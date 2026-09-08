@@ -435,7 +435,7 @@ def test_empty_file_gets_preamble_like_missing_file(tmp_path):
     (target / "AGENTS.md").write_text("", encoding="utf-8")
     assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert text.startswith("# AGENTS.md"), "빈 파일 경로에서 PREAMBLE이 빠졌다"
+    assert text.startswith(_mod.PREAMBLE), "빈 파일 경로에서 PREAMBLE이 빠졌다"
 
 
 def test_symlink_escape_is_checked_before_reading(tmp_path):
@@ -853,4 +853,48 @@ def test_old_marker_block_is_replaced_in_place_not_duplicated(tmp_path):
     assert "낡은 규범 본문" not in out
     # 마커 밖 사용자 콘텐츠는 불가침.
     assert "앞 문장" in out and "뒤 문장" in out and "# 내 파일" in out
+
+
+# ── 다중 진입점 (v3.10.0) ────────────────────────────────────────────────────
+#
+# 하네스마다 읽는 파일 이름이 다르다(AGENTS.md / GEMINI.md). 내용은 같으므로 블록도
+# sha 도 하나이고 파일만 여럿이다. 한 파일에만 내보내면 나머지 하네스는 규율 밖에서 돈다.
+
+
+def test_writes_all_entrypoints_with_identical_block(tmp_path):
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
+    texts = [(target / n).read_text(encoding="utf-8") for n in _mod.ENTRYPOINTS]
+    assert len(texts) >= 2, "진입점이 하나뿐이면 이 계약은 의미가 없다"
+    # 같은 블록·같은 sha — 전문에 파일 이름이 들어가면 여기서 갈린다.
+    assert len(set(texts)) == 1, "진입점마다 내용이 갈렸다"
+    for t in texts:
+        assert t.count("kit:begin") == 1
+
+
+def test_check_reports_every_stale_entrypoint_not_just_the_first(tmp_path):
+    """첫 실패에서 멈추면 '하나만 낡음'과 '전부 낡음'을 구별할 수 없다."""
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target), "--check"]) == 0
+    # 두 진입점을 모두 망가뜨린다.
+    for n in _mod.ENTRYPOINTS:
+        f = target / n
+        f.write_text(f.read_text(encoding="utf-8").replace("단일 진실 원천", "손댐"), encoding="utf-8")
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target), "--check"]) == 1
+
+
+def test_entrypoints_flag_overrides_default(tmp_path):
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "ONLY.md"]
+    ) == 0
+    assert (target / "ONLY.md").exists()
+    assert not (target / "AGENTS.md").exists()
 

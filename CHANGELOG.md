@@ -8,6 +8,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.10.0] — 2026-09-09
+
+**진입점이 하나가 아니다.** 규범은 하네스 중립인데 내보내는 파일은 `AGENTS.md` 하나뿐이라,
+`GEMINI.md` 를 읽는 하네스는 규율 밖에서 돌고 있었다.
+
+### Added — 다중 진입점 export (`AGENTS.md` · `GEMINI.md`)
+
+하네스마다 **읽는 파일 이름이 다르다**: Codex·OpenCode·Copilot·Cursor 는 `AGENTS.md`,
+Gemini CLI 계열은 `GEMINI.md`. **내용은 같다** — 블록도 sha 도 하나이고 파일만 여럿이다.
+
+- `ENTRYPOINTS` 상수가 목록의 SSOT. `--entrypoints a.md,b.md` 로 덮어쓴다
+- 전문(preamble)의 H1 에서 파일 이름을 뺐다(`# Agent instructions`) — 넣으면 파일마다
+  전문이 갈리고, 전문이 sha 에 들어가므로 **진입점마다 sha 가 달라진다.**
+  하나의 블록·하나의 sha·여러 파일이 이 설계의 요점이다
+- `--check` 는 **첫 실패에서 멈추지 않는다.** 멈추면 "하나만 낡음"과 "전부 낡음"을
+  구별할 수 없어 사람이 재실행을 두 번 하게 된다
+- §11 게이트가 그대로 전 진입점을 덮는다 — **부재도 red 로 잡는다**(실측 확인).
+  새 게이트를 만들지 않았다
+
+**목록은 정책 파일이 아니라 모듈 상수다.** 소비자의 플러그인 캐시에는 `packaging/` 이
+없다 — 훅은 자기가 설치된 곳에서 자족해야 한다(consumer-first).
+
+**`CLAUDE.md` 는 의도적으로 뺐다.** Claude Code 는 SessionStart 훅이 규범을 직접
+주입하므로 파일로 또 실으면 같은 규범이 두 번 들어간다. 훅이 없는 하네스만 파일이 필요하다.
+
+### 회귀 테스트 3종
+
+전 진입점 동일 블록 · `--check` 가 전부를 보고 · `--entrypoints` 덮어쓰기.
+
+### 알려진 한계 (탐지하지 않는 것은 탐지한다고 적지 않는다)
+
+§15 크기 예산은 **`AGENTS.md` 전용으로 남긴다.** 그 상한의 근거는 Codex 의
+`project_doc_max_bytes`(32 KiB 병합 총량, 초과 시 조용히 잘림)라는 **실측된 값**이다.
+Gemini 계열의 대응 상한은 실측하지 않았으므로 숫자를 지어내지 않는다 —
+`docs/conventions/warning-signal.md` 의 "탐지할 수 없는 것은 탐지할 수 없다고 적는다".
+
+
 ## [3.9.0] — 2026-09-09
 
 마지막 개명 잔재였던 **런타임 경로와 마커 토큰**을 제품명과 무관한 이름으로 옮겼다.

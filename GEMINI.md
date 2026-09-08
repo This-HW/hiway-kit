@@ -1,7 +1,6 @@
-# AGENTS.md
+# Agent instructions
 
 > 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
-> 재생성: `./scripts/export-harness.sh` (플러그인 사용자는 `/harness-export` 스킬 참조)
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
 <!-- kit:begin rules-v1.4.0 sha256:51d6ce47977bd3952ffbc8df9136398a030d236adf610b11d9c7495925374dfe -->

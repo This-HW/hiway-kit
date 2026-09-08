@@ -1,6 +1,6 @@
 ---
 name: harness-export
-description: Export the kit's host-neutral rules to AGENTS.md so non-Claude-Code harnesses (Codex, OpenCode, Copilot, Pi, Hermes) follow the same discipline. Use when a repo is worked by more than one agent harness, or after changing rules/. Trigger with /harness-export.
+description: Export the kit's host-neutral rules to every harness entrypoint file (AGENTS.md, GEMINI.md) so non-Claude-Code harnesses (Codex, OpenCode, Copilot, Gemini CLI, Pi, Hermes) follow the same discipline. Use when a repo is worked by more than one agent harness, or after changing rules/. Trigger with /harness-export.
 model: sonnet
 effort: medium
 ---
@@ -11,14 +11,27 @@ effort: medium
 그런데 Orca·Paseo 같은 ADE에서는 한 레포에 Claude Code와 Codex·OpenCode·Pi를
 **동시에** 붙여 굴린다. 그 순간 레포의 절반은 이 킷의 규율 밖에서 동작한다.
 
-이 스킬은 규범을 `AGENTS.md`(Codex·OpenCode·Copilot CLI·Cursor가 공통으로 읽는 사실상
-표준)로 내보내 그 구멍을 메운다.
+이 스킬은 규범을 **각 하네스가 읽는 진입점 파일**로 내보내 그 구멍을 메운다.
+
+| 진입점 | 읽는 하네스 |
+| --- | --- |
+| `AGENTS.md` | Codex · OpenCode · Copilot CLI · Cursor (사실상 표준) |
+| `GEMINI.md` | Gemini CLI 계열 |
+
+**내용은 같다** — 규범이 하네스 중립이므로 블록도 sha 도 하나이고 파일만 여럿이다.
+한 파일에만 내보내면 나머지 하네스는 규율 밖에서 돈다.
+
+> **`CLAUDE.md` 는 의도적으로 뺐다.** Claude Code 는 이 킷의 SessionStart 훅이 규범을
+> 직접 주입한다 — 파일로 또 실으면 같은 규범이 두 번 들어간다. 훅이 없는 하네스만
+> 파일이 필요하다.
+
+진입점 목록을 바꾸려면 `--entrypoints AGENTS.md,GEMINI.md,OTHER.md` 로 덮어쓴다.
 
 ## 사용 시점
 
 | 상황 | 실행 |
 | --- | --- |
-| 레포를 두 개 이상의 하네스가 만진다 | `/harness-export` 1회 → `AGENTS.md` 커밋 |
+| 레포를 두 개 이상의 하네스가 만진다 | `/harness-export` 1회 → 생성된 진입점 파일 전부 커밋 |
 | `rules/*.md`를 고쳤다 | 재생성 (안 하면 다른 하네스가 옛 규범을 읽는다) |
 | CI/게이트에서 최신 여부만 확인 | `--check` |
 

@@ -519,7 +519,7 @@ else
   red "scripts/check_eval_coverage.py 없음 (W-018 S1 산출물 누락)"
 fi
 
-hdr "11. AGENTS.md 하네스 이식 드리프트 (W-017)"
+hdr "11. 하네스 진입점 이식 드리프트 (W-017) — AGENTS.md · GEMINI.md"
 # rules/ 를 고치고 AGENTS.md를 재생성하지 않으면, Codex·OpenCode 등 다른 하네스에서
 # 도는 에이전트는 **옛 규범**을 읽는다. 같은 레포에서 하네스마다 규율이 갈리는 상태를
 # 침묵으로 두지 않는다. exit 2(SKIPPED)는 소스 미탐지 — green으로 세지 않는다.
@@ -527,7 +527,7 @@ if [ -f scripts/export-harness.sh ] && [ -f plugins/common/hooks/export_harness.
   ./scripts/export-harness.sh --check >"$TMPD/agents_md" 2>&1
   EH_RC=$?
   if [ "$EH_RC" -eq 0 ]; then
-    green "AGENTS.md 최신 (rules 원문 + 블록 본문 일치)"
+    green "진입점 최신 (rules 원문 + 블록 본문 일치)"
   elif [ "$EH_RC" -eq 2 ]; then
     red "export-harness SKIPPED — 규범 소스 미탐지"
     sed 's/^/      /' "$TMPD/agents_md" | head -6
@@ -535,7 +535,7 @@ if [ -f scripts/export-harness.sh ] && [ -f plugins/common/hooks/export_harness.
     # exit 1은 드리프트만이 아니다 — 분류 미등재/유령 엔트리, 마커 손상, 본문 변조,
     # 인코딩 실패가 모두 여기 모인다. 원인을 안 보여주면 "재생성하라"가 무한루프가 된다
     # (분류 문제는 재생성으로 안 고쳐진다).
-    red "AGENTS.md 검사 실패 — 아래 원인 확인 (재생성으로 안 고쳐지는 경우가 있다)"
+    red "진입점 검사 실패 — 아래 원인 확인 (재생성으로 안 고쳐지는 경우가 있다)"
     sed 's/^/      /' "$TMPD/agents_md" | head -10
   fi
 else

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""export_harness.py — 이 킷의 규범을 하네스 중립 AGENTS.md로 내보낸다 (W-017 / Pillar 1).
+"""export_harness.py — 이 킷의 규범을 하네스 중립 진입점 파일로 내보낸다 (W-017 / Pillar 1).
 
 왜 필요한가
 -----------
@@ -299,7 +299,23 @@ def _rule_portability(path: Path) -> tuple[bool | None, str]:
     return m.group(1) == "true", (why.group(1) if why else "")
 
 
-PREAMBLE = """# AGENTS.md
+# ── 진입점 (하네스별 파일 이름) ───────────────────────────────────────────────
+#
+# 하네스마다 **읽는 파일 이름이 다르다**: Codex·OpenCode·Copilot·Cursor 는 `AGENTS.md`,
+# Gemini CLI 계열은 `GEMINI.md`. **내용은 같다** — 규범은 하네스 중립이므로 블록도 sha 도
+# 하나이고, 파일만 여러 개다. 한 파일에만 내보내면 나머지 하네스는 규율 밖에서 돈다.
+#
+# `CLAUDE.md` 는 **의도적으로 뺐다.** Claude Code 는 이 킷의 SessionStart 훅이 규범을
+# 직접 주입하므로 파일로 또 실으면 같은 규범이 두 번 들어간다. 훅이 없는 하네스만
+# 파일이 필요하다.
+#
+# 소비자의 플러그인 캐시에는 `packaging/` 이 없으므로 이 목록은 **정책 파일이 아니라
+# 이 모듈의 상수**다 — 훅은 자기가 설치된 곳에서 자족해야 한다(consumer-first).
+ENTRYPOINTS = ("AGENTS.md", "GEMINI.md")
+
+# H1 은 파일 이름을 넣지 않는다 — 넣으면 파일마다 전문이 갈리고, 전문이 sha 에 들어가므로
+# 진입점마다 sha 가 달라진다. 하나의 블록·하나의 sha·여러 파일이 이 설계의 요점이다.
+PREAMBLE = """# Agent instructions
 
 > 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
@@ -807,7 +823,7 @@ def cmd_check(
             file=sys.stderr,
         )
         return 1
-    print(f"[export-harness] ✓ AGENTS.md 규범 블록 최신 ({meta})")
+    print(f"[export-harness] ✓ {target.name} 규범 블록 최신 ({meta})")
 
     # conventions 블록(W-022 R7) — conv_block이 None이면 이 target에서 생성 대상이
     # 아니라는 뜻(build_conventions_block()이 docs/conventions/ 없음으로 스킵)이므로
@@ -845,7 +861,7 @@ def cmd_check(
                 file=sys.stderr,
             )
             return 1
-        print(f"[export-harness] ✓ AGENTS.md conventions 블록 최신 ({conv_meta})")
+        print(f"[export-harness] ✓ {target.name} conventions 블록 최신 ({conv_meta})")
 
     return 0
 
@@ -934,10 +950,14 @@ def main(argv: list[str]) -> int:
     드러내므로 같은 종류의 누락이 구조적으로 보인다.
     """
     ap = argparse.ArgumentParser(
-        description="이 킷의 규범을 하네스 중립 AGENTS.md로 내보낸다"
+        description="이 킷의 규범을 하네스 중립 진입점 파일(AGENTS.md·GEMINI.md)로 내보낸다"
     )
     ap.add_argument("--plugin-root", help="plugins/common 경로 (기본: 자동 탐색)")
     ap.add_argument("--target", help="대상 프로젝트 루트 (기본: git 최상위 또는 CWD)")
+    ap.add_argument(
+        "--entrypoints",
+        help=f"쉼표로 구분한 진입점 파일 이름 (기본: {','.join(ENTRYPOINTS)})",
+    )
     # 상호배타를 argparse에 **강제**시킨다. 예전에는 `--stdout` 분기가 `--check`보다
     # 앞에 있어서 `--check --stdout` 조합이 검사를 통째로 건너뛰고 무조건 exit 0을
     # 냈다 — 게이트(verify-done §11, CI)가 exit 0만 보므로 플래그 하나로 완료 게이트가
@@ -985,7 +1005,14 @@ def main(argv: list[str]) -> int:
         return 0
 
     target_root = Path(args.target) if args.target else _default_target()
-    target = target_root / "AGENTS.md"
+    entrypoints = (
+        tuple(x.strip() for x in args.entrypoints.split(",") if x.strip())
+        if args.entrypoints
+        else ENTRYPOINTS
+    )
+    if not entrypoints:
+        print("[export-harness] ✗ --entrypoints 가 비어 있다", file=sys.stderr)
+        return 1
 
     # conventions 블록(W-022 R7)은 target_root에 docs/conventions/가 있을 때만 존재한다
     # — 이 디렉토리는 plugins/에 없어 소비자의 설치된 플러그인 캐시에는 없다. None이면
@@ -1001,13 +1028,21 @@ def main(argv: list[str]) -> int:
     if conv_result is not None:
         conv_block, conv_sha = conv_result
 
-    if args.check:
-        return cmd_check(target_root, target, block, sha, conv_block, conv_sha)
-    try:
-        return cmd_write(target_root, target, block, sha, conv_block, conv_sha)
-    except OSError as err:
-        print(f"[export-harness] ✗ {target} 기록 실패: {err}", file=sys.stderr)
-        return 1
+    # 진입점마다 독립적으로 처리한다. **하나가 실패해도 나머지를 건너뛰지 않는다** —
+    # 첫 실패에서 멈추면 "AGENTS.md 만 낡았다"와 "둘 다 낡았다"를 구별할 수 없고,
+    # 사람이 재실행을 두 번 하게 된다.
+    rc = 0
+    for name in entrypoints:
+        target = target_root / name
+        if args.check:
+            rc |= cmd_check(target_root, target, block, sha, conv_block, conv_sha)
+            continue
+        try:
+            rc |= cmd_write(target_root, target, block, sha, conv_block, conv_sha)
+        except OSError as err:
+            print(f"[export-harness] ✗ {target} 기록 실패: {err}", file=sys.stderr)
+            rc = 1
+    return 1 if rc else 0
 
 
 if __name__ == "__main__":
