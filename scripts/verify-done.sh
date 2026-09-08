@@ -702,6 +702,38 @@ else
   red "구 이름 잔존 — 살아있는 표면에 개명 잔재 (상세는 위 출력)"
 fi
 
+hdr "21. 설치된 훅이 이 레포의 정본과 같은가 (배포 ≠ 실행 결함 클래스)"
+# **경고이지 오류가 아니다** — §3b·§19 와 같은 비대칭이다.
+#
+# 왜 필요한가: 이 킷의 대표 결함 클래스는 "커밋·테스트·문서를 다 갖춘 가드가 설치본에
+# 없어 집행이 0회"다. 실측(v3.7.0): .private-names 비공개 이름 차단이 setup/pre-commit
+# 소스에만 있고 어느 저장소에도 설치되지 않은 채 "활성"으로 릴리스 보고됐다. 원인은
+# session-check 가 훅이 **없을 때만** 설치해 최초 판이 영구 동결된 것이었다(v3.8.0 수정).
+# 고쳤어도 이 검사가 있어야 다음번에 같은 형태가 조용히 지나가지 않는다.
+#
+# 왜 red 가 아닌가: 훅 소스를 고치는 중에는 repo 가 설치본보다 앞선 것이 **정상**이다.
+# red 로 두면 훅 작업 내내 발화해 죽은 경고가 된다(warning-signal.md §검토 절차 1).
+# 설치본이 킷 소유가 아니거나(마커 없음) 아직 설치 전이면 조용히 넘어간다 —
+# 소비자가 자기 훅을 쓰는 것은 정상이고, 그 경우 이 검사의 대상이 아니다.
+#
+# 검사 조건 한 문장: **설치된 pre-commit 이 존재하고 킷 마커를 갖고 있는데 repo 정본과
+# 내용이 다르면 노란 줄을 낸다.**
+HOOK_SRC="plugins/common/setup/pre-commit"
+HOOK_DST="$(git rev-parse --git-path hooks 2>/dev/null)/pre-commit"
+HOOK_MARKER="# Auto-installed by session-check.py"
+if [ ! -f "$HOOK_SRC" ]; then
+  red "훅 정본 없음: $HOOK_SRC"
+elif [ ! -f "$HOOK_DST" ]; then
+  printf '  \033[33m! pre-commit 미설치 — 커밋타임 집행이 이 저장소에서 돌지 않는다\033[0m\n'
+elif ! grep -qF -- "$HOOK_MARKER" "$HOOK_DST"; then
+  printf '  \033[33m! pre-commit 이 킷 소유가 아니다(마커 없음) — 대조 생략\033[0m\n'
+elif cmp -s "$HOOK_SRC" "$HOOK_DST"; then
+  green "설치된 pre-commit = repo 정본 (커밋타임 집행이 최신)"
+else
+  printf '  \033[33m! 설치된 pre-commit 이 repo 정본과 다르다 — 새 세션에서 session-check 가 갱신한다\033[0m\n'
+  printf '      정본 %s B / 설치본 %s B\n' "$(wc -c <"$HOOK_SRC" | tr -d " ")" "$(wc -c <"$HOOK_DST" | tr -d " ")"
+fi
+
 # ── 결과 ──────────────────────────────────────────────────────────
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
