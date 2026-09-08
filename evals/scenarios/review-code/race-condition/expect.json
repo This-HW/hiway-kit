@@ -1,0 +1,45 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "race condition",
+        "race-condition",
+        "toctou",
+        "check-then-act",
+        "check then act",
+        "경쟁 상태",
+        "경쟁조건",
+        "원자적",
+        "atomic",
+        "동시성",
+        "concurrent",
+        "동시 실행"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "write_if_absent",
+        "cache.py"
+      ]
+    },
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "리뷰가 os.path.exists 검사와 파일 쓰기 사이의 TOCTOU 경쟁 조건을 정확히 지적하고 원자적 쓰기(예: O_EXCL, os.open)를 권고하는가?",
+    "threshold": 7
+  }
+}

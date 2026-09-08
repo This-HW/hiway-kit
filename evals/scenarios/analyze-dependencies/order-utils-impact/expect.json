@@ -1,0 +1,36 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "checkout"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "report"
+      ]
+    },
+    {
+      "type": "file_unchanged",
+      "file": "order_utils.py"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "checkout.py"
+    },
+    {
+      "type": "output_regex",
+      "pattern": "영향"
+    }
+  ],
+  "_removedAssertions": {
+    "output_not_contains": "[판정 2026-08-27, W-022 R3] 기본 거짓음성 목록(문제 없음/이상 없음 등)을 붙였다가 실제 실행에서 걸렸다 — 실제 출력은 다중 지표 표(직접/간접 영향, 리스크 수준별)를 만들고, '간접 영향 받는 파일: 0개'처럼 정확하고 정당한 하위 지표에도 '없음'류 표현이 자연히 등장한다. '총 영향 범위: 0개 파일' 같은 결론부에만 걸리도록 --must-not-say로 좁혀 재시도했으나(1차), 재실행에서 '0개 파일'이 간접 영향 하위 지표 문구와 다시 충돌해 두 번째 거짓양성이 났다(2차) — 단순 부분문자열 배제로는 이 출력 스타일에서 판별력을 만들 수 없다는 결론. 실제 원인은 not_contains 자체의 한계이지 에이전트 결함이 아니다(같은 실행에서 checkout/report/영향 언급은 전부 정상 통과했다). 대신 output_contains_any(checkout, report) + output_regex(영향) + file_unchanged가 이미 '분석을 안 했다/틀렸다' 케이스를 판별한다(red 실증: '분석을 완료했습니다. 특별한 문제는 발견되지 않았습니다' 류 회피성 출력에서 checkout/report/영향 매치가 전부 fail로 확인됨). 재부착 조건: 결론부만 앵커링하는 정규식(예: 문장 전체가 '영향(이)? 없(다|습니다)'로 끝나는 패턴)이 설계되고 다중 실행에서 거짓양성 0으로 확인되면 되돌린다."
+  },
+  "judge": {
+    "enabled": false,
+    "rubric": "analyze-dependencies가 order-utils-impact 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

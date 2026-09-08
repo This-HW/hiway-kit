@@ -1,0 +1,43 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "sql injection",
+        "sql-injection",
+        "sqli",
+        "injection",
+        "인젝션",
+        "parameteriz",
+        "파라미터화",
+        "prepared statement",
+        "바인드 변수",
+        "placeholder"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "find_user",
+        "db.py"
+      ]
+    },
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "리뷰가 f-string으로 조립된 SQL 쿼리의 injection 취약점을 정확히 지적하고 파라미터화 바인딩을 권고하는가?",
+    "threshold": 7
+  }
+}

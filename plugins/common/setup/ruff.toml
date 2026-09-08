@@ -1,0 +1,18 @@
+# 전역 ruff 설정 (W-040)
+# 위치: ~/.config/ruff/ruff.toml (install-global.sh가 배포)
+# 우선순위: 프로젝트 pyproject.toml/ruff.toml이 이 설정을 오버라이드 (ruff 기본 동작)
+
+[lint]
+# E(pycodestyle errors) + F(pyflakes)만 선택 — 전역 기본 최소치
+# W(warnings), I(isort), UP(pyupgrade) 등은 프로젝트별 pyproject.toml에서 추가
+select = ["E", "F"]
+ignore = [
+    "E501",   # line too long (프로젝트별 설정 상이)
+    "E402",   # module level import not at top (조건부 import 허용)
+    "E712",   # comparison to True/False (가독성 우선)
+    "E713",   # not in test
+    "E741",   # ambiguous variable name (수학/금융 관례: l, O, I)
+]
+
+[format]
+# ruff format 기본값 사용 (black 호환)

@@ -1,0 +1,36 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "parser_helper.py"
+      ]
+    },
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    },
+    {
+      "type": "file_unchanged",
+      "file": "project-structure.yaml"
+    },
+    {
+      "type": "output_regex",
+      "pattern": "위반|Critical",
+      "flags": "i"
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "enforce-structure가 misplaced-source 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

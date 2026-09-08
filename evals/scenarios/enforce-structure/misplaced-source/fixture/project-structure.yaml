@@ -1,0 +1,6 @@
+rules:
+  - name: source-location
+    description: "소스 코드(.py)는 반드시 src/ 하위에 위치해야 한다"
+    pattern: "*.py"
+    allowed_dirs: ["src/"]
+    severity: critical

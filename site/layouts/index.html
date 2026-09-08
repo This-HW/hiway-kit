@@ -1,0 +1,33 @@
+{{ define "main" }}
+<section class="hero">
+  <div class="wrap">
+    <h1>{{ site.Title }}</h1>
+    <p>{{ site.Params.description }}</p>
+  </div>
+</section>
+
+{{ if .Content }}
+<section class="wrap content">
+  {{ .Content }}
+</section>
+{{ end }}
+
+{{ $posts := where site.RegularPages "Section" "posts" }}
+{{ if $posts }}
+<section class="wrap">
+  <p class="section-title">{{ if eq site.Language.Lang "en" }}Recent Posts{{ else }}최근 글{{ end }}</p>
+  <ul class="postlist">
+    {{ range $posts }}
+      <li>
+        <p class="date">{{ .Date.Format "2006-01-02" }}</p>
+        <h3><a href="{{ .RelPermalink }}">{{ .Title }}</a></h3>
+        {{ with .Description }}<p class="summary">{{ . }}</p>{{ end }}
+        {{ with .Params.categories }}
+          <div class="tags">{{ range . }}<span class="tag">{{ . }}</span>{{ end }}</div>
+        {{ end }}
+      </li>
+    {{ end }}
+  </ul>
+</section>
+{{ end }}
+{{ end }}

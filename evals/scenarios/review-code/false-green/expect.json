@@ -1,0 +1,45 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "returncode",
+        "exit code",
+        "exit status",
+        "결과를 확인하지",
+        "결과 미검증",
+        "검증하지 않",
+        "false green",
+        "false-green",
+        "성공을 가정",
+        "확인 없이 성공",
+        "무시하고",
+        "실패해도"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "run_migration",
+        "deploy.py"
+      ]
+    },
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "리뷰가 subprocess.run의 returncode를 검증하지 않고 무조건 성공(True)을 반환/출력하는 false-green 패턴을 정확히 지적하는가?",
+    "threshold": 7
+  }
+}

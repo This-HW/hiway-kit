@@ -1,0 +1,50 @@
+{
+  "assertions": [
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    },
+    {
+      "type": "file_unchanged",
+      "file": "domain.md"
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/planning/business-logic/point-rules.md",
+      "pattern": "CALC-"
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/planning/business-logic/point-rules.md",
+      "pattern": "VAL-"
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/planning/business-logic/point-rules.md",
+      "pattern": "STATE-"
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/planning/business-logic/point-rules.md",
+      "pattern": "POL-"
+    }
+  ],
+  "_designNote": {
+    "_surfaceFix": "W-023(2026-09-01): 이 4개 검사는 원래 stdout 에 대한 output_regex 였고, 그것이 이 시나리오 플레이크의 원인이었다. 이 에이전트의 **계약된 산출물은 파일**이다 — 정의 §'문서 저장 위치'가 docs/planning/business-logic/[도메인명]-rules.md 를 지정하고 tools 에 Write 가 있다. 파일은 매번 확실히 쓰이는 반면 stdout 에 그 내용을 다시 뱉는지는 모델 재량이라, 어서션이 계약되지 않은 부수 채널을 보고 있었다. 실증: 프로브 실행에서 docs/planning/business-logic/point-rules.md(15336B)에 마커 4종 전부 존재. 관측 3회 중 stdout 통과 2 / 실패 1.",
+    "_whyPathInTask": "task.md 가 저장 경로를 지정하는 것은 정답을 지시하는 것이 아니다 — 측정 대상은 CALC/VAL/STATE/POL 분류 체계를 산출하는 능력이고, 그 분류는 task.md 가 아니라 에이전트 정의(OUTPUT: CALC/VAL/STATE/POL 규칙)가 약속한 것이다. 경로 고정은 파일명이 모델 재량([도메인명])이라 file_contains 로 지목할 수 없던 문제를 없앤다.",
+    "output_not_contains": "stdout 대상이 맞다 — 응답이 '문제 없음' 류로 회피하지 않는지 보는 검사다."
+  },
+  "judge": {
+    "enabled": false,
+    "rubric": "define-business-logic가 point-service-rules 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

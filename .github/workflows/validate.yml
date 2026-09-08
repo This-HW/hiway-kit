@@ -1,0 +1,240 @@
+name: Validate Plugins
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.11"
+
+      - name: Validate plugin.json files
+        run: |
+          for f in plugins/*/.claude-plugin/plugin.json; do
+            echo "Checking $f..."
+            python3 -c "import json,sys; json.load(open(sys.argv[1])); print('✓ Valid JSON')" "$f"
+          done
+
+      - name: Check plugin.json required fields
+        run: |
+          python3 - <<'EOF'
+          import json, pathlib, sys
+          REQUIRED = ["name", "version", "description", "homepage", "repository", "license"]
+          errors = []
+          for f in pathlib.Path("plugins").glob("*/.claude-plugin/plugin.json"):
+              data = json.loads(f.read_text())
+              for field in REQUIRED:
+                  if field not in data:
+                      errors.append(f"{f}: missing required field '{field}'")
+              author = data.get("author", {})
+              if not isinstance(author, dict) or "email" not in author:
+                  errors.append(f"{f}: missing 'author.email'")
+          if errors:
+              print("\n".join(errors))
+              sys.exit(1)
+          print("✓ All plugin.json files have required fields")
+          EOF
+
+      - name: Validate marketplace.json
+        run: |
+          python3 -c "import json; json.load(open('.claude-plugin/marketplace.json'))" && echo "✓ marketplace.json valid"
+
+      - name: Check agent frontmatter — required fields
+        run: |
+          python3 - <<'EOF'
+          import pathlib, re, sys
+          errors = []
+          for f in pathlib.Path("plugins").rglob("*.md"):
+              if "/skills/" in str(f) or "/rules/" in str(f):
+                  continue
+              content = f.read_text()
+              if not content.startswith("---"):
+                  continue
+              end = content.find("---", 3)
+              if end == -1:
+                  continue
+              fm = content[3:end]
+              if "name:" not in fm:
+                  errors.append(f"{f}: missing 'name' in frontmatter")
+              if "description:" not in fm:
+                  errors.append(f"{f}: missing 'description' in frontmatter")
+          if errors:
+              print("\n".join(errors))
+              sys.exit(1)
+          print("✓ All agent frontmatter valid")
+          EOF
+
+      - name: Check agent frontmatter — no forbidden fields
+        run: |
+          python3 - <<'EOF'
+          import pathlib, re, sys
+          FORBIDDEN = ["permissionMode", "context_cache", "output_schema", "next_agents", "hooks"]
+          errors = []
+          for f in pathlib.Path("plugins").rglob("*.md"):
+              if "/skills/" in str(f) or "/rules/" in str(f):
+                  continue
+              content = f.read_text()
+              if not content.startswith("---"):
+                  continue
+              end = content.find("---", 3)
+              if end == -1:
+                  continue
+              fm = content[3:end]
+              for field in FORBIDDEN:
+                  if re.search(rf"^{field}:", fm, re.MULTILINE):
+                      errors.append(f"{f}: forbidden field '{field}' in frontmatter")
+          if errors:
+              print("\n".join(errors))
+              sys.exit(1)
+          print("✓ No forbidden frontmatter fields found")
+          EOF
+
+      - name: Run hook unit tests
+        run: |
+          # 검증 도구는 **둘 다** 버전을 핀한다(.ruff-version / .pytest-version, F-036):
+          # 도구 기본 동작이 릴리스마다 바뀌어 "코드 변경 없이 CI가 red"가 되는 사고를
+          # 막는다(2.12.0 실사고). ruff는 기본 룰셋이, pytest는 수집·fixture·deprecation
+          # 처리가 메이저마다 달라진다 — 핀이 없으면 CI만 조용히 최신으로 떠내려간다.
+          # 룰 집합 자체는 루트 ruff.toml 이 명시 — 로컬 훅/게이트와 판정이 항상 일치한다.
+          pip install "pytest==$(cat .pytest-version)" "ruff==$(cat .ruff-version)" --quiet
+          ruff check .   # 범위·룰 = ruff.toml SSOT (verify-done.sh §3과 동일 커맨드)
+          # pytest exit 5 = "no tests collected" (OK to skip). 그 외 비정상 종료는
+          # 실제 실패이므로 CI를 실패시킨다 (이전 `|| echo`는 실패도 green으로 삼켰음).
+          rc=0
+          # 대상은 pytest.ini의 testpaths가 단일 소스 (F-023) — 인자를 주지 않는다.
+          python3 -m pytest -v || rc=$?
+          # exit 5(수집 0)도 실패 — 테스트 220+개가 상존하는 레포에서 수집 0은
+          # 전멸/경로 붕괴 신호다. verify-done §4와 fail-closed 방향 통일 (재감사 R2/ATK-004).
+          if [ "$rc" -eq 5 ]; then echo "❌ No tests collected — 테스트 소실은 실패다"; exit 1; fi
+          exit "$rc"
+
+      - name: AGENTS.md harness-export drift (W-017)
+        # 로컬 verify-done.sh §11과 **같은 명령**. rules/ 변경 후 재생성하지 않으면
+        # 다른 하네스(Codex·OpenCode)가 옛 규범을 읽는다.
+        run: ./scripts/export-harness.sh --check
+
+      - name: Verify multi-harness target manifests (W-019)
+        # 로컬 verify-done.sh §14와 **같은 명령**. S1 단계는 어떤 타겟도 아직
+        # --write 되지 않아 항상 통과한다 — S2/S3가 매니페스트를 기록하기 시작하면
+        # 그 시점부터 이 검사가 엄격해진다.
+        run: python3 scripts/build-targets.py --check
+
+      - name: Shell lint (shellcheck)
+        # 이 레포의 완료 게이트와 설치 스크립트는 셸이다 — 파이썬만 린트하고 셸을
+        # 방치하면 정작 "완료"를 판정하는 코드가 무검사다. 대상 목록·심각도 임계값은
+        # scripts/lint-shell.sh 가 단일 소스 (verify-done.sh §3b와 동일 커맨드).
+        run: |
+          # 러너 이미지에 미리 깔린 shellcheck는 버전이 떠다녀 "코드 변경 없이 red"를
+          # 만든다(.ruff-version과 같은 이유). 릴리스 tarball을 핀 + sha256 검증해서 쓴다.
+          # 핀을 올릴 때 SC_SHA256도 함께 바꾼다 — 어긋나면 이 스텝이 즉시 실패한다.
+          SC_VER="$(cat .shellcheck-version)"
+          SC_SHA256="8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198"
+          TARBALL="shellcheck-v${SC_VER}.linux.x86_64.tar.xz"
+          curl -fsSL --retry 3 -o "$TARBALL" \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SC_VER}/${TARBALL}"
+          echo "${SC_SHA256}  ${TARBALL}" | sha256sum -c -
+          tar -xJf "$TARBALL"
+          # sudo로 설치하지 않고 PATH만 앞에 붙인다 — 러너는 일회용이고, 추출물은
+          # 추적되지 않으므로 lint-shell.sh의 `git ls-files` 대상에도 들어가지 않는다.
+          export PATH="$PWD/shellcheck-v${SC_VER}:$PATH"
+          shellcheck --version
+          ./scripts/lint-shell.sh
+
+      - name: Check doc agent/skill counts (drift guard)
+        # scripts/check_doc_counts.py 가 단일 소스 (F-023) — 로컬 verify-done.sh §6과
+        # 동일 스크립트. 여기 인라인 재구현 금지(로직 이중화 = 드리프트).
+        run: python3 scripts/check_doc_counts.py
+
+      - name: Eval coverage/baseline gate (W-018)
+        # scripts/check_eval_coverage.py 가 단일 소스 — 로컬 verify-done.sh §13과
+        # 동일 스크립트. 에이전트 호출 없음(비용 0) — evals/policy.json의
+        # gate.runFullSuiteInCI: false 방침대로 CI는 드리프트 대조만 한다.
+        run: python3 scripts/check_eval_coverage.py
+
+      - name: Plugin manifest validate (배포 경로가 실제로 거는 관문 / §19)
+        # 커뮤니티 카탈로그의 pin 전진(anthropics/claude-plugins-community 의
+        # bump-plugin-shas.yml)이 새 SHA 에서 `claude plugin validate` 를 돌린다.
+        # 실패하면 그 항목은 red PR 로 남거나 freeze 목록에 올라 자동 전진이 멈춘다 —
+        # 즉 우리 CI 가 아니라 **배포 경로가 거는 관문**이므로 여기서 먼저 돌린다.
+        # 상류는 `latest` 를 쓰므로 우리도 핀하지 않는다(핀하면 스키마가 갈린다).
+        run: |
+          set -euo pipefail
+          npm i -g @anthropic-ai/claude-code >/dev/null 2>&1
+          rc=0
+          out=$(mktemp)
+          for t in .claude-plugin/marketplace.json plugins/common \
+                   plugins/common/agents plugins/common/skills; do
+            [ -e "$t" ] || continue
+            claude plugin validate --strict "$t" >>"$out" 2>&1 || rc=1
+          done
+          # 종료코드만 보지 않는다 — --strict 실패에도 0 을 내는 것이 실측됐다.
+          if grep -q "Validation failed" "$out"; then rc=1; fi
+          cat "$out"
+          exit $rc
+
+      - name: Name derivation drift (D-3 / §18)
+        # scripts/derive-name.py 가 단일 소스 — 로컬 verify-done.sh §18과 동일 스크립트.
+        # 다른 드리프트 게이트 3종(AGENTS.md·타겟 매니페스트·문서 카운트)은 처음부터
+        # CI에 있었는데 이것만 빠져 있었다. 발화 조건이 "누가 로컬에서 verify-done.sh를
+        # 돌릴 때만"이었다는 뜻이다 — 개명 PR이 파생 없이 green으로 통과할 수 있었다.
+        run: python3 scripts/derive-name.py --check
+
+      - name: Old project name on live surfaces (§20)
+        # scripts/check_old_names.py 가 단일 소스 — 로컬 verify-done.sh §20과 동일 스크립트.
+        # §18(이름 파생)은 산문 문서만 보므로 plugins/·site/·setup.sh 는 대상이 아니었다.
+        # 그 구멍으로 구 이름이 배포물 14건·사이트 브랜드·설치 스크립트에 남았고, 셋은
+        # 기능 결함이었다(캐시 glob 2건 + setup.sh 가 전임 플러그인을 설치).
+        run: python3 scripts/check_old_names.py
+
+      - name: Security scan (gitleaks)
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 소비자 환경 최저 파이썬(=macOS 기본 python3 3.9)에서 훅이 실제로 뜨는지 검증한다.
+  # 훅은 소비자 머신의 `python3`로 실행되므로, 3.10 전용 문법이 들어가면 그 사용자에겐
+  # 훅이 전부 죽는다(2.12.0까지 4종이 그 상태였다 — F-037). 린트의 FA 룰이 정적 방어,
+  # 이 잡이 실행 방어다.
+  python39-compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.9"
+
+      - name: Hooks 로드 스모크 (python 3.9)
+        run: |
+          set -e
+          # 판정은 **종료코드**로 한다. 에러 문자열 grep은 예상 못 한 예외 유형
+          # (AttributeError 등)을 통과시키는 false-green 통로다 (게이트 설계 원칙).
+          # runpy로 모듈 top-level만 실행 — __main__ 가드 안의 main()은 돌지 않으므로
+          # "로드 가능한가"만 결정론적으로 검증된다.
+          # examples/ 도 포함한다 — opt-in 훅이라도 켜는 순간 소비자의 python3 에서
+          # 돌기 때문이다. 글롭이 hooks/*.py 뿐이던 시절 examples/ 는 3.9 검사를 한
+          # 번도 받지 않았다(검사 대상이 아닌 것은 결코 red 가 되지 않는다, D-23).
+          for f in plugins/common/hooks/*.py plugins/common/hooks/examples/*.py \
+                   plugins/common/setup/*.py scripts/*.py; do
+            case "$f" in */tests/*) continue ;; esac
+            if python3 -c "import runpy,sys; runpy.run_path(sys.argv[1], run_name='__ckkit_smoke__')" "$f"; then
+              echo "✓ $f"
+            else
+              echo "❌ $f — python 3.9에서 로드 실패 (위 트레이스백 참조)"; exit 1
+            fi
+          done

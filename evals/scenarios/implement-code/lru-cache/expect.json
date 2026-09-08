@@ -1,0 +1,16 @@
+{
+  "assertions": [
+    {
+      "type": "pytest_green",
+      "path": "."
+    }
+  ],
+  "_removedAssertions": {
+    "delegation_signal": "계약 폐기(2026-08-27, W-022 R1) — DELEGATION_SIGNAL 자체가 에이전트 정의·rules·CLAUDE.md에서 전부 걷어내졌다(판별 결과: 결정론적 파싱 지점 없음, 8종 중 6종 미준수). 재부착 대상 아님 — 계약이 없으므로 어서션도 없다. 상세: docs/specs/2026-08-27-delegation-signal-contract-review.md(W-021)."
+  },
+  "judge": {
+    "enabled": false,
+    "rubric": "LRUCache가 stdlib만으로 정확히 구현되었는가(퇴출 정책 포함)?",
+    "threshold": 7
+  }
+}

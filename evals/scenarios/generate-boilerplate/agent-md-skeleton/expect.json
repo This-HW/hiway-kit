@@ -1,0 +1,26 @@
+{
+  "assertions": [
+    {
+      "type": "file_contains",
+      "file": "agents/dev/format-code.md",
+      "pattern": "(?m)^name:\\s*format-code"
+    },
+    {
+      "type": "file_contains",
+      "file": "agents/dev/format-code.md",
+      "pattern": "(?m)^# 역할:"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "agents/dev/existing-example.md"
+    }
+  ],
+  "_removedAssertions": {
+    "delegation_signal_block": "계약 폐기(2026-08-27, W-022 R1) — 생성된 보일러플레이트가 ---DELEGATION_SIGNAL--- 블록을 담아야 한다는 요구는 폐기된 계약을 재생산시키는 요구였다(agent-creator 템플릿에서 막은 것과 같은 구멍, torpedo-c4 잔재 검색 지적). '# 역할:' 섹션 존재 확인으로 대체 — task.md가 이미 요구하던 구조 요소였는데 어서션이 없었다."
+  },
+  "judge": {
+    "enabled": false,
+    "rubric": "generate-boilerplate가 agent-md-skeleton 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "assertions": [
+    {
+      "type": "pytest_green",
+      "path": "."
+    },
+    {
+      "type": "file_unchanged",
+      "file": "test_registry.py"
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "mutable default argument 버그를 None 센티널 패턴 등으로 근본 수정했는가, 회귀 테스트 포함 전체 테스트가 green인가?",
+    "threshold": 7
+  }
+}

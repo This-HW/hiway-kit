@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.env
+.venv/
+venv/
+.ruff_cache/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code (로컬 전용)
+.claude/
+*.claude-local
+
+# 빌드 산출물
+dist/
+build/
+*.egg-info/
+
+# 민감 정보 (절대 커밋 금지)
+*.key
+*.pem
+*.p12
+secrets/
+.env*
+
+# 내부 개발 기록 (공개 리포에 포함하지 않음)
+docs/works/
+
+# 개인 자료 (프로젝트 레포에 개인 홍보/이력 콘텐츠 반입 금지 — DEC-005)
+docs/personal/
+.worktrees/
+
+# graphify 지식그래프 산출물 (개발 시점 분석 보조물 — 순수 로컬)
+# 이 레포가 참조하지도, 배포 대상도 아니며 graphify update . 로 재생성 가능 → 추적 제외
+graphify-out/
+
+# Agent evals 실행 리포트 (매 실행 산출물 — 로컬 전용, baseline/만 추적)
+evals/reports/
+
+# pytest 캐시 (fixture 실행 등 로컬 산출물)
+.pytest_cache/
+evals/baseline/*.bak
+
+# 비공개 프로젝트 이름 목록 — pre-commit 이 읽는다. 절대 커밋하지 않는다.
+.private-names

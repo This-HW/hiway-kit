@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "v2.0.0"
+      ]
+    },
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    },
+    {
+      "type": "file_unchanged",
+      "file": "CHANGELOG.md"
+    },
+    {
+      "type": "output_regex",
+      "pattern": "Breaking|breaking"
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "manage-api-versions가 v2-breaking-change 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "ops": [
+    { "op": "init", "defaultBranch": "main" },
+    { "op": "add", "paths": ["."] },
+    { "op": "commit", "message": "feat: add greet function" },
+    {
+      "op": "write",
+      "path": "src/greet.py",
+      "content": "def greet(name):\n    return f\"Hi there, {name}!\"\n"
+    }
+  ]
+}

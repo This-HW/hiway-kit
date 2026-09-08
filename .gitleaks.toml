@@ -1,0 +1,41 @@
+title = "hiway-kit gitleaks config"
+
+[extend]
+useDefault = true
+
+# 이 룰은 **작동하지 않는다는 것이 실측됐다** (2026-09-08). 남겨 두되 한계를 명시한다.
+#
+# 전체 히스토리 스캔 결과 이 룰의 매치 24건 중 **참 양성은 1건**이었다(정밀도 4%):
+#   total_quant(13) · git_ops(4) · extra_ops(4) · write_ops(4) · empty_ops(1) · claude_ops(1)
+#   ← 전부 평범한 식별자.  실제 비공개 프로젝트 이름은 1건뿐.
+# 더 나쁜 것은 **놓친 쪽**이다: 같은 이름이 접미사 없이 `Bash(<name>:*)` 형태로 현재
+# 트리 문서 3곳에 들어와 있었는데 이 룰은 하나도 잡지 못했다(접미사만 보기 때문).
+#
+# **패턴으로는 임의의 비공개 이름을 탐지할 수 없다** — 이름을 알아야 잡을 수 있고, 이름을
+# 이 공개 파일에 적으면 그것이 곧 유출이다. 탐지할 수 없는 것을 탐지한다고 주장하지
+# 않는다(docs/conventions/warning-signal.md).
+#
+# 그래서 이 룰은 **접미사 오탐을 내지 않도록 좁혔다**(`_ops` 제거 — `git_ops`·`write_ops`
+# 같은 일상 식별자가 CI 를 red 로 만든다). 남은 실질 방어선은 **리뷰**이고, 기계적
+# 방어가 필요하면 이름 목록을 **gitignore 된 로컬 파일**에 두고 pre-commit 에서 읽어야 한다.
+[[rules]]
+id = "private-project-names"
+description = "비공개 프로젝트 이름 패턴 — 한계는 위 주석 참고 (패턴으로는 불완전)"
+regex = '''[a-z][a-z0-9]{3,}_(quant|optimizer)'''
+tags = ["private", "internal"]
+
+[[rules]]
+id = "internal-server-patterns"
+description = "내부 서버/IP 패턴"
+regex = '''(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)'''
+tags = ["private", "internal"]
+
+[allowlist]
+description = "허용 목록"
+paths = [
+    '''.gitleaks.toml''',
+    '''plugins/common/agents/dev/security-scan.md''',
+    '''plugins/common/rules/CHECKSUMS.sha256''',
+]
+# CHANGELOG.md는 blanket 제외하지 않는다 — 실제 시크릿이 changelog에 붙어도 스캔되도록
+# (적대적 리뷰). 산문상 "secret/token" 단어는 gitleaks의 엔트로피 패턴에 안 걸린다.

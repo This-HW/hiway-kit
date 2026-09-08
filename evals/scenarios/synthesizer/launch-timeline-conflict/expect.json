@@ -1,0 +1,72 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "충돌",
+        "상충",
+        "모순"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "OAuth 재인증",
+        "3주"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "프로모션 배너",
+        "8월 30일",
+        "1주 이내"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "세션 토큰"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "Critical",
+        "Important",
+        "우선순위",
+        "🔴",
+        "🟡"
+      ]
+    },
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    },
+    {
+      "type": "file_unchanged",
+      "file": "planner.md"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "developer.md"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "security.md"
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "synthesizer가 launch-timeline-conflict 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

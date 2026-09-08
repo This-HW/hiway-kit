@@ -1,0 +1,137 @@
+#!/bin/bash
+# hiway-kit pre-commit hook
+# Auto-installed by session-check.py
+
+set -e
+
+# Python 파일 ruff check
+if command -v ruff &>/dev/null; then
+    # macOS/Linux 호환: tr로 NUL→줄바꿈 변환 후 grep, 재NUL화
+    STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+    if [ -n "$STAGED_PY" ]; then
+        while IFS= read -r f; do
+            before="$(md5 -q "$f" 2>/dev/null || md5sum "$f" 2>/dev/null | cut -d' ' -f1)"
+            # --force-exclude 필수: 파일 경로를 **명시**하면 ruff는 프로젝트 설정의
+            # exclude/extend-exclude를 무시한다. 그 결과 훅이 제외 대상(이 레포에선
+            # evals/scenarios의 *의도적 결함 픽스처*)까지 린트하고, --fix가 붙어 있어
+            # 그 결함을 자동 수정한 뒤 재스테이징할 수 있다 — eval 자산이 조용히 망가진다.
+            # ruff.toml은 룰셋뿐 아니라 **범위**의 단일 소스이며(CLAUDE.md), 훅도 그 계약을 지킨다.
+            ruff check --force-exclude --fix "$f" 2>/dev/null || true
+            after="$(md5 -q "$f" 2>/dev/null || md5sum "$f" 2>/dev/null | cut -d' ' -f1)"
+            if [ "$before" != "$after" ]; then
+                git add "$f"
+            fi
+        done <<< "$STAGED_PY"
+    fi
+fi
+
+# JSON 파일 유효성 검증
+STAGED_JSON=$(git diff --cached --name-only --diff-filter=ACM | grep '\.json$' || true)
+if [ -n "$STAGED_JSON" ]; then
+    while IFS= read -r f; do
+        if ! python3 -m json.tool "$f" > /dev/null 2>&1; then
+            echo "❌ Invalid JSON: $f"
+            exit 1
+        fi
+    done <<< "$STAGED_JSON"
+fi
+
+# plugins/ 하위 .md 파일 frontmatter 필수값 검증
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep '^plugins/.*\.md$' || true)
+if [ -n "$STAGED_MD" ]; then
+    python3 - <<'PYEOF'
+import sys, re, pathlib, subprocess
+
+result = subprocess.run(
+    ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+    capture_output=True, text=True
+)
+files = [f for f in result.stdout.splitlines() if f.startswith("plugins/") and f.endswith(".md")]
+
+errors = []
+for fpath in files:
+    if "/skills/" in fpath or "/rules/" in fpath:
+        continue
+    p = pathlib.Path(fpath)
+    if not p.exists():
+        continue
+    content = p.read_text(encoding="utf-8")
+    if not content.startswith("---"):
+        continue  # frontmatter 없는 파일은 스킵 (README 등)
+    m = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
+    if not m:
+        continue
+    fm = m.group(1)
+    if "name:" not in fm:
+        errors.append(f"{fpath}: frontmatter에 'name:' 필드 없음")
+    if "description:" not in fm:
+        errors.append(f"{fpath}: frontmatter에 'description:' 필드 없음")
+
+if errors:
+    for e in errors:
+        print(f"❌ {e}")
+    sys.exit(1)
+PYEOF
+fi
+
+# 비공개 이름 차단 — 목록은 **커밋되지 않는 로컬 파일**에서 읽는다
+#
+# 왜 이 형태인가: 패턴(정규식)으로는 임의의 비공개 프로젝트 이름을 탐지할 수 없다.
+# 이름을 알아야 잡히는데, 그 이름을 커밋되는 설정 파일(.gitleaks.toml 등)에 적으면
+# **그 파일 자체가 유출**이 된다. 그래서 목록은 gitignore 된 로컬 파일에 두고 훅이
+# 그것을 읽는다 — 보호는 동작하고 이름은 공개되지 않는다.
+#
+# 사용법: 레포 루트에 `.private-names` 를 만들고 한 줄에 하나씩 적는다(# 주석 허용).
+# 파일이 없으면 이 검사는 조용히 통과한다(fail-open) — 없는 보호를 있다고 믿게 하지
+# 않기 위해, 통과 사실을 아래에서 명시적으로 알린다.
+# 실측 근거: 2026-09-08, 설계 문서 3곳에 비공개 프로젝트 이름이 들어갔는데 gitleaks 의
+# 접미사 패턴 룰이 하나도 잡지 못했다(정밀도 4%, 재현율 0%).
+NAMES_FILE="$(git rev-parse --show-toplevel)/.private-names"
+if [ -f "$NAMES_FILE" ]; then
+  STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
+  # 목록 파일 자체가 스테이징된 경우를 먼저 잡는다 — 이름이 그 안에 있는 것은 정상이므로
+  # 아래 루프에 맡기면 "b.md 가 아니라 .private-names 가 걸렸다"는 혼란스러운 메시지가 난다.
+  if printf '%s\n' "$STAGED" | grep -qx '\.private-names'; then
+    printf '\033[31m✗ .private-names 자체가 스테이징됐습니다 — 이 파일은 커밋하면 안 됩니다.\033[0m\n'
+    echo "  .gitignore 에 '.private-names' 를 넣고 'git restore --staged .private-names' 하세요."
+    exit 1
+  fi
+  if [ -n "$STAGED" ]; then
+    HITS=""
+    while IFS= read -r name; do
+      case "$name" in ''|'#'*) continue ;; esac
+      # -F 고정 문자열, -I 바이너리 제외. 스테이징된 파일만 본다.
+      #
+      # `|| true` 가 필수다. 이 스크립트는 `set -e` 아래에서 돌고, **명령치환 대입의
+      # 종료코드는 그 명령의 종료코드**다 — `grep -l` 은 매치가 없으면 1 을 내므로,
+      # 위반이 하나도 없는 정상 커밋에서 훅이 그 줄에서 죽는다(실측으로 걸렸다).
+      # "매치 없음" 은 정상 결과이지 실패가 아니다.
+      found="$(printf '%s\n' "$STAGED" | tr '\n' '\0' \
+        | xargs -0 grep -lFI -- "$name" 2>/dev/null || true)"
+      # `[ ... ] && ...` 대신 `if` 를 쓰는 것도 같은 이유다 — 복합문이 비-0 이면 죽는다.
+      if [ -n "$found" ]; then
+        # **이름 자체는 찍지 않는다.** 이 훅의 출력은 터미널에만 남지 않는다 —
+        # 에이전트 트랜스크립트·CI 로그·이슈 첨부로 옮겨 다니고, 그 순간 "목록을
+        # 커밋하지 않는다"는 이 설계의 전제가 무너진다(실측: 되돌려-FAIL 검증 중
+        # 훅 출력이 그대로 대화 로그에 실렸다). 소유자는 자기 목록을 이미 알고
+        # 있으므로 첫 글자와 길이면 어느 항목인지 식별에 충분하다.
+        masked="$(printf '%s' "$name" | cut -c1)…(${#name}자)"
+        HITS="$HITS\n  $masked → $(printf '%s' "$found" | tr '\n' ' ')"
+      fi
+    done < "$NAMES_FILE"
+    if [ -n "$HITS" ]; then
+      printf '\033[31m✗ 비공개 이름이 스테이징된 파일에 있습니다:\033[0m'
+      printf '%b\n' "$HITS"
+      echo "  .private-names 목록의 항목입니다(이름은 일부러 가렸습니다 — 이 출력은"
+      echo "  로그·트랜스크립트로 옮겨 다닙니다). 자리표시자로 바꾸고 다시 커밋하세요."
+      exit 1
+    fi
+  fi
+else
+  echo "  · .private-names 없음 — 비공개 이름 검사 건너뜀 (보호 없음)"
+fi
+
+# 명시적으로 0 으로 닫는다 — 마지막 명령의 종료코드가 훅의 판정이 되지 않게.
+# 이 배치에서 다룬 "종료코드를 읽지 않으면 게이트가 아니다"의 거울상이다: 여기서는
+# 읽히지 않은 종료코드가 **거짓 차단**을 만든다.
+exit 0

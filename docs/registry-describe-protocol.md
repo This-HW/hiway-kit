@@ -1,0 +1,125 @@
+# 컨트롤 레지스트리 이음매 — `describe` 프로토콜 (26-15~26-19, D-42·D-44·D-48·D-49·D-50)
+
+> 이 문서는 규범이 아니다. cck가 아는 동사는 `describe` 하나뿐이고, 그 계약은
+> `plugins/common/hooks/feedback_ledger.py`의 docstring("스테이징 → 승격" 절)이
+> 코드와 함께 SSOT로 갖고 있다. 여기서는 **레지스트리를 구현하는 쪽**(컨트롤
+> 프로젝트)이 알아야 할 것을 한 곳에 모은다 — 포인터 형식, `describe` 응답 스키마,
+> 적합성 프로브 사용법.
+
+## 왜 이 이음매가 있는가
+
+cck(claude-code-kit)는 자체 feedback ledger(`docs/works/feedback/ledger.md`)로
+결함 패턴을 누적하는 학습 루프를 갖고 있다. 컨트롤 프로젝트(여러 레포·세션을
+운영하는 상위 오케스트레이터)가 자기 원장(레지스트리)을 갖고 있으면, cck의 ledger는
+**세션 로컬 스테이징 버퍼**로 격하되고 컨트롤의 레지스트리가 내구 진실이 된다.
+컨트롤 레지스트리가 없으면 cck ledger가 그대로 내구 진실이다(폴백) — 이 전환은
+cck 소스에 특정 레지스트리의 어휘를 하드코딩하지 않고 이뤄진다.
+
+## 1. 포인터 — 컨트롤이 cck에게 자신을 알리는 방법
+
+cck는 두 위치에서 포인터를 찾는다(우선순위 순):
+
+1. 자식 세션 마커(`$(git rev-parse --git-dir)/cck/child.json`)의 `registry` 필드 — 자식용
+2. `$(git rev-parse --git-common-dir)/cck/registry.json` — 부모/컨트롤 세션용
+
+두 경로 모두 **레포 밖(gitdir), untracked, 클론과 함께 죽는다** — 새 설정 파일
+형식을 넣지 않는다는 원칙의 의도적 예외다(값이 아니라 포인터만 담고, 프로젝트가
+유지보수하지 않으며, 런처가 등록 시 한 번 쓴다).
+
+포인터 파일 형식:
+
+```json
+{
+  "command": ["/path/to/registry-cli", "--project", "my-project"],
+  "promotionVerb": "register_defect"
+}
+```
+
+- **`command`(필수)** — argv 배열. cck는 이 뒤에 동사 이름과 인자를 붙여 실행한다.
+  **`url` 필드는 절대 허용되지 않는다** — cck는 exec 전용 계약이다(D-48). HTTP
+  레지스트리는 소비자 쪽에서 shim(요청 조립 + 토큰 주입 + stdout)을 내야 한다.
+  cck는 자격증명을 다루지 않는다.
+- **`promotionVerb`(선택)** — ledger 항목을 승격할 때 호출할 동사 이름. cck 소스는
+  이 이름을 하드코딩하지 않는다(D-42) — 여기, 컨트롤이 쓰는 파일에서 읽는다.
+  생략하면 cck는 `describe`가 선언한 `write` 동사가 **정확히 하나**일 때만 그것을
+  자동 선택한다. 둘 이상이거나 하나도 없으면 승격을 보류하고 이유를 보고한다 —
+  추측하지 않는다.
+
+## 2. `describe` 응답 스키마
+
+포인터의 `command`에 `describe`를 덧붙여 실행하면(`<command...> describe`) 표준출력에
+JSON을 낸다:
+
+```json
+{
+  "verbs": [
+    {"name": "list_open", "args": [], "effect": "read", "idempotent": true},
+    {"name": "register_defect", "args": ["category", "severity", "pattern"], "effect": "write", "idempotent": false}
+  ],
+  "head": "3f85f47be4997e54d275218bf64ac2c81324c2bd"
+}
+```
+
+| 필드 | 필수 | 의미 |
+| --- | --- | --- |
+| `verbs[].name` | 예 | 동사 이름. cck가 호출할 때 쓴다 |
+| `verbs[].args` | 예 | 위치 인자 이름 목록(문서화 목적 — cck는 개수·이름을 강제하지 않는다) |
+| `verbs[].effect` | 아니오 | `"read"` \| `"write"`. **미선언은 `write`로 간주**되고 자식에게 노출되지 않는다 |
+| `verbs[].idempotent` | 아니오 | bool. **미선언은 `false`로 간주** — cck는 재시도하지 않는다 |
+| `head` | 아니오 | "이 응답이 반영하는 레포 커밋"(fresh exec면 자연히 현재 HEAD). **"프로세스가 기동한 커밋"이 아니다** — 그 값을 정확히 계산할 수 없으면 아예 선언하지 않는 편이 낫다(미선언은 경고로 끝나지만, 잘못된 선언은 아래 3절의 강등을 부른다) |
+
+**모르는 것은 위험한 것으로 취급한다.** `effect`·`idempotent`를 생략하면 cck는
+안전한 쪽(각각 write / 재시도 불가)으로 읽는다 — 관대한 기본값이 레지스트리
+구현자의 실수를 cck의 사고로 만드는 것을 막는다.
+
+**자식에게는 `effect == "read"`인 동사만 노출된다.** 이것은 cck가 스스로 계산하는
+필터이지 레지스트리가 선언하는 값이 아니다 — 레지스트리는 `effect`만 정직하게
+선언하면 된다.
+
+## 3. 신선도 — `head`가 낡으면 무슨 일이 일어나는가
+
+| 상황 | cck 처리 |
+| --- | --- |
+| `head` 선언 + 현재 HEAD와 일치 | 정상 — 승격 진행 |
+| `head` 선언 + 불일치 | 승격 보류(ledger 보존) + 경고. 읽기 동사는 계속 쓸 수 있다 |
+| `head` 불일치가 **연속 3회** | 레지스트리를 **미신뢰로 강등** — 이후 호출은 cck ledger를 내구 진실로 쓰는 폴백으로 고정된다 |
+| `head` 미선언 | 진행하되 "신선도 미선언" 경고만 남긴다 |
+
+강등 상태는 `$(git-common-dir)/cck/registry_trust.json`에 기록된다(공유 gitdir,
+untracked). 레지스트리가 정상화되어 `head`가 다시 일치하기 시작하면 연속 카운터가
+리셋되지만, **한 번 강등되면 그 세션에서는 자동 복귀하지 않는다** — 신선도
+데이터를 정책적으로 신뢰 회복시키는 것은 사람의 판단이 필요하다.
+
+## 4. 적합성 프로브로 자기 파사드를 검증하기
+
+**cck를 설치하지 않고도** 레지스트리 파사드가 이 계약을 지키는지 확인할 수 있다:
+
+```bash
+# 포인터 파일 경유
+python3 scripts/check_registry_describe.py --pointer registry.json
+
+# 커맨드를 직접 지정
+python3 scripts/check_registry_describe.py -- /path/to/registry-cli --project my-project
+```
+
+프로브는 스키마·effect 분류·자식 노출 집합·신선도를 검사하고 사람이 읽을 수 있는
+`[PASS]`/`[FAIL]`/`[WARN]`/`[INFO]` 줄과 `GREEN`/`RED` 최종 판정을 출력한다.
+exit code 0 = 적합, 1 = 부적합.
+
+`--observe <파일>`을 주면 신선도 관측을 JSONL로 누적해, "head를 기동 시점 커밋으로
+고정 보고하는" 패턴(레포는 바뀌는데 head는 안 바뀌는 연속 관측)을 감지한다 —
+장수 데몬형 레지스트리 구현에서 특히 유용하다.
+
+## 5. 알려진 한계
+
+- **동사 어휘는 표본 1개(n=1)에서 나왔다.** `describe`만이 안전한 계약이고, 나머지
+  동사 이름(`list_open`·`claim`/`release`·`record_outcome`·`register_defect`·
+  `record_decision` 등)은 참고 목록일 뿐 규격이 아니다. 두 번째 컨트롤 프로젝트
+  표본이 나오면 재검토한다.
+- **`promotionVerb` 필드는 이 킷 구현의 해석이다.** D-44의 4필드 스키마
+  (`name`·`args`·`effect`·`idempotent`)에는 "이 동사가 승격용이다"를 나타내는
+  필드가 없다 — 그 공백을 포인터 파일(컨트롤 소유)의 필드로 메운 것이며, 설계
+  문서에 명문화된 결정이 아니다. 컨트롤이 다른 방식을 원하면 조정 대상이다.
+- **cck는 선언되지 않은 낡음을 탐지할 수 없다.** `head`를 구현하지 않은
+  레지스트리에서 신선도는 영원히 "미선언" 경고만 남기고 승격을 막지 않는다 —
+  이것은 사양이다(동작하지 않는 안전장치를 두지 않는다), 결함이 아니다.

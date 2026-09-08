@@ -1,0 +1,45 @@
+{
+  "assertions": [
+    {
+      "type": "output_not_contains",
+      "values": [
+        "취약점 없음",
+        "취약점이 없",
+        "취약점은 없",
+        "버그 없음",
+        "버그가 없",
+        "no vulnerabilities",
+        "no issues found"
+      ]
+    },
+    {
+      "type": "file_unchanged",
+      "file": "checkout-request.md"
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/planning/user-journeys/checkout-journey.md",
+      "pattern": "품절"
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/planning/user-journeys/checkout-journey.md",
+      "pattern": "카드"
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/planning/user-journeys/checkout-journey.md",
+      "pattern": "상태"
+    }
+  ],
+  "_designNote": {
+    "_surfaceFix": "W-023(2026-09-01): 이 3개 검사는 원래 stdout 에 대한 output_contains_any 였다. define-business-logic/point-service-rules 와 동일한 결함 — 이 에이전트의 계약된 산출물은 파일이다(정의 §'문서 저장 위치': docs/planning/user-journeys/[기능명]-journey.md, tools 에 Write). policy.json cost._meta 가 이 시나리오의 300s 타임아웃을 '본질적 소요'로 진단했으나, 최소한 채점 실패분의 원인은 소요가 아니라 잘못된 검사 대상이었다.",
+    "_residualWeakness": "세 검사(`품절`·`카드`·`상태`) **전부** 약하다. 파일 기반으로 옮기면서 '채팅에서 요청을 되풀이'는 걸러졌지만, 납품 문서가 요청 문구를 인용만 해도 통과한다. 조일 방향: 두 엣지케이스의 **상태 전이가 실제로 설계됐는지**를 보는 관계 패턴(예: 품절 분기에서 재고/대체/알림 중 하나로 이어지는지). **이번 배치에서 하지 않은 이유**: 새 내용 어서션은 실제 산출물로 검증해야 하는데, 검사 대상(stdout→파일)과 검사 내용을 동시에 바꾸면 무엇이 결과를 바꿨는지 분리되지 않는다. 지금 검증 없이 바꾸면 방금 없앤 플레이크를 다른 형태로 되들이는 셈이다. 다음 배치에서 관계 패턴 후보를 실제 실행 산출물에 대조해 확정할 것.",
+    "_notInFixture_RETRACTED": "**철회 (W-023 리뷰 S-1).** 원문은 \"'상태'는 fixture 에 없다(grep 0건) — 셋 중 이 검사만 현재도 능력을 측정한다\" 였다. 틀렸다. fixture 부재는 비-공허성의 **충분조건이 아니다** — 한국어 여정 설계 문서에서 '상태'라는 두 글자가 등장하지 않을 확률은 사실상 0이다('상태 전이'·'로그인 상태'·'결제 상태'·'상태 코드'…). 즉 이 검사도 '품절'·'카드'와 같은 부류이며, 거의 항상 참인 토톨로지다."
+  },
+  "judge": {
+    "enabled": false,
+    "rubric": "design-user-journey가 checkout-edge-cases 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

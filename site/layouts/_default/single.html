@@ -1,0 +1,21 @@
+{{ define "main" }}
+<article class="post wrap">
+  <div class="post-header">
+    <p class="kicker">{{ with .Params.categories }}{{ delimit . " · " }}{{ else }}{{ if eq .Lang "en" }}Article{{ else }}글{{ end }}{{ end }}</p>
+    <h1>{{ .Title }}</h1>
+    {{ with .Description }}<p class="summary" style="color:var(--muted);font-size:1.05rem;margin:0">{{ . }}</p>{{ end }}
+    <div class="meta">
+      {{ if not .Date.IsZero }}<span><b>날짜</b> {{ .Date.Format "2006-01-02" }}</span>{{ end }}
+      {{ with .ReadingTime }}<span>{{ if eq $.Lang "en" }}<b>Read</b> {{ . }} min{{ else }}<b>읽기</b> {{ . }}분{{ end }}</span>{{ end }}
+      {{ with .Params.tags }}<span><b>태그</b> {{ delimit . ", " }}</span>{{ end }}
+    </div>
+  </div>
+  <div class="content">
+    {{ .Content }}
+  </div>
+  <nav class="post-nav">
+    <span>{{ with .PrevInSection }}<a href="{{ .RelPermalink }}">← {{ .Title }}</a>{{ end }}</span>
+    <span>{{ with .NextInSection }}<a href="{{ .RelPermalink }}">{{ .Title }} →</a>{{ end }}</span>
+  </nav>
+</article>
+{{ end }}

@@ -1,0 +1,20 @@
+{
+  "interface": {
+    "displayName": "Claude Code Kit"
+  },
+  "name": "hiway-kit-marketplace",
+  "plugins": [
+    {
+      "category": "Coding",
+      "name": "hiway-kit",
+      "policy": {
+        "authentication": "ON_INSTALL",
+        "installation": "AVAILABLE"
+      },
+      "source": {
+        "path": "./plugins/common",
+        "source": "local"
+      }
+    }
+  ]
+}

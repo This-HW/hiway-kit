@@ -1,0 +1,80 @@
+# 프로젝트 ruff 설정 — 이 레포의 린트 SSOT (F-036)
+#
+# 왜 이 파일이 필요한가:
+#   이게 없으면 ruff는 **개발자 개인의 전역 설정**(`~/.config/ruff/ruff.toml` —
+#   공교롭게도 이 kit의 `plugins/common/setup/ruff.toml`이 배포하는 파일)을 집어간다.
+#   그 결과 로컬 `verify-done.sh §3`은 green인데 CI(전역 설정 없음)는 red이 될 수 있다.
+#   실제로 ruff 0.16의 기본 룰셋 확장 때 그 사고가 났다(2.12.0 push, run 30794529796).
+#   프로젝트 config가 존재하면 ruff는 전역 config를 **무시**하므로 환경 비의존이 된다.
+#
+# select를 명시하는 이유 (기본값 상속 금지):
+#   ruff의 **기본 룰셋은 버전마다 다르다**. 0.15는 E402를 켜고 0.16은 끄는 식이라,
+#   기본값에 기대면 "CI(핀 버전)는 green인데 auto-format 훅(로컬 ruff)은 block"
+#   같은 모순이 생긴다. 룰 집합을 여기 못박아 도구 버전과 무관하게 만든다.
+#   `.ruff-version` 핀은 그 위에 얹는 재현성 장치다 (같은 룰, 같은 판정).
+
+# 훅은 **소비자 머신의 `python3`**로 실행된다. macOS 기본 python3는 아직 3.9.6이므로
+# floor는 3.9다. (2.12.0까지 훅 4종이 3.9에서 PEP604 어노테이션 런타임 평가로 죽고
+# 있었다 — auto-format/stop-validator/checklist/feedback_ledger. F-037)
+# `from __future__ import annotations`로 어노테이션을 지연 평가하면 3.10 문법을 그대로
+# 쓰면서 3.9에서 동작한다. 그 누락을 아래 FA 룰이 영구 강제한다.
+target-version = "py39"
+
+# eval 시나리오 fixture는 **의도적으로 결함을 심은 검사 대상 코드**다.
+# (예: fix-bugs/mutable-default-arg/fixture/registry.py 의 B006은 에이전트가
+#  찾아내야 할 바로 그 버그다 — 고치면 eval이 무의미해진다.)
+#
+# `exclude`가 아니라 **`extend-exclude`**: exclude는 ruff의 기본 제외 목록
+# (.venv/node_modules/dist/.git …)을 *대체*한다. 지금은 respect-gitignore가 .venv를
+# 가려주지만, gitignore되지 않은 벤더 디렉토리 하나면 수천 건을 린트하게 된다.
+extend-exclude = ["evals/scenarios"]
+
+[lint]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "W",     # pycodestyle warnings
+    "I",     # isort — import 정렬
+    "UP",    # pyupgrade (target-version 기준)
+    "B",     # bugbear — 실버그 패턴
+    "SIM",   # 단순화
+    "C4",    # comprehension
+    "PIE",   # 불필요 코드
+    "PLW",   # pylint warnings (subprocess check= 명시 등)
+    "RUF",   # ruff 고유 (미사용 noqa 포함)
+    "S",     # bandit — 보안
+    "BLE",   # blind except
+    "DTZ",   # naive datetime
+    "EXE",   # shebang/실행권한 정합
+    "FURB",  # 현대화 리팩터
+    "FA",    # future-annotations 누락 — 소비자 python 3.9에서 훅이 죽는 것을 구조로 차단
+]
+ignore = [
+    "E501",  # line-too-long — 한국어 주석 폭이 큼. 줄바꿈은 포매터 책임.
+    "S603",  # subprocess 호출 자체 — 훅/게이트의 본질 기능이다(인자는 리터럴 고정).
+    "S607",  # 부분 경로 실행(git/ruff/npx) — PATH 해석은 의도된 동작.
+    "RUF002", # 독스트링의 유니코드 기호(∪, — 등) — 한국어 문서의 정상 표기.
+    "RUF003", # 주석의 유니코드 기호 — 동일. (식별자/문자열의 RUF001은 켜둔다)
+]
+
+[lint.per-file-ignores]
+# 테스트: sys.path 조작 후 import(플러그인 레이아웃상 패키지가 아님) + assert가 본질 +
+# "/tmp/.env" 류는 실제 파일이 아니라 경로 판정을 먹이는 **문자열 픽스처**다.
+"plugins/common/hooks/tests/*.py" = ["E402", "S101", "S108"]
+"evals/tests/*.py" = ["E402", "S101", "S108"]
+# scripts/ 의 게이트 스크립트 테스트도 동일 — 하이픈 파일명이라 importlib로 로드한다.
+"scripts/tests/*.py" = ["E402", "S101", "S108"]
+# 훅의 fail-open 계약: 훅은 어떤 예외로도 세션을 죽이면 안 되고, 항상 안전한
+# 기본값으로 degrade한다(각 사이트에 명시적 폴백 존재 — 예: git 실패 시 cwd).
+# 따라서 광범위 except는 결함이 아니라 설계다. 코드에 noqa를 40여 개 뿌리는 대신
+# 정책을 여기 한 곳에 문서화한다.
+"plugins/common/hooks/*.py" = [
+    "BLE001", # blind except — fail-open 계약 (세션 보호)
+    "S110",   # try-except-pass — 명시적 폴백이 뒤따름
+    "S112",   # try-except-continue — 한 항목 실패가 루프 전체를 죽이지 않음
+]
+"plugins/common/setup/*.py" = ["BLE001", "S110", "S112"]
+
+[format]
+# ruff format 기본값 (black 호환). 포맷은 게이트가 강제하지 않는다 —
+# auto-format.py 훅이 편집 시점에 적용한다.

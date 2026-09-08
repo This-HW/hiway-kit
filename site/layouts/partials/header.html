@@ -1,0 +1,29 @@
+<nav class="nav">
+  <div class="wrap">
+    <a class="brand" href="{{ site.Home.RelPermalink }}">hiway-kit</a>
+    {{ range site.Menus.main }}
+      <a class="item" href="{{ .URL }}">{{ .Name }}</a>
+    {{ end }}
+    <span class="lang-switch">
+      {{ if .IsTranslated }}
+        {{ range .AllTranslations }}
+          {{ if eq .Lang $.Lang }}
+            <span class="lang-item is-active">{{ .Language.Label }}</span>
+          {{ else }}
+            <a class="lang-item" href="{{ .RelPermalink }}">{{ .Language.Label }}</a>
+          {{ end }}
+        {{ end }}
+      {{ else }}
+        {{ range hugo.Sites }}
+          {{ if eq .Language.Lang $.Lang }}
+            <span class="lang-item is-active">{{ .Language.Label }}</span>
+          {{ else if eq .Language.Lang "ko" }}
+            <a class="lang-item" href="{{ "" | absURL }}">{{ .Language.Label }}</a>
+          {{ else }}
+            <a class="lang-item" href="{{ (printf "%s/" .Language.Lang) | absURL }}">{{ .Language.Label }}</a>
+          {{ end }}
+        {{ end }}
+      {{ end }}
+    </span>
+  </div>
+</nav>

@@ -1,0 +1,27 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "add_widget"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "remove_widget"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "get_stock_level"
+      ]
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "explore-codebase가 inventory-function-inventory 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "ops": [
+    { "op": "init", "defaultBranch": "main" },
+    { "op": "add", "paths": ["."] },
+    { "op": "commit", "message": "feat: add initial config" },
+    { "op": "branch", "name": "feature/x" },
+    { "op": "write", "path": "src/config.py", "content": "TIMEOUT = 60\n" },
+    { "op": "add", "paths": ["."] },
+    { "op": "commit", "message": "feat: bump timeout to 60 on main" },
+    { "op": "checkout", "ref": "feature/x" },
+    { "op": "write", "path": "src/config.py", "content": "TIMEOUT = 90\n" },
+    { "op": "add", "paths": ["."] },
+    { "op": "commit", "message": "feat: bump timeout to 90 on feature/x" },
+    { "op": "checkout", "ref": "main" }
+  ]
+}

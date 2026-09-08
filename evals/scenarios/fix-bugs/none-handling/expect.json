@@ -1,0 +1,17 @@
+{
+  "assertions": [
+    {
+      "type": "pytest_green",
+      "path": "."
+    },
+    {
+      "type": "file_unchanged",
+      "file": "test_parser.py"
+    }
+  ],
+  "judge": {
+    "enabled": false,
+    "rubric": "None/비이메일 입력에 대한 AttributeError·IndexError를 방어하며 회귀 테스트를 포함한 전체 테스트가 green인가?",
+    "threshold": 7
+  }
+}

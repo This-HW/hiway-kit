@@ -1,0 +1,12 @@
+# 미러 동기화 매니페스트 — docs/architecture/rules/ 는 주입 룰의 장문 해설본이다.
+# 각 줄 = 그 해설본이 마지막으로 반영한 **주입 룰**(plugins/common/rules/)의 sha256.
+# 주입 룰을 고쳤는데 이 값이 그대로면 verify-done §7이 FAIL — 해설본 확인 후 재생성:
+#   scripts/sync-rule-mirror.sh --regenerate
+fdaab05b634a33cef1acd6f1d085f4dff30a65c5916a404aa09afd000df55aba  agent-delegation-chain.md
+cc143582bcb8b0aab0cd5d925c4e1a0cb98602d6e80579c843a0d6dbca56c76c  agent-system.md
+8ff5ea765512cfadc1ef857f8c6daf9d79666a30bf2b05dd11aa93b26e53f165  code-quality.md
+28a4f85bea50a45135d279f2ed82cbf292d6e0130cbbad51393a35285d2c200c  mcp-usage.md
+125cf72452304acb030ac19d13c3439b06f5f5b878ba84e0ef68f402bca8737e  planning-check.md
+1ca70df2f6c8cf5f02567a454f6b567dd7c2bcf33bea094f9339701384b1a45b  planning-protocol.md
+7d8a6f2b39189f9ae5755adde0382594cfa6c0ec0faf19dfa5c05fad98e68543  ssot.md
+12a04abe0eab24c89aa7cd974efeb85b2fffb00377e4ec33c611c776e9d2e8ef  task-resume.md

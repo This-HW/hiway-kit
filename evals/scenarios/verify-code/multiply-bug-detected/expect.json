@@ -1,0 +1,45 @@
+{
+  "assertions": [
+    {
+      "type": "output_contains_any",
+      "values": [
+        "multiply"
+      ]
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "fail",
+        "실패",
+        "failed"
+      ]
+    },
+    {
+      "type": "output_not_contains",
+      "values": [
+        "모든 테스트 통과",
+        "전부 통과",
+        "테스트 통과했습니다",
+        "all tests passed",
+        "all tests pass",
+        "모든 검증 통과"
+      ]
+    },
+    {
+      "type": "file_unchanged",
+      "file": "calc.py"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "test_calc.py"
+    }
+  ],
+  "_removedAssertions": {
+    "delegation_signal": "준수율 관측 1/2(W-022 R1) 근거로 게이트에서 분리 — verify-code 에이전트의 DELEGATION_SIGNAL 계약 미준수는 실재하는 결함이며, 어서션 삭제가 아니라 결정적 게이트에서의 분리다(스펙 §5.4). haiku/low-effort 프로필(explore-codebase·optimize-logic 등)에서 반복 관측되는 패턴과 일치. 에이전트 정의(plugins/common/agents/dev/verify-code.md) 수정으로 준수율이 개선되면 이 어서션을 되돌리는 것이 그 수정의 수용 기준이다. 2026-08-27, decision-log D-3 원칙 적용. **[상위 판정 갱신, 2026-08-27 W-022 R1]** 위 재부착 조건은 무효다 — DELEGATION_SIGNAL 계약 자체가 폐기되어(에이전트 정의·rules·CLAUDE.md 전부 걷어냄) '에이전트 정의가 고쳐지면 재부착'이라는 조건이 성립할 대상이 없다. 상세: docs/specs/2026-08-27-delegation-signal-contract-review.md(W-021)."
+  },
+  "judge": {
+    "enabled": false,
+    "rubric": "verify-code가 multiply-bug-detected 상황을 정확히 처리하는가?",
+    "threshold": 7
+  }
+}
