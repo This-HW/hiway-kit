@@ -13,6 +13,29 @@
 | `child-git-guard.py` | 다중 세션 개발에서 위험한 git 명령 (D-36) |
 | `verify-mutate-split.py` | 검증과 상태 변경을 한 Bash 호출에 잇는 형태 |
 
+### git 훅은 별도 위치에 있다
+
+위 표는 **Claude Code 훅**(`PreToolUse` 등)이다. 하네스가 바뀌면 안 돈다.
+
+`setup/git-hooks/` 에는 **git 훅**이 있다 — 누가 명령을 실행하든 똑같이 돌므로
+**하네스 중립 집행**이다. Claude Code·Codex·Gemini·플레인 터미널에서 동일하게 작동한다.
+
+| 파일 | 막는 것 | 이유 |
+| --- | --- | --- |
+| `setup/git-hooks/reference-transaction` | 태그 없는 `git stash` | stash 스택은 저장소의 모든 워크트리·동시 세션이 **공유**한다. 태그가 없으면 `pop` 이 남의 항목을 꺼내고 꺼낸 쪽은 모른다 |
+
+```bash
+H="$(git rev-parse --git-path hooks)"
+cp "<플러그인 루트>/setup/git-hooks/reference-transaction" "$H/reference-transaction"
+chmod +x "$H/reference-transaction"
+```
+
+`--git-path` 를 쓰는 이유는 워크트리에서 `.git/hooks` 조립이 깨지기 때문이다
+(이 킷이 워크트리 운영을 권장한다). 해제는 그 파일을 지우면 된다. git 2.28+ 필요.
+
+**차단해도 작업은 보존된다** — ref 갱신이 abort 되면 작업트리 리셋이 일어나지 않는다
+`[confirmed]`. 회귀 테스트가 이 계약을 고정한다(`tests/test_git_stash_guard.py`).
+
 ## 설치 방법
 
 프로젝트의 `.claude/settings.json`(또는 `settings.local.json`)에 `PreToolUse` 항목으로

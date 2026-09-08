@@ -8,6 +8,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.11.0] — 2026-09-09
+
+### Added — 하네스 중립 집행의 첫 실증: `setup/git-hooks/reference-transaction`
+
+**질문은 이랬다**: Claude Code 의 PreToolUse 로만 막던 규율을 하네스 무관하게 집행할
+수단이 있는가. `git stash` 는 커밋을 만들지 않아 pre-commit 이 볼 순간이 없고, git
+alias 는 builtin 을 가로채지 못한다. **답: `reference-transaction` 훅이 있다** —
+모든 ref 갱신에 발화하므로 `refs/stash` 도 잡힌다(git 2.28+).
+
+실측으로 확인한 것 `[confirmed]`:
+
+| 항목 | 결과 |
+| --- | --- |
+| bare `git stash` | **차단** (`fatal: ref updates aborted by hook`) |
+| `git stash push -u -m "tag"` | 통과 |
+| 차단 시 작업트리 | **완전 보존** — 수정·untracked 파일 그대로, stash 0개 |
+| `pop`/`drop` (삭제 방향) | 막지 않음 |
+
+**판정을 문구가 아니라 데이터로 한다.** bare stash 는 제목을 `WIP on <branch>:
+<HEAD 한 줄>` 로 자동 생성하는데, `"WIP on"` 접두어로 판정하면 **로케일 번역에 깨질
+수 있고 그 방향이 "조용히 통과"**다 — 가드가 죽는 쪽이다. 그래서 번역되지 않는 부분,
+**제목이 HEAD 의 `%h %s` 로 끝나는가**로 판정한다. 경계 사례(`-m` 에 HEAD 한 줄을
+그대로 쓰는 경우)는 **차단 방향으로 실패**하므로 안전하다.
+
+> 로케일 독립성은 **직접 실측하지 못했다** — 이 환경의 git 빌드에 번역 카탈로그가
+> 없어 `ko_KR` 에서도 영어가 나왔다. 그래서 "문구가 번역되지 않는다"에 기대지 않고
+> 애초에 문구를 안 보는 설계를 골랐다. 검증할 수 없는 전제 위에 가드를 세우지 않는다.
+
+회귀 테스트 5종 + 되돌려-FAIL 확인(무동작 훅으로 바꾸면 3종이 실패).
+**opt-in 이다** — `hooks.json` 에 없고 문서화된 복사 한 줄로 켠다.
+
+
 ### Added — §21: 설치된 훅이 repo 정본과 같은가 (2026-09-09, 레포 로컬)
 
 `plugins/` 무변경. `scripts/verify-done.sh` 만.
