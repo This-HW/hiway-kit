@@ -92,3 +92,21 @@ def test_detection_is_data_based_not_locale_based(repo: Path) -> None:
     body = src.split("set -u", 1)[1]  # 주석(설명)에는 문구가 나올 수 있다
     assert '"WIP on ' not in body, "번역 가능한 문구로 판정하고 있다"
     assert "head_oneline" in body
+
+
+def test_drift_marker_is_present_and_position_independent(repo: Path) -> None:
+    """마커 계약: 존재하고, 위치에 의존하지 않는다.
+
+    피어 레포가 이 훅을 정본으로 들이면서 출처 주석을 위에 끼웠고 마커가 3행이 됐다.
+    "2행 정확히"로 판별했다면 그 순간 드리프트 감시가 **조용히 꺼졌을** 것이다.
+    판별은 고정 문자열 검색이라 위치 무관이고, 그 계약을 여기서 고정한다.
+    """
+    src = HOOK_SRC.read_text(encoding="utf-8")
+    assert "# kit-managed-hook" in src
+    # 마커를 아래로 옮겨도 여전히 "있다"로 판별돼야 한다 — 위치 고정 판별이면 여기서 깨진다.
+    lines = [ln for ln in src.splitlines() if ln.strip() != "# kit-managed-hook"]
+    moved = "\n".join([*lines[:1], "# 출처: 어느 레포", "# kit-managed-hook", *lines[1:]])
+    assert "# kit-managed-hook" in moved
+    # 제품명을 마커에 넣지 않는다 — 개명 때 대조가 조용히 멈춘다.
+    assert "hiway" not in "# kit-managed-hook"
+
