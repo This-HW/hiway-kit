@@ -469,7 +469,7 @@ def test_symlink_escape_is_checked_before_reading(tmp_path):
 def test_prose_mentioning_markers_is_not_treated_as_a_block(tmp_path):
     """마커를 *설명하는* 산문을 진짜 블록으로 오인하지 않는다 (ATK-001).
 
-    이 도구의 대상 파일은 하필 "에이전트에게 CCK를 설명하는 문서"다. 앵커 없는 관대한
+    이 도구의 대상 파일은 하필 "에이전트에게 이 킷을 설명하는 문서"다. 앵커 없는 관대한
     패턴은 두 인용 사이의 사용자 문장을 침묵 속에 삭제하고 exit 0을 냈다 — 그리고 그
     뒤로 --check는 green을 돌려줘 흔적도 남지 않았다.
     """
@@ -478,7 +478,7 @@ def test_prose_mentioning_markers_is_not_treated_as_a_block(tmp_path):
     target.mkdir()
     user = (
         "# 우리 팀 규약\n\n"
-        "## CCK 블록에 대해\n\n"
+        "## 이 킷의 블록에 대해\n\n"
         "`<!-- cck:begin -->` 마커로 시작하는 구간은 자동 생성이다.\n\n"
         "**절대 손으로 고치지 마라.** 고치면 다음 재생성에서 날아간다.\n"
         "갱신은 `/harness-export`로만 한다. QA 승인 없이 배포 금지.\n\n"

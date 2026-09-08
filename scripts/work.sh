@@ -61,10 +61,10 @@ PYEOF
 # (실측 확인, D-40/D-41) — so it must be normalised before use, not string-compared.
 # This directory is shared by every worktree of this repo and is structurally
 # untracked, which is exactly what fixes the cross-worktree W-XXX collision below.
-CCK_STATE_DIR=""
-cck_state_dir() {
-  if [[ -n "$CCK_STATE_DIR" ]]; then
-    printf "%s" "$CCK_STATE_DIR"
+KIT_STATE_DIR=""
+kit_state_dir() {
+  if [[ -n "$KIT_STATE_DIR" ]]; then
+    printf "%s" "$KIT_STATE_DIR"
     return 0
   fi
   local raw
@@ -76,18 +76,23 @@ cck_state_dir() {
     /*) : ;;
     *) raw="${REPO_ROOT}/${raw}" ;;
   esac
-  CCK_STATE_DIR="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${raw}/cck")"
-  printf "%s" "$CCK_STATE_DIR"
+  # 디렉토리 이름 "cck" 는 개명 잔재이지만 **바꾸지 않는다** — 이것은 내부 경로가 아니라
+  # 프로토콜 경로다: rules/child-marker.md·skills/child-session·hooks/examples/child-git-guard.py
+  # ·feedback_ledger.py 의 레지스트리 포인터가 같은 이름을 규범으로 참조하고, 외부
+  # 오케스트레이터의 registry describe 이음매도 이 경로를 읽는다. 바꾸려면 그 소비자들과
+  # 함께 옮겨야 하므로 조율 안건으로 남긴다(살아있는 마커를 고아로 만들지 않는다).
+  KIT_STATE_DIR="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${raw}/cck")"
+  printf "%s" "$KIT_STATE_DIR"
 }
 
 # Find the next W-XXX number by scanning all three stage dirs *and* the shared
-# claim registry (cck_state_dir/claimed — see claim_work_id). The claim registry
+# claim registry (kit_state_dir/claimed — see claim_work_id). The claim registry
 # must be included here too: it is what lets a concurrent process in another
 # worktree see a number that has been reserved but has no docs/works directory yet.
 next_work_number() {
   local max="0"
   local claimed_dir
-  claimed_dir="$(cck_state_dir)/claimed"
+  claimed_dir="$(kit_state_dir)/claimed"
   while IFS= read -r -d '' dir; do
     local base
     base="$(basename "$dir")"
@@ -110,13 +115,13 @@ next_work_number() {
 # 받을 수 있다(동시 `work.sh new`). mkdir의 원자성으로 claimed/W-XXX를
 # 선점해 번호를 확정한다 — 선점 실패 시 재채번 후 재시도.
 #
-# 레지스트리는 `cck_state_dir`(레포의 모든 워크트리·clone이 공유하는 git-common-dir
+# 레지스트리는 `kit_state_dir`(레포의 모든 워크트리·clone이 공유하는 git-common-dir
 # 하위)에 있다 — 이전에는 docs/works/.claimed 였고, 이는 워크트리별로 별도 체크아웃이라
 # 동시 세션이 같은 W-XXX를 받을 수 있었다(D-41). 크로스-레포(별도 clone)는 여전히
 # 이 메커니즘으로 탐지할 수 없다 — git-common-dir 자체가 레포 경계이기 때문이다.
 claim_work_id() {
   local claimed_dir
-  claimed_dir="$(cck_state_dir)/claimed"
+  claimed_dir="$(kit_state_dir)/claimed"
   mkdir -p "$claimed_dir"
   local num
   for _ in $(seq 1 20); do
@@ -291,7 +296,7 @@ cmd_new() {
   num="$(claim_work_id)"  # 원자적 ID 선점 (동시 실행 시 중복 W-XXX 방지, 워크트리 간 공유 — D-41)
   local id="W-${num}"
   local claimed_dir
-  claimed_dir="$(cck_state_dir)/claimed"
+  claimed_dir="$(kit_state_dir)/claimed"
   # claim 이후 실패(set -e) 시 고아 claimed 항목 잔존으로 번호가 영구 소각되는 것 방지 —
   # Work 디렉토리 생성 성공 후에만 trap 해제.
   trap 'rmdir "'"${claimed_dir}/W-${num}"'" 2>/dev/null || true' EXIT

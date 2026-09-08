@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""export_harness.py — CCK 규범을 하네스 중립 AGENTS.md로 내보낸다 (W-017 / Pillar 1).
+"""export_harness.py — 이 킷의 규범을 하네스 중립 AGENTS.md로 내보낸다 (W-017 / Pillar 1).
 
 왜 필요한가
 -----------
-CCK의 규범(`plugins/common/rules/*.md`)은 **Claude Code의 SessionStart 훅으로만**
+이 킷의 규범(`plugins/common/rules/*.md`)은 **Claude Code의 SessionStart 훅으로만**
 주입된다. 그런데 2026년의 개발자는 Orca·Paseo 같은 ADE에서 한 레포에 Claude Code와
-Codex·OpenCode·Pi를 **동시에** 붙여 굴린다. 그 순간 같은 레포의 절반은 CCK 규율
+Codex·OpenCode·Pi를 **동시에** 붙여 굴린다. 그 순간 같은 레포의 절반은 이 킷의 규율
 (planning gate·DoD·비신뢰 텍스트 취급) 밖에서 동작한다. 규율이 하네스마다 다른 레포는
 규율이 없는 레포와 같다.
 
@@ -26,7 +26,7 @@ Codex·OpenCode·Pi를 **동시에** 붙여 굴린다. 그 순간 같은 레포�
 정직한 한계 (생성물 헤더에도 명시된다)
 --------------------------------------
 AGENTS.md는 **텍스트 규범만** 이식한다. 훅(protect-sensitive·stop-validator·auto-format)과
-서브에이전트 정의는 Claude Code 전용이며 이식되지 않는다. 다른 하네스에서 CCK는
+서브에이전트 정의는 Claude Code 전용이며 이식되지 않는다. 다른 하네스에서 이 킷은
 "규율 문서"로 동작하지 "강제 장치"로 동작하지 않는다.
 
 사용 (레포에서는 ./scripts/export-harness.sh 래퍼를 쓴다):
@@ -61,7 +61,7 @@ from pathlib import Path
 # 마커는 "문자열"이 아니라 **구조**다.
 #
 # 앵커 없이 관대한 패턴은 산문 속 마커 *설명*을 진짜 블록으로 오인한다 — 그리고 이
-# 도구의 대상 파일은 하필 "에이전트에게 CCK를 설명하는 문서"다. 실제로 자기 AGENTS.md에
+# 도구의 대상 파일은 하필 "에이전트에게 이 킷을 설명하는 문서"다. 실제로 자기 AGENTS.md에
 # `<!-- cck:begin ... -->` ~ `<!-- cck:end -->` 를 인용해 설명을 적어둔 소비자에게
 # 재생성을 돌리면, 두 인용 **사이의 사용자 문장이 침묵 속에 삭제**되고 exit 0이 났다.
 # 게다가 그 뒤로 `--check`는 green을 돌려줘 흔적조차 남지 않았다
@@ -368,7 +368,7 @@ def _plugin_root(explicit: str | None) -> Path | None:
         """이 경로가 정말 이 플러그인인가.
 
         후보 판정이 "rules/ 디렉터리 존재"뿐이면, 셸에 남은 **다른 플러그인의**
-        CLAUDE_PLUGIN_ROOT가 남의 rules/를 CCK 규범으로 내보낸다 — 생성물은 그것을
+        CLAUDE_PLUGIN_ROOT가 남의 rules/를 이 킷의 규범으로 내보낸다 — 생성물은 그것을
         "이 킷의 규범을 원문 그대로 옮긴 것"이라고 소비자에게 선언한다.
         순서 조정은 검사가 아니다 (ATK-011).
         """
@@ -927,7 +927,7 @@ def main(argv: list[str]) -> int:
     드러내므로 같은 종류의 누락이 구조적으로 보인다.
     """
     ap = argparse.ArgumentParser(
-        description="CCK 규범을 하네스 중립 AGENTS.md로 내보낸다"
+        description="이 킷의 규범을 하네스 중립 AGENTS.md로 내보낸다"
     )
     ap.add_argument("--plugin-root", help="plugins/common 경로 (기본: 자동 탐색)")
     ap.add_argument("--target", help="대상 프로젝트 루트 (기본: git 최상위 또는 CWD)")

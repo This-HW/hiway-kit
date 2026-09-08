@@ -8,6 +8,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 개명 잔재 — 약칭 'CCK' 10건, 그중 4건은 단어 경계 검사로는 안 잡혔다 (2026-09-09)
+
+`plugins/` 변경(산문 주석·독스트링만, 동작 무변경). 방금 넣은 §검토 절차 5("인스턴스를
+고칠 때 클래스를 묻는다")를 §20 자신에게 적용한 결과다 — 개명 잔재는 정식 이름만이
+아니라 **약칭**으로도 남는다.
+
+`previousNames` 에 `CCK` 를 추가했다. 실측으로 드러난 것:
+
+- `\bCCK\b` 정규식은 **한글 조사가 붙은 `CCK의` 를 놓친다** — 그 형태로 4건이 더 있었다.
+  §20 이 리터럴 부분문자열 방식인 것이 단어 경계 방식보다 강하다는 실증이다.
+- `scripts/work.sh` 의 **상태 디렉토리 변수**가 `CCK_STATE_DIR`/`cck_state_dir` 였다 —
+  내부 식별자이므로 `KIT_STATE_DIR`/`kit_state_dir` 로 바꿨다.
+
+**온디스크 경로 `$(git-common-dir)/cck` 는 바꾸지 않았다.** 이것은 내부 경로가 아니라
+**프로토콜 경로**다: `rules/child-marker.md`·`skills/child-session`·
+`hooks/examples/child-git-guard.py`·`feedback_ledger.py` 의 레지스트리 포인터가 같은
+이름을 규범으로 참조하고, 외부 오케스트레이터의 registry `describe` 이음매도 이 경로를
+읽는다. 옮기려면 소비자와 함께 옮겨야 하므로 **조율 안건으로 남긴다** — 살아있는 마커를
+고아로 만들지 않는다. `previousNames` 가 대소문자를 구분하므로 소문자 `cck` 는 검사에
+걸리지 않고, 그것이 의도다(사유는 `packaging/name-targets.json` 에 기록).
+
+### `claude plugin details` 가 중첩 에이전트를 세지 않는다 — 원인 확정 (2026-09-09)
+
+`plugins/` 무변경. 열려 있던 `[unresolved]` 를 닫았다.
+
+**원인**: `plugin details` 는 `agents/*.md` 만 세고 **하위 디렉토리를 무시한다.**
+스크래치 플러그인에 `agents/flat-one.md` 와 `agents/sub/nested-one.md` 를 동시에 두고
+실행하니 `Agents (1) flat-one` 만 나왔다 `[confirmed]`. 대조군도 일치한다 —
+`code-simplifier` 는 `agents/code-simplifier.md` 로 **평평**해서 `Agents (1)` 을 낸다.
+이 킷의 33종은 전부 `agents/{category}/` 라 통째로 안 보인다.
+
+**영향**: `Always-on ~1,386 tok` 추정에 **에이전트 description 이 빠져 있다** —
+실측 7,844B ≈ 1,961 tok(frontmatter 전체는 14,092B ≈ 3,523 tok). §16 이 재는 축
+(core 규범 + WORKFLOW, 9,986B/10,240B) **밖에 그만한 상시 비용이 또 있다.**
+
+**평탄화하지 않는다.** 에이전트 호출 id 에 카테고리가 들어가므로(`<플러그인>:dev:fix-bugs`)
+평탄화는 33종의 id 를 바꾸는 파괴적 변경이고, 얻는 것은 CLI 리포트 정확도뿐이다.
+도구가 못 세는 것을 우리가 대신 세는 쪽이 맞다 — §16 예산 재설계에서 이 축을 다룬다.
+
 ### 경고·검사 검토 절차에 두 질문 추가 (2026-09-09, 레포 로컬)
 
 `plugins/` 무변경. `docs/conventions/warning-signal.md` 에 §검토 절차 5·6 을 넣었다.

@@ -7,9 +7,9 @@ effort: medium
 
 # Harness Export — 규범을 하네스 중립으로 내보내기
 
-CCK의 규범(`rules/*.md`)은 **Claude Code의 SessionStart 훅으로만** 주입된다.
+이 킷의 규범(`rules/*.md`)은 **Claude Code의 SessionStart 훅으로만** 주입된다.
 그런데 Orca·Paseo 같은 ADE에서는 한 레포에 Claude Code와 Codex·OpenCode·Pi를
-**동시에** 붙여 굴린다. 그 순간 레포의 절반은 CCK 규율 밖에서 동작한다.
+**동시에** 붙여 굴린다. 그 순간 레포의 절반은 이 킷의 규율 밖에서 동작한다.
 
 이 스킬은 규범을 `AGENTS.md`(Codex·OpenCode·Copilot CLI·Cursor가 공통으로 읽는 사실상
 표준)로 내보내 그 구멍을 메운다.
@@ -135,7 +135,7 @@ python3 "$EH" --target /path/to/project
 `parallel-worktree`·`mcp-usage`·`task-resume`)는 이식되지 않는다. 생성물이 그 목록과
 사유를 표로 남긴다.
 
-**다른 하네스에서 CCK는 규율 *문서*로 동작하지 강제 *장치*로 동작하지 않는다.**
+**다른 하네스에서 이 킷은 규율 *문서*로 동작하지 강제 *장치*로 동작하지 않는다.**
 강제가 필요하면 그 하네스의 네이티브 수단(pre-commit, CI)에 같은 검사를 건다.
 
 ## 게이트
