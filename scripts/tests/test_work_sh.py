@@ -96,7 +96,7 @@ def test_claim_registry_lives_under_git_common_dir_not_docs_works(tmp_path):
         else Path(common_dir)
     )
 
-    assert (common_dir_path / "cck" / "claimed" / "W-001").is_dir()
+    assert (common_dir_path / "kit" / "claimed" / "W-001").is_dir()
     # 옛 위치(docs/works/.claimed)에는 아무것도 만들지 않는다
     assert not (repo / "docs" / "works" / ".claimed").exists()
 
@@ -155,7 +155,7 @@ def test_claim_exhaustion_errors_then_recovers_when_writable_again(tmp_path):
         if not Path(common_dir).is_absolute()
         else Path(common_dir)
     )
-    claimed_dir = common_dir_path / "cck" / "claimed"
+    claimed_dir = common_dir_path / "kit" / "claimed"
     assert claimed_dir.is_dir()
 
     original_mode = claimed_dir.stat().st_mode

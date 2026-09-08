@@ -112,7 +112,7 @@ Code deepening feature. Put plainly: **what a non-Claude-Code harness loses is e
 one thing — automatic blocking (hooks).** Everything else keeps working, because it
 depends only on git and external processes, not on any harness-specific runtime:
 discipline (rules), procedure (skills), state (child session markers under
-`gitdir/cck/child.json`), and the registry `describe` seam all carry over unchanged.
+`gitdir/kit/child.json`), and the registry `describe` seam all carry over unchanged.
 One caveat: behavioral evals (`evals/`) currently drive only Claude Code — the harness
 call is centralized behind one seam (`evals/run.py`'s `Harness` protocol) but a
 Codex/Antigravity implementation hasn't been built yet.

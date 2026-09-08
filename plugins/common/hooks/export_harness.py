@@ -62,7 +62,7 @@ from pathlib import Path
 #
 # 앵커 없이 관대한 패턴은 산문 속 마커 *설명*을 진짜 블록으로 오인한다 — 그리고 이
 # 도구의 대상 파일은 하필 "에이전트에게 이 킷을 설명하는 문서"다. 실제로 자기 AGENTS.md에
-# `<!-- cck:begin ... -->` ~ `<!-- cck:end -->` 를 인용해 설명을 적어둔 소비자에게
+# `<!-- kit:begin ... -->` ~ `<!-- kit:end -->` 를 인용해 설명을 적어둔 소비자에게
 # 재생성을 돌리면, 두 인용 **사이의 사용자 문장이 침묵 속에 삭제**되고 exit 0이 났다.
 # 게다가 그 뒤로 `--check`는 green을 돌려줘 흔적조차 남지 않았다
 # (2026-08-24 적대적 리뷰 ATK-001 — 재현 확인).
@@ -70,42 +70,49 @@ from pathlib import Path
 # 그래서 두 가지를 요구한다: (1) 줄 전체를 차지할 것, (2) 메타가
 # `rules-v… sha256:<64hex>` 형식일 것. 인라인 인용·백틱 예시는 둘 중 어느 것도
 # 만족하지 못하므로 더 이상 블록으로 오인되지 않는다.
+# 마커 토큰은 구 이름(`cck`)도 **읽기만** 인식한다 — 이행 경로다. 소비자의 AGENTS.md 에는  (old-name-ok: 구 마커 인식 = 이행 경로)
+# 이미 구 토큰 블록이 들어 있고, 새 토큰만 인식하면 그 블록이 고아가 된 채 새 블록이
+# 덧붙는다. 읽을 때 둘 다 받고 쓸 때 새 토큰으로만 내보내면, 다음 export 가 제자리에서
+# 교체한다. 자기 손상 가드도 둘 다 봐야 한다 — 구 토큰이 룰 본문에 들어와도 같은 사고다.
+RULES_MARKER_TOKENS = ("cck:begin", "cck:end", "kit:begin", "kit:end")  # old-name-ok: 구 마커 인식 = 이행 경로
+CONV_MARKER_TOKENS = ("cck2:begin", "cck2:end", "kit2:begin", "kit2:end")  # old-name-ok: 구 마커 인식 = 이행 경로
+
 BEGIN_RE = re.compile(
-    r"^<!--[ \t]*cck:begin[ \t]+(rules-v\S+[ \t]+sha256:[0-9a-f]{64})[ \t]*-->[ \t]*$",
+    r"^<!--[ \t]*(?:cck|kit):begin[ \t]+(rules-v\S+[ \t]+sha256:[0-9a-f]{64})[ \t]*-->[ \t]*$",  # old-name-ok: 구 마커 인식 = 이행 경로
     re.MULTILINE,
 )
 # end도 같은 규율로 대칭화한다. begin만 공백에 관대하면, 소비자 레포의 포맷터가
-# `<!--cck:end-->`로 정규화하는 순간 end가 0개가 되어 쓰기·검사 양쪽이 영구 red가 된다
+# `<!--kit:end-->`로 정규화하는 순간 end가 0개가 되어 쓰기·검사 양쪽이 영구 red가 된다
 # (ATK-013). 비대칭이 의도적일 이유가 없다.
-END_RE = re.compile(r"^<!--[ \t]*cck:end[ \t]*-->[ \t]*$", re.MULTILINE)
-END_MARK = "<!-- cck:end -->"  # 생성 시 쓰는 정규형
+END_RE = re.compile(r"^<!--[ \t]*(?:cck|kit):end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
+END_MARK = "<!-- kit:end -->"  # 생성 시 쓰는 정규형
 # 엄격화에는 반대편 구멍이 있다: 손으로 망가뜨린 **진짜** 마커 줄(`sha256:dead` 등)이
 # 이제 패턴에 안 걸려 "마커 없음"으로 읽히고, 새 블록이 덧붙으면서 낡은 규범 본문이
-# 파일에 고아로 남는다. 그래서 "줄 전체를 차지하는 cck 마커꼴"을 따로 세어, 엄격
+# 파일에 고아로 남는다. 그래서 "줄 전체를 차지하는 마커꼴"을 따로 세어, 엄격
 # 패턴과 개수가 어긋나면 손상으로 보고 멈춘다. 인라인 인용(백틱·문장 중간)은 줄 앵커에
 # 걸리지 않으므로 ATK-001이 되살아나지는 않는다.
-SUSPECT_RE = re.compile(r"^<!--[ \t]*cck:(begin|end)\b.*-->[ \t]*$", re.MULTILINE)
+SUSPECT_RE = re.compile(r"^<!--[ \t]*(?:cck|kit):(begin|end)\b.*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 
 # ─────────────────────────────────────────────────────────────────────────────
-# conventions 블록 (W-022 R7) — **완전히 별도 마커 네임스페이스**(`cck2:`)다.
+# conventions 블록 (W-022 R7) — **완전히 별도 마커 네임스페이스**(`kit2:`)다.
 #
-# 왜 별도 마커인가: 위 BEGIN_RE는 `cck:begin (rules-v...)`처럼 "rules-v" 접두어까지
+# 왜 별도 마커인가: 위 BEGIN_RE는 `kit:begin (rules-v...)`처럼 "rules-v" 접두어까지
 # 하드코딩돼 있어 다른 형식의 begin 줄과 자연히 매치되지 않는다. 그런데 SUSPECT_RE는
-# `cck:(begin|end)` **아무거나** 잡는다 — 만약 conventions 블록도 `cck:begin
-# conventions-v...`처럼 같은 "cck:" 접두어를 썼다면, SUSPECT_RE는 이 줄을 "suspect"로
+# `kit:(begin|end)` **아무거나** 잡는다 — 만약 conventions 블록도 `kit:begin
+# conventions-v...`처럼 같은 "kit:" 접두어를 썼다면, SUSPECT_RE는 이 줄을 "suspect"로
 # 세는데 BEGIN_RE는 안 잡으므로 `malformed = suspects - begins - ends > 0`이 되어
 # **멀쩡한 rules 블록까지 손상으로 오판**했을 것이다(2.14.1이 고친 것과 같은 클래스의
-# 취약점을 새로 만들 뻔한 지점). 그래서 접두어 자체를 `cck2:`로 완전히 분리한다 —
-# 위 세 정규식 중 어느 것도 "cck2:"를 매치하지 않는다("cck:"의 부분열이 아니므로).
+# 취약점을 새로 만들 뻔한 지점). 그래서 접두어 자체를 `kit2:`로 완전히 분리한다 —
+# 위 세 정규식 중 어느 것도 "kit2:"를 매치하지 않는다("kit:"의 부분열이 아니므로).
 # 이 절 아래 함수들은 규범 블록의 `_existing_marker`/`_compose` 로직을 **참고**하되
 # 별도로 구현한다 — 기존 함수는 한 글자도 건드리지 않는다(STAGE2 지시).
 CONV_BEGIN_RE = re.compile(
-    r"^<!--[ \t]*cck2:begin[ \t]+(conventions-v\S+[ \t]+sha256:[0-9a-f]{64})[ \t]*-->[ \t]*$",
+    r"^<!--[ \t]*(?:cck2|kit2):begin[ \t]+(conventions-v\S+[ \t]+sha256:[0-9a-f]{64})[ \t]*-->[ \t]*$",  # old-name-ok: 구 마커 인식 = 이행 경로
     re.MULTILINE,
 )
-CONV_END_RE = re.compile(r"^<!--[ \t]*cck2:end[ \t]*-->[ \t]*$", re.MULTILINE)
-CONV_END_MARK = "<!-- cck2:end -->"
-CONV_SUSPECT_RE = re.compile(r"^<!--[ \t]*cck2:(begin|end)\b.*-->[ \t]*$", re.MULTILINE)
+CONV_END_RE = re.compile(r"^<!--[ \t]*(?:cck2|kit2):end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
+CONV_END_MARK = "<!-- kit2:end -->"
+CONV_SUSPECT_RE = re.compile(r"^<!--[ \t]*(?:cck2|kit2):(begin|end)\b.*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 
 CONVENTIONS_VERSION = "1.0.0"
 
@@ -130,7 +137,7 @@ CONVENTIONS_REFERENCE_ONLY: list[str] = [
 CONV_BLOCK_HEADER = """
 ## hiway-kit — Project Conventions (요약 발췌)
 
-> **이 절도 자동 생성된다** (별도 마커 `cck2:` — 위 규범 블록과 독립).
+> **이 절도 자동 생성된다** (별도 마커 `kit2:` — 위 규범 블록과 독립).
 > `docs/conventions/*.md`의 일부를 인라인한 것이다. Codex의 `project_doc_max_bytes`
 > (병합 총량, 초과 시 조용히 잘림)를 넘지 않도록 가장 핵심적인 것만 골랐다 — 전체
 > 목록과 "왜 이것만 골랐는지"는 `docs/conventions/README.md` 참고. Claude Code는
@@ -170,9 +177,9 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
                 " export_harness.py의 CONVENTIONS_INLINE 목록을 수정했다면 파일도 같이 옮겨라."
             )
         body = p.read_text(encoding="utf-8").rstrip()
-        if "cck2:begin" in body or "cck2:end" in body:
+        if any(t in body for t in CONV_MARKER_TOKENS):
             raise ClassificationError(
-                f"docs/conventions/{fname}에 cck2 마커 문자열이 있다 — 생성물이 자기 자신을 손상시킨다."
+                f"docs/conventions/{fname}에 kit2 마커 문자열이 있다 — 생성물이 자기 자신을 손상시킨다."
             )
         sections.append(f"### {title}\n\n{body}\n")
 
@@ -191,9 +198,9 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     header = CONV_BLOCK_HEADER.format(
         sections="\n".join(sections), references=references
     )
-    if "cck2:begin" in header or "cck2:end" in header:
+    if any(t in header for t in CONV_MARKER_TOKENS):
         raise ClassificationError(
-            "CONV_BLOCK_HEADER에 cck2 마커 문자열이 있다 — 생성물이 자기 자신을 손상시킨다."
+            "CONV_BLOCK_HEADER에 kit2 마커 문자열이 있다 — 생성물이 자기 자신을 손상시킨다."
         )
 
     h = hashlib.sha256()
@@ -201,14 +208,14 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     h.update(header.encode())
     sha = h.hexdigest()
     block = (
-        f"<!-- cck2:begin conventions-v{CONVENTIONS_VERSION} sha256:{sha} -->\n"
+        f"<!-- kit2:begin conventions-v{CONVENTIONS_VERSION} sha256:{sha} -->\n"
         f"{header.rstrip()}\n{CONV_END_MARK}\n"
     )
     return block, sha
 
 
 def _existing_conv_marker(text: str) -> tuple[str | None, int, int]:
-    """`_existing_marker()`(규범 블록용)와 같은 알고리즘, cck2 네임스페이스로 독립 구현.
+    """`_existing_marker()`(규범 블록용)와 같은 알고리즘, kit2 네임스페이스로 독립 구현.
 
     코드 중복이지만, 두 마커 체계가 정규식 하나만 공유해도 그 정규식의 결함이 양쪽에
     동시에 번진다 — 별도 함수로 완전히 갈라 규범 블록의 실전 검증(2.14.1 이후 무결함)을
@@ -220,27 +227,27 @@ def _existing_conv_marker(text: str) -> tuple[str | None, int, int]:
     malformed = len(suspects) - len(begins) - len(ends)
     if malformed > 0:
         raise MarkerError(
-            f"형식이 깨진 cck2 마커 줄이 {malformed}개 있다 "
-            "(정상형: `<!-- cck2:begin conventions-v… sha256:<64자리 hex> -->` / `<!-- cck2:end -->`).\n"
+            f"형식이 깨진 kit2 마커 줄이 {malformed}개 있다 "
+            "(정상형: `<!-- kit2:begin conventions-v… sha256:<64자리 hex> -->` / `<!-- kit2:end -->`).\n"
             "  손으로 고쳤거나 도구가 중간에 죽은 흔적이다. 생성기는 추측해서 고치지 않는다."
         )
     if not begins and not ends:
         return None, -1, -1
     if len(begins) != 1 or len(ends) != 1:
         raise MarkerError(
-            f"cck2 마커가 손상됐다 (begin {len(begins)}개, end {len(ends)}개). "
+            f"kit2 마커가 손상됐다 (begin {len(begins)}개, end {len(ends)}개). "
             "블록을 손으로 정리한 뒤 다시 실행하라."
         )
     b, e = begins[0], ends[0]
     if e.start() < b.end():
         raise MarkerError(
-            "cck2:end가 cck2:begin보다 앞에 있다 — 블록을 손으로 정리하라."
+            "kit2:end가 kit2:begin보다 앞에 있다 — 블록을 손으로 정리하라."
         )
     return b.group(1), b.start(), e.end()
 
 
 def _compose_conv(text: str, block: str) -> str:
-    """`_compose()`(규범 블록용)와 같은 알고리즘의 cck2 버전. 첫 번째 블록 기록 **후**의
+    """`_compose()`(규범 블록용)와 같은 알고리즘의 kit2 버전. 첫 번째 블록 기록 **후**의
     텍스트를 받으므로 `text`가 빈 문자열일 일은 없다(PREAMBLE + 규범 블록이 이미 있다)."""
     meta, s, e = _existing_conv_marker(text)
     if meta is not None:
@@ -294,14 +301,14 @@ def _rule_portability(path: Path) -> tuple[bool | None, str]:
 
 PREAMBLE = """# AGENTS.md
 
-> 이 파일의 `cck:` 마커 블록은 **자동 생성**된다.
+> 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 """
 
 BLOCK_HEADER = """
 ## hiway-kit — 하네스 중립 규범
 
-> **이 절은 자동 생성된다.** 위아래의 `cck` 주석 마커 사이는 재생성 시 통째로 교체되고,
+> **이 절은 자동 생성된다.** 위아래의 `kit` 주석 마커 사이는 재생성 시 통째로 교체되고,
 > **그 밖은 생성기가 건드리지 않는다**. 갱신은 `/harness-export` 스킬(또는 kit 레포에서
 > `./scripts/export-harness.sh`). 손으로 고치면 드리프트 검사가 막는다.
 
@@ -364,7 +371,7 @@ def _plugin_root(explicit: str | None) -> Path | None:
         p = Path(explicit)
         return p.resolve() if (p / "rules").is_dir() else None
 
-    def _is_cck(root: Path) -> bool:
+    def _is_kit(root: Path) -> bool:
         """이 경로가 정말 이 플러그인인가.
 
         후보 판정이 "rules/ 디렉터리 존재"뿐이면, 셸에 남은 **다른 플러그인의**
@@ -399,7 +406,7 @@ def _plugin_root(explicit: str | None) -> Path | None:
     # 레포에서 scripts/ 등 다른 위치로 복사된 경우의 폴백
     candidates.append(here.parent / "plugins" / "common")
     for c in candidates:
-        if (c / "rules").is_dir() and _is_cck(c):
+        if (c / "rules").is_dir() and _is_kit(c):
             return c.resolve()
     return None
 
@@ -434,7 +441,7 @@ _VERSION_RE = re.compile(r"[0-9A-Za-z._+-]{1,32}")
 def _rules_version(plugin_root: Path) -> str:
     """rules/VERSION. 읽기 실패는 **조용히** 넘기지 않는다.
 
-    이 값은 `<!-- cck:begin rules-v{...} sha256:… -->` 줄에 직접 들어간다. 조용히
+    이 값은 `<!-- kit:begin rules-v{...} sha256:… -->` 줄에 직접 들어간다. 조용히
     "unknown"으로 폴백하면 버전 추적이 소실된 채 마커만 그럴듯해진다 (ATK-007).
     """
     v = plugin_root / "rules" / "VERSION"
@@ -545,9 +552,9 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     # 룰 본문뿐 아니라 **생성기 자신의 헤더**도 검사한다. 실제로 헤더에 마커를 리터럴로
     # 적었다가 생성물이 자기 자신을 손상시켰다(2026-08-23). 룰만 검사하는 가드는 절반이다.
     for name, tpl in (("BLOCK_HEADER", header), ("PREAMBLE", PREAMBLE)):
-        if "cck:begin" in tpl or "cck:end" in tpl:
+        if any(t in tpl for t in RULES_MARKER_TOKENS):
             raise ClassificationError(
-                f"{name}에 cck 마커 문자열이 있다 — 생성물의 마커가 둘이 되어 이후 모든 "
+                f"{name}에 kit 마커 문자열이 있다 — 생성물의 마커가 둘이 되어 이후 모든 "
                 "실행이 손상으로 거부된다. 템플릿에서 마커를 리터럴로 쓰지 마라."
             )
 
@@ -569,9 +576,9 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
         # 룰 본문이 마커 문자열을 담으면 생성물의 마커가 둘이 되고, 그 순간 이후의
         # 모든 실행이 MarkerError로 떨어진다 — **재생성으로도 못 고치는** 영구 red다
         # (생성기가 손상된 파일을 건드리길 거부하므로). 생성 전에 잡는다.
-        if "cck:begin" in body or "cck:end" in body:
+        if any(t in body for t in RULES_MARKER_TOKENS):
             raise ClassificationError(
-                f"룰 본문에 cck 마커 문자열이 있다: rules/{p.name}\n"
+                f"룰 본문에 kit 마커 문자열이 있다: rules/{p.name}\n"
                 "  → 마커는 생성물의 구조다. 룰에서 인용하려면 문자 사이에 공백/영으로 폭을 두거나\n"
                 "    코드 펜스 대신 설명으로 바꿔라. 그대로 두면 생성물이 자기 자신을 손상시킨다."
             )
@@ -589,7 +596,7 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
         parts.append("\n")
 
     inner = "".join(parts).rstrip() + "\n"
-    block = f"<!-- cck:begin rules-v{rules_v} sha256:{sha} -->\n{inner}{END_MARK}\n"
+    block = f"<!-- kit:begin rules-v{rules_v} sha256:{sha} -->\n{inner}{END_MARK}\n"
     return block, sha
 
 
@@ -619,8 +626,8 @@ def _existing_marker(text: str) -> tuple[str | None, int, int]:
     malformed = len(suspects) - len(begins) - len(ends)
     if malformed > 0:
         raise MarkerError(
-            f"형식이 깨진 cck 마커 줄이 {malformed}개 있다 "
-            "(정상형: `<!-- cck:begin rules-v… sha256:<64자리 hex> -->` / `<!-- cck:end -->`).\n"
+            f"형식이 깨진 kit 마커 줄이 {malformed}개 있다 "
+            "(정상형: `<!-- kit:begin rules-v… sha256:<64자리 hex> -->` / `<!-- kit:end -->`).\n"
             "  손으로 고쳤거나 도구가 중간에 죽은 흔적이다. 그 줄을 지우거나 정상형으로 "
             "되돌린 뒤 다시 실행하라 — 생성기는 추측해서 고치지 않는다.\n"
             "  (문서에 마커를 *설명*하려면 줄 전체가 아니라 문장 안에 인라인으로 인용하라.)"
@@ -629,12 +636,12 @@ def _existing_marker(text: str) -> tuple[str | None, int, int]:
         return None, -1, -1
     if len(begins) != 1 or len(ends) != 1:
         raise MarkerError(
-            f"cck 마커가 손상됐다 (begin {len(begins)}개, end {len(ends)}개). "
+            f"kit 마커가 손상됐다 (begin {len(begins)}개, end {len(ends)}개). "
             "블록을 손으로 정리한 뒤 다시 실행하라 — 생성기는 추측해서 고치지 않는다."
         )
     b, e = begins[0], ends[0]
     if e.start() < b.end():
-        raise MarkerError("cck:end가 cck:begin보다 앞에 있다 — 블록을 손으로 정리하라.")
+        raise MarkerError("kit:end가 kit:begin보다 앞에 있다 — 블록을 손으로 정리하라.")
     return b.group(1), b.start(), e.end()
 
 
@@ -781,7 +788,7 @@ def cmd_check(
         print(f"[export-harness] ✗ {target}: {err}", file=sys.stderr)
         return 1
     if meta is None:
-        print(f"[export-harness] ✗ {target} 에 cck 마커 블록이 없다.", file=sys.stderr)
+        print(f"[export-harness] ✗ {target} 에 마커 블록이 없다.", file=sys.stderr)
         return 1
     if f"sha256:{sha}" not in meta:
         print(
@@ -794,7 +801,7 @@ def cmd_check(
         return 1
     if text[s:e] != block.rstrip("\n"):
         print(
-            f"[export-harness] ✗ 블록 본문 불일치 — {target} 의 cck 블록이 생성 결과와 다르다.\n"
+            f"[export-harness] ✗ 블록 본문 불일치 — {target} 의 규범 블록이 생성 결과와 다르다.\n"
             "    (마커의 sha는 일치한다 — 손으로 고쳤거나, kit 버전이 다르다)\n"
             "  → ./scripts/export-harness.sh 로 재생성하라.",
             file=sys.stderr,
@@ -817,7 +824,7 @@ def cmd_check(
             return 1
         if conv_meta is None:
             print(
-                f"[export-harness] ✗ {target} 에 cck2 conventions 블록이 없다.",
+                f"[export-harness] ✗ {target} 에 conventions 블록이 없다.",
                 file=sys.stderr,
             )
             return 1
@@ -832,7 +839,7 @@ def cmd_check(
             return 1
         if text[cs:ce] != conv_block.rstrip("\n"):
             print(
-                f"[export-harness] ✗ 블록 본문 불일치 — {target} 의 cck2 conventions 블록이 생성 결과와 다르다.\n"
+                f"[export-harness] ✗ 블록 본문 불일치 — {target} 의 conventions 블록이 생성 결과와 다르다.\n"
                 "    (마커의 sha는 일치한다 — 손으로 고쳤거나, kit 버전이 다르다)\n"
                 "  → ./scripts/export-harness.sh 로 재생성하라.",
                 file=sys.stderr,

@@ -71,7 +71,7 @@ def _install_pointer(repo: Path, command: list, extra: dict | None = None) -> No
     common_dir_path = Path(common_dir)
     if not common_dir_path.is_absolute():
         common_dir_path = (repo / common_dir_path).resolve()
-    pointer_dir = common_dir_path / "cck"
+    pointer_dir = common_dir_path / "kit"
     pointer_dir.mkdir(parents=True, exist_ok=True)
     data = {"command": command}
     if extra:
@@ -136,7 +136,7 @@ class TestDiscoverPointer:
         )
         if not common_dir.is_absolute():
             common_dir = (repo / common_dir).resolve()
-        pointer_dir = common_dir / "cck"
+        pointer_dir = common_dir / "kit"
         pointer_dir.mkdir(parents=True, exist_ok=True)
         (pointer_dir / "registry.json").write_text("{ broken")
         assert _mod.discover_registry_pointer(repo) is None

@@ -25,26 +25,26 @@ ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 진실**이고 `/self-improve`가 직접 읽는다(폴백). 어느 쪽이든 upsert/parse/digest의
 동작은 동일하다 — 달라지는 것은 `promote()`가 호출됐을 때뿐이다.
 
-레지스트리 발견: `$(git rev-parse --git-common-dir)/cck/registry.json` 포인터를
+레지스트리 발견: `$(git rev-parse --git-common-dir)/kit/registry.json` 포인터를
 읽는다(공유 gitdir — untracked, 클론과 함께 죽는다). 포인터는 `command`(argv)만
-허용하고 `url`은 거절한다(D-48, exec 전용 — cck가 자격증명을 다루지 않는다).
+허용하고 `url`은 거절한다(D-48, exec 전용 — 이 킷이 자격증명을 다루지 않는다).
 `describe` 동사를 호출해 능력을 협상하고, **`describe` 외의 동사 이름을 코드에
 하드코딩하지 않는다**(D-42) — 실제로 호출할 승격 동사 이름은 포인터 파일 자신의
-`promotionVerb` 필드(컨트롤이 쓰는 값, cck 소스가 아니다)에서 읽거나, `describe`가
+`promotionVerb` 필드(컨트롤이 쓰는 값, 킷 소스가 아니다)에서 읽거나, `describe`가
 `write` 동사를 정확히 하나만 선언하면 그것으로 추론한다. 어느 쪽도 안 되면
 승격을 보류하고 그 이유를 보고한다 — 추측으로 동사를 고르지 않는다.
 
 신선도(D-49·D-50): `describe`의 선택적 `head` 필드를 현재 git HEAD와 대조한다.
 일치하면 승격, 불일치면 보류(ledger 보존), 불일치가 연속 임계(3회)를 넘으면
 레지스트리를 **미신뢰로 강등**하고 이후 호출은 폴백(내구 ledger 유지)으로
-처리한다 — 이 강등 상태는 `$(git-common-dir)/cck/registry_trust.json`에 기록된다.
+처리한다 — 이 강등 상태는 `$(git-common-dir)/kit/registry_trust.json`에 기록된다.
 `head` 미선언은 오류가 아니라 "신선도 모름" 경고로만 남긴다 — 미선언 레지스트리에서
 승격이 영구 차단되면 그 자체가 동작하지 않는 안전장치가 된다.
 
 이 파일이 채우는 설계 공백 하나를 명시한다: D-42/D-44의 describe 스키마
 (`name`·`args`·`effect`·`idempotent`)에는 "이 동사가 승격/등록용이다"를 나타내는
 필드가 없다. `promotionVerb`를 포인터 파일(컨트롤 소유·비-repo 파일)에 두는 것은
-그 필드가 cck 소스에 박히는 것이 아니라 **컨트롤이 자기 레지스트리를 소개할 때
+그 필드가 킷 소스에 박히는 것이 아니라 **컨트롤이 자기 레지스트리를 소개할 때
 스스로 선언하는 값**이라 D-42의 "동사 이름을 하드코딩하지 않는다"를 어기지 않는다
 — 다만 이 구체적 필드명 자체는 설계 문서에 명문화돼 있지 않은 이 구현의 해석이다.
 """
@@ -70,8 +70,8 @@ VALID_CATEGORIES = {"lint", "security", "architecture", "test", "convention"}
 VALID_SEVERITIES = {"critical", "high", "medium", "low"}
 
 # ── 26-16: 레지스트리 스테이징→승격 (D-42·D-43·D-48·D-49·D-50) ─────────
-_REGISTRY_POINTER_REL = ("cck", "registry.json")
-_TRUST_STATE_REL = ("cck", "registry_trust.json")
+_REGISTRY_POINTER_REL = ("kit", "registry.json")
+_TRUST_STATE_REL = ("kit", "registry_trust.json")
 _DESCRIBE_TIMEOUT_SECONDS = 10
 _PROMOTE_CALL_TIMEOUT_SECONDS = 10
 _MISMATCH_DEMOTE_THRESHOLD = 3  # head 연속 불일치 임계 — 초과 시 레지스트리 미신뢰 강등
@@ -368,7 +368,7 @@ def _current_head(root: Path) -> str | None:
 def discover_registry_pointer(root: Path | None = None) -> dict | None:
     """컨트롤 레지스트리 포인터를 읽는다. 없거나 부적합하면 None(fail-open, 폴백).
 
-    `url` 필드가 있으면 무조건 거절한다(D-48) — cck는 exec 전용 계약이다.
+    `url` 필드가 있으면 무조건 거절한다(D-48) — 이 킷은 exec 전용 계약이다.
     """
     root = root or _project_root()
     common = _git_common_dir(root)
@@ -483,7 +483,7 @@ def promote(root: Path | None = None) -> dict:
         return {
             "promoted": False,
             "mode": "fallback",
-            "reason": "레지스트리 없음 — cck ledger가 내구 진실(폴백)",
+            "reason": "레지스트리 없음 — 킷 ledger가 내구 진실(폴백)",
         }
 
     command: list[str] = pointer["command"]
@@ -527,7 +527,7 @@ def promote(root: Path | None = None) -> dict:
             "mode": "fallback",
             "reason": (
                 "레지스트리가 head 지속 불일치로 미신뢰 강등됨 — "
-                "cck ledger가 내구 진실(D-50)"
+                "킷 ledger가 내구 진실(D-50)"
             ),
         }
     if freshness == "mismatch":

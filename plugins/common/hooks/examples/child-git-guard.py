@@ -14,7 +14,7 @@ opt-in 예시 훅 (PreToolUse) — 다중 세션 개발에서 위험한 git 명�
   3. `git clean -fd` 류(force+directory 조합) — 추적 안 된 파일 파괴
   4. `git push` — **자식 세션에서만** 차단(주 체크아웃·부모 세션은 통과)
 
-자식 판별은 워크트리 로컬 마커(`$(git rev-parse --git-dir)/cck/child.json`)로 한다.
+자식 판별은 워크트리 로컬 마커(`$(git rev-parse --git-dir)/kit/child.json`)로 한다.
 `CLAUDE_CODE_CHILD_SESSION` 은 쓰지 않는다 — 부모·자식·서브에이전트 전부 `1`이라
 역할 판별 신호가 아님이 실측됐다(설계 §13.5). 마커가 없으면(스킬 미로드) 이 훅은
 git push 를 막지 않는다 — **fail-open**이며, 없는 보호를 있다고 믿게 하지 않는다.
@@ -27,7 +27,7 @@ import shlex
 import subprocess
 import sys
 
-MARKER_REL = ("cck", "child.json")
+MARKER_REL = ("kit", "child.json")
 
 
 def _git(args: list[str]) -> str | None:
@@ -95,7 +95,7 @@ def is_child_session() -> bool:
             ).returncode
             if merge_base != 0:
                 print(
-                    f"[cck] 경고: 마커의 base_commit({base[:8]})이 현재 HEAD({head[:8]})의 "
+                    f"[kit] 경고: 마커의 base_commit({base[:8]})이 현재 HEAD({head[:8]})의 "
                     "조상이 아니다 — 브리프 교체 시 마커를 치환하지 않았을 수 있다 "
                     "(rules/child-marker.md)",
                     file=sys.stderr,
@@ -232,7 +232,7 @@ def check_command(command: str) -> str | None:
                 child = is_child_session()
             if child:
                 return (
-                    "이 세션은 자식 세션 마커(cck/child.json)를 갖고 있어 `git push`가 "
+                    "이 세션은 자식 세션 마커(kit/child.json)를 갖고 있어 `git push`가 "
                     "차단됩니다 — main 병합·푸시는 부모(컨트롤) 세션의 몫입니다."
                 )
     return None

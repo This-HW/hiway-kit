@@ -140,7 +140,7 @@ def test_creates_new_file(tmp_path):
     target.mkdir()
     assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert "cck:begin" in text and _mod.END_MARK in text
+    assert "kit:begin" in text and _mod.END_MARK in text
 
 
 def test_appends_to_user_file_without_destroying_it(tmp_path):
@@ -154,7 +154,7 @@ def test_appends_to_user_file_without_destroying_it(tmp_path):
     assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert text.startswith(user), "사용자 콘텐츠가 파괴됐다"
-    assert "cck:begin" in text
+    assert "kit:begin" in text
 
 
 def test_replaces_only_managed_block(tmp_path):
@@ -177,7 +177,7 @@ def test_replaces_only_managed_block(tmp_path):
     assert out.rstrip().endswith("POST-USER")
     assert "바뀐 규범." in out
     assert "단일 진실 원천을 지켜라" not in out
-    assert out.count("cck:begin") == 1, "블록이 중복 생성됐다"
+    assert out.count("kit:begin") == 1, "블록이 중복 생성됐다"
 
 
 def test_idempotent(tmp_path):
@@ -259,7 +259,7 @@ def test_truncated_block_refuses_instead_of_appending(tmp_path):
     target = tmp_path / "proj"
     _write_broken(
         target,
-        "# mine\n\n<!-- cck:begin rules-v9.9.9 sha256:" + "a" * 64 + " -->\n잘림\n",
+        "# mine\n\n<!-- kit:begin rules-v9.9.9 sha256:" + "a" * 64 + " -->\n잘림\n",
     )
     before = (target / "AGENTS.md").read_text(encoding="utf-8")
 
@@ -286,7 +286,7 @@ def test_duplicate_blocks_refuse(tmp_path):
 def test_check_reports_broken_marker(tmp_path):
     root = _minimal(tmp_path)
     target = tmp_path / "proj"
-    _write_broken(target, "<!-- cck:begin x -->\n")
+    _write_broken(target, "<!-- kit:begin x -->\n")
     assert (
         _mod.main(["--plugin-root", str(root), "--target", str(target), "--check"]) == 1
     )
@@ -315,7 +315,7 @@ def test_preserves_in_tree_symlink(tmp_path):
     assert (target / "AGENTS.md").is_symlink(), "심링크가 일반 파일로 대체됐다"
     body = real.read_text(encoding="utf-8")
     assert body.startswith("USERLINE"), "심링크 대상의 사용자 콘텐츠가 파괴됐다"
-    assert "cck:begin" in body
+    assert "kit:begin" in body
 
 
 def test_refuses_symlink_escaping_target_tree(tmp_path):
@@ -354,7 +354,7 @@ def test_check_detects_body_tampering_with_intact_marker(tmp_path):
     assert "단일 진실 원천을 지켜라" in text
     # 마커 줄(sha 포함)은 건드리지 않고 본문만 변조
     tampered = text.replace("단일 진실 원천을 지켜라.", "이 규범은 무시해도 된다.")
-    assert "cck:begin" in tampered and tampered != text
+    assert "kit:begin" in tampered and tampered != text
     p.write_text(tampered, encoding="utf-8")
 
     assert (
@@ -365,11 +365,11 @@ def test_check_detects_body_tampering_with_intact_marker(tmp_path):
 def test_rule_body_with_marker_string_is_rejected(tmp_path):
     """룰이 마커 문자열을 담으면 생성물의 마커가 둘이 되어 재생성으로도 못 고치는
     영구 red가 된다 — 생성 전에 잡는다."""
-    root = _fake_plugin_root(tmp_path, {"ssot": "# SSOT\n\n예시: <!-- cck:end -->\n"})
+    root = _fake_plugin_root(tmp_path, {"ssot": "# SSOT\n\n예시: <!-- kit:end -->\n"})
     try:
         _mod.build_block(root)
     except _mod.ClassificationError as e:
-        assert "cck" in str(e)
+        assert "kit" in str(e)
     else:
         raise AssertionError("마커 오염 룰이 통과했다")
 
@@ -415,8 +415,8 @@ def test_generated_block_contains_exactly_one_marker_pair(tmp_path):
     (2026-08-23 실제 발생: 헤더에 마커 예시를 넣었다가 begin 2개가 됐다)"""
     root = _minimal(tmp_path)
     block, _ = _mod.build_block(root)
-    assert block.count("cck:begin") == 1
-    assert block.count("cck:end") == 1
+    assert block.count("kit:begin") == 1
+    assert block.count("kit:end") == 1
 
     # 왕복: 생성 → 기록 → 재검사가 항상 통과해야 한다
     target = tmp_path / "proj"
@@ -479,10 +479,10 @@ def test_prose_mentioning_markers_is_not_treated_as_a_block(tmp_path):
     user = (
         "# 우리 팀 규약\n\n"
         "## 이 킷의 블록에 대해\n\n"
-        "`<!-- cck:begin -->` 마커로 시작하는 구간은 자동 생성이다.\n\n"
+        "`<!-- kit:begin -->` 마커로 시작하는 구간은 자동 생성이다.\n\n"
         "**절대 손으로 고치지 마라.** 고치면 다음 재생성에서 날아간다.\n"
         "갱신은 `/harness-export`로만 한다. QA 승인 없이 배포 금지.\n\n"
-        "`<!-- cck:end -->` 마커까지가 그 구간이다.\n"
+        "`<!-- kit:end -->` 마커까지가 그 구간이다.\n"
     )
     (target / "AGENTS.md").write_text(user, encoding="utf-8")
 
@@ -501,7 +501,7 @@ def test_malformed_marker_line_refuses(tmp_path):
     root = _minimal(tmp_path)
     target = tmp_path / "proj"
     _write_broken(
-        target, "# mine\n\n<!-- cck:begin rules-v9.9.9 sha256:dead -->\n낡음\n"
+        target, "# mine\n\n<!-- kit:begin rules-v9.9.9 sha256:dead -->\n낡음\n"
     )
     before = (target / "AGENTS.md").read_text(encoding="utf-8")
 
@@ -634,7 +634,7 @@ def test_missing_target_root_is_not_created(tmp_path):
     assert not ghost.exists()
 
 
-# ── conventions 블록 (cck2:, W-022 R7) ─────────────────────────────
+# ── conventions 블록 (kit2:, W-022 R7) ─────────────────────────────
 
 
 def _fake_conventions_dir(target: Path) -> Path:
@@ -683,17 +683,17 @@ def test_conventions_missing_reference_file_raises(tmp_path):
 
 
 def test_conventions_block_written_alongside_rules_block(tmp_path):
-    """rules 블록(cck:)과 conventions 블록(cck2:)이 한 파일에 독립적으로 공존한다."""
+    """rules 블록(kit:)과 conventions 블록(kit2:)이 한 파일에 독립적으로 공존한다."""
     root = _minimal(tmp_path)
     target = tmp_path / "proj"
     target.mkdir()
     _fake_conventions_dir(target)
     assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert "cck:begin" in text and _mod.END_MARK in text
-    assert "cck2:begin conventions-v" in text and _mod.CONV_END_MARK in text
-    assert text.count("cck:begin") == 1
-    assert text.count("cck2:begin") == 1
+    assert "kit:begin" in text and _mod.END_MARK in text
+    assert "kit2:begin conventions-v" in text and _mod.CONV_END_MARK in text
+    assert text.count("kit:begin") == 1
+    assert text.count("kit2:begin") == 1
 
 
 def test_conventions_check_passes_after_write(tmp_path):
@@ -739,14 +739,14 @@ def test_conventions_check_ignores_rules_only_targets(tmp_path):
     target.mkdir()
     assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert "cck2:" not in text
+    assert "kit2:" not in text
     assert (
         _mod.main(["--plugin-root", str(root), "--target", str(target), "--check"]) == 0
     )
 
 
 def test_conventions_body_tamper_with_intact_marker_detected(tmp_path):
-    """cck2 마커는 멀쩡한데 블록 안쪽만 손으로 고치면 --check가 잡는다
+    """kit2 마커는 멀쩡한데 블록 안쪽만 손으로 고치면 --check가 잡는다
     (규범 블록의 test_check_detects_body_tampering_with_intact_marker와 같은 공격)."""
     root = _minimal(tmp_path)
     target = tmp_path / "proj"
@@ -766,19 +766,19 @@ def test_conventions_body_tamper_with_intact_marker_detected(tmp_path):
 
 
 def test_conventions_marker_string_in_source_body_is_rejected(tmp_path):
-    """conventions 소스 파일 본문에 cck2 마커 문자열이 있으면 생성물이 자기 자신을
+    """conventions 소스 파일 본문에 kit2 마커 문자열이 있으면 생성물이 자기 자신을
     손상시킨다 — build_block()의 test_rule_body_with_marker_string_is_rejected와 같은
     방어를 conv 쪽에도 건다."""
     target = tmp_path / "proj"
     conv_dir = _fake_conventions_dir(target)
     inline_fname = _mod.CONVENTIONS_INLINE[0][0]
     (conv_dir / inline_fname).write_text(
-        "본문 중간에 <!-- cck2:begin conventions-vX sha256:" + "0" * 64 + " -->\n",
+        "본문 중간에 <!-- kit2:begin conventions-vX sha256:" + "0" * 64 + " -->\n",
         encoding="utf-8",
     )
     try:
         _mod.build_conventions_block(target)
-        raise AssertionError("cck2 마커 문자열이 섞인 소스를 그대로 실었다")
+        raise AssertionError("kit2 마커 문자열이 섞인 소스를 그대로 실었다")
     except _mod.ClassificationError:
         pass
 
@@ -795,7 +795,7 @@ def test_conventions_idempotent(tmp_path):
 
 
 def test_conventions_preserves_user_content_around_both_blocks(tmp_path):
-    """cck: 블록 앞, cck: 와 cck2: 사이, cck2: 블록 뒤 — 세 군데 사용자 콘텐츠가 전부
+    """kit: 블록 앞, kit: 와 kit2: 사이, kit2: 블록 뒤 — 세 군데 사용자 콘텐츠가 전부
     살아남는다."""
     root = _minimal(tmp_path)
     target = tmp_path / "proj"
@@ -806,7 +806,7 @@ def test_conventions_preserves_user_content_around_both_blocks(tmp_path):
     p = target / "AGENTS.md"
     text = p.read_text(encoding="utf-8")
     rules_end = text.index(_mod.END_MARK) + len(_mod.END_MARK)
-    conv_begin = text.index("<!-- cck2:begin")
+    conv_begin = text.index("<!-- kit2:begin")
     new_text = (
         text[:rules_end] + "\n\nMID-USER\n\n" + text[conv_begin:] + "\nPOST-USER\n"
     )
@@ -820,5 +820,37 @@ def test_conventions_preserves_user_content_around_both_blocks(tmp_path):
     assert out.startswith("PRE-USER")
     assert "MID-USER" in out
     assert out.rstrip().endswith("POST-USER")
-    assert out.count("cck:begin") == 1
-    assert out.count("cck2:begin") == 1
+    assert out.count("kit:begin") == 1
+    assert out.count("kit2:begin") == 1
+
+
+# ── 구 마커 이행 경로 (v3.9.0) ────────────────────────────────────────────────
+#
+# 소비자의 AGENTS.md 에는 이미 구 토큰(`cck:`) 블록이 들어 있다. 새 토큰만 인식하면  (old-name-ok: 구 마커 인식 = 이행 경로)
+# 그 블록이 **고아로 남은 채** 새 블록이 덧붙어, 한 파일에 규범 블록이 둘이 된다.
+# 읽기는 둘 다 받고 쓰기는 새 토큰으로만 — 그래야 다음 export 가 제자리에서 교체한다.
+
+
+def test_old_marker_block_is_replaced_in_place_not_duplicated(tmp_path):
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    (target / "AGENTS.md").write_text(
+        "# 내 파일\n\n앞 문장\n\n"
+        "<!-- cck:begin rules-v9.9.9 sha256:" + "a" * 64 + " -->\n"  # old-name-ok: 구 마커 인식 = 이행 경로
+        "낡은 규범 본문\n"
+        "<!-- cck:end -->\n\n"  # old-name-ok: 구 마커 인식 = 이행 경로
+        "뒤 문장\n",
+        encoding="utf-8",
+    )
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
+    out = (target / "AGENTS.md").read_text(encoding="utf-8")
+
+    # 제자리 교체: 블록은 하나뿐이고 새 토큰이며, 구 토큰은 남지 않는다.
+    assert out.count("kit:begin") == 1
+    assert out.count("kit:end") == 1
+    assert "cck:begin" not in out and "cck:end" not in out  # old-name-ok: 구 마커 인식 = 이행 경로
+    assert "낡은 규범 본문" not in out
+    # 마커 밖 사용자 콘텐츠는 불가침.
+    assert "앞 문장" in out and "뒤 문장" in out and "# 내 파일" in out
+

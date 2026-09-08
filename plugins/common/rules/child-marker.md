@@ -12,7 +12,7 @@ portable_reason: 마커는 git 만 쓰므로 하네스 무관 — 자식 스킬�
 
 ## 위치
 
-`$(git rev-parse --git-dir)/cck/child.json` — 워크트리마다 분리되고 **구조적으로 untracked** 다.
+`$(git rev-parse --git-dir)/kit/child.json` — 워크트리마다 분리되고 **구조적으로 untracked** 다.
 `--git-dir` 은 워크트리에서 절대경로, 주 체크아웃에서 상대경로를 주므로 **resolve 해서 쓴다**.
 
 **주 체크아웃(`--git-common-dir == --git-dir`)에서는 쓰지도 읽지도 않는다** —

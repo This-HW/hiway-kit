@@ -61,7 +61,7 @@ command -v orca >/dev/null 2>&1 && echo "1단 사용 가능"
    받은 뒤에는 컨트롤이 직접 게이트를 실행한다(규범 본문 P3).
 4. 게이트 통과 후 컨트롤이 직접 병합하고, 병합 완료 통지는 **통합 브랜치의 최종
    SHA**로 한다(자식이 보고한 SHA는 rebase·squash로 사라질 수 있다).
-5. 정리 단계에서 자식 마커(`$(git rev-parse --git-dir)/cck/child.json`)를 삭제한
+5. 정리 단계에서 자식 마커(`$(git rev-parse --git-dir)/kit/child.json`)를 삭제한
    뒤 워크트리를 회수한다.
 
 **함정**: 새 자식 워크트리가 컨트롤이 지정한 기준 커밋이 아니라 로컬 `main`(뒤처져

@@ -76,12 +76,11 @@ kit_state_dir() {
     /*) : ;;
     *) raw="${REPO_ROOT}/${raw}" ;;
   esac
-  # 디렉토리 이름 "cck" 는 개명 잔재이지만 **바꾸지 않는다** — 이것은 내부 경로가 아니라
-  # 프로토콜 경로다: rules/child-marker.md·skills/child-session·hooks/examples/child-git-guard.py
-  # ·feedback_ledger.py 의 레지스트리 포인터가 같은 이름을 규범으로 참조하고, 외부
-  # 오케스트레이터의 registry describe 이음매도 이 경로를 읽는다. 바꾸려면 그 소비자들과
-  # 함께 옮겨야 하므로 조율 안건으로 남긴다(살아있는 마커를 고아로 만들지 않는다).
-  KIT_STATE_DIR="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${raw}/cck")"
+  # 디렉토리 이름은 "kit" 이다 — **제품명을 넣지 않는다.** 이것은 내부 경로가 아니라
+  # 프로토콜 경로이고(rules/child-marker.md·skills/child-session·child-git-guard.py·
+  # feedback_ledger.py 가 같은 이름을 규범으로 참조한다), 제품명을 박으면 개명할 때마다
+  # 살아있는 마커가 고아가 된다. v3.9.0 에서 구 이름을 이 중립 이름으로 옮겼다.
+  KIT_STATE_DIR="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${raw}/kit")"
   printf "%s" "$KIT_STATE_DIR"
 }
 

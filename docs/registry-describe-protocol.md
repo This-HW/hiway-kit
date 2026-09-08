@@ -19,8 +19,8 @@ cck 소스에 특정 레지스트리의 어휘를 하드코딩하지 않고 이�
 
 cck는 두 위치에서 포인터를 찾는다(우선순위 순):
 
-1. 자식 세션 마커(`$(git rev-parse --git-dir)/cck/child.json`)의 `registry` 필드 — 자식용
-2. `$(git rev-parse --git-common-dir)/cck/registry.json` — 부모/컨트롤 세션용
+1. 자식 세션 마커(`$(git rev-parse --git-dir)/kit/child.json`)의 `registry` 필드 — 자식용
+2. `$(git rev-parse --git-common-dir)/kit/registry.json` — 부모/컨트롤 세션용
 
 두 경로 모두 **레포 밖(gitdir), untracked, 클론과 함께 죽는다** — 새 설정 파일
 형식을 넣지 않는다는 원칙의 의도적 예외다(값이 아니라 포인터만 담고, 프로젝트가
@@ -85,7 +85,7 @@ JSON을 낸다:
 | `head` 불일치가 **연속 3회** | 레지스트리를 **미신뢰로 강등** — 이후 호출은 cck ledger를 내구 진실로 쓰는 폴백으로 고정된다 |
 | `head` 미선언 | 진행하되 "신선도 미선언" 경고만 남긴다 |
 
-강등 상태는 `$(git-common-dir)/cck/registry_trust.json`에 기록된다(공유 gitdir,
+강등 상태는 `$(git-common-dir)/kit/registry_trust.json`에 기록된다(공유 gitdir,
 untracked). 레지스트리가 정상화되어 `head`가 다시 일치하기 시작하면 연속 카운터가
 리셋되지만, **한 번 강등되면 그 세션에서는 자동 복귀하지 않는다** — 신선도
 데이터를 정책적으로 신뢰 회복시키는 것은 사람의 판단이 필요하다.

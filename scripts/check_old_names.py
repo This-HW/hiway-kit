@@ -13,6 +13,12 @@
 개명 이후 영영 매치되지 않았다. "검사 대상이 아닌 것은 결코 red 가 되지 않는다"
 (D-23)의 실측 사례다.
 
+## 예외
+
+파일 단위 제외(`oldNameScanExclude`)는 **역사 기록에만** 쓴다. 코드에서 구 이름이
+정당한 경우 — 구 마커를 읽어 새 마커로 옮기는 **이행 경로** 같은 것 — 는 그 **줄에**
+`old-name-ok` 를 적어 예외로 둔다. 파일을 통째로 빼면 그 파일의 미래 잔재까지 안 잡힌다.
+
 ## 검사 조건 (한 문장)
 
 **`oldNameScanExclude` 에 없는 git-tracked 파일에 `previousNames` 문자열이 하나라도
@@ -37,6 +43,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 POLICY = REPO_ROOT / "packaging" / "name-targets.json"
 DEFAULT_EXCLUDE = ("docs/", "CHANGELOG.md", "packaging/name-targets.json")
+
+# 줄 단위 예외 표기. **파일 단위 제외를 쓰지 않는 이유**가 여기 있다 — 파일을 통째로
+# 빼면 그 파일의 *미래* 잔재까지 영영 안 잡힌다(warning-signal.md §검토 절차 5의
+# "검사 대상이 아닌 것은 결코 red 가 되지 않는다"). 구 이름이 정당한 줄은 소수이고
+# 이유가 분명하므로(구 마커 인식 = 이행 경로), 그 줄만 표기하고 나머지는 계속 검사한다.
+LINE_OPT_OUT = "old-name-ok"
 
 
 def load_previous_names() -> list[str]:
@@ -85,9 +97,13 @@ def find_hits(names: list[str], exclude: tuple[str, ...]) -> list[tuple[str, str
             text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for name in names:
-            if name in text:
-                hits.append((rel, name))
+        for lineno, line in enumerate(text.splitlines(), 1):
+            if LINE_OPT_OUT in line:
+                continue
+            for name in names:
+                if name in line:
+                    hits.append((f"{rel}:{lineno}", name))
+                    break
     return hits
 
 

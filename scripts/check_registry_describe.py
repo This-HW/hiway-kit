@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """`describe` 이음매 적합성 프로브 (26-17, D-42·D-44·D-48·D-49·D-50).
 
-컨트롤 프로젝트가 자기 레지스트리 파사드를 **cck를 설치하지 않고도** 검증할 수 있게
-하는 결정론적 스크립트다. cck 쪽 D-42 이음매는 동사 `describe` 하나만 알고, 그것이
-JSON으로 자기 능력을 선언하면 cck는 선언된 것만 호출한다. 이 프로브는 그 반대편
-계약을 검증한다 — cck가 실제로 설치되기 전에 계약이 맞물려 보는 유일한 방법이다.
+컨트롤 프로젝트가 자기 레지스트리 파사드를 **이 킷을 설치하지 않고도** 검증할 수 있게
+하는 결정론적 스크립트다. 이 킷 쪽 D-42 이음매는 동사 `describe` 하나만 알고, 그것이
+JSON으로 자기 능력을 선언하면 이 킷은 선언된 것만 호출한다. 이 프로브는 그 반대편
+계약을 검증한다 — 킷이 실제로 설치되기 전에 계약이 맞물려 보는 유일한 방법이다.
 
 검사(전부 D-44의 fail-closed 표에서 기계적으로 도출):
   1. `describe` 호출이 유효 JSON을 반환하는가
   2. 동사마다 `name`·`args`가 있는가
   3. `effect`가 `read`|`write`이거나 미선언인가(미선언은 write로 간주되고 그렇게 보고)
   4. 자식 노출 집합(`effect=="read"`)에 미선언 동사가 없는가
-  5. 포인터에 `url` 필드가 있으면 거절하는가(D-48 — exec 전용, 자격증명을 cck가 다루지 않는다)
+  5. 포인터에 `url` 필드가 있으면 거절하는가(D-48 — exec 전용, 자격증명을 킷이 다루지 않는다)
   6. `head`(선택) — 현재 git HEAD와 대조해 신선도를 보고한다(D-49). 지속 불일치 패턴은
      `--observe`로 누적 기록해 감지한다(D-50 — "기동 커밋 보고" 파사드 판정).
   7. 깨진 응답(비-JSON, 실행 실패, 타임아웃) → 전면 폴백 판정(부분 신뢰 없음)
@@ -24,7 +24,7 @@ JSON으로 자기 능력을 선언하면 cck는 선언된 것만 호출한다. �
   check_registry_describe.py -- /path/to/registry-cli --some-flag
 
   # 신선도 지속 불일치(기동 커밋 파사드) 관측 누적
-  check_registry_describe.py --pointer registry.json --observe .cck-probe-history.jsonl
+  check_registry_describe.py --pointer registry.json --observe .kit-probe-history.jsonl
 
 exit 0 = green(적합), exit 1 = red(부적합 — 이유를 stdout에 나열)
 
@@ -61,7 +61,7 @@ class ProbeError(Exception):
 def load_pointer(path: Path) -> list[str]:
     """레지스트리 포인터 JSON을 읽어 command(argv)를 반환한다.
 
-    `url` 필드가 있으면 무조건 거절한다(D-48) — cck는 exec 전용 계약이고, HTTP
+    `url` 필드가 있으면 무조건 거절한다(D-48) — 이 킷은 exec 전용 계약이고, HTTP
     레지스트리는 자격증명 취급을 스스로 떠안는 shim을 내야 한다(소비자 몫).
     """
     try:
@@ -156,7 +156,7 @@ def validate_schema(response: dict) -> list[str]:
 
 
 def child_exposed_verbs(verbs: list[dict]) -> list[str]:
-    """cck가 자식에게 노출할 동사 이름 목록 — effect가 명시적으로 'read'인 것만."""
+    """킷이 자식에게 노출할 동사 이름 목록 — effect가 명시적으로 'read'인 것만."""
     return [
         v.get("name")
         for v in verbs
@@ -291,7 +291,7 @@ def evaluate(
     if non_idempotent_writes:
         lines.append(
             f"[INFO] 재시도 안전하지 않은 write 동사: {non_idempotent_writes} "
-            "(cck는 재시도하지 않는다)"
+            "(킷은 재시도하지 않는다)"
         )
 
     declared_head = response.get("head")
@@ -306,7 +306,7 @@ def evaluate(
     elif freshness == "mismatch":
         lines.append(
             f"[WARN] 신선도: head 불일치(선언 {declared_head} != 실제 {repo_head}) "
-            "— 실제 소비자(cck ledger)는 승격을 보류한다(D-49)"
+            "— 실제 소비자(킷 ledger)는 승격을 보류한다(D-49)"
         )
     elif freshness == "undeclared":
         lines.append("[WARN] 신선도: head 미선언 — 낡음을 탐지할 수 없다(D-49)")
@@ -365,7 +365,7 @@ def main(argv: list[str]) -> int:
         print(f"[FAIL] {error}", file=sys.stderr)
         print(
             "[FAIL] 깨진 응답 — 전면 폴백 판정(부분 신뢰 없음). "
-            "cck는 이 레지스트리를 신뢰하지 않고 docs/works/ 폴백으로 간다.",
+            "킷은 이 레지스트리를 신뢰하지 않고 docs/works/ 폴백으로 간다.",
             file=sys.stderr,
         )
         return 1

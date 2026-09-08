@@ -147,7 +147,7 @@ class TestPushChildOnly:
             text=True,
             check=True,
         ).stdout.strip()
-        marker_dir = (worktree_dir / git_dir / "cck").resolve()
+        marker_dir = (worktree_dir / git_dir / "kit").resolve()
         marker_dir.mkdir(parents=True)
         marker = marker_dir / "child.json"
         marker.write_text(
@@ -196,7 +196,7 @@ class TestPushChildOnly:
             text=True,
             check=True,
         ).stdout.strip()
-        marker_dir = (main_repo / git_dir / "cck").resolve()
+        marker_dir = (main_repo / git_dir / "kit").resolve()
         marker_dir.mkdir(parents=True)
         (marker_dir / "child.json").write_text(json.dumps({"role": "child"}))
 

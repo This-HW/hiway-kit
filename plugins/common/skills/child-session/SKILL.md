@@ -37,7 +37,7 @@ effort: medium
 
 ## 2. 마커 기록
 
-로드 시 마커를 쓴다. 위치는 **`$(git rev-parse --git-dir)/cck/child.json`**.
+로드 시 마커를 쓴다. 위치는 **`$(git rev-parse --git-dir)/kit/child.json`**.
 
 - 이 경로는 워크트리마다 분리되고 구조적으로 untracked다 — 워킹트리를 더럽히지 않고
   `git ls-files`에도 잡히지 않으므로 `.gitignore` 등재를 따로 검사할 필요가 없다.
