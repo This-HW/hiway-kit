@@ -421,8 +421,5 @@ UX: "사용자 페르소나 없음"
 이 파일이 **기본이자 활성 경로**입니다: `Main Claude → Task(synthesizer) → 결과 수신 →
 Task(consensus-builder)`, 각 Round마다 별도 Task 호출.
 
-`facilitator-teams.md`(Agent Teams 모드 Lead)는 이 역할을 Round 2에서 흡수 수행하는
-**레거시 폴백**이며 자동 선택되지 않습니다. 폐기 일정은 D-7을 따릅니다.
-
 ---
 

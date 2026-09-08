@@ -486,8 +486,5 @@ UX: "세션 1일"
 AskUserQuestion(필요시)`. 충돌 항목을 synthesizer 결과에서 추출해 트레이드오프 분석 후
 합의안을 도출합니다.
 
-`facilitator-teams.md`(Agent Teams 모드 Lead)는 이 역할을 Round 3에서 흡수 수행하는
-**레거시 폴백**이며 자동 선택되지 않습니다. 폐기 일정은 D-7을 따릅니다.
-
 ---
 

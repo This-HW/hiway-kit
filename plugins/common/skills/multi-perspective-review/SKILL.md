@@ -310,55 +310,10 @@ effort: max
 
 ---
 
-## Agent Teams 모드 (실험적)
-
-### 개요
-
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` 환경 변수가 설정되면, 이 스킬은 **Agent Teams 모드**로 실행될 수 있습니다.
-Agent Teams는 spawnTeam() API를 사용하여 Teammate들이 병렬로 독립 분석을 수행합니다.
-
-### 모드 자동 선택 (CALC-001)
+## 토큰 한도 (POL-002)
 
 ```
-모드 점수 = scale×2 + perspective×2 + complexity×1
-
-조건:
-  점수 >= 9 → AGENT_TEAMS 모드 (자동 전환)
-  점수 < 9  → SUBAGENT 모드 (기본)
-
-사용자 오버라이드:
-  --agent-teams     → 강제 Teams 모드
-  --no-agent-teams  → 강제 Subagent 모드
-```
-
-### 폴백 전략 (Teams → Subagent)
-
-Agent Teams 모드에서 문제 발생 시, 자동으로 Subagent 모드로 전환합니다.
-
-#### 즉시 전환 트리거
-
-```
-다음 상황 발생 시 Subagent 모드로 즉시 폴백:
-
-1. VAL-001 검증 실패
-   → spawnTeam API 미지원, 환경 변수 미설정, 릴리즈 버전 미충족
-   → 기존 3-Round Deliberation으로 자동 전환
-
-2. Lead 초기화 실패 (30초 타임아웃)
-   → facilitator-teams.md 로드 실패
-   → 기존 facilitator.md + 개별 Meta 에이전트로 전환
-
-3. 전원 실패 (모든 Teammate FAILED)
-   → 결과물이 전혀 없는 상태
-   → Subagent 모드로 전환하여 전체 리뷰 재시작
-```
-
-### 토큰 한도 (POL-002)
-
-```
-모드별 한도:
-  SUBAGENT 모드:     150,000 토큰
-  AGENT_TEAMS 모드:  300,000 토큰
+한도: 150,000 토큰
 
 3계층 방어:
   80% → 분석 범위 축소 (Level 3 참고 문서 스킵)

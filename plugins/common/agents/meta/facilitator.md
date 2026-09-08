@@ -316,9 +316,6 @@ Facilitator 완료
 `ultracode`(dynamic workflow)를 직접 트리거합니다 — 스킬에서 자동 분기하지 않습니다
 (`plugins/common/skills/agent-teams/SKILL.md` 참고).
 
-`facilitator-teams.md`(Agent Teams 모드 Lead)는 **레거시 폴백**이며 자동 선택되지 않습니다.
-폐기 일정은 D-7을 따릅니다.
-
 ### 역할 분담
 
 ```

@@ -37,7 +37,7 @@ git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 
 ```
 plugins/
-└── common/      — Core agents (33) + skills (20) + rules (15) + hooks
+└── common/      — Core agents (32) + skills (20) + rules (15) + hooks
 ```
 
 `plugins/common/` contains:
@@ -80,7 +80,7 @@ plugins/
 ### 2-Tier Model
 
 ```
-Tier 1: plugins/common/  — All projects (33 agents)
+Tier 1: plugins/common/  — All projects (32 agents)
 Tier 2: project-local/   — Project-specific (user-added)
 ```
 
@@ -236,7 +236,7 @@ cache), but `scripts/` and `evals/` are repo-local and take effect immediately.
 ### Sub-agent Rules
 
 - Regular agents: `disallowedTools: [Task]` — cannot spawn sub-agents
-- Meta agents (facilitator, synthesizer, devil's advocate, impact-analyzer, consensus-builder, facilitator-teams — 6 total): `disallowedTools: [Bash]`
+- Meta agents (facilitator, synthesizer, devil's advocate, impact-analyzer, consensus-builder — 5 total): `disallowedTools: [Bash]`
 - Skills (auto-dev, etc.) drive delegation; leaf agents stay flat.
 
 ### Orchestration Model — Scale-Appropriate Primitives (Spec 2 / W-006)

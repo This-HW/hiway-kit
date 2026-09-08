@@ -92,11 +92,6 @@
         "reason": "[초안 정정] '회피 경로 없음'은 틀렸다 — 정의 본문에 P1/P2/P3용 무질문 경로가 실재한다(P0 없으면 AskUserQuestion 없이 진행). 다만 frontmatter OUTPUT:이 이 조건부성을 명시하지 않고, opus/max 모델이 애매함을 과잉 escalation할 행동적 비결정성 리스크가 남아 A는 아니다",
         "promotionCondition": "무-P0 태스크에서 다중 실행(n≥5) 동안 AskUserQuestion 미호출이 안정적으로 재현되면 A로 승격"
       },
-      "facilitator-teams": {
-        "grade": "C",
-        "reason": "message/broadcast 팀 프리미티브 — spawnTeam()의 Lead로만 존재하며 살아있는 teammate 없이는 단독 실행 자체가 불가",
-        "promotionCondition": "eval 러너가 팀 모드(다중 에이전트 동시 실행 + message/broadcast 라우팅)를 구동하는 경로를 지원하면 재검토"
-      },
       "git-workflow": {
         "grade": "A",
         "promotedAt": "2026-08-31 (W-023)",

@@ -193,6 +193,12 @@ jobs:
         # 돌릴 때만"이었다는 뜻이다 — 개명 PR이 파생 없이 green으로 통과할 수 있었다.
         run: python3 scripts/derive-name.py --check
 
+      - name: Always-on injection budget (§16)
+        # scripts/check_injection_budget.py 가 단일 소스 — 로컬 verify-done.sh §16과 동일.
+        # 이 검사는 원래 verify-done.sh 안 인라인이라 CI 에 없었다 — 로컬에서 누가 돌릴
+        # 때만 발화하는 상태였다(§18 이 겪은 것과 같은 구멍).
+        run: python3 scripts/check_injection_budget.py
+
       - name: Old project name on live surfaces (§20)
         # scripts/check_old_names.py 가 단일 소스 — 로컬 verify-done.sh §20과 동일 스크립트.
         # §18(이름 파생)은 산문 문서만 보므로 plugins/·site/·setup.sh 는 대상이 아니었다.

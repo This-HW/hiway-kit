@@ -562,38 +562,15 @@ else
   red "다중 하네스 생성기 산출물 누락 (packaging/targets.json 또는 scripts/build-targets.py) — W-019"
 fi
 
-hdr "16. 세션 주입 예산 (W-025 / D-20·D-46)"
-# 세션마다 무조건 주입되는 양(core 티어 규범 + WORKFLOW 스킬)의 **총량** 상한.
-#
-# 왜 총량 하나인가(Q2 답신): core/WORKFLOW 를 따로 재면 절을 파일 사이로 **옮기는 것만으로**
-# 통과시킬 수 있다(게이밍). 실제로 이 배치에서 "비신뢰 텍스트" 2KB 절이 스킬 → 규범으로
-# 이동했다 — 개별 상한이었다면 그 이동이 예산 통과로 보였을 것이다.
-#
-# 상한 도출: §11.2(e) 의 최초 추정치 9,216B 는 **작업 전 추정**이었고 613B 낙관적이었다.
-# 축약을 먼저 끝낸 뒤(34,062B → 9,829B, **71% 감축**) 실측으로 재도출한다 —
-# 10,240B(10 KiB)는 현재값 대비 411B 여유로, 내용을 추가할 때 검토를 강제할 만큼 빡빡하다.
-# 먼저 깎고 나서 숫자를 정한다(D-46) — 반대로 하면 예산이 압력을 잃고 장식이 된다.
-INJECT_CAP=10240
-INJ_BYTES=$(python3 - <<'PYEOF' 2>/dev/null
-import importlib.util
-from pathlib import Path
-try:
-    s = importlib.util.spec_from_file_location("ss", "plugins/common/hooks/session-start.py")
-    m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
-    r = Path("plugins/common")
-    print(len(m.load_rules(r, False).encode()) + len(m.load_workflow_skill(r).encode()))
-except Exception:
-    print(-1)
-PYEOF
-)
-if [ "$INJ_BYTES" = "-1" ] || [ -z "$INJ_BYTES" ]; then
-  red "세션 주입 예산: 측정 실패 (session-start.py 로드 불가)"
-elif [ "$INJ_BYTES" -le "$INJECT_CAP" ]; then
-  green "세션 주입 ${INJ_BYTES}B ≤ ${INJECT_CAP}B (core 규범 + WORKFLOW 총량)"
+hdr "16. 상시 주입 예산 — 규범+WORKFLOW · 에이전트 설명 (W-025 / D-20·D-46)"
+# 판정 로직은 scripts/check_injection_budget.py 가 단일 소스 — CI(validate.yml)와 동일
+# 스크립트를 호출한다. 원래 이 게이트는 여기 인라인이었고 **CI 에 없었다** — 발화 조건이
+# "누가 로컬에서 verify-done.sh 를 돌릴 때만"이었다는 뜻이다(F-023 + §18 이 같은 구멍을
+# 겪었다). 상한 도출·축 분리 근거는 그 스크립트의 독스트링에 있다.
+if python3 scripts/check_injection_budget.py; then
+  green "상시 주입 예산 통과 (check_injection_budget.py — CI와 단일 소스)"
 else
-  red "세션 주입 ${INJ_BYTES}B > ${INJECT_CAP}B — 매 세션 이만큼이 컨텍스트를 먹는다"
-  echo "      → core 티어 규범을 축약하거나, 상시 필요 없는 것을 conditional/reference 로 내려라"
-  echo "        (티어는 각 rules/*.md 의 frontmatter 가 선언한다 — D-17)"
+  red "상시 주입 예산 초과 — 매 세션 이만큼이 컨텍스트를 먹는다 (상세는 위 출력)"
 fi
 
 hdr "15. AGENTS.md 크기 예산 (W-022 R7)"

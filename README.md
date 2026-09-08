@@ -1,6 +1,6 @@
 # hiway-kit
 
-> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 33 agents + 20 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
+> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 32 agents + 20 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
 
 A focused, single-plugin AI agent system built for Claude Code. Covers the full software development lifecycle: planning, implementation, review, testing, and meta-tooling. (Not a TUI component library or a scaffolding installer — this is the agents + skills plugin.)
 
@@ -100,7 +100,7 @@ differs by platform capability, verified against the real CLIs (not assumed):
 | --- | --- | --- |
 | Skills (20) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
 | Rules (13) | ⚠ no dedicated field → carried via `AGENTS.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ✅ recognized |
-| Agents (33) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`backend`/`dev`/`meta`/`planning`); it miscounts the 4 category folders as agent entries and finds none of the real 33. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
+| Agents (32) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`backend`/`dev`/`meta`/`planning`); it miscounts the 4 category folders as agent entries and finds none of the real 32. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
 | Hooks | ❌ not shipped — Codex's hook runtime does not load the exec-array form (`command`+`args`) this kit uses; confirmed by direct testing, not just reading docs | ❌ not shipped this batch — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
 
@@ -228,7 +228,7 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 | **Scale-appropriate orchestration** | Small/Medium 스킬 주도 플랫, Large 네이티브 `ultracode` 위임 | 스케일별 최적, main 컨텍스트 병목 회피 |
 | **Adversarial review** | `review-code`가 4 페르소나(hacker·murphy·future-self·picky-user)로 침투 검토 | 버그·엣지케이스를 능동 발굴 |
 | **Multi-perspective deliberation** | 10 관점 × 3 라운드 합의(`/multi-perspective-review`) + devil's advocate | 설계 사각지대 제거 |
-| **Agent specialization** | 33 전문 에이전트 × 모델 티어(Opus 전략 / Sonnet 구현 / Haiku 탐색) | 작업별 최적 모델·비용 |
+| **Agent specialization** | 32 전문 에이전트 × 모델 티어(Opus 전략 / Sonnet 구현 / Haiku 탐색) | 작업별 최적 모델·비용 |
 | **Worktree isolation** | 파일 수정 에이전트를 격리 git worktree에서 실행 | 병렬 작업 충돌 방지 |
 | **Harness engineering** | 컨텍스트 주입(session-start)·도구 큐레이션·가드레일 훅·Work 메모리 | 환경이 모델을 올바른 궤도로 유지 |
 | **SSOT governance** | `rules/` + decisions 추적 + 거버넌스/시크릿 보호 훅 | 일관성·감사 가능성 |
@@ -266,7 +266,7 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 
 | Plugin            | Agents | Skills | Description                               |
 | ----------------- | ------ | ------ | ----------------------------------------- |
-| `hiway-kit` | 33     | 20     | Core: planning, development, review, meta |
+| `hiway-kit` | 32     | 20     | Core: planning, development, review, meta |
 
 ---
 
@@ -275,7 +275,7 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 ### 2-Tier Agent Model
 
 ```
-Tier 1: plugins/common/  — Core agents for all projects (33 agents)
+Tier 1: plugins/common/  — Core agents for all projects (32 agents)
 Tier 2: project-local/   — Project-specific agents (user-defined)
 ```
 
@@ -368,7 +368,6 @@ Orchestrate multi-perspective review workflows. No `Bash` access.
 | Agent               | Description                                                                                         |
 | ------------------- | --------------------------------------------------------------------------------------------------- |
 | `facilitator`       | Analyzes what perspectives are needed, assigns agents                                               |
-| `facilitator-teams` | Manages Round 0/2/3, integrates facilitator + synthesizer + consensus-builder                       |
 | `synthesizer`       | Consolidates Round 1/2 results, identifies conflicts and duplicates                                 |
 | `devils-advocate`   | Failure scenario analysis via 4 attack personas (scalability / dependency / maintainability / cost) |
 | `consensus-builder` | Conflict analysis across perspectives → Win-Win resolution                                          |
@@ -452,7 +451,7 @@ clarify-requirements → analyze-domain → design-user-journey → define-busin
 
 ```
 plugins/
-└── common/      — Core agents (33) + skills (20) + rules (15) + hooks
+└── common/      — Core agents (32) + skills (20) + rules (15) + hooks
 ```
 
 The plugin contains:
