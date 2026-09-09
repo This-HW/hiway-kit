@@ -43,6 +43,9 @@ exit code:
       절대 0으로 위장하지 않는다. 반면 `--plugin-root`를 명시했는데 그곳에 rules/가
       없으면 SKIPPED가 아니라 exit 1이다 — 사용자가 지정한 것이 틀렸다는 뜻이고,
       이걸 2로 내면 CI가 "kit 미설치"로 오분류한다.
+  3 = 규범 블록은 기록·검사했으나 conventions 블록(두 번째)을 건너뜀. kit 레포에서
+      `docs/conventions/`가 부분적으로만 있을 때(= 실제 드리프트)다. 소비자 레포처럼
+      해당 파일이 **하나도** 없으면 애초에 대상이 아니므로 0이다.
 """
 
 from __future__ import annotations
@@ -93,6 +96,55 @@ END_MARK = "<!-- kit:end -->"  # 생성 시 쓰는 정규형
 # 걸리지 않으므로 ATK-001이 되살아나지는 않는다.
 SUSPECT_RE = re.compile(r"^<!--[ \t]*(?:cck|kit):(begin|end)\b.*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 
+# 구 토큰 **만** 세는 짝. `BEGIN_RE`/`END_RE`는 구·신을 함께 잡으므로, 이행 중인
+# 파일(구 블록 1 + 신 블록 1)이 `begins=2, ends=2`가 되어 "손상"으로 거부됐다 —
+# 재생성으로도 못 고치는 영구 red다 (ATK-010). 아래 `_drop_legacy_duplicate()`가
+# 그 한 가지 형태만 이행 경로로 해석한다.
+_LEGACY_BEGIN_RE = re.compile(
+    r"^<!--[ \t]*cck:begin[ \t]+rules-v\S+[ \t]+sha256:[0-9a-f]{64}[ \t]*-->[ \t]*$",  # old-name-ok: 구 마커 인식 = 이행 경로
+    re.MULTILINE,
+)
+_LEGACY_END_RE = re.compile(r"^<!--[ \t]*cck:end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
+
+
+def _drop_legacy_duplicate(
+    text: str,
+    begin_re: re.Pattern[str],
+    end_re: re.Pattern[str],
+    legacy_begin_re: re.Pattern[str],
+    legacy_end_re: re.Pattern[str],
+) -> tuple[str, bool]:
+    """구 토큰 블록과 신 토큰 블록이 **각각 하나씩** 공존하면 구 블록을 제거한다.
+
+    이행 경로다. 구 토큰(`cck:`)은 읽기만 인식하므로 소비자의 AGENTS.md에는 구 블록이
+    이미 들어 있고, 새 토큰으로 한 번 내보내면 두 블록이 공존한다. 그 상태를 "손상"으로
+    거부하면 **재생성으로도 못 고치는** 영구 red가 된다(LESSONS에 x3로 등재된 패턴).
+
+    구 1 + 신 1은 해석이 하나뿐이다 — 구 블록을 지우고 신 블록을 갱신하는 것. 그
+    **외의** 손상(begin만 있음, 3개 이상, 두 블록이 서로 맞물림)은 해석이 여럿이므로
+    이 함수가 손대지 않고 `(text, False)`로 돌려보내 기존 거부 경로(exit 1)로 보낸다 —
+    생성기는 추측해서 고치지 않는다.
+    """
+    begins = list(begin_re.finditer(text))
+    ends = list(end_re.finditer(text))
+    if len(begins) != 2 or len(ends) != 2:
+        return text, False
+    lb = list(legacy_begin_re.finditer(text))
+    le = list(legacy_end_re.finditer(text))
+    if len(lb) != 1 or len(le) != 1:
+        return text, False
+    start, stop = lb[0].start(), le[0].end()
+    if stop <= start:
+        return text, False
+    legacy_spans = {lb[0].span(), le[0].span()}
+    # 신 블록이 구 블록 **안**에 있으면(마커가 서로 맞물림) 어느 쪽이 바깥인지
+    # 단정할 수 없다 — 추측하지 않고 그대로 둔다.
+    if any(
+        start < m.start() < stop for m in begins + ends if m.span() not in legacy_spans
+    ):
+        return text, False
+    return text[:start] + text[stop:].lstrip("\n"), True
+
 # ─────────────────────────────────────────────────────────────────────────────
 # conventions 블록 (W-022 R7) — **완전히 별도 마커 네임스페이스**(`kit2:`)다.
 #
@@ -113,6 +165,41 @@ CONV_BEGIN_RE = re.compile(
 CONV_END_RE = re.compile(r"^<!--[ \t]*(?:cck2|kit2):end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 CONV_END_MARK = "<!-- kit2:end -->"
 CONV_SUSPECT_RE = re.compile(r"^<!--[ \t]*(?:cck2|kit2):(begin|end)\b.*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
+_CONV_LEGACY_BEGIN_RE = re.compile(
+    r"^<!--[ \t]*cck2:begin[ \t]+conventions-v\S+[ \t]+sha256:[0-9a-f]{64}[ \t]*-->[ \t]*$",  # old-name-ok: 구 마커 인식 = 이행 경로
+    re.MULTILINE,
+)
+_CONV_LEGACY_END_RE = re.compile(r"^<!--[ \t]*cck2:end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 이름·홈페이지는 **매니페스트에서 파생한다** (ATK-016 / D-3).
+#
+# 예전에는 `PREAMBLE`·`BLOCK_HEADER`·`CONV_BLOCK_HEADER` 가 킷 이름과 URL 문자열을
+# 직접 들고 있었다. 이 레포는 이름을 매니페스트에서 파생하는 정책(`packaging/
+# name-targets.json`, §18/§20 게이트)을 갖고 있으므로, 개명 때 이 세 상수가 조용히
+# 뒤처지면 **모든 소비자의 AGENTS.md 가 옛 이름을 영구히 광고**한다.
+#
+# **마커 토큰(`kit:`/`kit2:`)은 파생 대상이 아니다.** 그건 이름이 아니라 생성물의
+# **구조**이고, 바꾸면 기존 소비자의 AGENTS.md 가 전부 손상 판정된다. 이름이 바뀌어도
+# 토큰은 불변이다 — 위 정규식들이 그래서 리터럴로 남아 있다.
+_MANIFEST_PATH = Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
+
+
+def _own_manifest() -> dict:
+    """이 파일이 속한 플러그인의 매니페스트. 읽기 실패는 빈 dict (fail-open).
+
+    훅은 소비자 환경에서 자족해야 하므로, 매니페스트를 못 읽는 것이 도구 전체를
+    막지는 않는다 — 이름 자리에 폴백이 들어가고 나머지는 그대로 동작한다.
+    """
+    try:
+        return json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+_MANIFEST = _own_manifest()
+KIT_NAME = _MANIFEST.get("name") or "kit"
+KIT_HOMEPAGE = _MANIFEST.get("homepage") or _MANIFEST.get("repository") or ""
 
 CONVENTIONS_VERSION = "1.0.0"
 
@@ -135,7 +222,7 @@ CONVENTIONS_REFERENCE_ONLY: list[str] = [
 ]
 
 CONV_BLOCK_HEADER = """
-## hiway-kit — Project Conventions (요약 발췌)
+## {kit_name} — Project Conventions (요약 발췌)
 
 > **이 절도 자동 생성된다** (별도 마커 `kit2:` — 위 규범 블록과 독립).
 > `docs/conventions/*.md`의 일부를 인라인한 것이다. Codex의 `project_doc_max_bytes`
@@ -163,9 +250,18 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     블록(첫 번째)과 달리 이 두 번째 블록은 **kit 레포 자체를 개발할 때만** 의미가
     있다 — 다른 하네스가 kit 레포 자체를 작업할 때 CLAUDE.md의 `@import`를 못
     읽으므로 같은 내용을 여기 인라인해서 준다.
+
+    **이 검사가 도는 조건**(`warning-signal.md` §4): `CONVENTIONS_INLINE`에 등재된
+    파일이 **하나라도** 있을 때만 드리프트 판정으로 들어간다. 하나도 없으면 그 레포는
+    kit 레포가 아니므로(자기 관례 문서를 가진 소비자는 흔하다) 대상 아님(None)이고,
+    **일부만** 있으면 그건 kit 레포의 실제 드리프트이므로 red다. `conv_dir.is_dir()`
+    하나로 판정하면 자기 `docs/conventions/`를 가진 **모든 소비자**가 red가 됐다
+    (ATK-003, 재현 확인) — consumer-first 북극성의 정면 위반이었다.
     """
     conv_dir = _conventions_dir(target_root)
     if not conv_dir.is_dir():
+        return None
+    if not any((conv_dir / fname).is_file() for fname, _ in CONVENTIONS_INLINE):
         return None
 
     sections = []
@@ -196,7 +292,7 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     )
 
     header = CONV_BLOCK_HEADER.format(
-        sections="\n".join(sections), references=references
+        kit_name=KIT_NAME, sections="\n".join(sections), references=references
     )
     if any(t in header for t in CONV_MARKER_TOKENS):
         raise ClassificationError(
@@ -249,6 +345,9 @@ def _existing_conv_marker(text: str) -> tuple[str | None, int, int]:
 def _compose_conv(text: str, block: str) -> str:
     """`_compose()`(규범 블록용)와 같은 알고리즘의 kit2 버전. 첫 번째 블록 기록 **후**의
     텍스트를 받으므로 `text`가 빈 문자열일 일은 없다(PREAMBLE + 규범 블록이 이미 있다)."""
+    text, _ = _drop_legacy_duplicate(  # ATK-010 — kit2 네임스페이스의 같은 이행 경로
+        text, CONV_BEGIN_RE, CONV_END_RE, _CONV_LEGACY_BEGIN_RE, _CONV_LEGACY_END_RE
+    )
     meta, s, e = _existing_conv_marker(text)
     if meta is not None:
         return text[:s] + block.rstrip("\n") + text[e:]
@@ -322,13 +421,13 @@ PREAMBLE = """# Agent instructions
 """
 
 BLOCK_HEADER = """
-## hiway-kit — 하네스 중립 규범
+## {kit_name} — 하네스 중립 규범
 
 > **이 절은 자동 생성된다.** 위아래의 `kit` 주석 마커 사이는 재생성 시 통째로 교체되고,
 > **그 밖은 생성기가 건드리지 않는다**. 갱신은 `/harness-export` 스킬(또는 kit 레포에서
 > `./scripts/export-harness.sh`). 손으로 고치면 드리프트 검사가 막는다.
 
-이 절은 [hiway-kit](https://github.com/This-HW/hiway-kit)의 규범을
+이 절은 [{kit_name}]({kit_homepage})의 규범을
 **원문 그대로** 옮긴 것이다. Claude Code·Codex·OpenCode·Copilot·Pi·Hermes 등 이
 파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
 
@@ -387,12 +486,10 @@ def _plugin_root(explicit: str | None) -> Path | None:
         # 하드코딩된 검사가 자기 자신을 못 찾아 SKIPPED 를 냈다. 판정은 **이 파일이
         # 속한 플러그인의 매니페스트 이름**과 같은가로 한다(자기 참조). D-3 의
         # "이름은 SSOT 에서 파생한다"가 탐색 로직에도 적용된다.
+        own = _own_manifest().get("name")
+        if not own:
+            return False
         try:
-            own = json.loads(
-                (Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json").read_text(
-                    encoding="utf-8"
-                )
-            ).get("name")
             manifest = root / ".claude-plugin" / "plugin.json"
             return json.loads(manifest.read_text(encoding="utf-8")).get("name") == own
         except (OSError, ValueError):
@@ -560,6 +657,8 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
         if _rule_portability(p)[0] is False
     )
     header = BLOCK_HEADER.format(
+        kit_name=KIT_NAME,
+        kit_homepage=KIT_HOMEPAGE,
         portable_rows=portable_rows, not_portable_rows=not_portable_rows
     )
     # 룰 본문뿐 아니라 **생성기 자신의 헤더**도 검사한다. 실제로 헤더에 마커를 리터럴로
@@ -658,26 +757,42 @@ def _existing_marker(text: str) -> tuple[str | None, int, int]:
     return b.group(1), b.start(), e.end()
 
 
-def _resolve_target(path: Path, root: Path) -> tuple[Path | None, Path | None]:
-    """대상 경로를 **한 번만** 해석해 (실경로, 탈출경로)를 돌려준다.
+def _resolve_in_repo(
+    container_root: Path, rel_path: str
+) -> tuple[Path | None, str | None]:
+    """`rel_path`를 `container_root` 안으로만 한정해 **한 번만** 해석한다.
 
-    심링크 **보존** 자체는 kit의 관례다(os.replace가 링크를 파괴하지 않도록
-    realpath에 쓴다). 모노레포에서 AGENTS.md를 공용 파일로 링크하는 건 정상 사용이다.
-    다만 공유 CI 워크스페이스나 신뢰 못 할 체크아웃에 `AGENTS.md -> ~/.ssh/…` 같은
-    링크가 심겨 있으면, 그 관례가 **트리 밖 임의 파일 쓰기**로 바뀐다.
-    그래서 "보존하되 트리 밖은 거부"로 가른다.
+    시그니처·계약은 `scripts/build-targets.py::_resolve_in_repo`와 **동일**하다
+    (D-15: 구현은 여러 벌, 계약만 하나). 이 레포에서 같은 결함이 네 번 반복된 뒤
+    관례로 굳은 형태이므로 새로 발명하지 않는다 — `docs/conventions/path-containment.md`.
 
-    **해석은 한 번뿐이다.** 예전에는 검사(`_symlink_escapes`)와 쓰기(`_atomic_write`)가
-    각자 `realpath`를 불렀다. 그 사이에 파일 읽기·조립이 끼므로, 검사 직후 링크를
-    바꿔치기하면 검사받지 않은 경로에 쓰게 된다 (ATK-002 TOCTOU). 검사한 객체와
-    사용하는 객체가 다르면 그 검사는 장식이다.
+    막는 것 셋:
+
+    - **절대경로.** `container_root / rel_path`는 `rel_path`가 절대경로면
+      `container_root`를 통째로 버린다(pathlib의 문서화된 동작). `--entrypoints`로
+      절대경로를 넘기면 트리 밖 임의 파일에 13KB를 썼다 (ATK-002, 재현 확인).
+    - **`..` 순회.** 같은 경로로 트리를 벗어난다.
+    - **트리 밖 심링크.** 심링크 **보존** 자체는 kit의 관례다(모노레포에서 AGENTS.md를
+      공용 파일로 링크하는 건 정상 사용이라 os.replace가 링크를 파괴하지 않도록
+      realpath에 쓴다). 다만 `AGENTS.md -> ~/.ssh/…` 가 심긴 체크아웃에서는 그 관례가
+      트리 밖 쓰기로 바뀌므로 "보존하되 트리 밖은 거부"로 가른다.
+
+    **해석은 한 번뿐이고, 호출자는 이 결과(Path)를 읽기·쓰기 양쪽에 그대로 써야 한다.**
+    검사와 사용이 각자 resolve하면 그 사이가 TOCTOU 창이고(ATK-002), 검사한 객체와
+    사용하는 객체가 다르면 그 검사는 장식이다(ATK-009).
     """
-    real = Path(os.path.realpath(path))
-    if path.is_symlink():
-        try:
-            real.relative_to(root.resolve())
-        except ValueError:
-            return None, real
+    candidate = container_root / rel_path
+    real = candidate.resolve()
+    try:
+        real.relative_to(container_root.resolve())
+    except ValueError:
+        if candidate.is_symlink():
+            kind = "트리 밖을 가리키는 심링크다"
+        elif Path(rel_path).is_absolute():
+            kind = "절대경로다"
+        else:
+            kind = "`..` 순회로 트리를 벗어난다"
+        return None, f"{kind} → {real}"
     return real, None
 
 
@@ -762,7 +877,6 @@ def _read_target(target: Path) -> tuple[str | None, int]:
 
 
 def cmd_check(
-    target_root: Path,
     target: Path,
     block: str,
     sha: str,
@@ -774,19 +888,11 @@ def cmd_check(
     **블록 전문을 대조한다.** 마커의 sha는 파일이 스스로 신고한 값이라, 그것만 믿으면
     마커 줄을 그대로 둔 채 블록 안쪽을 지우거나 변조해도 초록이 된다 — 이 도구가
     막겠다고 선언한 상황(하네스마다 규범이 다름)이 그대로 게이트를 통과한다.
+
+    `target`은 `main()`이 `_resolve_in_repo()`로 **이미 봉쇄·해석한** 경로다. 여기서
+    다시 해석하지 않는다 — 해석이 두 번이면 그 사이가 TOCTOU 창이고, 봉쇄를 쓰기
+    경로에만 걸면 `--check`가 구멍으로 남는다 (ATK-002/004/009).
     """
-    # cmd_write와 **같은** 검사를 같은 순서로 한다. 예전에는 쓰기 경로에만 있었는데,
-    # 그러면 `AGENTS.md -> ~/.aws/credentials` 가 심긴 체크아웃에서 CI가 --check를
-    # 도는 것만으로 트리 밖 파일을 읽는다 (존재 여부·디코딩 오류 오프셋이 오라클로
-    # 새어나간다). 방어 논리를 한쪽에만 두면 그 논리는 절반만 참이다 (ATK-004).
-    _, escaped = _resolve_target(target, target_root)
-    if escaped is not None:
-        print(
-            f"[export-harness] ✗ {target} 는 대상 트리 밖을 가리키는 심링크다 → {escaped}\n"
-            "  읽기를 거부한다.",
-            file=sys.stderr,
-        )
-        return 1
     if not target.exists():
         print(
             f"[export-harness] ✗ {target} 없음 — 아직 내보내지 않았다.", file=sys.stderr
@@ -795,6 +901,21 @@ def cmd_check(
     text, rc = _read_target(target)
     if text is None:
         return rc
+    # 이행 가능한 공존(구 1 + 신 1)은 손상이 아니다 — 재생성이 고친다. 그러니
+    # `--check`는 초록을 주지 않고(그러면 구 블록이 영구히 남는다) **재생성하라는
+    # 드리프트**로 보고한다 (ATK-010).
+    for label, res in (
+        ("규범", (BEGIN_RE, END_RE, _LEGACY_BEGIN_RE, _LEGACY_END_RE)),
+        ("conventions", (CONV_BEGIN_RE, CONV_END_RE, _CONV_LEGACY_BEGIN_RE, _CONV_LEGACY_END_RE)),
+    ):
+        if _drop_legacy_duplicate(text, *res)[1]:
+            print(
+                f"[export-harness] ✗ {target} 의 {label} 블록에 구 토큰 블록과 신 토큰 "
+                "블록이 공존한다 (이행 중).\n"
+                "  → ./scripts/export-harness.sh 로 재생성하면 구 블록이 제거된다.",
+                file=sys.stderr,
+            )
+            return 1
     try:
         meta, s, e = _existing_marker(text)
     except MarkerError as err:
@@ -869,6 +990,12 @@ def _compose(text: str | None, block: str) -> str:
         # 파일 없음과 **빈 파일**을 같게 취급한다. 빈 AGENTS.md로 시작한 소비자만
         # 안내 헤더를 영영 못 받는 비대칭을 없앤다.
         return PREAMBLE + "\n" + block
+    # 구 토큰 블록 + 신 토큰 블록 공존은 **이행 상태**다 — 구 블록을 제거하고 신
+    # 블록을 갱신하는 것이 유일한 해석이다 (ATK-010). 그 외 손상은 아래
+    # `_existing_marker()`가 그대로 거부한다.
+    text, _ = _drop_legacy_duplicate(
+        text, BEGIN_RE, END_RE, _LEGACY_BEGIN_RE, _LEGACY_END_RE
+    )
     meta, s, e = _existing_marker(text)
     if meta is not None:
         return text[:s] + block.rstrip("\n") + text[e:]
@@ -878,29 +1005,17 @@ def _compose(text: str | None, block: str) -> str:
 
 
 def cmd_write(
-    target_root: Path,
     target: Path,
     block: str,
     sha: str,
     conv_block: str | None = None,
     conv_sha: str | None = None,
 ) -> int:
-    """블록을 기록한다. 마커 블록 밖의 사용자 콘텐츠는 불가침."""
-    if not target_root.is_dir():
-        # --target 오타 하나로 없는 디렉터리 트리를 통째로 만들지 않는다.
-        print(f"[export-harness] ✗ 대상 루트가 없다: {target_root}", file=sys.stderr)
-        return 1
-    # **읽기 전에** 심링크 탈출을 검사한다. 뒤에 두면 트리 밖 파일을 먼저 읽어
-    # 메모리에 올리고, "변경 없음" 조기반환이 존재/내용 오라클로 새어나간다.
-    real, escaped = _resolve_target(target, target_root)
-    if escaped is not None:
-        print(
-            f"[export-harness] ✗ {target} 는 대상 트리 밖을 가리키는 심링크다 → {escaped}\n"
-            "  읽기·기록을 모두 거부한다.",
-            file=sys.stderr,
-        )
-        return 1
+    """블록을 기록한다. 마커 블록 밖의 사용자 콘텐츠는 불가침.
 
+    `cmd_check`와 마찬가지로 `target`은 `main()`이 이미 봉쇄·해석한 경로다 —
+    읽기도 쓰기도 **그 객체 하나**만 쓴다 (ATK-009).
+    """
     text: str | None = None
     if target.exists():
         text, rc = _read_target(target)
@@ -922,10 +1037,7 @@ def cmd_write(
         print(f"[export-harness] ✓ 변경 없음 ({target})")
         return 0
 
-    if real is None:  # pragma: no cover — escaped is None이면 real은 항상 있다
-        print(f"[export-harness] ✗ {target} 경로를 해석하지 못했다.", file=sys.stderr)
-        return 1
-    _atomic_write(real, new_text)
+    _atomic_write(target, new_text)
     if conv_block is not None:
         if conv_sha is None:
             raise ValueError("conv_block이 있으면 conv_sha도 있어야 한다 (호출자 계약)")
@@ -1017,29 +1129,58 @@ def main(argv: list[str]) -> int:
     # 대고 돌려도 동작이 그대로여야 한다(consumer-first).
     conv_block: str | None = None
     conv_sha: str | None = None
+    conv_skipped = False
     try:
         conv_result = build_conventions_block(target_root)
     except ClassificationError as err:
-        print(f"[export-harness] ✗ conventions 블록: {err}", file=sys.stderr)
-        return 1
+        # **규범 블록 쓰기를 막지 않는다.** 예전에는 여기서 `return 1` 했기 때문에
+        # 진입점 루프에 들어가기 전에 종료됐고, 이 도구의 본래 목적인 규범 블록이
+        # 한 글자도 써지지 않았다 (ATK-003). 바로 아래 루프가 "하나가 실패해도
+        # 나머지를 건너뛰지 않는다"고 적어 놓고 정반대로 동작하던 지점이다.
+        # 조용히 넘기지도 않는다 — stderr 경고 + 전용 종료코드 3으로 구분한다.
+        print(
+            f"[export-harness] ! conventions 블록을 건너뛴다: {err}\n"
+            "  규범 블록(첫 번째)은 그대로 기록한다 — 종료코드 3.",
+            file=sys.stderr,
+        )
+        conv_result = None
+        conv_skipped = True
     if conv_result is not None:
         conv_block, conv_sha = conv_result
 
     # 진입점마다 독립적으로 처리한다. **하나가 실패해도 나머지를 건너뛰지 않는다** —
     # 첫 실패에서 멈추면 "AGENTS.md 만 낡았다"와 "둘 다 낡았다"를 구별할 수 없고,
     # 사람이 재실행을 두 번 하게 된다.
+    if not args.check and not target_root.is_dir():
+        # --target 오타 하나로 없는 디렉터리 트리를 통째로 만들지 않는다.
+        print(f"[export-harness] ✗ 대상 루트가 없다: {target_root}", file=sys.stderr)
+        return 1
+
     rc = 0
     for name in entrypoints:
-        target = target_root / name
+        # 진입점 이름은 **사용자 입력**이다(`--entrypoints`). `target_root / name`은
+        # name이 절대경로면 target_root를 통째로 버리므로, 봉쇄 없이는 트리 밖 임의
+        # 파일에 쓴다 (ATK-002, 재현 확인). 검사·쓰기 **양쪽**이 같은 헬퍼를 통과한다.
+        target, err = _resolve_in_repo(target_root, name)
+        if target is None:
+            print(
+                f"[export-harness] ✗ 진입점 {name!r} 은 {err}\n"
+                "  읽기·기록을 모두 거부한다.",
+                file=sys.stderr,
+            )
+            rc = 1
+            continue
         if args.check:
-            rc |= cmd_check(target_root, target, block, sha, conv_block, conv_sha)
+            rc |= cmd_check(target, block, sha, conv_block, conv_sha)
             continue
         try:
-            rc |= cmd_write(target_root, target, block, sha, conv_block, conv_sha)
-        except OSError as err:
-            print(f"[export-harness] ✗ {target} 기록 실패: {err}", file=sys.stderr)
+            rc |= cmd_write(target, block, sha, conv_block, conv_sha)
+        except OSError as err2:
+            print(f"[export-harness] ✗ {target} 기록 실패: {err2}", file=sys.stderr)
             rc = 1
-    return 1 if rc else 0
+    if rc:
+        return 1
+    return 3 if conv_skipped else 0
 
 
 if __name__ == "__main__":

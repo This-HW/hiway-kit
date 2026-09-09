@@ -898,3 +898,376 @@ def test_entrypoints_flag_overrides_default(tmp_path):
     assert (target / "ONLY.md").exists()
     assert not (target / "AGENTS.md").exists()
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-002 / ATK-009 — 진입점 이름 경로 봉쇄 (docs/conventions/path-containment.md)
+#
+# `--entrypoints`는 사용자 입력이고 `target_root / name`은 name이 절대경로면
+# target_root를 통째로 버린다. 봉쇄 전에는 트리 밖 파일에 13,824바이트를 실제로 썼다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _resolve_contract_cases():
+    """`scripts/tests/resolve_in_repo_contract.py`의 공유 적대적 케이스 표 (D-15).
+
+    이 표는 **레포 로컬**이다 — 소비자의 플러그인 캐시에는 `scripts/`가 없으므로
+    없으면 건너뛴다. 여기서 케이스를 다시 베끼면 계약이 두 벌이 된다.
+    """
+    import sys as _sys
+
+    repo_tests = HOOKS_DIR.parent.parent.parent / "scripts" / "tests"
+    if not (repo_tests / "resolve_in_repo_contract.py").is_file():
+        return None
+    if str(repo_tests) not in _sys.path:
+        _sys.path.insert(0, str(repo_tests))
+    import resolve_in_repo_contract
+
+    return resolve_in_repo_contract
+
+
+def test_resolve_in_repo_matches_shared_contract(tmp_path):
+    """봉쇄 헬퍼가 다른 두 구현과 **같은 계약**을 만족한다 (절대경로·`..`·심링크·대조군).
+
+    관례를 새로 발명하는 것이 이 결함이 네 번 반복된 이유이므로, 이 구현도
+    `build-targets.py`·`check_eval_coverage.py`와 같은 표로 검증한다.
+    """
+    contract = _resolve_contract_cases()
+    if contract is None:  # 레포 밖(플러그인 캐시)에서는 표가 없다
+        return
+    for case in contract.CASES:
+        container = tmp_path / f"container-{case.name}"
+        rel = case.setup(container)
+        real, err = _mod._resolve_in_repo(container, rel)
+        if case.should_escape:
+            assert real is None and err, f"{case.name}: 탈출이 봉쇄되지 않았다"
+        else:
+            assert real is not None and err is None, f"{case.name}: 정상 경로를 막았다"
+
+
+def test_absolute_entrypoint_cannot_write_outside_target(tmp_path, capsys):
+    """절대경로 진입점은 트리 밖에 쓰지 못한다 (ATK-002, 재현 확인)."""
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    outside = tmp_path / "outside" / "pwned.md"
+    outside.parent.mkdir()
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", str(outside)]
+    )
+    assert rc == 1
+    assert not outside.exists(), "트리 밖에 파일이 생성됐다"
+    assert "절대경로" in capsys.readouterr().err
+
+
+def test_dotdot_entrypoint_cannot_write_outside_target(tmp_path, capsys):
+    """`..` 순회 진입점도 같은 봉쇄에 걸린다 (ATK-002)."""
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    (tmp_path / "outside").mkdir()
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", "../outside/dotdot.md"]
+    )
+    assert rc == 1
+    assert not (tmp_path / "outside" / "dotdot.md").exists(), "트리 밖에 파일이 생성됐다"
+    assert "순회" in capsys.readouterr().err
+
+
+def test_check_applies_the_same_entrypoint_containment(tmp_path):
+    """`--check`에도 **같은** 봉쇄를 건다 — 2.14.1은 쓰기에만 걸어 구멍이 남았다.
+
+    exit 1만 보면 "마커 없음"과 구별되지 않으므로, 트리 밖 파일을 **읽지 않았다**는
+    것까지 확인한다(존재·디코딩 오류가 오라클로 새어나가는 경로).
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("not-a-secret-placeholder\n", encoding="utf-8")
+
+    reads: list[str] = []
+    orig = _mod.Path.read_text
+
+    def spy(self, *a, **k):
+        reads.append(str(self))
+        return orig(self, *a, **k)
+
+    _mod.Path.read_text = spy
+    try:
+        rc = _mod.main(
+            ["--plugin-root", str(root), "--target", str(target),
+             "--entrypoints", str(outside), "--check"]
+        )
+    finally:
+        _mod.Path.read_text = orig
+
+    assert rc == 1
+    assert str(outside) not in reads, "봉쇄 전에 트리 밖 파일을 읽었다"
+
+
+def test_in_tree_symlink_target_is_read_and_written_through_resolved_path(tmp_path):
+    """검사한 객체와 읽고 쓰는 객체가 같아야 한다 (ATK-009).
+
+    트리 안 심링크는 정상 사용이므로 **보존**되고, 읽기·쓰기 모두 해석된 실경로
+    하나로만 일어난다 — 해석 전 경로를 따로 읽으면 그 사이가 TOCTOU 창이다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    (target / "shared").mkdir(parents=True)
+    real = target / "shared" / "agents-base.md"
+    real.write_text("USERLINE\n", encoding="utf-8")
+    (target / "AGENTS.md").symlink_to(real)
+
+    reads: list[str] = []
+    orig = _mod.Path.read_text
+
+    def spy(self, *a, **k):
+        reads.append(str(self))
+        return orig(self, *a, **k)
+
+    _mod.Path.read_text = spy
+    try:
+        rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    finally:
+        _mod.Path.read_text = orig
+
+    assert rc == 0
+    assert str(real) in reads, "해석된 실경로로 읽지 않았다"
+    assert str(target / "AGENTS.md") not in reads, (
+        "해석 전 경로를 따로 읽었다 — 검사한 객체와 쓰는 객체가 갈린다"
+    )
+    assert (target / "AGENTS.md").is_symlink()
+    assert "kit:begin" in real.read_text(encoding="utf-8")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-003 — conventions 블록 실패가 규범 블록 기록을 막으면 안 된다 (consumer-first)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_consumer_repo_with_its_own_conventions_dir_still_gets_rules_block(tmp_path):
+    """자기 관례 문서를 가진 소비자 레포에서도 규범 블록은 기록된다 (ATK-003).
+
+    `docs/conventions/`가 있으나 `CONVENTIONS_INLINE`의 파일이 **하나도** 없으면
+    그 레포는 kit 레포가 아니다 — 오류가 아니라 대상 아님이다. 수정 전에는
+    ClassificationError → `return 1`로 진입점 루프 **전에** 종료해서, 이 도구의
+    본래 목적인 규범 블록이 한 글자도 써지지 않았다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    (target / "docs" / "conventions").mkdir(parents=True)
+    (target / "docs" / "conventions" / "our-style.md").write_text(
+        "# 우리 레포의 관례\n", encoding="utf-8"
+    )
+
+    rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    assert rc == 0, "소비자 레포에서 실패했다 — consumer-first 위반"
+    body = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "kit:begin" in body, "규범 블록이 기록되지 않았다"
+    assert "kit2:begin" not in body, "대상이 아닌 레포에 conventions 블록이 생겼다"
+
+
+def test_partial_conventions_is_drift_but_rules_block_is_still_written(tmp_path, capsys):
+    """kit 레포의 **부분** 드리프트는 red 로 유지하되, 규범 블록은 기록한다.
+
+    `CONVENTIONS_INLINE`이 일부만 있으면 그건 실제 드리프트이므로 조용히 넘기지
+    않는다 — 전용 종료코드 3과 stderr 경고로 구분한다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    conv = target / "docs" / "conventions"
+    conv.mkdir(parents=True)
+    (conv / _mod.CONVENTIONS_INLINE[0][0]).write_text("# 하나만 있다\n", encoding="utf-8")
+
+    rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    assert rc == 3, "부분 드리프트가 green 이거나 일반 실패와 구별되지 않는다"
+    err = capsys.readouterr().err
+    assert "conventions 블록을 건너뛴다" in err, "조용히 넘어갔다"
+    assert "kit:begin" in (target / "AGENTS.md").read_text(encoding="utf-8"), (
+        "conventions 실패가 규범 블록 기록을 막았다 (ATK-003)"
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-010 — 구/신 마커 공존은 영구 red 가 아니라 이행 경로다
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _seed_legacy_duplicate(target: Path, *, old: str = "kit", new: str = "cck") -> str:
+    """정상 생성물의 블록을 구 토큰으로 복제해 구 1 + 신 1 공존 상태를 만든다."""
+    import re as _re
+
+    path = target / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    b = _re.search(rf"^<!-- {old}:begin .*-->$", text, _re.MULTILINE)
+    e = _re.search(rf"^<!-- {old}:end -->$", text, _re.MULTILINE)
+    block = text[b.start() : e.end()]
+    legacy = block.replace(f"{old}:begin", f"{new}:begin").replace(
+        f"{old}:end", f"{new}:end"
+    )
+    marker = "USER-CONTENT-MUST-SURVIVE"
+    path.write_text(f"{legacy}\n\n{marker}\n\n{text}", encoding="utf-8")
+    return marker
+
+
+def test_legacy_and_new_block_coexistence_is_migrated_not_refused(tmp_path):
+    """구 토큰 블록 1개 + 신 토큰 블록 1개는 **구 블록을 제거하고 신 블록을 갱신**한다.
+
+    수정 전에는 `begins=2, ends=2` → MarkerError → 재생성으로도 못 고치는 영구 red였다
+    (LESSONS에 x3로 등재된 패턴). 마커 밖 사용자 콘텐츠는 그대로 살아 있어야 한다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    ) == 0
+    marker = _seed_legacy_duplicate(target)
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    )
+    assert rc == 0, "이행 가능한 공존이 거부됐다 — 영구 red"
+    body = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "cck:begin" not in body, "구 토큰 블록이 남았다"
+    assert body.count("<!-- kit:begin") == 1
+    assert marker in body, "마커 밖 사용자 콘텐츠가 삭제됐다"
+
+    # 재생성 후 --check가 초록이어야 "재생성으로 고쳐진다"가 실제로 참이다.
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", "AGENTS.md", "--check"]
+    ) == 0
+
+
+def test_check_reports_legacy_coexistence_as_drift_not_green(tmp_path, capsys):
+    """`--check`는 공존을 **초록으로 넘기지 않는다** — 그러면 구 블록이 영구히 남는다."""
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    ) == 0
+    _seed_legacy_duplicate(target)
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", "AGENTS.md", "--check"]
+    )
+    assert rc == 1
+    assert "공존" in capsys.readouterr().err, "공존을 다른 실패와 구별해 보고하지 않는다"
+
+
+def test_other_marker_corruption_is_still_refused(tmp_path):
+    """이행 경로는 **구 1 + 신 1** 한 형태만이다. 그 외 손상은 지금처럼 거부한다.
+
+    추측해서 고치면 사용자 콘텐츠를 잃는다 — 생성기는 해석이 하나가 아닐 때 멈춘다.
+    """
+    import re as _re
+
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    ) == 0
+    path = target / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    # begin 만 하나 더 (짝 없는 구 begin) — begins=2, ends=1
+    b = _re.search(r"^<!-- kit:begin .*-->$", text, _re.MULTILINE)
+    path.write_text(
+        text[: b.start()] + b.group(0).replace("kit:", "cck:") + "\n" + text[b.start() :],
+        encoding="utf-8",
+    )
+    before = path.read_text(encoding="utf-8")
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    )
+    assert rc == 1, "해석이 여럿인 손상을 추측해서 고쳤다"
+    assert path.read_text(encoding="utf-8") == before, "거부했는데 파일이 바뀌었다"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-016 — 이름은 매니페스트에서 파생한다. 마커 토큰은 불변이다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _kit_copy_with_manifest_name(tmp_path: Path, name: str, homepage: str) -> ModuleType:
+    """이 플러그인을 복사해 매니페스트 이름만 바꾼 뒤 그 사본 모듈을 로드한다.
+
+    이름 파생은 **import 시점**에 매니페스트를 읽으므로, 상수를 몽키패치하는 대신
+    실제 매니페스트를 바꿔 로드해야 파생 경로가 실제로 도는지 확인된다.
+    """
+    import json
+    import shutil
+
+    dst = tmp_path / "common"
+    shutil.copytree(HOOKS_DIR.parent, dst)
+    mp = dst / ".claude-plugin" / "plugin.json"
+    manifest = json.loads(mp.read_text(encoding="utf-8"))
+    manifest["name"] = name
+    manifest["homepage"] = homepage
+    mp.write_text(json.dumps(manifest), encoding="utf-8")
+
+    spec = importlib.util.spec_from_file_location(
+        f"export_harness_{name}", dst / "hooks" / "export_harness.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.__dict__["_KIT_COPY_ROOT"] = dst
+    return mod
+
+
+def test_kit_name_and_homepage_are_derived_from_the_manifest(tmp_path):
+    """개명 시 헤더가 따라간다 (ATK-016).
+
+    하드코딩이면 개명 때 **모든 소비자의 AGENTS.md** 가 옛 이름을 영구히 광고한다 —
+    이 레포는 이름을 매니페스트에서 파생하는 정책(§18/§20 게이트)을 갖고 있다.
+    """
+    mod = _kit_copy_with_manifest_name(
+        tmp_path, "renamed-kit", "https://example.invalid/renamed-kit"
+    )
+    assert mod.KIT_NAME == "renamed-kit"
+    block, _ = mod.build_block(mod.__dict__["_KIT_COPY_ROOT"])
+    assert "## renamed-kit — 하네스 중립 규범" in block, "블록 헤더가 파생되지 않았다"
+    assert "[renamed-kit](https://example.invalid/renamed-kit)" in block
+    assert "hiway-kit" not in block, "구 이름이 생성물에 남았다"
+
+
+def test_marker_token_is_never_derived(tmp_path):
+    """마커 토큰은 이름이 아니라 생성물의 **구조**다 — 개명해도 불변이어야 한다.
+
+    파생시키면 기존 소비자의 AGENTS.md 가 전부 "마커 없음"으로 읽혀 새 블록이 덧붙고,
+    낡은 규범 본문이 고아로 남는다.
+    """
+    mod = _kit_copy_with_manifest_name(
+        tmp_path, "renamed-kit", "https://example.invalid/renamed-kit"
+    )
+    block, _ = mod.build_block(mod.__dict__["_KIT_COPY_ROOT"])
+    assert block.startswith("<!-- kit:begin rules-v"), "마커 토큰이 개명에 끌려갔다"
+    assert mod.END_MARK == "<!-- kit:end -->"
+    assert mod.CONV_END_MARK == "<!-- kit2:end -->"
+    assert "renamed-kit:begin" not in block
+
+
+def test_manifest_read_failure_does_not_break_the_tool(tmp_path):
+    """매니페스트를 못 읽어도 도구는 동작한다 (fail-open) — 훅은 소비자 환경에서 자족한다."""
+    import shutil
+
+    dst = tmp_path / "common"
+    shutil.copytree(HOOKS_DIR.parent, dst)
+    (dst / ".claude-plugin" / "plugin.json").unlink()
+    spec = importlib.util.spec_from_file_location(
+        "export_harness_nomanifest", dst / "hooks" / "export_harness.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.KIT_NAME == "kit", "폴백 이름이 적용되지 않았다"
+    block, _ = mod.build_block(dst)
+    assert "<!-- kit:begin rules-v" in block
