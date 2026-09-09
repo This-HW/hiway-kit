@@ -23,12 +23,19 @@
 | 파일 | 막는 것 | 이유 |
 | --- | --- | --- |
 | `setup/git-hooks/reference-transaction` | 태그 없는 `git stash` | stash 스택은 저장소의 모든 워크트리·동시 세션이 **공유**한다. 태그가 없으면 `pop` 이 남의 항목을 꺼내고 꺼낸 쪽은 모른다 |
+| `setup/git-hooks/pre-push` | 자식 세션 워크트리에서 나가는 `git push` | 원격 반영은 부모(컨트롤) 세션의 몫이다. 같은 차단이 `child-git-guard.py` 에도 있지만 **그것은 Claude Code 에서만 돈다** — 아래 §파리티 참고 |
 
 ```bash
 H="$(git rev-parse --git-path hooks)"
-cp "<플러그인 루트>/setup/git-hooks/reference-transaction" "$H/reference-transaction"
-chmod +x "$H/reference-transaction"
+for hook in reference-transaction pre-push; do
+  cp "<플러그인 루트>/setup/git-hooks/$hook" "$H/$hook"
+  chmod +x "$H/$hook"
+done
 ```
+
+`pre-push` 는 **주 저장소에 한 번만** 깔면 된다. 연결된 워크트리는 hooks 디렉토리를
+공유하므로(`--git-path hooks` 가 주 저장소를 가리킨다) 이후 생기는 모든 워커 워크트리에
+자동으로 적용된다 `[confirmed]`.
 
 `--git-path` 를 쓰는 이유는 워크트리에서 `.git/hooks` 조립이 깨지기 때문이다
 (이 킷이 워크트리 운영을 권장한다). 해제는 그 파일을 지우면 된다. git 2.28+ 필요.
@@ -119,6 +126,10 @@ Code가 다시 설정한다), 이 변수로 분기하면 **컨트롤 세션 자�
 그 사실을 자식 세션 스킬 본문에도 적어야 한다 — 없는 보호를 있다고 믿게 하지
 않는다는 원칙은 이 훅에도, 그 스킬에도 동일하게 적용된다.
 
+**단, `git push` 차단 한 가지는 하네스 중립 대응물이 있다** — `setup/git-hooks/pre-push`.
+아래 §파리티가 어느 차단이 어느 하네스에서 도는지 표로 정리한다. 나머지 셋
+(`stash`·`reset --hard`·`clean -fd`)에는 대응물이 없다.
+
 ## 왜 완전한 셸 파서가 아닌가
 
 `child-git-guard.py`의 명령 파싱은 따옴표 경계 밖에서 `&&`·`||`·`;`·`|`로 나누고
@@ -128,6 +139,82 @@ Code가 다시 설정한다), 이 변수로 분기하면 **컨트롤 세션 자�
 방어선이 아니다(최종 방어선은 여전히 부모의 재검증과 `git reflog`/`stash list`
 복구 경로다).
 
+
+---
+
+# `setup/git-hooks/pre-push` — 자식 워크트리 push 차단 (하네스 중립)
+
+## 왜 또 있는가 — `child-git-guard.py` 와의 관계
+
+둘은 **같은 규율을 서로 다른 층에서** 집행한다. 중복이 아니라 파리티 보정이다.
+
+`child-git-guard.py` 의 `git push` 차단은 `PreToolUse` 훅이라 **Claude Code 하네스에서만**
+돈다. 실측: 다른 엔진(Codex)의 워커를 워크트리에 띄웠을 때, 브리프에 적은 "push 금지" 는
+산문일 뿐 **기계 강제가 0** 이었다. 워커는 지켰지만 그건 모델이 지시를 따른 것이지
+무엇이 막은 게 아니다.
+
+git 훅은 그 비대칭을 없앤다 — **누가 명령을 실행하든 똑같이 돈다.**
+
+| 차단 | Claude Code | Codex·Gemini·플레인 터미널 |
+| --- | --- | --- |
+| bare `git stash` / `pop` | `child-git-guard.py` | `reference-transaction` (bare stash 만) |
+| `git reset --hard` | `child-git-guard.py` | **없음** — 규범뿐 |
+| `git clean -fd` | `child-git-guard.py` | **없음** — 규범뿐 |
+| 자식 세션 `git push` | `child-git-guard.py` | **`pre-push`** |
+
+둘 다 켜져 있으면 자식 세션의 `git push` 는 두 번 막힌다(PreToolUse 에서 먼저, 빠져나가도
+git 이 다시). 겹치는 것은 의도된 것이다 — 한 층이 꺼져 있어도 다른 층이 남는다.
+
+## 판정 — 두 훅은 **같은 마커**를 본다
+
+`$(git rev-parse --git-dir)/kit/child.json` 하나다. `child-git-guard.py` 의
+`MARKER_REL = ("kit", "child.json")` 과 경로·스키마가 같고, 스키마 SSOT 는
+`rules/child-marker.md` 다. **두 훅이 다른 것을 보면 그 자체가 결함이다** — 한쪽은 막고
+한쪽은 통과시키는 상태를 아무도 설명할 수 없다. 회귀 테스트가 이 동등성을 고정한다
+(`tests/test_pre_push_child_guard.py`).
+
+판정 규칙은 `child-git-guard.py` 와 동일하다:
+
+1. **주 체크아웃은 마커가 있어도 자식이 아니다**(`--git-dir` == `--git-common-dir`).
+   마커는 자식임을 *확인*하지, 부모가 쓰는 자리를 자식으로 *승격*하지 않는다.
+2. 워크트리이고 마커가 있고 스키마가 유효하면 — 차단.
+3. 마커가 없거나 손상됐거나 모르는 스키마 버전이면 — **통과(fail-open).**
+
+## 탈출구
+
+정당한 push 가 필요한 자식이 있을 수 있다. 그 명령 한 번에 한해:
+
+```bash
+KIT_ALLOW_CHILD_PUSH=1 git push origin my-branch
+```
+
+`export` 하지 않는다 — 그러면 차단이 세션 내내 꺼진다. 차단 메시지가 이 방법을 **직접
+인쇄**한다. 막기만 하고 푸는 법을 안 알려주는 훅은 사람이 훅 자체를 지운다.
+
+## 이 훅이 보지 못하는 것 (정직한 한계)
+
+**git 훅은 `git` 을 거치는 행위만 본다.** 중립 집행의 사정거리는 정확히 거기까지다:
+
+- 파일 직접 수정·삭제(`rm`, 에디터, 스크립트) — **안 보인다**
+- 다른 워크트리·메인 체크아웃 디렉토리 접근 — **안 보인다**
+- 네트워크 API 호출(`gh pr merge`, 배포 API, MCP 도구) — **안 보인다**
+
+이것들은 여전히 **산문 규약**(`child-session` 스킬, `rules/parallel-worktree.md`)으로만
+성립한다. 이 훅이 켜져 있다고 워커가 격리됐다고 믿지 마라.
+
+**마커가 없으면 아무것도 막지 않는다.** 마커는 `child-session` 스킬이 로드될 때 생긴다 —
+스킬 없이 시작된 세션은 이 훅으로 보호되지 않는다(fail-open).
+
+**`--dry-run` 은 탐지할 수 없다.** git 은 pre-push 훅에 dry-run 여부를 주지 않는다.
+실측 `[confirmed]`: `git push --dry-run` 과 실제 push 는 훅에 넘어오는 **argv·stdin·
+환경변수가 전부 동일**했다. 구분할 신호가 없으므로 **dry-run 도 함께 막힌다** — 추정으로
+통과시키지 않는다(`docs/conventions/warning-signal.md` "탐지할 수 없는 것은 탐지할 수
+없다고 적는다"). 과차단이지만 안전한 방향이고, 필요하면 위 탈출구로 푼다.
+
+## 차단해도 커밋은 보존된다
+
+pre-push 가 거부하면 push 만 중단된다 — 로컬 커밋·작업트리는 그대로다. 원격에는
+**아무것도 가지 않는다**(부분 전송 없음) `[confirmed]`. 회귀 테스트가 이 계약을 고정한다.
 
 ---
 
