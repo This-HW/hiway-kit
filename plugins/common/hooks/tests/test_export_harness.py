@@ -1191,3 +1191,83 @@ def test_other_marker_corruption_is_still_refused(tmp_path):
     )
     assert rc == 1, "해석이 여럿인 손상을 추측해서 고쳤다"
     assert path.read_text(encoding="utf-8") == before, "거부했는데 파일이 바뀌었다"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-016 — 이름은 매니페스트에서 파생한다. 마커 토큰은 불변이다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _kit_copy_with_manifest_name(tmp_path: Path, name: str, homepage: str) -> ModuleType:
+    """이 플러그인을 복사해 매니페스트 이름만 바꾼 뒤 그 사본 모듈을 로드한다.
+
+    이름 파생은 **import 시점**에 매니페스트를 읽으므로, 상수를 몽키패치하는 대신
+    실제 매니페스트를 바꿔 로드해야 파생 경로가 실제로 도는지 확인된다.
+    """
+    import json
+    import shutil
+
+    dst = tmp_path / "common"
+    shutil.copytree(HOOKS_DIR.parent, dst)
+    mp = dst / ".claude-plugin" / "plugin.json"
+    manifest = json.loads(mp.read_text(encoding="utf-8"))
+    manifest["name"] = name
+    manifest["homepage"] = homepage
+    mp.write_text(json.dumps(manifest), encoding="utf-8")
+
+    spec = importlib.util.spec_from_file_location(
+        f"export_harness_{name}", dst / "hooks" / "export_harness.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod.__dict__["_KIT_COPY_ROOT"] = dst
+    return mod
+
+
+def test_kit_name_and_homepage_are_derived_from_the_manifest(tmp_path):
+    """개명 시 헤더가 따라간다 (ATK-016).
+
+    하드코딩이면 개명 때 **모든 소비자의 AGENTS.md** 가 옛 이름을 영구히 광고한다 —
+    이 레포는 이름을 매니페스트에서 파생하는 정책(§18/§20 게이트)을 갖고 있다.
+    """
+    mod = _kit_copy_with_manifest_name(
+        tmp_path, "renamed-kit", "https://example.invalid/renamed-kit"
+    )
+    assert mod.KIT_NAME == "renamed-kit"
+    block, _ = mod.build_block(mod.__dict__["_KIT_COPY_ROOT"])
+    assert "## renamed-kit — 하네스 중립 규범" in block, "블록 헤더가 파생되지 않았다"
+    assert "[renamed-kit](https://example.invalid/renamed-kit)" in block
+    assert "hiway-kit" not in block, "구 이름이 생성물에 남았다"
+
+
+def test_marker_token_is_never_derived(tmp_path):
+    """마커 토큰은 이름이 아니라 생성물의 **구조**다 — 개명해도 불변이어야 한다.
+
+    파생시키면 기존 소비자의 AGENTS.md 가 전부 "마커 없음"으로 읽혀 새 블록이 덧붙고,
+    낡은 규범 본문이 고아로 남는다.
+    """
+    mod = _kit_copy_with_manifest_name(
+        tmp_path, "renamed-kit", "https://example.invalid/renamed-kit"
+    )
+    block, _ = mod.build_block(mod.__dict__["_KIT_COPY_ROOT"])
+    assert block.startswith("<!-- kit:begin rules-v"), "마커 토큰이 개명에 끌려갔다"
+    assert mod.END_MARK == "<!-- kit:end -->"
+    assert mod.CONV_END_MARK == "<!-- kit2:end -->"
+    assert "renamed-kit:begin" not in block
+
+
+def test_manifest_read_failure_does_not_break_the_tool(tmp_path):
+    """매니페스트를 못 읽어도 도구는 동작한다 (fail-open) — 훅은 소비자 환경에서 자족한다."""
+    import shutil
+
+    dst = tmp_path / "common"
+    shutil.copytree(HOOKS_DIR.parent, dst)
+    (dst / ".claude-plugin" / "plugin.json").unlink()
+    spec = importlib.util.spec_from_file_location(
+        "export_harness_nomanifest", dst / "hooks" / "export_harness.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.KIT_NAME == "kit", "폴백 이름이 적용되지 않았다"
+    block, _ = mod.build_block(dst)
+    assert "<!-- kit:begin rules-v" in block

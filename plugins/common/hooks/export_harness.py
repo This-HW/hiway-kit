@@ -171,6 +171,36 @@ _CONV_LEGACY_BEGIN_RE = re.compile(
 )
 _CONV_LEGACY_END_RE = re.compile(r"^<!--[ \t]*cck2:end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 이름·홈페이지는 **매니페스트에서 파생한다** (ATK-016 / D-3).
+#
+# 예전에는 `PREAMBLE`·`BLOCK_HEADER`·`CONV_BLOCK_HEADER` 가 킷 이름과 URL 문자열을
+# 직접 들고 있었다. 이 레포는 이름을 매니페스트에서 파생하는 정책(`packaging/
+# name-targets.json`, §18/§20 게이트)을 갖고 있으므로, 개명 때 이 세 상수가 조용히
+# 뒤처지면 **모든 소비자의 AGENTS.md 가 옛 이름을 영구히 광고**한다.
+#
+# **마커 토큰(`kit:`/`kit2:`)은 파생 대상이 아니다.** 그건 이름이 아니라 생성물의
+# **구조**이고, 바꾸면 기존 소비자의 AGENTS.md 가 전부 손상 판정된다. 이름이 바뀌어도
+# 토큰은 불변이다 — 위 정규식들이 그래서 리터럴로 남아 있다.
+_MANIFEST_PATH = Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json"
+
+
+def _own_manifest() -> dict:
+    """이 파일이 속한 플러그인의 매니페스트. 읽기 실패는 빈 dict (fail-open).
+
+    훅은 소비자 환경에서 자족해야 하므로, 매니페스트를 못 읽는 것이 도구 전체를
+    막지는 않는다 — 이름 자리에 폴백이 들어가고 나머지는 그대로 동작한다.
+    """
+    try:
+        return json.loads(_MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+_MANIFEST = _own_manifest()
+KIT_NAME = _MANIFEST.get("name") or "kit"
+KIT_HOMEPAGE = _MANIFEST.get("homepage") or _MANIFEST.get("repository") or ""
+
 CONVENTIONS_VERSION = "1.0.0"
 
 # 무엇을 인라인하고 무엇을 경로 참조로만 남길지는 여기 이 두 리스트가 SSOT다
@@ -192,7 +222,7 @@ CONVENTIONS_REFERENCE_ONLY: list[str] = [
 ]
 
 CONV_BLOCK_HEADER = """
-## hiway-kit — Project Conventions (요약 발췌)
+## {kit_name} — Project Conventions (요약 발췌)
 
 > **이 절도 자동 생성된다** (별도 마커 `kit2:` — 위 규범 블록과 독립).
 > `docs/conventions/*.md`의 일부를 인라인한 것이다. Codex의 `project_doc_max_bytes`
@@ -262,7 +292,7 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     )
 
     header = CONV_BLOCK_HEADER.format(
-        sections="\n".join(sections), references=references
+        kit_name=KIT_NAME, sections="\n".join(sections), references=references
     )
     if any(t in header for t in CONV_MARKER_TOKENS):
         raise ClassificationError(
@@ -391,13 +421,13 @@ PREAMBLE = """# Agent instructions
 """
 
 BLOCK_HEADER = """
-## hiway-kit — 하네스 중립 규범
+## {kit_name} — 하네스 중립 규범
 
 > **이 절은 자동 생성된다.** 위아래의 `kit` 주석 마커 사이는 재생성 시 통째로 교체되고,
 > **그 밖은 생성기가 건드리지 않는다**. 갱신은 `/harness-export` 스킬(또는 kit 레포에서
 > `./scripts/export-harness.sh`). 손으로 고치면 드리프트 검사가 막는다.
 
-이 절은 [hiway-kit](https://github.com/This-HW/hiway-kit)의 규범을
+이 절은 [{kit_name}]({kit_homepage})의 규범을
 **원문 그대로** 옮긴 것이다. Claude Code·Codex·OpenCode·Copilot·Pi·Hermes 등 이
 파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
 
@@ -456,12 +486,10 @@ def _plugin_root(explicit: str | None) -> Path | None:
         # 하드코딩된 검사가 자기 자신을 못 찾아 SKIPPED 를 냈다. 판정은 **이 파일이
         # 속한 플러그인의 매니페스트 이름**과 같은가로 한다(자기 참조). D-3 의
         # "이름은 SSOT 에서 파생한다"가 탐색 로직에도 적용된다.
+        own = _own_manifest().get("name")
+        if not own:
+            return False
         try:
-            own = json.loads(
-                (Path(__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json").read_text(
-                    encoding="utf-8"
-                )
-            ).get("name")
             manifest = root / ".claude-plugin" / "plugin.json"
             return json.loads(manifest.read_text(encoding="utf-8")).get("name") == own
         except (OSError, ValueError):
@@ -629,6 +657,8 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
         if _rule_portability(p)[0] is False
     )
     header = BLOCK_HEADER.format(
+        kit_name=KIT_NAME,
+        kit_homepage=KIT_HOMEPAGE,
         portable_rows=portable_rows, not_portable_rows=not_portable_rows
     )
     # 룰 본문뿐 아니라 **생성기 자신의 헤더**도 검사한다. 실제로 헤더에 마커를 리터럴로
