@@ -342,6 +342,19 @@ def _existing_conv_marker(text: str) -> tuple[str | None, int, int]:
     return b.group(1), b.start(), e.end()
 
 
+def _strip_conv(text: str) -> tuple[str, bool]:
+    """conventions 블록이 있으면 **제거**한 텍스트를 돌려준다. (새 텍스트, 제거했는가).
+
+    `CONVENTIONS_INLINE` 소스가 **하나도** 없을 때 쓴다. 그 블록은 자기 머리에
+    "자동 생성"이라고 선언하는데 생성할 소스가 없으므로, 남겨 두면 **존재하지 않는
+    소스를 가리키는 영구 유령**이 된다. 마커 밖 사용자 콘텐츠는 건드리지 않는다.
+    """
+    meta, s, e = _existing_conv_marker(text)
+    if meta is None:
+        return text, False
+    return (text[:s] + text[e:].lstrip("\n")), True
+
+
 def _compose_conv(text: str, block: str) -> str:
     """`_compose()`(규범 블록용)와 같은 알고리즘의 kit2 버전. 첫 번째 블록 기록 **후**의
     텍스트를 받으므로 `text`가 빈 문자열일 일은 없다(PREAMBLE + 규범 블록이 이미 있다)."""
@@ -988,6 +1001,7 @@ def cmd_check(
     sha: str,
     conv_block: str | None = None,
     conv_sha: str | None = None,
+    conv_absent: bool = False,
 ) -> int:
     """드리프트 검사. 기록하지 않는다.
 
@@ -1050,10 +1064,34 @@ def cmd_check(
     print(f"[export-harness] ✓ {target.name} 규범 블록 최신 ({meta})")
 
     # conventions 블록(W-022 R7) — conv_block이 None이면 이 target에서 생성 대상이
-    # 아니라는 뜻(build_conventions_block()이 docs/conventions/ 없음으로 스킵)이므로
-    # 검사도 스킵한다. rules 블록 검사가 이미 통과한 뒤에만 여기 도달한다 — 두 블록은
-    # 서로 독립이라 순서를 바꿔도 결과는 같지만, 기존 계약(§11)을 하나도 안 건드리려면
-    # rules 검사가 먼저 끝나 있어야 한다.
+    # 아니라는 뜻(build_conventions_block()이 docs/conventions/ 없음으로 스킵)이다.
+    # rules 블록 검사가 이미 통과한 뒤에만 여기 도달한다 — 두 블록은 서로 독립이라
+    # 순서를 바꿔도 결과는 같지만, 기존 계약(§11)을 하나도 안 건드리려면 rules 검사가
+    # 먼저 끝나 있어야 한다.
+    #
+    # **소스가 전면 결손이면 "검사 안 함"이 아니라 "기존 블록이 있으면 red"다** (W6 F-3).
+    # 한 파일만 없으면 red 인데 전부 없으면 green 이던 방향이 거꾸로였다: 전면 결손일수록
+    # 더 심각한데 게이트는 더 조용했고, `--write` 는 낡은 블록을 제거하지도 않아
+    # "자동 생성"을 선언하는 블록이 존재하지 않는 소스를 가리킨 채 영구히 남았다.
+    #
+    # **소비자 레포는 영향받지 않는다** — 애초에 이 블록이 없으므로 `conv_absent` 여도
+    # `_existing_conv_marker` 가 None 을 돌려주고 그대로 통과한다. 문제가 되는 것은
+    # **기존 블록이 있는데 소스가 사라진** 경우, 즉 kit 레포의 실제 드리프트뿐이다.
+    if conv_block is None and conv_absent:
+        try:
+            stale_meta, _, _ = _existing_conv_marker(text)
+        except MarkerError as err:
+            print(f"[export-harness] ✗ {target}: {err}", file=sys.stderr)
+            return 1
+        if stale_meta is not None:
+            print(
+                f"[export-harness] ✗ {target} 에 conventions 블록이 남아 있는데 "
+                "생성 소스(docs/conventions/)가 하나도 없다.\n"
+                f"    남은 블록: {stale_meta}\n"
+                "  → ./scripts/export-harness.sh 로 재생성하면 제거된다.",
+                file=sys.stderr,
+            )
+            return 1
     if conv_block is not None:
         if conv_sha is None:
             raise ValueError("conv_block이 있으면 conv_sha도 있어야 한다 (호출자 계약)")
@@ -1116,6 +1154,7 @@ def cmd_write(
     sha: str,
     conv_block: str | None = None,
     conv_sha: str | None = None,
+    conv_absent: bool = False,
 ) -> int:
     """블록을 기록한다. 마커 블록 밖의 사용자 콘텐츠는 불가침.
 
@@ -1135,6 +1174,15 @@ def cmd_write(
         # 조금도 바꾸지 않는다는 걸 코드 순서로도 보이게 한다.
         if conv_block is not None:
             new_text = _compose_conv(new_text, conv_block)
+        elif conv_absent:
+            # 소스 전면 결손 — 낡은 블록을 **제거**한다(W6 F-3). 소비자 레포에는
+            # 애초에 이 블록이 없으므로 아무 일도 일어나지 않는다.
+            new_text, removed = _strip_conv(new_text)
+            if removed:
+                print(
+                    f"[export-harness] · conventions 블록 제거 ({target}) — "
+                    "생성 소스가 하나도 없다"
+                )
     except MarkerError as err:
         print(f"[export-harness] ✗ {target}: {err}", file=sys.stderr)
         return 1
@@ -1257,6 +1305,11 @@ def main(argv: list[str]) -> int:
         conv_skipped = True
     if conv_result is not None:
         conv_block, conv_sha = conv_result
+    # 소스가 **깨끗하게** 없는 경우(build_conventions_block이 None을 반환)와, 일부만
+    # 없어 ClassificationError로 건너뛴 경우를 가른다. 후자는 이미 종료코드 3으로
+    # 보고된 **복구 가능한 부분 드리프트**이므로 기존 블록을 지우지 않는다 — 회복
+    # 가능한 오류에서 사용자 파일의 내용을 파괴하지 않는다.
+    conv_absent = conv_result is None and not conv_skipped
 
     # 진입점마다 독립적으로 처리한다. **하나가 실패해도 나머지를 건너뛰지 않는다** —
     # 첫 실패에서 멈추면 "AGENTS.md 만 낡았다"와 "둘 다 낡았다"를 구별할 수 없고,
@@ -1281,10 +1334,10 @@ def main(argv: list[str]) -> int:
             rc = 1
             continue
         if args.check:
-            rc |= cmd_check(target, block, sha, conv_block, conv_sha)
+            rc |= cmd_check(target, block, sha, conv_block, conv_sha, conv_absent)
             continue
         try:
-            rc |= cmd_write(target, block, sha, conv_block, conv_sha)
+            rc |= cmd_write(target, block, sha, conv_block, conv_sha, conv_absent)
         except OSError as err2:
             print(f"[export-harness] ✗ {target} 기록 실패: {err2}", file=sys.stderr)
             rc = 1

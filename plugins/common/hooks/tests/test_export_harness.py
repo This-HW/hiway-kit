@@ -731,6 +731,90 @@ def test_conventions_drift_detected_independently_of_rules(tmp_path):
     )
 
 
+def test_total_source_absence_is_red_not_green(tmp_path):
+    """소스가 **전부** 없는데 블록이 남아 있으면 red — "검사 안 함"이 아니다 (W6 F-3).
+
+    방향이 거꾸로였다: 한 파일만 없으면 red(ClassificationError)인데 **전부** 없으면
+    `build_conventions_block`이 None을 돌려주고 `cmd_check`가 conventions 검사를
+    통째로 건너뛰어 **green**이었다. 전면 결손이 더 심각한데 게이트가 더 조용했다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    conv_dir = _fake_conventions_dir(target)
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
+    assert "kit2:begin" in (target / "AGENTS.md").read_text(encoding="utf-8")
+
+    for f in conv_dir.glob("*.md"):
+        f.unlink()
+    assert (
+        _mod.main(["--plugin-root", str(root), "--target", str(target), "--check"]) == 1
+    ), "소스 전면 결손인데 green 이다 — 존재하지 않는 소스를 가리키는 블록이 남는다"
+
+
+def test_total_source_absence_write_removes_the_stale_block(tmp_path):
+    """`--write`는 낡은 블록을 **제거**한다 — 남기면 영구 유령이다 (W6 F-3).
+
+    그 블록은 자기 머리에 "자동 생성"이라고 선언하는데 생성할 소스가 없다.
+    rules 블록과 마커 밖 사용자 콘텐츠는 그대로 남아야 한다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    conv_dir = _fake_conventions_dir(target)
+    _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    agents = target / "AGENTS.md"
+    agents.write_text(
+        agents.read_text(encoding="utf-8") + "\n사용자가 직접 쓴 문단.\n",
+        encoding="utf-8",
+    )
+
+    for f in conv_dir.glob("*.md"):
+        f.unlink()
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
+    text = agents.read_text(encoding="utf-8")
+    assert "kit2:begin" not in text, "낡은 conventions 블록이 남았다"
+    assert "kit:begin" in text, "rules 블록까지 지웠다"
+    assert "사용자가 직접 쓴 문단." in text, "마커 밖 사용자 콘텐츠를 건드렸다"
+    assert (
+        _mod.main(["--plugin-root", str(root), "--target", str(target), "--check"]) == 0
+    )
+
+
+def test_consumer_without_conventions_is_unaffected_by_absence_check(tmp_path):
+    """**양성 대조** — 소비자 레포는 애초에 이 블록이 없으므로 영향받지 않는다.
+
+    전면 결손 검사가 소비자를 red 로 만들면 그것은 가드가 아니라 consumer-first
+    북극성의 정면 위반이다(ATK-003 이 정확히 그 결함이었다).
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "consumer"
+    target.mkdir()  # docs/conventions/ 자체가 없다
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
+    assert (
+        _mod.main(["--plugin-root", str(root), "--target", str(target), "--check"]) == 0
+    )
+
+
+def test_partial_source_loss_does_not_destroy_the_block(tmp_path):
+    """일부만 없는 것은 **복구 가능한 부분 드리프트**다 — 블록을 지우지 않는다.
+
+    ClassificationError 경로(종료코드 3)와 전면 결손 경로를 가르지 않으면, 파일 하나를
+    잠깐 옮긴 것만으로 생성물이 파괴된다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    conv_dir = _fake_conventions_dir(target)
+    _mod.main(["--plugin-root", str(root), "--target", str(target)])
+
+    (conv_dir / _mod.CONVENTIONS_INLINE[0][0]).unlink()
+    assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 3
+    assert "kit2:begin" in (target / "AGENTS.md").read_text(encoding="utf-8"), (
+        "부분 결손인데 블록을 파괴했다"
+    )
+
+
 def test_conventions_check_ignores_rules_only_targets(tmp_path):
     """docs/conventions/가 없는 대상은 conv 블록 검사 자체를 안 한다 — 기존 rules-only
     --check 계약이 이 확장으로 조금도 안 변했다는 회귀 방지."""
