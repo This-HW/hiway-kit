@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""git_tracked.py — 게이트 스크립트가 공유하는 **추적 파일 목록 + 건너뜀 집계**.
+
+`check_old_names.py` 와 `check_shadowed_defs.py` 가 같은 방식으로 파일을 고르고
+같은 방식으로 "못 읽은 파일"을 보고하게 만드는 단일 지점이다. 두 게이트가 각자
+`git ls-files` 를 부르던 시절, **둘 다 같은 두 결함을 갖고 있었다** — 복제 로직은
+결함까지 복제한다(F-023).
+
+## 왜 `-z` + `core.quotePath=false` 인가
+
+git 의 기본값 `core.quotePath=true` 는 비-ASCII 경로를 **따옴표 + 8진 이스케이프**로
+출력한다:
+
+    plugins/한글.md  →  "plugins/\\355\\225\\234\\352\\270\\200.md"
+
+그 문자열은 **실제 경로가 아니다.** 호출부가 그것으로 파일을 열면 `OSError` 가 나고,
+두 게이트는 그것을 `continue` / `return {}` 로 **조용히 건너뛰었다** — 한글 파일명
+하나가 곧 게이트의 사각지대였다. 개행이 든 파일명은 `splitlines()` 가 한 줄을 둘로
+쪼개 같은 결과를 낳는다.
+
+`-z`(NUL 구분) + `core.quotePath=false`(이스케이프 금지) 조합이 이 둘을 동시에 막는다.
+**둘 다 필요하다** — `-z` 만 쓰면 이스케이프가 남고, `quotePath=false` 만 쓰면 개행이
+든 파일명이 여전히 쪼개진다.
+
+## 왜 건너뜀을 집계하는가
+
+*"통과했다"* 와 *"돌지 않았다"* 가 집계에서 구분되지 않으면 게이트 전체의 신뢰가
+무너진다. 못 읽은 파일이 하나라도 있으면 **개수·비율·경로를 인쇄한다** — 조용한
+초록은 이 레포에서 최악의 결함 등급이다(F-012,
+`docs/conventions/warning-signal.md` §검토 절차 4·5).
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+from pathlib import Path
+
+
+def tracked_files(
+    repo_root: Path,
+    patterns: tuple[str, ...] = (),
+    label: str = "gate",
+) -> list[str]:
+    """`repo_root` 가 추적하는 파일 경로 목록. 실패하면 exit 1(green 으로 위장하지 않는다).
+
+    비-ASCII·개행이 든 파일명도 **실제 경로 그대로** 돌아온다 — 위 독스트링 참고.
+    """
+    result = subprocess.run(
+        ["git", "-c", "core.quotePath=false", "ls-files", "-z", *patterns],
+        cwd=str(repo_root), capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:
+        print(f"[{label}] git ls-files 실패: {result.stderr.strip()}")
+        raise SystemExit(1)
+    return [rel for rel in result.stdout.split("\0") if rel]
+
+
+class SkipTally:
+    """읽기·파싱에 실패한 파일을 사유별로 모아 **비율과 함께** 보고한다.
+
+    `attempted` 는 시도한 수, `len(self)` 는 못 읽은 수다. 둘을 함께 인쇄하지 않으면
+    *"N개 파일 검사함"* 이 실제로는 *"N개를 시도했고 전부 실패함"* 일 수 있다.
+    """
+
+    def __init__(self, label: str) -> None:
+        self.label = label
+        self.attempted = 0
+        self.entries: list[tuple[str, str, str]] = []  # (경로, 사유코드, 상세)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    def add(self, rel: str, reason: str, detail: str) -> None:
+        self.entries.append((rel, reason, detail))
+
+    @property
+    def parsed(self) -> int:
+        return self.attempted - len(self.entries)
+
+    def report(self, fatal_reasons: frozenset[str]) -> int:
+        """건너뜀을 인쇄하고 종료코드 기여분을 반환한다(치명 사유가 있으면 1).
+
+        사유가 하나도 없으면 아무것도 인쇄하지 않는다 — 상시 참인 줄은 소음이고,
+        소음은 옆의 진짜 경고까지 죽인다(`warning-signal.md`).
+        """
+        if not self.entries:
+            return 0
+        pct = 100.0 * len(self.entries) / self.attempted if self.attempted else 100.0
+        fatal = [e for e in self.entries if e[1] in fatal_reasons]
+        mark = "✗" if fatal else "!"
+        print(
+            f"[{self.label}] {mark} 검사하지 못한 파일 {len(self.entries)}건 "
+            f"/ 시도 {self.attempted}건 ({pct:.1f}%) — 실제로 검사한 것은 {self.parsed}건이다"
+        )
+        for rel, reason, detail in self.entries:
+            print(f"    {rel}  [{reason}] {detail}")
+        if fatal:
+            print(
+                f"    → 이 {len(fatal)}건은 게이트의 사각지대다 — "
+                "건너뛴 채 초록을 내지 않는다"
+            )
+            return 1
+        return 0
+
+
+if __name__ == "__main__":  # 진단용 — 게이트가 무엇을 보는지 눈으로 확인할 때
+    root = Path(__file__).resolve().parent.parent
+    listed = tracked_files(root, tuple(sys.argv[1:]))
+    print(f"{len(listed)}개 파일")
