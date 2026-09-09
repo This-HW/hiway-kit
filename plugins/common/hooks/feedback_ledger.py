@@ -53,7 +53,6 @@ ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 
 from __future__ import annotations
 
-import contextlib
 import fcntl
 import hashlib
 import json
@@ -186,11 +185,21 @@ def migrate_legacy_ledger(root: Path | None = None) -> str:
         incoming = parse_ledger(legacy)
         if not incoming:
             return "noop"
+        # **개명이 먼저다** (ATK-008). 병합·쓰기를 먼저 하고 개명을 나중에 하면 둘이
+        # 원자적이지 않아, 개명이 실패했을 때(권한·파일시스템·경합) 구 원장이 그대로
+        # 남는다. 그러면 다음 SessionStart 마다 같은 항목이 다시 병합돼 frequency 가
+        # 부푼다 — frequency 는 digest 순위를 정하므로 부푼 항목이 진짜 반복 결함을
+        # digest 밖으로 밀어낸다. 개명이 성공한 뒤에는 구 경로가 없으므로 재실행돼도
+        # 중복 병합이 없다(멱등).
+        #
+        # 반대 방향의 손해는 감수한다: 개명 뒤 쓰기가 실패하면 이번 병합분이 정본에
+        # 반영되지 않는다. 그러나 원본은 .migrated 로 **디스크에 남아 있어** 되돌릴 수
+        # 있고, 반대편(중복 계수)은 조용히 순위를 오염시켜 되돌릴 수 없다.
+        backup = legacy.with_suffix(".md.migrated")
+        legacy.rename(backup)
         merged = _merge_entries(parse_ledger(target), incoming)
         kept = _decay(merged)
         _write_ledger(target, kept)
-        backup = legacy.with_suffix(".md.migrated")
-        legacy.rename(backup)
     dropped = len(merged) - len(kept)
     if dropped:
         # **조용히 지우지 않는다.** 상한·감쇠는 설계된 동작이지만, 이관 중에 일어나면
@@ -408,9 +417,25 @@ def _try_migrate(root: Path | None) -> None:
 
     학습 루프는 opt-in·fail-open 이 원칙이다(rules/feedback-loop.md). 이관 실패로
     upsert/digest 가 죽으면 그 원칙이 깨진다.
+
+    **다만 완전히 침묵하지는 않는다** — 초판은 `contextlib.suppress(Exception)` 으로
+    삼켜, 개명 실패로 구 원장이 남아 매 세션 중복 병합되는 상태가 어디에서도 드러나지
+    않았다(ATK-008). fail-open 은 유지하되 stderr 한 줄로 관측 가능하게 한다.
+
+    warning-signal §4 — **이 경고가 도는 조건을 한 문장으로**: *"구 원장이 실제로
+    존재해서 이관을 시도했고, 그 이관이 예외로 실패했을 때만 발화한다."* 구 원장이
+    없으면 `migrate_legacy_ledger` 가 예외 없이 "noop" 을 돌려주므로 정상 운영에서는
+    한 번도 발화하지 않는다 — 상시 참인 경고가 아니다.
     """
-    with contextlib.suppress(Exception):
+    try:
         migrate_legacy_ledger(root)
+    except Exception as ex:
+        print(
+            f"[feedback_ledger] warning: 구 원장 이관 실패 — 구 위치 그대로 진행합니다 "
+            f"({type(ex).__name__}: {ex}). 반복되면 구 원장이 매 세션 재병합돼 "
+            f"frequency 가 부풀 수 있습니다.",
+            file=sys.stderr,
+        )
 
 
 def load_digest(top_k: int = DEFAULT_DIGEST_K, root: Path | None = None) -> str:

@@ -322,3 +322,75 @@ def test_legacy_vanishing_at_lock_entry_does_not_double_count(tmp_path, monkeypa
             if e["pattern"] == "정확히 한 번"]
     assert len(hits) == 1
     assert hits[0]["frequency"] == 1, f"중복 계수: {hits[0]['frequency']}"
+
+
+# ── ATK-008: 이관 순서 — 개명이 먼저다 ────────────────────────────
+def test_rename_failure_does_not_inflate_frequency(tmp_path, monkeypatch, capsys):
+    """개명 실패 후 재실행해도 frequency 가 부풀지 않는다.
+
+    초판은 `_write_ledger(target, kept)` 를 **먼저**, `legacy.rename(backup)` 을
+    **나중** 에 했다. 둘은 원자적이지 않으므로 개명이 실패하면(권한·파일시스템·경합)
+    구 원장이 그대로 남고, 다음 SessionStart 가 같은 항목을 또 병합해 frequency 가
+    2배가 된다. frequency 는 digest 순위를 정하므로 부푼 항목이 진짜 반복 결함을
+    digest 밖으로 밀어낸다(ATK-008).
+    """
+    repo = _init_repo(tmp_path)
+    legacy = _mod.legacy_ledger_path(repo)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    _mod._write_ledger(legacy, [
+        {"id": "F-001", "category": "test", "pattern": "정확히 한 번만 세어야 한다",
+         "frequency": 1, "last_seen": "2026-01-01", "severity": "low"},
+    ])
+
+    real_rename = Path.rename
+    state = {"failed": False}
+
+    def flaky_rename(self, target):
+        if not state["failed"] and self == legacy:
+            state["failed"] = True
+            raise OSError("rename blocked")
+        return real_rename(self, target)
+
+    monkeypatch.setattr(Path, "rename", flaky_rename)
+
+    _mod._try_migrate(repo)  # 1회차 — 개명 실패
+    assert state["failed"], "개명 실패 경로에 도달하지 않았다 (양성 대조)"
+    _mod._try_migrate(repo)  # 2회차 — 재시도
+
+    hits = [e for e in _mod.parse_ledger(_mod.ledger_path(repo))
+            if e["pattern"] == "정확히 한 번만 세어야 한다"]
+    assert len(hits) == 1, f"항목이 중복됐다: {hits}"
+    assert hits[0]["frequency"] == 1, (
+        f"중복 병합으로 frequency 가 부풀었다: {hits[0]['frequency']}"
+    )
+
+
+def test_migration_failure_is_not_silent(tmp_path, monkeypatch, capsys):
+    """이관 실패를 완전히 침묵시키지 않는다 — fail-open 은 유지하되 관측 가능하게.
+
+    warning-signal §4 — 이 경고가 도는 조건: *"구 원장이 실제로 존재해서 이관을
+    시도했고, 그 이관이 예외로 실패했을 때만."* 아래 양성 대조가 그 조건을 만든다.
+    """
+    repo = _init_repo(tmp_path)
+    legacy = _mod.legacy_ledger_path(repo)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    _mod._write_ledger(legacy, [
+        {"id": "F-001", "category": "test", "pattern": "관측 가능해야 한다",
+         "frequency": 1, "last_seen": "2026-01-01", "severity": "low"},
+    ])
+
+    def boom(self, target):
+        raise OSError("rename blocked")
+
+    monkeypatch.setattr(Path, "rename", boom)
+    _mod._try_migrate(repo)  # fail-open — 예외가 밖으로 새지 않는다
+    err = capsys.readouterr().err
+    assert "이관 실패" in err, f"이관 실패가 침묵됐다 (stderr={err!r})"
+
+
+def test_migration_warning_is_silent_in_normal_operation(tmp_path, capsys):
+    """음성 대조 — 구 원장이 없는 정상 운영에서는 발화하지 않는다(상시 참 경고 금지)."""
+    repo = _init_repo(tmp_path)
+    _mod._try_migrate(repo)
+    assert "이관 실패" not in capsys.readouterr().err
+
