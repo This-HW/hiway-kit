@@ -15,7 +15,9 @@ session-start가 주입할 digest를 제공하는 학습 루프의 SSOT (Spec 3 
       python3 feedback_ledger.py digest [K]
       python3 feedback_ledger.py promote   (26-16, 아래 "스테이징→승격" 참고)
 
-ledger 경로: <project_root>/docs/works/feedback/ledger.md
+ledger 경로: <git-common-dir>/kit/ledger.md — **모든 워크트리가 공유**한다.
+  구 위치(<project_root>/docs/works/feedback/ledger.md)는 작업 트리 안이라
+  워크트리마다 갈라졌다. 남아 있으면 첫 실행이 **병합 이관**하고 .migrated 로 개명한다.
 ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 
 ## 스테이징 → 승격 (26-16, D-43)
@@ -51,6 +53,7 @@ ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -105,9 +108,91 @@ def _project_root() -> Path:
     return Path.cwd()
 
 
-def ledger_path(root: Path | None = None) -> Path:
+def legacy_ledger_path(root: Path | None = None) -> Path:
+    """구 위치 — **워크트리마다 갈라지던** 자리. 이관 원본으로만 쓴다."""
     root = root or _project_root()
     return root / "docs" / "works" / "feedback" / "ledger.md"
+
+
+def ledger_path(root: Path | None = None) -> Path:
+    """원장 정본 경로. **공용 gitdir 아래**가 기본이다.
+
+    **왜 옮겼나.** 구 위치(`docs/works/feedback/ledger.md`)는 **작업 트리 안**이라
+    워크트리마다 별도 파일이 된다. 그런데 이 킷은 워크트리 운영을 권장한다
+    (`isolation: worktree`·`parallel-worktree`·`control-loop`) — 권장을 따르는 순간
+    **학습 원장이 세션마다 갈라진다.** 실측: 같은 레포의 두 워크트리에 서로 다른
+    50항목 원장이 있었고, 한쪽에서 배운 것이 다른 쪽에 영영 도달하지 않았다.
+
+    `<git-common-dir>/kit/` 은 **모든 워크트리가 공유**하고 구조적으로 untracked 이며
+    git 만 있으면 되므로 하네스와도 무관하다 — 자식 마커·레지스트리 포인터가 이미
+    거기 산다. 원장도 같은 자리로 올린다.
+
+    git 저장소가 아니면(또는 조회 실패) 구 위치로 물러선다 — 이 헬퍼는 임의의
+    디렉토리에서도 동작해야 한다(fail-open).
+    """
+    root = root or _project_root()
+    common = _git_common_dir(root)
+    if common is None:
+        return legacy_ledger_path(root)
+    return common / "kit" / "ledger.md"
+
+
+def _merge_entries(base: list[dict], incoming: list[dict]) -> list[dict]:
+    """dedupe 키가 같으면 frequency 합산·최근 날짜 채택. 이관용 병합."""
+    index = {_normalize(e["category"], e["pattern"]): e for e in base}
+    for src in incoming:
+        key = _normalize(src["category"], src["pattern"])
+        hit = index.get(key)
+        if hit is None:
+            index[key] = dict(src)
+            continue
+        hit["frequency"] += src["frequency"]
+        hit["last_seen"] = max(hit["last_seen"], src["last_seen"])
+    merged = list(index.values())
+    # id 재채번 — 두 원장의 F-번호가 충돌할 수 있다.
+    for i, e in enumerate(sorted(merged, key=lambda x: x["id"]), start=1):
+        e["id"] = f"F-{i:03d}"
+    return merged
+
+
+def migrate_legacy_ledger(root: Path | None = None) -> str:
+    """구 위치 원장을 정본으로 **병합** 이관한다. 반환: 'merged' | 'noop'.
+
+    **이동이 아니라 병합인 이유**: 워크트리마다 원장이 갈려 있었으므로 먼저 도착한
+    하나만 채택하면 나머지의 학습이 사라진다. 각 워크트리가 자기 것을 병합해 올린다.
+
+    이관 후 원본은 `.migrated` 접미사로 **개명**한다 — 지우지 않는 것은 되돌릴 수
+    있게 하기 위해서고, 개명하는 것은 다음 실행이 같은 것을 또 병합해 frequency 를
+    부풀리지 않게 하기 위해서다(멱등).
+
+    심링크는 건드리지 않는다 — 사용자가 공유 원장으로 링크해 둔 경우다(F7).
+    """
+    root = root or _project_root()
+    legacy = legacy_ledger_path(root)
+    target = ledger_path(root)
+    if target == legacy or legacy.is_symlink() or not legacy.is_file():
+        return "noop"
+    incoming = parse_ledger(legacy)
+    if not incoming:
+        return "noop"
+    with _ledger_lock(target):
+        merged = _merge_entries(parse_ledger(target), incoming)
+        kept = _decay(merged)
+        _write_ledger(target, kept)
+    backup = legacy.with_suffix(".md.migrated")
+    legacy.rename(backup)
+    dropped = len(merged) - len(kept)
+    if dropped:
+        # **조용히 지우지 않는다.** 상한·감쇠는 설계된 동작이지만, 이관 중에 일어나면
+        # 사용자가 고르지 않은 유실로 보인다. 원본은 .migrated 로 남아 있으므로
+        # 되돌릴 수 있다는 것까지 같이 알린다.
+        print(
+            f"[feedback_ledger] 원장을 {target} 로 병합 이관했습니다 "
+            f"(상한 {CAP} 초과 {dropped}건은 감쇠 규칙으로 제외 — "
+            f"원본은 {backup.name} 로 보존).",
+            file=sys.stderr,
+        )
+    return "merged"
 
 
 def _sanitize(pattern: str) -> str:
@@ -273,6 +358,7 @@ def upsert(category: str, severity: str, pattern: str, root: Path | None = None)
     if severity not in VALID_SEVERITIES:
         severity = ""
     pattern = _sanitize(pattern)
+    _try_migrate(root)
     path = ledger_path(root)
     # 로컬 날짜를 유지하되 tz를 명시(naive 시각 금지) — 원장 날짜는 사용자 기준일이다.
     today = datetime.now().astimezone().date().isoformat()
@@ -307,8 +393,19 @@ def upsert(category: str, severity: str, pattern: str, root: Path | None = None)
         return "added"
 
 
+def _try_migrate(root: Path | None) -> None:
+    """이관은 **본 작업을 막지 않는다** — 실패하면 조용히 구 위치 그대로 동작한다.
+
+    학습 루프는 opt-in·fail-open 이 원칙이다(rules/feedback-loop.md). 이관 실패로
+    upsert/digest 가 죽으면 그 원칙이 깨진다.
+    """
+    with contextlib.suppress(Exception):
+        migrate_legacy_ledger(root)
+
+
 def load_digest(top_k: int = DEFAULT_DIGEST_K, root: Path | None = None) -> str:
     """주입용 digest 문자열. ledger 부재/빈 경우 빈 문자열 (fail-open)."""
+    _try_migrate(root)
     entries = parse_ledger(ledger_path(root))
     if not entries:
         return ""

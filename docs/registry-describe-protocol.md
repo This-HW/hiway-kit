@@ -8,7 +8,7 @@
 
 ## 왜 이 이음매가 있는가
 
-킷(hiway-kit)는 자체 feedback ledger(`docs/works/feedback/ledger.md`)로
+킷(hiway-kit)는 자체 feedback ledger(`<git-common-dir>/kit/ledger.md`)로
 결함 패턴을 누적하는 학습 루프를 갖고 있다. 컨트롤 프로젝트(여러 레포·세션을
 운영하는 상위 오케스트레이터)가 자기 원장(레지스트리)을 갖고 있으면, 킷의 ledger는
 **세션 로컬 스테이징 버퍼**로 격하되고 컨트롤의 레지스트리가 내구 진실이 된다.

@@ -213,3 +213,76 @@ def test_lock_timeout_warns(tmp_path, monkeypatch, capsys):
     # 무락이어도 쓰기는 성공해야 한다(fail-open)
     entries = _mod.parse_ledger(_mod.ledger_path(tmp_path))
     assert any(e["pattern"] == "timeout warn" for e in entries)
+
+
+# ── 원장 위치: 워크트리 공유 (v3.16.0) ──────────────────────────────────────
+#
+# 구 위치(docs/works/feedback/ledger.md)는 **작업 트리 안**이라 워크트리마다 별도
+# 파일이 됐다. 이 킷은 워크트리 운영을 권장하므로(isolation: worktree·parallel-worktree·
+# control-loop) 권장을 따르는 순간 **학습 원장이 세션마다 갈라졌다.**
+# 실측: 같은 레포의 두 워크트리에 서로 다른 50항목 원장이 있었다.
+
+
+def _init_repo(tmp_path):
+    import subprocess
+    subprocess.run(["git", "init", "-q", "."], cwd=tmp_path, check=True)
+    return tmp_path
+
+
+def test_ledger_lives_under_shared_gitdir_not_worktree(tmp_path):
+    repo = _init_repo(tmp_path)
+    path = _mod.ledger_path(repo)
+    assert path.parent.name == "kit"
+    assert ".git" in str(path), "작업 트리 안이면 워크트리마다 갈라진다"
+    assert "docs" not in str(path)
+
+
+def test_falls_back_to_legacy_outside_git(tmp_path):
+    """git 저장소가 아니면 구 위치로 물러선다 — 임의 디렉토리에서도 동작해야 한다."""
+    assert _mod.ledger_path(tmp_path) == _mod.legacy_ledger_path(tmp_path)
+
+
+def test_legacy_is_merged_not_overwritten(tmp_path):
+    """두 워크트리가 각자 다른 원장을 갖고 있었다 — 먼저 온 하나만 채택하면 유실이다."""
+    repo = _init_repo(tmp_path)
+    _mod.upsert("security", "high", "공용 원장에 이미 있던 것", root=repo)
+    legacy = _mod.legacy_ledger_path(repo)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    _mod._write_ledger(legacy, [
+        {"id": "F-001", "category": "test", "pattern": "구 원장에만 있던 것",
+         "frequency": 3, "last_seen": "2026-01-01", "severity": "high"},
+    ])
+    assert _mod.migrate_legacy_ledger(repo) == "merged"
+    patterns = [e["pattern"] for e in _mod.parse_ledger(_mod.ledger_path(repo))]
+    assert "공용 원장에 이미 있던 것" in patterns
+    assert "구 원장에만 있던 것" in patterns, "구 원장 항목이 유실됐다"
+
+
+def test_migration_is_idempotent(tmp_path):
+    """두 번 돌려도 frequency 가 부풀지 않아야 한다 — 원본을 개명해서 보장한다."""
+    repo = _init_repo(tmp_path)
+    legacy = _mod.legacy_ledger_path(repo)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    _mod._write_ledger(legacy, [
+        {"id": "F-001", "category": "test", "pattern": "한 번만 세어야 한다",
+         "frequency": 1, "last_seen": "2026-01-01", "severity": "low"},
+    ])
+    assert _mod.migrate_legacy_ledger(repo) == "merged"
+    assert _mod.migrate_legacy_ledger(repo) == "noop"
+    entries = [e for e in _mod.parse_ledger(_mod.ledger_path(repo))
+               if e["pattern"] == "한 번만 세어야 한다"]
+    assert len(entries) == 1 and entries[0]["frequency"] == 1
+    assert not legacy.exists() and legacy.with_suffix(".md.migrated").exists()
+
+
+def test_symlinked_legacy_is_left_alone(tmp_path):
+    """사용자가 공유 원장으로 심링크해 둔 경우(F7)는 건드리지 않는다."""
+    repo = _init_repo(tmp_path)
+    legacy = _mod.legacy_ledger_path(repo)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    real = tmp_path / "elsewhere.md"
+    real.write_text("| F-001 | test | x | 1 | 2026-01-01 | low |\n", encoding="utf-8")
+    legacy.symlink_to(real)
+    assert _mod.migrate_legacy_ledger(repo) == "noop"
+    assert legacy.is_symlink()
+

@@ -44,7 +44,8 @@ evals 실행 불가(exit 2 SKIPPED)면 제안까지만 — SKIPPED를 통과로 
 
 ### 1. 입력 수집
 
-- **ledger 전량**: `docs/works/feedback/ledger.md`를 **직접 읽는다** (읽기는 허용 —
+- **ledger 전량**: 원장 파일을 **직접 읽는다**. 경로는 `feedback_ledger.py` 의
+  `ledger_path()` 가 정한다(`<git-common-dir>/kit/ledger.md`) — 하드코딩하지 마라 (읽기는 허용 —
   `feedback-loop.md`의 금지는 *편집*이다). `feedback.sh digest`는 세션 주입용으로
   1,200자에서 절단되므로 전수 분석 입력으로 쓰지 않는다.
 - 최신 eval 자산: baseline은 `evals/baseline/`에서 **파일명 사전순 최대의
