@@ -729,6 +729,24 @@ done <<EOF
 $KIT_HOOKS
 EOF
 
+hdr "22. 그림자 정의 0건 (같은 모듈에 같은 이름의 최상위 정의)"
+# 판정은 scripts/check_shadowed_defs.py 가 단일 소스 — CI 와 동일 스크립트(F-023).
+#
+# **ruff 로 부족하다** `[confirmed 2026-09-09]`. F811(Redefinition of unused name)이 이
+# 결함이고 켜져 있지만, ruff 는 `_` 접두 이름을 dummy 로 보고 **면제**한다 — 그런데
+# 밑줄 접두가 이 레포 테스트 헬퍼의 기본 명명 관례라 면제 범위가 정확히 위험 지대와
+# 겹친다. `dummy-variable-rgx` 를 좁히면 잡히지만 그 설정은 F841·B007·RUF059 와 공유라
+# 서술적 폐기 이름(`_scenario`·`_lines`) 10곳이 `_` 한 글자로 강등된다 — 그 가독성을
+# 이 검사 하나와 바꾸지 않는다.
+#
+# 왜 red 인가: 그림자 정의는 **테스트가 통과하면서 다른 것을 재는** 상태를 만든다.
+# 이 레포가 가장 나쁘게 보는 false-green 이다(F-012).
+if python3 scripts/check_shadowed_defs.py; then
+  green "그림자 정의 0건 (check_shadowed_defs.py — CI와 단일 소스)"
+else
+  red "그림자 정의 잔존 — 나중 정의가 앞선 것을 덮는다 (상세는 위 출력)"
+fi
+
 # ── 결과 ──────────────────────────────────────────────────────────
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
