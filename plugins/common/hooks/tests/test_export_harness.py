@@ -1098,7 +1098,7 @@ def test_partial_conventions_is_drift_but_rules_block_is_still_written(tmp_path,
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _seed_legacy_duplicate(target: Path, *, old: str = "kit", new: str = "cck") -> str:
+def _seed_legacy_duplicate(target: Path, *, old: str = "kit", new: str = "cck") -> str:  # old-name-ok: 구 마커 인식 = 이행 경로
     """정상 생성물의 블록을 구 토큰으로 복제해 구 1 + 신 1 공존 상태를 만든다."""
     import re as _re
 
@@ -1134,7 +1134,7 @@ def test_legacy_and_new_block_coexistence_is_migrated_not_refused(tmp_path):
     )
     assert rc == 0, "이행 가능한 공존이 거부됐다 — 영구 red"
     body = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert "cck:begin" not in body, "구 토큰 블록이 남았다"
+    assert "cck:begin" not in body, "구 토큰 블록이 남았다"  # old-name-ok: 구 마커 인식 = 이행 경로
     assert body.count("<!-- kit:begin") == 1
     assert marker in body, "마커 밖 사용자 콘텐츠가 삭제됐다"
 
@@ -1181,7 +1181,7 @@ def test_other_marker_corruption_is_still_refused(tmp_path):
     # begin 만 하나 더 (짝 없는 구 begin) — begins=2, ends=1
     b = _re.search(r"^<!-- kit:begin .*-->$", text, _re.MULTILINE)
     path.write_text(
-        text[: b.start()] + b.group(0).replace("kit:", "cck:") + "\n" + text[b.start() :],
+        text[: b.start()] + b.group(0).replace("kit:", "cck:") + "\n" + text[b.start() :],  # old-name-ok: 구 마커 인식 = 이행 경로
         encoding="utf-8",
     )
     before = path.read_text(encoding="utf-8")

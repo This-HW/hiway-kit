@@ -25,7 +25,24 @@
 하네스가 노출하는 목록) **줄이는 수단도 다르다.** 합치면 "규범을 깎아 에이전트를 늘리는"
 교환이 조용히 통과한다 — 그 둘은 교환 가능한 자원이 아니다.
 
-## 왜 **최악의 경우**를 재는가
+## 왜 축이 둘이 아니라 셋인가 (2026-09-10 컨트롤 판정)
+
+규범 축은 다시 **둘**로 나뉜다. 한 숫자로 합치면 둘 다 못 답한다:
+
+| 축 | 묻는 것 | 상한 |
+| --- | --- | --- |
+| 규범(항상) | *"모든 세션이 무조건 내는 비용은?"* | 10 KiB |
+| 규범(최악) | *"조건이 다 겹치면 얼마까지?"* | 22 KiB |
+| 에이전트 | *"하네스가 노출하는 목록의 비용은?"* | 8 KiB |
+
+**항상만 재면** 지금까지처럼 조용히 과소측정한다(그것이 ATK-006 이다).
+**최악만 재면** 평범한 세션에 대해 과대보고해서 경고가 죽는다 — 상시 참인 경고는
+정보가 아니라 소음이고, 소음은 옆의 진짜 경고까지 죽인다(`warning-signal.md`).
+
+최악 상한 22 KiB 는 판정 시점 실측 20,675B 위 약 1.8 KiB 다. 넉넉하지 않은 것이
+의도다 — 이 레포의 상한은 미학이 아니라 **조용한 증가를 막는 래칫**이다.
+
+## 왜 **최악의 경우**도 재는가
 
 `rules_bytes()` 는 `load_rules(PLUGIN_ROOT, False)` 를 불렀다 — `signals` 인자가 **없는**
 호출이라 `tier: conditional` 규범이 하나도 포함되지 않았고, 결국 **core 규범만** 재고
@@ -59,8 +76,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "common"
 
-RULES_CAP = 10240   # 10 KiB — core 규범 + WORKFLOW
-AGENTS_CAP = 8192   # 8 KiB — 에이전트 name + description
+RULES_CORE_CAP = 10240  # 10 KiB — **항상** 내는 비용 (core 규범 + WORKFLOW)
+RULES_PEAK_CAP = 22528  # 22 KiB — conditional 이 전부 겹칠 때의 **최대** 비용
+AGENTS_CAP = 8192       # 8 KiB — 에이전트 name + description
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 NAME_RE = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
@@ -90,11 +108,13 @@ def conditional_signals() -> dict[str, bool]:
     return signals
 
 
-def rules_bytes() -> tuple[int, dict[str, bool]]:
-    """**최악의 경우** 주입 바이트 수. 재구현하지 않고 session-start.py 의 함수를 부른다.
+def rules_bytes() -> tuple[int, int, dict[str, bool]]:
+    """(항상 비용, 최악 비용, 켠 신호). 재구현하지 않고 session-start.py 의 함수를 부른다.
 
-    최악 = core 전부 + conditional 전부 + reference 색인. `include_task_resume` 도
-    True 다(활성 Work 가 있는 세션).
+    - **항상**: core 전부 + reference 색인. 신호가 하나도 없는 세션이 내는 바닥값이다.
+    - **최악**: 거기에 conditional 전부. `include_task_resume` 도 True(활성 Work 세션).
+
+    두 값을 **따로** 돌려주는 이유는 아래 "왜 축이 둘이 아니라 셋인가" 참고.
     """
     spec = importlib.util.spec_from_file_location(
         "session_start", PLUGIN_ROOT / "hooks" / "session-start.py"
@@ -109,10 +129,10 @@ def rules_bytes() -> tuple[int, dict[str, bool]]:
             "conditional 규범을 하나도 파생하지 못했다 — frontmatter 파싱 경로가 깨졌다. "
             "이대로면 core 만 재고 통과시키던 옛 결함으로 되돌아간다"
         )
-    used = len(mod.load_rules(PLUGIN_ROOT, True, signals=signals).encode()) + len(
-        mod.load_workflow_skill(PLUGIN_ROOT).encode()
-    )
-    return used, signals
+    workflow = len(mod.load_workflow_skill(PLUGIN_ROOT).encode())
+    always = len(mod.load_rules(PLUGIN_ROOT, False).encode()) + workflow
+    peak = len(mod.load_rules(PLUGIN_ROOT, True, signals=signals).encode()) + workflow
+    return always, peak, signals
 
 
 def agent_entries() -> list[tuple[int, str]]:
@@ -141,18 +161,22 @@ def _report(label: str, used: int, cap: int, hint: str) -> int:
 
 def main() -> int:
     try:
-        used_rules, signals = rules_bytes()
+        always, peak, signals = rules_bytes()
     except Exception as err:  # noqa: BLE001 — 측정 실패를 green 으로 위장하지 않는다
         print(f"[injection-budget] ✗ 규범 축 측정 실패: {err}")
         return 1
 
     print(
-        f"[injection-budget] · 최악의 경우로 측정 — conditional {len(signals)}종 전부 켬: "
-        + ", ".join(sorted(signals))
+        f"[injection-budget] · conditional {len(signals)}종: " + ", ".join(sorted(signals))
     )
     rc = _report(
-        "규범+WORKFLOW(최악)", used_rules, RULES_CAP,
+        "규범+WORKFLOW(항상)", always, RULES_CORE_CAP,
         "core 티어를 축약하거나 상시 필요 없는 것을 conditional/reference 로 내려라 (D-17)",
+    )
+    rc |= _report(
+        "규범+WORKFLOW(최악)", peak, RULES_PEAK_CAP,
+        "conditional 규범을 축약하거나 신호 조건을 좁혀라 — 최악은 흔한 조합이다"
+        " (워크트리 + 활성 Work + MCP 존재 + 원장 있음)",
     )
 
     entries = agent_entries()

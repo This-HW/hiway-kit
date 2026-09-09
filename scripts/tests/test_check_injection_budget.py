@@ -66,22 +66,40 @@ def test_conditional_signals_are_derived_not_hardcoded(tmp_path):
     }
 
 
+
+def _rules_text(root: Path, *, signals):
+    session_start = load_module_by_path(
+        root / "hooks" / "session-start.py", "session_start_probe"
+    )
+    return session_start.load_rules(root, False, signals=signals)
+
 def test_worst_case_includes_conditional_bodies(tmp_path):
     """최악 측정이 conditional 본문을 실제로 포함해야 한다 — core 만 재면 안 된다."""
     root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
     mod = _load(root)
-    used, signals = mod.rules_bytes()
+    _always, peak, signals = mod.rules_bytes()
 
     assert signals == {"cond-one": True}
-    # conditional 본문의 바이트가 측정에 실제로 반영됐는가.
-    assert used > len(CORE_BODY.encode()) + len(COND_BODY.encode())
+    # conditional 본문의 바이트가 최악 측정에 실제로 반영됐는가.
+    assert peak > len(CORE_BODY.encode()) + len(COND_BODY.encode())
+    # 그리고 **항상** 축에는 들어가지 않아야 한다 — 그게 두 축을 나눈 이유다.
+    assert COND_BODY.strip() not in _rules_text(root, signals=None)
+
+
+def test_always_axis_excludes_conditional(tmp_path):
+    """'항상' 축은 신호 없는 세션의 바닥값이다 — conditional 이 섞이면 과대보고다."""
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
+    always, peak, _sig = _load(root).rules_bytes()
+    assert always < peak, (
+        f"'항상'({always}B)이 '최악'({peak}B)보다 작지 않다 — 두 축이 같은 것을 재고 있다"
+    )
 
 
 def test_worst_case_is_strictly_larger_than_core_only(tmp_path):
     """되돌림 감지의 핵심 — signals 없이 부르면 나오는 수보다 반드시 커야 한다."""
     root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
     mod = _load(root)
-    used, _ = mod.rules_bytes()
+    _, peak, _ = mod.rules_bytes()
 
     session_start = load_module_by_path(
         root / "hooks" / "session-start.py", "session_start_t"
@@ -89,8 +107,8 @@ def test_worst_case_is_strictly_larger_than_core_only(tmp_path):
     core_only = len(session_start.load_rules(root, False).encode()) + len(
         session_start.load_workflow_skill(root).encode()
     )
-    assert used > core_only, (
-        f"최악 측정({used}B)이 core 전용 측정({core_only}B)보다 크지 않다 — "
+    assert peak > core_only, (
+        f"최악 측정({peak}B)이 core 전용 측정({core_only}B)보다 크지 않다 — "
         "conditional 규범이 측정에서 빠졌다"
     )
 
