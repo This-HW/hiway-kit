@@ -173,13 +173,16 @@ def check_content_sensitive(
     for pattern, description in patterns:
         match = re.search(pattern, content, re.IGNORECASE)
         if match:
-            # 매칭된 값은 마스킹하여 로깅
+            # **매칭된 값의 원문 조각을 남기지 않는다.** 이 훅의 출력은 터미널에만
+            # 머물지 않는다 — 에이전트 트랜스크립트·CI 로그로 옮겨 다닌다
+            # (`docs/conventions/warning-signal.md` §6). 앞 4자+뒤 2자를 찍던
+            # 방식은 같은 레포의 `.private-names` 가드(첫 글자+길이)보다 느슨해,
+            # 한 저장소 안에 마스킹 기준이 둘이었다. 더 보수적인 쪽으로 통일한다.
+            #
+            # 판정에 필요한 정보는 *"무엇이 걸렸나(description)"* 와 *"얼마나 긴가"*
+            # 이지 *"값이 무엇인가"* 가 아니다 — 값은 사용자가 이미 갖고 있다.
             matched_text = match.group(0)
-            masked = (
-                matched_text[:4] + "***" + matched_text[-2:]
-                if len(matched_text) > 6
-                else "***"
-            )
+            masked = f"{matched_text[:1]}…({len(matched_text)}자)"
             debug_log(f"Sensitive content detected: {description} ({masked})")
             msg = f"메시지에 민감 정보가 포함되어 있습니다: {description}. 민감 정보를 제거한 후 다시 시도하세요."
             return True, msg

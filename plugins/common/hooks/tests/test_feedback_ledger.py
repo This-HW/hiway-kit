@@ -1,6 +1,7 @@
 """Unit tests for feedback_ledger.py (Spec 3 / W-007)."""
 
 import importlib.util
+import os
 from pathlib import Path
 from types import ModuleType
 
@@ -17,6 +18,18 @@ def _load_module() -> ModuleType:
 
 
 _mod = _load_module()
+
+
+def _row(entry_id: str) -> dict:
+    """`_write_ledger` 가 기대하는 최소 항목."""
+    return {
+        "id": entry_id,
+        "category": "lint",
+        "pattern": "sample pattern",
+        "frequency": 1,
+        "last_seen": "2026-09-10",
+        "severity": "low",
+    }
 
 
 # ── upsert: 신규 추가 ─────────────────────────────────────────────
@@ -472,3 +485,90 @@ def test_foreign_owned_lock_dir_falls_back(monkeypatch, tmp_path):
     monkeypatch.setattr(_mod.os, "lstat", foreign_lstat)
     ledger = tmp_path / "ledger.md"
     assert _mod._lock_path_for(ledger) == ledger.with_name("ledger.md.lock")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 원장이 심링크일 때: 내 것이면 따라가고, 남의 것이면 쓰지 않는다
+# (같은 파일의 락 디렉토리 검사와 같은 기준 — 이전에는 원장 쪽만 가정으로 열려 있었다)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_symlinked_ledger_owned_by_me_is_followed(tmp_path):
+    """F7(공유 원장 심링크)은 **의도된 기능**이다 — 봉쇄가 이 기능을 깨면 안 된다."""
+    shared = tmp_path / "shared-ledger.md"
+    shared.write_text(_mod._HEADER, encoding="utf-8")
+    link = tmp_path / "ledger.md"
+    link.symlink_to(shared)
+
+    _mod._write_ledger(link, [_row("E-1")])
+
+    assert "E-1" in shared.read_text(encoding="utf-8")
+    assert link.is_symlink(), "심링크가 일반 파일로 교체됐다 — F7 이 깨졌다"
+
+
+def test_symlinked_ledger_owned_by_someone_else_is_refused(tmp_path, monkeypatch, capsys):
+    """남이 심어 둔 링크는 따라가지 않는다. 예외는 올리지 않는다(학습 루프는 fail-open)."""
+    victim = tmp_path / "victim.txt"
+    victim.write_text("DO NOT OVERWRITE\n", encoding="utf-8")
+    link = tmp_path / "ledger.md"
+    link.symlink_to(victim)
+
+    # 실제로 남의 uid 로 파일을 만들 수 없으므로 "내 uid" 쪽을 바꿔 같은 조건을 만든다.
+    monkeypatch.setattr(_mod.os, "getuid", lambda: os.stat(victim).st_uid + 1)
+
+    _mod._write_ledger(link, [_row("E-2")])
+
+    assert victim.read_text(encoding="utf-8") == "DO NOT OVERWRITE\n", "남의 파일이 덮였다"
+    assert "남의 소유" in capsys.readouterr().err
+
+
+def test_plain_ledger_file_is_unaffected(tmp_path):
+    """심링크가 아니면 검사가 개입하지 않는다 — 정상 경로에서 조용해야 한다."""
+    plain = tmp_path / "ledger.md"
+    _mod._write_ledger(plain, [_row("E-3")])
+    assert "E-3" in plain.read_text(encoding="utf-8")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# "부재"와 "못 읽음"을 구분한다 — 뭉개면 upsert 가 원장을 통째로 덮어쓴다
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_absent_ledger_is_empty_not_an_error(tmp_path):
+    """부재는 정상이다 — 아직 배운 게 없을 뿐이다."""
+    assert _mod.parse_ledger(tmp_path / "nope.md") == []
+
+
+def test_unreadable_ledger_raises_instead_of_looking_empty(tmp_path):
+    """**있는데 못 읽음**은 빈 원장이 아니다."""
+    bad = tmp_path / "ledger.md"
+    bad.write_bytes(b"| F-001 | lint | \xff\xfe broken | 1 | 2026-09-10 | low |\n")
+    try:
+        _mod.parse_ledger(bad)
+    except _mod.LedgerUnreadable:
+        return
+    raise AssertionError("읽기 실패가 빈 원장으로 뭉개졌다")
+
+
+def test_upsert_refuses_to_overwrite_an_unreadable_ledger(tmp_path, monkeypatch, capsys):
+    """★핵심 회귀: 못 읽은 원장 위에 쓰면 학습 항목이 통째로 사라진다."""
+    path = _mod.ledger_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    raw = b"| F-001 | lint | \xff\xfe broken | 7 | 2026-09-10 | low |\n"
+    path.write_bytes(raw)
+
+    result = _mod.upsert("lint", "low", "new pattern", root=tmp_path)
+
+    assert result == "skipped"
+    assert path.read_bytes() == raw, "읽지 못한 원장이 덮어써졌다"
+    assert "읽지 못해" in capsys.readouterr().err
+
+
+def test_digest_is_empty_but_loud_when_unreadable(tmp_path, capsys):
+    """읽기 전용 경로는 빈 문자열로 물러서되 **조용하지는 않다**."""
+    path = _mod.ledger_path(tmp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"| F-001 | lint | \xff\xfe | 1 | 2026-09-10 | low |\n")
+
+    assert _mod.load_digest(root=tmp_path) == ""
+    assert "읽지 못해" in capsys.readouterr().err

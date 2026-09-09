@@ -447,12 +447,16 @@ brainstorming  →  plan-task  →  auto-dev
 | --- | --- |
 {portable_rows}
 
+### 이름만 알리는 룰 (참조 티어 — 본문 미인라인)
+
+{index_only_rows}
+
 ### 이 파일이 이식하지 **못하는** 것 (정직한 한계)
 
 | 영역 | 이유 |
 | --- | --- |
 | 훅 (protect-sensitive · stop-validator · auto-format) | Claude Code 훅 런타임 전용 — 다른 하네스에는 실행 지점이 없다 |
-| 서브에이전트 정의 (33종) | Claude Code 서브에이전트 규격 전용 |
+| 서브에이전트 정의{agent_count} | Claude Code 서브에이전트 규격 전용 |
 | 룰 본문의 kit-레포 전용 명령 (`scripts/verify-done.sh` 등) | "요약 금지 / 원문 그대로" 정책의 대가 — 각 룰이 "이 레포에선"으로 한정하고 있으니, 당신 프로젝트의 해당 명령으로 읽어라 |
 {not_portable_rows}
 
@@ -460,6 +464,69 @@ brainstorming  →  plan-task  →  auto-dev
 강제가 필요하면 그 하네스의 네이티브 수단(pre-commit 훅, CI)에 같은 검사를 걸어라.
 
 """
+
+
+def _agent_count(plugin_root: Path) -> str:
+    """이식 불가 표에 적을 에이전트 수 — **세어서** 적는다. 리터럴로 적지 않는다.
+
+    리터럴 `(33종)` 이 박혀 있었고 실제가 32 로 줄어든 뒤에도 그대로였다. 이 문자열은
+    생성물(`AGENTS.md`·`GEMINI.md`)에 실려 **다른 하네스가 읽는 사실**이 된다 —
+    실측(2026-09-10): 실제 Codex 세션에 "몇 종이라고 적혀 있나" 를 물었더니 `33` 이라고
+    답했다. 잘못된 수가 소비자에게 그대로 전달되고 있었다.
+
+    §11 드리프트 게이트는 이것을 잡지 못한다. 그 게이트는 **입력(rules 원문)의 sha** 를
+    대조하는데, 이 수는 입력이 아니라 생성기 안의 리터럴이었다 — 게이트가 보는 것과
+    틀릴 수 있는 것이 어긋난 자리다.
+
+    **셀 수 없으면 수를 적지 않는다.** `agents/` 가 없으면(설치 형태가 다를 수 있다)
+    빈 문자열을 돌려줘 표에 `서브에이전트 정의` 만 남긴다. 틀린 수를 적느니 수를 안 적는
+    편이 낫다 — "0종" 은 그 자체가 거짓말이다.
+    """
+    agents = plugin_root / "agents"
+    if not agents.is_dir():
+        return ""
+    n = sum(1 for _ in agents.rglob("*.md"))
+    return f" ({n}종)" if n else ""
+
+
+# 진입점 파일의 보수적 크기 상한. **이 값의 SSOT 는 여기다** — `verify-done.sh §15` 가
+# 이 상수를 읽어 쓴다(복제하면 반드시 드리프트한다).
+#
+# 근거: Codex 의 `project_doc_max_bytes`(기본 32 KiB)는 전역 `~/.codex/AGENTS.md` →
+# git-root → cwd 의 진입점을 **병합한 총량**에 걸리고, 넘으면 **조용히 잘린다**(경고
+# 없음). 잘리면 규범이 도착하지 않는데 아무도 모른다 — 이 킷이 존재하는 이유인
+# "약속 ≠ 실물" 결함이 정확히 그 형태다. 그래서 32 KiB 전부가 아니라 75% 를 이 파일
+# 몫으로 두고 나머지는 사용자의 전역 파일 몫으로 남긴다.
+#
+# 다른 하네스의 상한은 **측정하지 않았다.** 그래도 같은 값으로 경고한다 — 큰 진입점은
+# 어디서든 위험하고, 모르는 것을 "안전하다"로 취급하는 것이 더 나쁘다.
+ENTRYPOINT_SOFT_CAP = 24576
+
+
+def _warn_if_oversized(target: Path, text: str) -> None:
+    """진입점이 커지면 **경고만** 한다 (fail-open).
+
+    **왜 실패시키지 않는가.** 소비자의 진입점에는 그들이 직접 쓴 내용이 함께 있다.
+    크다는 이유로 exit 1 을 내면 이 도구는 그 레포에서 아예 못 쓰게 되고, 그러면
+    규범이 **한 글자도** 도달하지 않는다 — 잘릴 위험보다 나쁜 결과다.
+
+    **왜 그래도 경고하는가.** 잘림은 조용하다. 도구가 `✓ 기록` 만 찍고 끝나면
+    소비자는 규범이 도착했다고 믿는다. 이 레포에는 같은 검사가 게이트(`§15`)로도
+    있지만 **그 게이트는 배포되지 않는다** — 소비자에게 가는 것은 이 경고뿐이다.
+
+    **이 검사가 도는 조건**(`warning-signal.md` §4): 기록·검사한 진입점의 최종 바이트
+    수가 `ENTRYPOINT_SOFT_CAP` 을 넘을 때만. 정상 크기에서는 한 줄도 찍지 않는다.
+    """
+    size = len(text.encode("utf-8"))
+    if size <= ENTRYPOINT_SOFT_CAP:
+        return
+    print(
+        f"[export-harness] ! {target} 가 {size:,}B 다 (권장 상한 {ENTRYPOINT_SOFT_CAP:,}B).\n"
+        "  Codex 는 진입점들을 **병합한 총량**이 32 KiB 를 넘으면 경고 없이 잘라낸다 —\n"
+        "  잘리면 규범이 도착하지 않는데 성공으로 보인다. 마커 블록 밖의 내용을 줄이거나,\n"
+        "  덜 중요한 규범을 참조로 내려라. (기록 자체는 정상 완료했다)",
+        file=sys.stderr,
+    )
 
 
 def _plugin_root(explicit: str | None) -> Path | None:
@@ -516,23 +583,41 @@ def _rule_files(plugin_root: Path) -> list[Path]:
     return sorted(p for p in (plugin_root / "rules").glob("*.md") if p.is_file())
 
 
-def _classify(rules: list[Path]) -> tuple[list[Path], list[str], list[str]]:
+def _classify(
+    rules: list[Path],
+) -> tuple[list[Path], list[str], list[str], list[Path], list[Path]]:
     """이식 대상 선별.
 
-    반환: (이식 대상, 미분류 룰, 유령 엔트리).
+    반환: (인라인 대상, 미분류 룰, 유령 엔트리, 색인만, 이식 불가).
     **양방향으로 검사한다** — 신규 룰 누락(미분류)만 막으면, 삭제·개명된 룰의 분류
     엔트리가 표에 남아 모든 소비자 AGENTS.md에 "존재하지 않는 룰"을 영구히 광고한다.
+
+    **모든 규범은 정확히 한 버킷에 들어간다.** 이전 판은 버킷이 둘(`portable`/`unknown`)
+    뿐이라 `portable: true` + `tier: reference` 인 규범이 **어느 쪽에도 안 들어갔다** —
+    본문도 안 실리고, "이식된 룰" 표에도 없고, "이식 못 하는 것" 표에도 없었다. 실측
+    (2026-09-10): `rules/child-marker`·`rules/delegation-contract` 가 생성물에 **0회**
+    등장했다. 하필 `child-marker` 는 하네스 중립 `pre-push` 훅이 판정에 쓰는 마커의
+    스키마 SSOT 다 — **다른 하네스 워커가 읽어야 할 규범이 정확히 다른 하네스로 안 나갔다.**
+    바로 이 파일의 설계 원칙("조용히 빠뜨리면 '내보냈다고 믿는데 안 나간' 구멍이 생긴다")을
+    이 함수가 어기고 있었다.
+
+    그래서 호출부가 **총합 불변식**을 강제한다. 버킷을 하나 더 늘릴 때 같은 구멍이
+    다시 열리지 않게 하는 것은 새 분기가 아니라 그 불변식이다.
     """
-    portable, unknown = [], []
+    portable, unknown, index_only, not_portable = [], [], [], []
     for p in rules:
         flag, _ = _rule_portability(p)
         if flag is None:
             unknown.append(p.stem)
-        elif flag and _rule_tier(p) != "reference":
-            portable.append(p)  # reference 티어는 인라인하지 않는다 — 이름만 광고
+        elif not flag:
+            not_portable.append(p)
+        elif _rule_tier(p) == "reference":
+            index_only.append(p)  # 본문은 인라인하지 않고 **이름만** 광고한다
+        else:
+            portable.append(p)
     # 유령(분류표에만 있고 실물 없음)은 **구조적으로 불가능해졌다** — 분류가 규범 파일
     # 자신에 있으므로 파일이 사라지면 분류도 사라진다. 빈 목록을 유지해 호출부 계약만 지킨다.
-    return portable, unknown, []
+    return portable, unknown, [], index_only, not_portable
 
 
 #: 마커 줄에 그대로 인터폴레이션되는 값이므로 마커 문법을 깰 수 없는 문자만 허용한다.
@@ -614,7 +699,18 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     # 교집합 검사는 불필요해졌다 — 분류가 규범 파일 하나에 있어 양쪽 등재가
     # 구조적으로 불가능하다 (D-45). 이전에는 딕셔너리 둘이라 필요했다.
     rules = _rule_files(plugin_root)
-    portable, unknown, ghosts = _classify(rules)
+    portable, unknown, ghosts, index_only, not_portable = _classify(rules)
+    # **총합 불변식.** 모든 규범은 정확히 한 버킷에 들어가야 한다. 이 assert 가 없어서
+    # `portable: true` + `tier: reference` 인 규범 둘이 세 분기 밖으로 새고도 아무도
+    # 몰랐다(실측 2026-09-10). 버킷을 하나 더 늘릴 때 같은 구멍이 다시 열리지 않게
+    # 막는 것은 새 분기가 아니라 이 한 줄이다.
+    counted = len(portable) + len(index_only) + len(not_portable) + len(unknown)
+    if counted != len(rules):
+        raise ClassificationError(
+            f"규범 분류 총합 불일치: 버킷 합 {counted} ≠ 규범 {len(rules)}개.\n"
+            "  → 어느 규범이 세 분기 밖으로 샜다. _classify 를 고쳐라 — 새는 규범은"
+            " 생성물에 흔적조차 남지 않는다."
+        )
     # `untrusted-text` 를 맨 앞으로 올린다. 그 룰 자신이 **"방어 프레이밍을 페이로드보다
     # 먼저 선치하라"** 고 규정하므로, 규범 묶음 안에서도 먼저 와야 규정과 배치가 일치한다.
     #
@@ -653,13 +749,23 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     )
     not_portable_rows = "\n".join(
         f"| `rules/{p.stem}` | {_rule_portability(p)[1] or 'Claude Code 고유 프리미티브에 종속'} |"
-        for p in sorted(_rule_files(plugin_root), key=lambda x: x.stem)
-        if _rule_portability(p)[0] is False
+        for p in sorted(not_portable, key=lambda x: x.stem)
+    )
+    # 색인만 나가는 규범(`tier: reference` + `portable: true`). 본문은 싣지 않지만
+    # **존재는 알린다** — 예전에는 이 줄이 없어 그 규범들이 생성물에서 통째로 사라졌다.
+    index_only_rows = (
+        "\n".join(
+            f"- `rules/{p.stem}` — 본문은 킷 레포에서 읽어라(참조 티어라 인라인하지 않는다)"
+            for p in sorted(index_only, key=lambda x: x.stem)
+        )
+        or "- (없음)"
     )
     header = BLOCK_HEADER.format(
         kit_name=KIT_NAME,
         kit_homepage=KIT_HOMEPAGE,
-        portable_rows=portable_rows, not_portable_rows=not_portable_rows
+        agent_count=_agent_count(plugin_root),
+        portable_rows=portable_rows, not_portable_rows=not_portable_rows,
+        index_only_rows=index_only_rows,
     )
     # 룰 본문뿐 아니라 **생성기 자신의 헤더**도 검사한다. 실제로 헤더에 마커를 리터럴로
     # 적었다가 생성물이 자기 자신을 손상시켰다(2026-08-23). 룰만 검사하는 가드는 절반이다.
@@ -1035,9 +1141,13 @@ def cmd_write(
 
     if text == new_text:
         print(f"[export-harness] ✓ 변경 없음 ({target})")
+        # 변경이 없어도 **이미 큰 파일은 계속 위험하다.** 여기서 건너뛰면 한 번 커진
+        # 진입점은 다시는 경고를 받지 못한다(재실행해도 항상 "변경 없음"이므로).
+        _warn_if_oversized(target, new_text)
         return 0
 
     _atomic_write(target, new_text)
+    _warn_if_oversized(target, new_text)
     if conv_block is not None:
         if conv_sha is None:
             raise ValueError("conv_block이 있으면 conv_sha도 있어야 한다 (호출자 계약)")

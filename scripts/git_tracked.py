@@ -45,10 +45,21 @@ def tracked_files(
     """`repo_root` 가 추적하는 파일 경로 목록. 실패하면 exit 1(green 으로 위장하지 않는다).
 
     비-ASCII·개행이 든 파일명도 **실제 경로 그대로** 돌아온다 — 위 독스트링 참고.
+
+    **디코딩도 명시한다.** git 쪽만 `-z` + `core.quotePath=false` 로 고치고 Python 쪽
+    디코딩을 미지정으로 두면, `text=True` 가 로케일 인코딩(`LC_ALL=C` 인 CI 컨테이너·
+    cron·sudo 환경에서는 ASCII)으로 **strict** 디코딩해 비-ASCII 파일명 하나에
+    `UnicodeDecodeError` 로 죽는다 — 이 모듈이 고치려던 바로 그 사각지대가 다른 층에서
+    되살아난다. UTF-8 이 아닌 파일명(리눅스는 바이트열이면 무엇이든 허용한다)도
+    `surrogateescape` 로 받아 **경로를 잃지 않는다** — 파일시스템 경로 규약과 같은 처리다.
+
+    타임아웃도 건다. 이 레포의 다른 subprocess 호출은 전부 시한이 있는데 여기만
+    무기한이면, 깨진 저장소에서 게이트가 조용히 멈춘다.
     """
     result = subprocess.run(
         ["git", "-c", "core.quotePath=false", "ls-files", "-z", *patterns],
-        cwd=str(repo_root), capture_output=True, text=True, check=False,
+        cwd=str(repo_root), capture_output=True, check=False,
+        encoding="utf-8", errors="surrogateescape", timeout=30,
     )
     if result.returncode != 0:
         print(f"[{label}] git ls-files 실패: {result.stderr.strip()}")

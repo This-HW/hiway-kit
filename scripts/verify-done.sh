@@ -598,7 +598,18 @@ hdr "15. AGENTS.md 크기 예산 (W-022 R7)"
 # 이 레포의 AGENTS.md 혼자 32 KiB를 다 써버리면 사용자의 전역 AGENTS.md와 합쳐지는
 # 순간 어느 쪽이든 잘릴 여지가 남는다. 그래서 32 KiB 자체가 아니라 그 75%인
 # 24,576 B를 이 레포 몫의 보수적 상한으로 둔다 — 나머지는 사용자의 전역 파일 몫.
-CONV_SIZE_CAP=24576
+# **상한 값의 SSOT 는 배포되는 코드**다 — `export_harness.py::ENTRYPOINT_SOFT_CAP`.
+# 여기 숫자를 다시 적으면 둘이 갈리고, 갈리는 순간 게이트와 소비자가 서로 다른 기준으로
+# 판정한다(F-023: 복제 로직은 반드시 드리프트한다). 읽지 못하면 **red** 다 — 상한을
+# 모르는 채 통과시키는 것이 이 게이트가 막으려는 false-green 이다.
+CONV_SIZE_CAP=$(python3 -c 'import importlib.util,sys
+spec=importlib.util.spec_from_file_location("eh","plugins/common/hooks/export_harness.py")
+m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+print(m.ENTRYPOINT_SOFT_CAP)' 2>/dev/null || echo "")
+if [ -z "$CONV_SIZE_CAP" ]; then
+  red "ENTRYPOINT_SOFT_CAP 을 export_harness.py 에서 읽지 못했다 — 상한을 모르는 채 통과시키지 않는다"
+  CONV_SIZE_CAP=0
+fi
 if [ -f AGENTS.md ]; then
   AGENTS_BYTES=$(wc -c <AGENTS.md | tr -d ' ')
   if [ "$AGENTS_BYTES" -le "$CONV_SIZE_CAP" ]; then

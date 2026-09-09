@@ -65,6 +65,19 @@ OPT_IN_DIR = "plugins/common/setup/git-hooks"
 # 설치본이 킷 소유인지 가르는 마커. 소스가 어느 쪽을 갖고 있는지로 고른다.
 MARKERS = ("# kit-managed-hook", "# Auto-installed by session-check.py")
 
+# **파생에는 제외 정책이 따라와야 한다.** 나열을 파생으로 바꾼 것만으로는 부족하다 —
+# `git-hooks/` 에 README 나 편집기 백업이 하나 생기면 "마커 없는 킷 훅"으로 잡혀
+# 훅을 하나도 안 건드렸는데 게이트가 red 가 된다. `warning-signal.md` §5 가 권하는
+# 형태는 "대상을 나열하지 말고 **제외를 나열한다**" 이고, 제외 목록이 없으면 그 절반만
+# 한 것이다. 제외는 주석이 아니라 **코드 상수**로 둔다.
+NON_HOOK_NAMES = frozenset({"README.md", ".gitignore", ".gitkeep"})
+NON_HOOK_SUFFIXES = (".md", ".sample", ".bak", ".orig", ".rej", "~")
+
+
+def _looks_like_hook(path: Path) -> bool:
+    """훅 디렉토리 안의 파일 중 **훅이 아닌 것**을 걸러낸다 (제외 방식)."""
+    return path.name not in NON_HOOK_NAMES and not path.name.endswith(NON_HOOK_SUFFIXES)
+
 
 def discover_hooks() -> tuple[list[tuple[str, str, str, bool]], list[str]]:
     """(검사 대상, 마커 없는 정본). 나열이 아니라 파생이다.
@@ -80,7 +93,7 @@ def discover_hooks() -> tuple[list[tuple[str, str, str, bool]], list[str]]:
     srcs = [REPO_ROOT / rel for rel in AUTO_INSTALLED]
     opt_in = REPO_ROOT / OPT_IN_DIR
     if opt_in.is_dir():
-        srcs += sorted(p for p in opt_in.iterdir() if p.is_file())
+        srcs += sorted(p for p in opt_in.iterdir() if p.is_file() and _looks_like_hook(p))
     for src in srcs:
         if not src.is_file():
             continue

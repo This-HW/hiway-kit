@@ -229,13 +229,33 @@ def _normalize(category: str, pattern: str) -> str:
     return f"{category}::{_sanitize(pattern).lower()}"
 
 
+class LedgerUnreadable(Exception):
+    """원장이 **있는데 읽지 못했다**. 빈 원장과 구별하기 위한 신호다.
+
+    둘을 같은 값(빈 리스트)으로 뭉개면 그 직후 `upsert` 가 `_write_ledger` 로 파일을
+    통째로 교체해 **최대 50개 학습 항목이 조용히 사라진다.** 이 파일은 스스로
+    *"fail-open 은 '막지 않는다'이지 '지운다'가 아니다"* 라고 적어 놓고(promote 주석)
+    읽기 경로에는 그 원칙을 적용하지 않고 있었다.
+
+    발생 조건(전부 평범하다): 손편집·부분쓰기로 생긴 `UnicodeDecodeError`,
+    공유 `.git/kit/` 를 다른 uid 가 먼저 만들어 생긴 `PermissionError`,
+    병렬 실행 중 `EMFILE`.
+    """
+
+
 def parse_ledger(path: Path) -> list[dict]:
-    """ledger.md 테이블을 파싱. 부재/실패 시 빈 리스트 (fail-open)."""
+    """ledger.md 테이블을 파싱.
+
+    **부재는 빈 리스트(정상), 읽기 실패는 예외다.** 이 구분이 없으면 호출부가
+    "볼 게 없었다"와 "못 봤다"를 같게 취급해 원장을 덮어쓴다 (`LedgerUnreadable` 참고).
+    """
     entries: list[dict] = []
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return entries
+    except FileNotFoundError:
+        return entries  # 부재 = 정상. 아직 배운 게 없을 뿐이다.
+    except (OSError, UnicodeDecodeError, ValueError) as err:
+        raise LedgerUnreadable(f"{path}: {err}") from err
     for line in lines:
         s = line.strip()
         if not s.startswith("|"):
@@ -364,14 +384,52 @@ def _lock_dir_is_safe(d: Path) -> bool:
     return not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
 
 
+def _symlinked_target_is_safe(path: Path, real: Path) -> bool:
+    """원장이 심링크일 때 그 대상을 따라가도 되는가 — **내 소유일 때만**.
+
+    심링크 **보존**은 의도된 기능이다(F7: ledger.md 를 공유 원장으로 링크해 두는 사용).
+    그래서 봉쇄가 아니라 **소유권 확인**으로 가른다 — 내가 만든 링크 대상은 따라가고,
+    남이 심어 둔 것은 따라가지 않는다. 같은 파일의 락 디렉토리 검사
+    (`_lock_dir_is_safe`)와 **같은 기준**이다.
+
+    **왜 필요했나.** 이전 독스트링은 *"ledger.md 는 저장소 내부의 사용자 통제 파일이라
+    심링크 추적이 안전하다"* 고 적었다 — 그건 **검사가 아니라 가정**이었다. 같은 파일이
+    락 경로에는 소유권 검사를 걸어 두고 원장 경로에는 안 걸었다는 비대칭이 근거다
+    (`docs/conventions/path-containment.md` 규칙 1·3: 한 번만 resolve 하고, 읽기 경로도 본다).
+
+    **한계는 정직하게 적는다.** 같은 uid 로 도는 공격자(공유 CI 러너에서 모두가 같은
+    계정인 경우)는 이 검사를 통과한다. 그 시나리오에서는 `.git/hooks/` 도 쓸 수 있으므로
+    이 검사가 마지막 방어선이 아니다 — 여기서 막는 것은 **다른 사용자가 심어 둔 링크**다.
+    """
+    if not path.is_symlink():
+        return True
+    try:
+        st = os.lstat(str(real))
+    except OSError:
+        return True  # 대상이 아직 없다 — 우리가 만들 것이므로 정상 경로다
+    try:
+        return st.st_uid == os.getuid()
+    except AttributeError:
+        return True  # 소유권 개념이 없는 플랫폼
+
+
 def _write_ledger(path: Path, entries: list[dict]) -> None:
     """tmp 파일 작성 후 os.replace로 원자 교체 — 부분 쓰기 상태 노출 방지.
 
     대상이 심링크면 링크 자체가 아니라 **링크가 가리키는 실제 파일**을 교체한다 —
-    사용자가 ledger.md를 공유 원장으로 심링크해 둔 경우를 보존한다(F7). ledger.md는
-    저장소 내부의 사용자 통제 파일이라 /tmp와 달리 심링크 추적이 안전하다.
+    사용자가 ledger.md를 공유 원장으로 심링크해 둔 경우를 보존한다(F7). 다만 그
+    대상이 **내 소유일 때만** 따라간다(`_symlinked_target_is_safe`).
     """
     real = Path(os.path.realpath(path))
+    if not _symlinked_target_is_safe(path, real):
+        # **쓰지 않고 조용히 물러선다(fail-open).** 학습 루프는 본 작업을 막지 않는다 —
+        # 여기서 예외를 올리면 남이 심어 둔 링크 하나로 세션이 죽는다. 다만 조용히
+        # 넘어가지도 않는다: 관측 가능해야 다음 사람이 원인을 찾는다.
+        print(
+            f"[feedback_ledger] 원장이 남의 소유 파일로 링크돼 있다 — 쓰지 않는다: {path}",
+            file=sys.stderr,
+        )
+        return
     real.parent.mkdir(parents=True, exist_ok=True)
     rows = [
         f"| {e['id']} | {e['category']} | {e['pattern']} | "
@@ -390,7 +448,9 @@ def _write_ledger(path: Path, entries: list[dict]) -> None:
 
 
 def upsert(category: str, severity: str, pattern: str, root: Path | None = None) -> str:
-    """결함 패턴을 추가하거나 기존 freq를 증가. 반환: 'added' | 'incremented'.
+    """결함 패턴을 추가하거나 기존 freq를 증가.
+
+    반환: 'added' | 'incremented' | 'skipped'(원장을 읽지 못해 쓰지 않음).
 
     parse→수정→write 전체가 _ledger_lock 안에서 실행된다 — 병렬 upsert에서도
     양쪽 기록이 모두 보존되고 F-id가 중복 채번되지 않는다.
@@ -410,7 +470,14 @@ def upsert(category: str, severity: str, pattern: str, root: Path | None = None)
     # 로컬 날짜를 유지하되 tz를 명시(naive 시각 금지) — 원장 날짜는 사용자 기준일이다.
     today = datetime.now().astimezone().date().isoformat()
     with _ledger_lock(path):
-        entries = parse_ledger(path)
+        try:
+            entries = parse_ledger(path)
+        except LedgerUnreadable as err:
+            # **읽지 못한 원장 위에 쓰지 않는다.** 여기서 빈 리스트로 진행하면 그 직후
+            # `_write_ledger` 가 파일을 통째로 교체해 학습 항목이 전부 사라진다.
+            # 작업은 막지 않는다(fail-open) — 배우지 못할 뿐이다.
+            print(f"[feedback_ledger] 원장을 읽지 못해 기록을 건너뛴다 — {err}", file=sys.stderr)
+            return "skipped"
         key = _normalize(category, pattern)
         for e in entries:
             if _normalize(e["category"], e["pattern"]) == key:
@@ -467,9 +534,17 @@ def _try_migrate(root: Path | None) -> None:
 
 
 def load_digest(top_k: int = DEFAULT_DIGEST_K, root: Path | None = None) -> str:
-    """주입용 digest 문자열. ledger 부재/빈 경우 빈 문자열 (fail-open)."""
+    """주입용 digest 문자열. ledger 부재/빈/읽기 실패 시 빈 문자열 (fail-open).
+
+    **읽기 전용 경로라 실패를 삼켜도 안전하다** — 쓰기 경로(`upsert`)와 달리 여기서는
+    "못 읽음"이 데이터를 파괴하지 않는다. 다만 조용히 넘기지는 않는다.
+    """
     _try_migrate(root)
-    entries = parse_ledger(ledger_path(root))
+    try:
+        entries = parse_ledger(ledger_path(root))
+    except LedgerUnreadable as err:
+        print(f"[feedback_ledger] 원장을 읽지 못해 digest 를 비운다 — {err}", file=sys.stderr)
+        return ""
     if not entries:
         return ""
     entries.sort(key=lambda e: (e["frequency"], e["last_seen"]), reverse=True)
@@ -782,7 +857,11 @@ def promote(root: Path | None = None) -> dict:
     # 그 상태에서 원장을 통째로 비우면 그 항목은 승격도 보존도 되지 않고 사라진다(ATK-001).
     # fail-open 은 "막지 않는다"이지 "지운다"가 아니다.
     with _ledger_lock(path):
-        claimed = parse_ledger(path)
+        try:
+            claimed = parse_ledger(path)
+        except LedgerUnreadable as err:
+            # 읽지 못한 원장은 승격하지 않는다 — 그리고 **비우지도 않는다.**
+            return {"promoted": False, "mode": "fallback", "reason": f"원장 읽기 실패: {err}"}
     if not claimed:
         return {"promoted": True, "mode": "promoted", "count": 0}
 
@@ -804,7 +883,18 @@ def promote(root: Path | None = None) -> dict:
         }
     with _ledger_lock(path):
         # 비우지 않고 **차집합을 다시 계산해** 쓴다. 승격 중 추가·증가된 것은 남는다.
-        _write_ledger(path, _remaining_after_promotion(parse_ledger(path), succeeded))
+        try:
+            current = parse_ledger(path)
+        except LedgerUnreadable as err:
+            # 승격은 이미 성공했으나 차감할 대상을 읽지 못했다. **덮어쓰지 않는다** —
+            # 다음 호출에서 재승격이 일어나는 편이 원장을 파괴하는 것보다 낫다.
+            print(
+                f"[feedback_ledger] 승격 후 원장을 읽지 못해 차감을 건너뛴다 — {err}",
+                file=sys.stderr,
+            )
+            return {"promoted": True, "mode": "partial", "count": len(succeeded),
+                    "reason": "차감 실패 — 원장 보존"}
+        _write_ledger(path, _remaining_after_promotion(current, succeeded))
     return {"promoted": True, "mode": "promoted", "count": len(succeeded)}
 
 

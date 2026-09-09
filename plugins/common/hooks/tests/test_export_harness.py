@@ -1271,3 +1271,53 @@ def test_manifest_read_failure_does_not_break_the_tool(tmp_path):
     assert mod.KIT_NAME == "kit", "폴백 이름이 적용되지 않았다"
     block, _ = mod.build_block(dst)
     assert "<!-- kit:begin rules-v" in block
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 이식 불가 표의 에이전트 수는 **세어서** 적는다 (리터럴 33 이 32 로 줄어도 안 고쳐졌다)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _plugin_root_with_agents(tmp_path, count: int):
+    """rules/ 와 agents/ 를 갖춘 최소 플러그인 루트."""
+    root = tmp_path / "common"
+    (root / "rules").mkdir(parents=True)
+    (root / "rules" / "VERSION").write_text("1.0.0\n", encoding="utf-8")
+    (root / "rules" / "sample.md").write_text(
+        "---\ntier: core\nportable: true\n---\n\n# Sample\n\nbody\n", encoding="utf-8"
+    )
+    agents = root / "agents" / "dev"
+    agents.mkdir(parents=True)
+    for i in range(count):
+        (agents / f"a{i}.md").write_text("---\nname: a\n---\n", encoding="utf-8")
+    return root
+
+
+def test_agent_count_in_block_is_counted_not_literal(tmp_path):
+    """에이전트를 하나 더하면 표의 수가 따라 움직여야 한다 — 리터럴이면 여기서 실패한다."""
+    import export_harness as eh
+
+    root = _plugin_root_with_agents(tmp_path, 7)
+    block, _ = eh.build_block(root)
+    assert "서브에이전트 정의 (7종)" in block
+
+    (root / "agents" / "dev" / "extra.md").write_text("---\nname: b\n---\n", encoding="utf-8")
+    block2, _ = eh.build_block(root)
+    assert "서브에이전트 정의 (8종)" in block2
+
+
+def test_agent_count_is_omitted_when_uncountable(tmp_path):
+    """셀 수 없으면 수를 **안 적는다**. '0종' 은 그 자체가 거짓말이다.
+
+    설치 형태에 따라 `agents/` 가 없을 수 있고, 그때 "(0종)" 을 적으면 생성물이 소비자에게
+    거짓을 말한다 — 이 표는 다른 하네스가 읽는 **사실**이 되는 자리다.
+    """
+    import shutil
+
+    import export_harness as eh
+
+    root = _plugin_root_with_agents(tmp_path, 3)
+    shutil.rmtree(root / "agents")
+    block, _ = eh.build_block(root)
+    assert "서브에이전트 정의 |" in block
+    assert "종)" not in block.split("서브에이전트 정의")[1].split("|")[0]
