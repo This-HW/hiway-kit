@@ -57,6 +57,7 @@ import fcntl
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -328,12 +329,39 @@ def _lock_path_for(path: Path) -> Path:
     key = hashlib.md5(str(path.resolve()).encode(), usedforsecurity=False).hexdigest()[
         :12
     ]
+    fallback = path.with_name(path.name + ".lock")  # 폴백: 기존 위치
     d = Path(tempfile.gettempdir()) / f"claude-{uid}"
     try:
         d.mkdir(mode=0o700, exist_ok=True)
-        return d / f"ledger_{key}.lock"
     except Exception:
-        return path.with_name(path.name + ".lock")  # 폴백: 기존 위치
+        return fallback
+    # `exist_ok=True` 는 **이미 있는 디렉토리를 그대로 받아들이고**, `mode=` 는 생성
+    # 시에만 적용된다. 다중 사용자 머신의 공용 /tmp 에서 이 이름이 선점돼 있으면
+    # (소유자가 다르거나 group/other 쓰기 가능) 남이 통제하는 디렉토리에 락 파일을
+    # 연다 — O_NOFOLLOW 는 락 **파일**의 심링크만 막지 디렉토리 자체는 막지 못한다(M-1).
+    if not _lock_dir_is_safe(d):
+        return fallback
+    return d / f"ledger_{key}.lock"
+
+
+def _lock_dir_is_safe(d: Path) -> bool:
+    """락 디렉토리를 재사용해도 되는가 — 실제 디렉토리 · 내 소유 · 남이 쓸 수 없음.
+
+    `lstat` 을 쓴다(`stat` 이 아니라) — 심링크면 그 자체로 거절해야 하는데 `stat` 은
+    링크를 따라가 대상 디렉토리의 속성을 보여 준다.
+    """
+    try:
+        st = os.lstat(str(d))
+    except OSError:
+        return False
+    if not stat.S_ISDIR(st.st_mode):
+        return False  # 심링크·일반 파일 등 — 디렉토리가 아니면 쓰지 않는다
+    try:
+        if st.st_uid != os.getuid():
+            return False
+    except AttributeError:
+        pass  # getuid 없는 플랫폼 — 소유권 개념이 없으니 퍼미션 검사만 한다
+    return not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
 
 
 def _write_ledger(path: Path, entries: list[dict]) -> None:

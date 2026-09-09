@@ -394,3 +394,81 @@ def test_migration_warning_is_silent_in_normal_operation(tmp_path, capsys):
     _mod._try_migrate(repo)
     assert "이관 실패" not in capsys.readouterr().err
 
+
+# ── M-1: 락 디렉토리 소유권·퍼미션 검사 ───────────────────────────
+def _fake_tmpdir(monkeypatch, tmp_path):
+    d = tmp_path / "fake_tmp"
+    d.mkdir()
+    monkeypatch.setattr(_mod.tempfile, "gettempdir", lambda: str(d))
+    return d
+
+
+def _hijack_name(fake_tmp):
+    import os
+    try:
+        uid = os.getuid()
+    except AttributeError:
+        uid = os.environ.get("USER", "user")
+    return fake_tmp / f"claude-{uid}"
+
+
+def test_lock_dir_reused_when_owned_and_private(monkeypatch, tmp_path):
+    """양성 대조 — 내 소유 0700 디렉토리는 그대로 재사용한다."""
+    fake_tmp = _fake_tmpdir(monkeypatch, tmp_path)
+    d = _hijack_name(fake_tmp)
+    d.mkdir(mode=0o700)
+    lock = _mod._lock_path_for(tmp_path / "ledger.md")
+    assert lock.parent == d
+
+
+def test_world_writable_lock_dir_falls_back(monkeypatch, tmp_path):
+    """공용 /tmp 에서 이름이 선점돼 group/other 쓰기 가능하면 쓰지 않는다 (M-1).
+
+    `exist_ok=True` 는 기존 디렉토리를 그대로 받아들이고 `mode=` 는 생성 시에만
+    적용되므로, 검사 없이는 남이 통제하는 디렉토리에 락 파일을 연다.
+    """
+    import os
+    fake_tmp = _fake_tmpdir(monkeypatch, tmp_path)
+    d = _hijack_name(fake_tmp)
+    d.mkdir()
+    # S103 억제 근거: 이 테스트가 **검사하려는 위험 조건 자체**를 만드는 픽스처다.
+    # 안전한 모드로 바꾸면 테스트가 아무것도 잡지 못한다(false-green).
+    os.chmod(d, 0o777)  # noqa: S103
+    ledger = tmp_path / "ledger.md"
+    assert _mod._lock_path_for(ledger) == ledger.with_name("ledger.md.lock")
+
+
+def test_symlinked_lock_dir_falls_back(monkeypatch, tmp_path):
+    """O_NOFOLLOW 는 락 **파일**의 심링크만 막는다 — 디렉토리 자체는 lstat 로 본다."""
+    fake_tmp = _fake_tmpdir(monkeypatch, tmp_path)
+    elsewhere = tmp_path / "attacker_dir"
+    elsewhere.mkdir(mode=0o700)
+    _hijack_name(fake_tmp).symlink_to(elsewhere, target_is_directory=True)
+    ledger = tmp_path / "ledger.md"
+    assert _mod._lock_path_for(ledger) == ledger.with_name("ledger.md.lock")
+
+
+def test_foreign_owned_lock_dir_falls_back(monkeypatch, tmp_path):
+    """소유자가 내가 아니면 쓰지 않는다 — lstat 결과의 st_uid 로 판정한다."""
+    import stat as _stat
+    fake_tmp = _fake_tmpdir(monkeypatch, tmp_path)
+    d = _hijack_name(fake_tmp)
+    d.mkdir(mode=0o700)
+
+    real_lstat = _mod.os.lstat
+
+    def foreign_lstat(p):
+        st = real_lstat(p)
+        if Path(p) == d:
+            return _stat_result_with_uid(st, st.st_uid + 1)
+        return st
+
+    def _stat_result_with_uid(st, uid):
+        class _S:
+            st_mode = st.st_mode | _stat.S_IFDIR
+            st_uid = uid
+        return _S()
+
+    monkeypatch.setattr(_mod.os, "lstat", foreign_lstat)
+    ledger = tmp_path / "ledger.md"
+    assert _mod._lock_path_for(ledger) == ledger.with_name("ledger.md.lock")
