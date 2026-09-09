@@ -8,6 +8,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.15.0] — 2026-09-09
+
+### Fixed — 이식되는 룰 2종이 더 Claude 전용 도구를 지시하고 있었다
+
+v3.14.0 에서 `feedback-loop` 하나를 고친 뒤 **클래스를 물었다**(`warning-signal.md`
+§검토 절차 5: "인스턴스를 고칠 때 클래스를 묻는다"). 이식 대상 룰 전체를 Claude 전용
+프리미티브로 훑으니 둘이 더 나왔다 — **둘 다 `core` 티어**라 매 세션 주입되면서 동시에
+다른 하네스로 이식되고 있었다:
+
+| 룰 | 지시하던 것 | 그 하네스에서 |
+| --- | --- | --- |
+| `definition-of-done` | `TaskList` 를 조회하라 | 그 도구가 없다 → 규율이 무동작 |
+| `loop-engineering` | `TaskUpdate(completed)` 를 호출하라 | 같음 |
+
+**규율 자체는 하네스 무관이다** — *"보고보다 마킹이 먼저"*, *"완료를 기록하고 다음으로"*.
+도구 이름만 종속이었다. 그래서 이 레포에 **이미 있던 관용구**로 바꿨다:
+`호스트가 제공하는 수단으로` — `planning-check`·`planning-protocol`·
+`agent-delegation-chain` 이 쓰던 표현이다. 새 표현을 발명하지 않았다.
+
+`loop-engineering` 의 `auto-dev` 참조도 `배치 실행(킷의 auto-dev 등)` 으로 일반화했다 —
+스킬 호출 형태가 하네스마다 다르다.
+
+**전수 확인**: 이식 대상 11종에 Claude 전용 참조 **0건** `[confirmed]`.
+
+**예산**: 상시 주입 9,986B → **10,069B** (+83B, 캡 10,240B). 처음엔 예시를 괄호로
+달아 +145B 였는데(여유 109B), 기존 관용구가 예시 없이 쓰는 형태라 맞췄다 — 일관성이
+바이트도 돌려줬다.
+
+
 ## [3.14.0] — 2026-09-09
 
 ### Fixed — `feedback-loop` 은 `portable: true` 인데 다른 하네스에서 **영원히 발동하지 않았다**

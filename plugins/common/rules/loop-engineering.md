@@ -13,7 +13,7 @@ brainstorming/plan-task HARD-GATE) ≠ 루프(실행 — 승인된 계획을 P0�
 
 `while(미완료 Work/Task):` 재앵커(요약이 아닌 `planning-results.md` 원본 재확인 — 요약은
 drift한다) → unblocked Task 선택 → 실행 → 완료 시 checklist pass → `progress.md` 래칫 →
-`TaskUpdate(completed)` → 종료 가드 점검(아래) → 확인 없이 다음 unblocked로 → 완료 보고.
+태스크 완료 마킹(호스트 수단) → 종료 가드 점검(아래) → 확인 없이 다음 unblocked로 → 완료 보고.
 
 ## 종료 가드 (안티-런어웨이 = 필수)
 
@@ -23,5 +23,5 @@ drift한다) → unblocked Task 선택 → 실행 → 완료 시 checklist pass 
 → 에스컬레이션·중단 보고) · **idle**(N iteration 새 커밋 0건 → 종료, git 커밋 기준) ·
 **검증 실패 잔존**(가드 재시도 후에도 실패 → 보고) 에서 반드시 멈춘다.
 
-`auto-dev` 배치는 Work 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
+배치 실행(킷의 `auto-dev` 등)은 Work 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
 본 작업을 막지 않는다.

@@ -4,7 +4,7 @@
 > 재생성: `./scripts/export-harness.sh` (플러그인 사용자는 `/harness-export` 스킬 참조)
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:1fe6e866fe8f61e5feccdf0c8181c40885e745804d5ba86e180b7e3dbf169571 -->
+<!-- kit:begin rules-v1.4.0 sha256:49ae0be1d3d5041153a9e49f50c02d85d77440084eeaf344d7827960244e1258 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -137,7 +137,7 @@ CHANGELOG·README·CLAUDE.md 반영. 완료 = 게이트 green + attest + Work �
 
 <!-- 앵커: #task-마감-규율 -->
 
-**턴을 끝내기 직전 `TaskList`를 조회해 "끝났는데 마킹만 안 된" 태스크를 completed로
+**턴을 끝내기 직전 태스크 목록을 조회해(호스트가 제공하는 수단으로) "끝났는데 마킹만 안 된" 태스크를 completed로
 정리한다 — 마킹이 보고보다 먼저다. 진행 중/대기 태스크는 마킹하지 않는다(잔존 사유
 명시).** 마지막 태스크=보고/마무리라 마킹을 뒤에 두면 완료 처리가 증발한다(실측된
 반복 버그) — ad-hoc 태스크에도 적용. completed 위장 금지(false-green 금지).
@@ -192,7 +192,7 @@ brainstorming/plan-task HARD-GATE) ≠ 루프(실행 — 승인된 계획을 P0�
 
 `while(미완료 Work/Task):` 재앵커(요약이 아닌 `planning-results.md` 원본 재확인 — 요약은
 drift한다) → unblocked Task 선택 → 실행 → 완료 시 checklist pass → `progress.md` 래칫 →
-`TaskUpdate(completed)` → 종료 가드 점검(아래) → 확인 없이 다음 unblocked로 → 완료 보고.
+태스크 완료 마킹(호스트 수단) → 종료 가드 점검(아래) → 확인 없이 다음 unblocked로 → 완료 보고.
 
 #### 종료 가드 (안티-런어웨이 = 필수)
 
@@ -202,7 +202,7 @@ drift한다) → unblocked Task 선택 → 실행 → 완료 시 checklist pass 
 → 에스컬레이션·중단 보고) · **idle**(N iteration 새 커밋 0건 → 종료, git 커밋 기준) ·
 **검증 실패 잔존**(가드 재시도 후에도 실패 → 보고) 에서 반드시 멈춘다.
 
-`auto-dev` 배치는 Work 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
+배치 실행(킷의 `auto-dev` 등)은 Work 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
 본 작업을 막지 않는다.
 
 ---
