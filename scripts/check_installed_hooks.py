@@ -18,11 +18,15 @@
 내내 발화해 죽은 경고가 된다(`docs/conventions/warning-signal.md` §검토 절차 1).
 `§3b`·`§19` 와 같은 비대칭이다.
 
-## 미설치의 의미가 훅마다 다르다
+## 미설치의 의미는 **위치에서 파생된다**
 
-- `pre-commit` — `session-check` 가 자동 설치한다. **없으면** 집행이 안 도는 것이므로 알린다.
-- `reference-transaction` — opt-in 이다. **없는 것이 정상**이므로 침묵한다. 안 켠 것을
-  결함으로 보고하면 켜지 않은 모든 소비자에게 상시 참이 되어 그 경고가 죽는다.
+- `setup/pre-commit` — `session-check` 가 자동 설치한다. **없으면** 집행이 안 도는
+  것이므로 알린다.
+- `setup/git-hooks/*` — 그 디렉토리는 **opt-in 훅을 담으려고** 존재한다. **없는 것이
+  정상**이므로 침묵한다. 안 켠 것을 결함으로 보고하면 켜지 않은 모든 소비자에게 상시
+  참이 되어 그 경고가 죽는다.
+
+훅을 손으로 등록하지 않는다 — 새 훅은 `setup/git-hooks/` 에 놓이는 것만으로 대상이 된다.
 
 ## 검사 조건 (한 문장)
 
@@ -42,25 +46,56 @@ YELLOW = "\033[33m"
 GREEN = "\033[32m"
 RESET = "\033[0m"
 
-# (정본 경로, 설치 이름, 마커, 미설치 시 알릴 것인가)
+# 킷 훅 정본이 사는 두 자리. **나열하지 않고 파생한다.**
 #
-# 새 킷 훅이 생기면 여기 한 줄만 더한다 — `warning-signal.md` §검토 절차 5
-# ("대상 목록을 나열하는 검사는 목록에 없는 것을 결코 red 로 만들지 못한다")를
-# 알고 쓰는 나열이다. 훅은 소수이고 각각 미설치 의미가 달라 제외 방식이 맞지 않는다.
-KIT_HOOKS: tuple[tuple[str, str, str, bool], ...] = (
-    (
-        "plugins/common/setup/pre-commit",
-        "pre-commit",
-        "# Auto-installed by session-check.py",
-        True,
-    ),
-    (
-        "plugins/common/setup/git-hooks/reference-transaction",
-        "reference-transaction",
-        "# kit-managed-hook",
-        False,
-    ),
-)
+# 이 목록은 원래 훅 세 요소를 손으로 나열했고, 그 옆에 *"훅은 소수이고 각각 미설치
+# 의미가 달라 제외 방식이 맞지 않는다"* 는 정당화까지 적혀 있었다. **바로 다음에
+# 추가된 훅(`pre-push`)이 그 나열에서 빠졌다** — 등록되지 않은 훅의 드리프트는
+# 영원히 잡히지 않는다. `warning-signal.md` §검토 절차 5 가 예측한 그대로다:
+# *"대상 목록을 나열하는 검사는 목록에 없는 것을 결코 red 로 만들지 못한다."*
+# 나열을 정당화하는 주석을 쓴다고 나열이 안전해지지는 않는다.
+#
+# 정당화의 전제("각각 미설치 의미가 다르다")도 틀렸다 — 그 의미는 **위치에서
+# 파생된다**: `setup/pre-commit` 은 `session-check` 가 자동 설치하므로 없으면 알리고,
+# `setup/git-hooks/` 는 **opt-in 훅을 담으려고 존재하는 디렉토리**이므로 없는 것이
+# 정상이다. 파일마다 사람이 아는 지식이 아니라 규칙이다.
+AUTO_INSTALLED = ("plugins/common/setup/pre-commit",)
+OPT_IN_DIR = "plugins/common/setup/git-hooks"
+
+# 설치본이 킷 소유인지 가르는 마커. 소스가 어느 쪽을 갖고 있는지로 고른다.
+MARKERS = ("# kit-managed-hook", "# Auto-installed by session-check.py")
+
+
+def discover_hooks() -> tuple[list[tuple[str, str, str, bool]], list[str]]:
+    """(검사 대상, 마커 없는 정본). 나열이 아니라 파생이다.
+
+    **이 검사가 도는 조건**(`warning-signal.md` §4): `setup/git-hooks/` 안의 모든 파일과
+    `AUTO_INSTALLED` 에 적힌 경로. 새 훅은 그 디렉토리에 놓이는 것만으로 대상이 된다.
+
+    마커가 없는 정본은 **건너뛰지 않고 돌려준다** — 호출자가 red 로 만든다. 마커 없는
+    킷 훅은 설치본과 대조할 수단이 없으므로, 조용히 통과시키면 그 훅만 감시 밖이 된다.
+    """
+    targets: list[tuple[str, str, str, bool]] = []
+    unmarked: list[str] = []
+    srcs = [REPO_ROOT / rel for rel in AUTO_INSTALLED]
+    opt_in = REPO_ROOT / OPT_IN_DIR
+    if opt_in.is_dir():
+        srcs += sorted(p for p in opt_in.iterdir() if p.is_file())
+    for src in srcs:
+        if not src.is_file():
+            continue
+        rel = src.relative_to(REPO_ROOT).as_posix()
+        try:
+            body = src.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            unmarked.append(rel)
+            continue
+        marker = next((m for m in MARKERS if m in body), None)
+        if marker is None:
+            unmarked.append(rel)
+            continue
+        targets.append((rel, src.name, marker, rel in AUTO_INSTALLED))
+    return targets, unmarked
 
 
 def hooks_dir() -> Path | None:
@@ -109,8 +144,17 @@ def check_one(src_rel: str, name: str, marker: str, notify_missing: bool) -> tup
 
 
 def main() -> int:
+    targets, unmarked = discover_hooks()
     reds = 0
-    for src_rel, name, marker, notify in KIT_HOOKS:
+    for rel in unmarked:
+        reds += 1
+        print(f"  ✗ 킷 훅 정본에 드리프트 마커가 없다: {rel}")
+        print(f"      → 첫 줄들 중 하나에 {MARKERS[0]!r} 를 넣어라 (없으면 이 훅만 감시 밖이 된다)")
+    if not targets:
+        # 0 건은 통과가 아니다 — 파생 경로가 깨졌다는 뜻이다 (이 레포의 false-green 정책).
+        print("  ✗ 킷 훅 정본을 하나도 찾지 못했다 — 파생 경로가 깨졌다(통과가 아니다)")
+        return 1
+    for src_rel, name, marker, notify in targets:
         red, line = check_one(src_rel, name, marker, notify)
         reds += red
         print(line)
