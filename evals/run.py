@@ -1176,6 +1176,43 @@ def build_claude_command(agent: AgentDef, task: str) -> list[str]:
     return HARNESS.run_scenario_cmd(agent, task)
 
 
+# 실패 리포트에 남기는 출력 발췌 상한. 리포트는 커밋되지 않지만 baseline 은 커밋되므로
+# 무한정 키우지 않는다 — 진단에 필요한 만큼만.
+FAIL_EXCERPT_CHARS = 3000
+
+
+def _fail_excerpt(stdout: str, checks: list[dict]) -> str | None:
+    """실패한 어서션 주변 출력을 잘라 둔다.
+
+    **왜 필요한가.** 리포트가 판정만 남기고 출력을 버려서, 실패를 만나면 *"무엇이
+    출력됐길래 걸렸는지"* 를 알 수 없었다. 비결정적 시나리오는 수동 재현으로 잡히지도
+    않는다 — 실제로 `output_not_contains` 실패 하나를 수동 재현 3회로 못 잡았고,
+    가드를 고칠지 에이전트를 고칠지 **추측할 수밖에 없는 상태**가 됐다.
+    추측으로 어서션을 약화시키면 그때부터 그 시나리오는 아무것도 안 잡는다.
+
+    실패한 검사의 detail 에 나온 문자열을 출력에서 찾아 그 **주변**을 남긴다.
+    못 찾으면 앞부분을 남긴다(그것만으로도 형식·길이 판단이 된다).
+    """
+    if not stdout:
+        return None
+    needle = None
+    for c in checks:
+        if c.get("ok"):
+            continue
+        detail = str(c.get("detail", ""))
+        # "발견됨 ['모든 테스트 통과']" 처럼 detail 에 실린 값을 뽑는다
+        m = re.search(r"\['([^']+)'", detail)
+        if m:
+            needle = m.group(1)
+            break
+    if needle:
+        i = _norm(stdout).find(_norm(needle))
+        if i >= 0:
+            half = FAIL_EXCERPT_CHARS // 2
+            return stdout[max(0, i - half): i + half]
+    return stdout[:FAIL_EXCERPT_CHARS]
+
+
 def _result(
     agent: str,
     scenario: Scenario,
@@ -1184,7 +1221,9 @@ def _result(
     duration: float,
     judge=None,
     work_dir: str | None = None,
+    stdout: str = "",
 ) -> dict:
+    excerpt = _fail_excerpt(stdout, checks) if status != "pass" else None
     return {
         "agent": agent,
         "scenario": scenario.scenario_id,
@@ -1195,6 +1234,9 @@ def _result(
         # 작업 디렉토리 이름 자체는 중립(에이전트명·시나리오 id 미노출, D-39) —
         # 디버깅용 매핑은 여기 리포트에만 남긴다.
         "work_dir": work_dir,
+        # 실패했을 때만 출력 발췌를 남긴다 — 통과한 실행의 출력은 진단 가치가 없고
+        # 리포트만 키운다.
+        "output_excerpt": excerpt,
     }
 
 
@@ -1326,6 +1368,7 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
             time.time() - start,
             judge=judge_result,
             work_dir=str(work_dir),
+            stdout=stdout,
         )
 
 
