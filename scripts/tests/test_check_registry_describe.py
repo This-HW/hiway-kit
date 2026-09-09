@@ -302,3 +302,56 @@ class TestFreshnessRepoResolution:
         """
         assert _mod.resolve_registry_repo(None, None) is None
 
+
+
+class TestFreshnessNeverFallsBackToCwd:
+    """ATK-007 — 레지스트리 레포를 모를 때 **CWD 의 HEAD 로 때려 맞히지 않는다.**
+
+    `resolve_registry_repo()` 는 이미 None 을 돌려주고 있었지만, 호출부가 그 None 을
+    `current_git_head(None)` 에 그대로 넘겼다 — `subprocess` 의 `cwd=None` 은 곧
+    **프로브를 실행한 레포**라, 결국 CWD 의 HEAD 와 비교했다. "신선도 판정 생략"이라는
+    독스트링의 약속이 한 단계 아래에서 깨져 있었다.
+
+    이것이 왜 나쁜가: 선언 head 와 CWD head 는 같을 리 없으니 **항상 mismatch** 이고,
+    `--observe` 를 켜면 D-50 이 그 지속 불일치를 "기동 커밋 파사드"로 보고 **멀쩡한
+    레지스트리를 강등**시킨다.
+    """
+
+    def test_registry_head_is_none_when_repo_unknown(self):
+        assert _mod.registry_head(None) is None
+
+    def test_registry_head_reads_the_given_repo(self, tmp_path):
+        repo = tmp_path / "reg"
+        repo.mkdir()
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.email", "t@example.invalid"], cwd=repo, check=True)
+        subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+        (repo / "f").write_text("x", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+        subprocess.run(["git", "commit", "-qm", "c"], cwd=repo, check=True)
+        expected = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+
+        assert _mod.registry_head(repo) == expected
+
+    def test_direct_command_does_not_compare_against_cwd_head(self, monkeypatch, capsys):
+        """--pointer 도 --repo 도 없으면 신선도 판정을 **생략**해야 한다.
+
+        수정 전에는 `[WARN] 신선도: head 불일치(선언 … != 실제 <이 레포의 HEAD>)` 가
+        나왔다 — 프로브를 돌린 레포의 커밋이 남의 레지스트리 판정에 새어 들어갔다.
+        """
+        monkeypatch.setenv("FAKE_REGISTRY_MODE", "head_mismatch")
+        rc = _mod.main(["--", sys.executable, str(FIXTURE)])
+        out = capsys.readouterr().out
+
+        assert rc == 0
+        assert "대조 불가" in out
+        assert "head 불일치" not in out
+
+        cwd_head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=SCRIPTS_DIR,
+            capture_output=True, text=True, check=False,
+        ).stdout.strip()
+        assert cwd_head and cwd_head not in out
