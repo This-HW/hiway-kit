@@ -698,54 +698,19 @@ else
 fi
 
 hdr "21. 설치된 git 훅이 이 레포의 정본과 같은가 (배포 ≠ 실행 결함 클래스)"
-# **경고이지 오류가 아니다** — §3b·§19 와 같은 비대칭이다.
+# 판정은 scripts/check_installed_hooks.py 가 단일 소스 — 다른 게이트 8종과 같은 형태다
+# (게이트 = 스크립트 + 짧은 래퍼). **CI 스텝은 만들지 않는다**: CI 에는 ~/.claude 도
+# 설치된 훅도 없다. 없는 것을 검사한다고 주장하지 않는다.
 #
-# 왜 필요한가: 이 킷의 대표 결함 클래스는 "커밋·테스트·문서를 다 갖춘 가드가 설치본에
-# 없어 집행이 0회"다. 실측(v3.7.0): .private-names 비공개 이름 차단이 setup/pre-commit
-# 소스에만 있고 어느 저장소에도 설치되지 않은 채 "활성"으로 릴리스 보고됐다. 원인은
-# session-check 가 훅이 **없을 때만** 설치해 최초 판이 영구 동결된 것이었다(v3.8.0 수정).
-#
-# 왜 red 가 아닌가: 훅 소스를 고치는 중에는 repo 가 설치본보다 앞선 것이 **정상**이다.
-# red 로 두면 훅 작업 내내 발화해 죽은 경고가 된다(warning-signal.md §검토 절차 1).
-#
-# 대상이 둘인 이유(§검토 절차 5 — "이 검사의 대상 밖은 어디인가"): 처음엔 pre-commit
-# 하나만 봤는데, v3.11.0 에서 들인 opt-in git 훅은 소비자가 **손으로 복사**하도록
-# 안내했다 — 그건 방금 고친 install-once/드리프트 문제 그 자체다. 그래서 목록으로 만들고,
-# 새 킷 훅이 생기면 여기 한 줄만 더한다.
-#
-# 설치 여부의 의미가 둘로 갈린다:
-#   - pre-commit: session-check 가 자동 설치한다 → **없으면** 집행이 안 도는 것이므로 알린다
-#   - reference-transaction: opt-in 이다 → **없는 것이 정상**이므로 침묵한다
-# 없는 보호를 있다고 적지 않는 것과 같은 규율의 뒷면이다 — 안 켠 것을 결함으로 보고하면
-# 그 경고는 켜지 않은 모든 소비자에게 상시 참이 되어 죽는다.
-#
-# 검사 조건 한 문장: **설치된 훅이 킷 마커를 갖고 있는데 repo 정본과 내용이 다르면 노란 줄.**
-HOOKS_DIR="$(git rev-parse --git-path hooks 2>/dev/null)"
-# "정본경로|설치이름|마커|미설치시_알림(1=알림, 0=침묵)"
-KIT_HOOKS="plugins/common/setup/pre-commit|pre-commit|# Auto-installed by session-check.py|1
-plugins/common/setup/git-hooks/reference-transaction|reference-transaction|# kit-managed-hook|0"
-while IFS='|' read -r _src _name _marker _notify; do
-  [ -n "$_src" ] || continue
-  _dst="${HOOKS_DIR}/${_name}"
-  if [ ! -f "$_src" ]; then
-    red "훅 정본 없음: $_src"
-  elif [ ! -f "$_dst" ]; then
-    if [ "$_notify" = "1" ]; then
-      printf '  \033[33m! %s 미설치 — 커밋타임 집행이 이 저장소에서 돌지 않는다\033[0m\n' "$_name"
-    else
-      green "${_name}: 미설치 (opt-in — 안 켠 것은 결함이 아니다)"
-    fi
-  elif ! grep -qF -- "$_marker" "$_dst"; then
-    printf '  \033[33m! %s 이 킷 소유가 아니다(마커 없음) — 대조 생략\033[0m\n' "$_name"
-  elif cmp -s "$_src" "$_dst"; then
-    green "설치된 ${_name} = repo 정본"
-  else
-    printf '  \033[33m! 설치된 %s 가 repo 정본과 다르다\033[0m\n' "$_name"
-    printf '      정본 %s B / 설치본 %s B\n' "$(wc -c <"$_src" | tr -d " ")" "$(wc -c <"$_dst" | tr -d " ")"
-  fi
-done <<EOF
-$KIT_HOOKS
-EOF
+# **경고이지 오류가 아니다** — 훅 소스를 고치는 중에는 repo 가 설치본보다 앞선 것이
+# 정상이고, red 로 두면 훅 작업 내내 발화해 죽은 경고가 된다. 정본 자체가 없을 때만 red.
+# green 을 호출해야 PASS 카운트에 잡힌다 — 안 하면 "통과한 게이트"와 "돌지 않은
+# 게이트"가 집계에서 구분되지 않는다(초판이 그랬고 총계가 조용히 2 줄었다).
+if python3 scripts/check_installed_hooks.py; then
+  green "설치된 킷 훅 대조 완료 (check_installed_hooks.py — 상세는 위 줄)"
+else
+  red "훅 정본 누락 — 상세는 위 출력"
+fi
 
 hdr "22. 그림자 정의 0건 (같은 모듈에 같은 이름의 최상위 정의)"
 # 판정은 scripts/check_shadowed_defs.py 가 단일 소스 — CI 와 동일 스크립트(F-023).
