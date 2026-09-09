@@ -39,6 +39,9 @@ AGENTS.md는 **텍스트 규범만** 이식한다. 훅(protect-sensitive·stop-v
 exit code:
   0 = 성공 (또는 --check 드리프트 없음)
   1 = --check 드리프트 / 분류 누락 / 기록 실패
+  3 = 규범 블록은 기록·검사했으나 conventions 블록(두 번째)을 건너뜀. kit 레포에서
+      `docs/conventions/`가 부분적으로만 있을 때(= 실제 드리프트)다. 소비자 레포처럼
+      해당 파일이 **하나도** 없으면 애초에 대상이 아니므로 0이다.
   2 = SKIPPED — 규범 소스(plugin root)를 **자동 탐색**으로 찾지 못함(kit 미설치 등).
       절대 0으로 위장하지 않는다. 반면 `--plugin-root`를 명시했는데 그곳에 rules/가
       없으면 SKIPPED가 아니라 exit 1이다 — 사용자가 지정한 것이 틀렸다는 뜻이고,
@@ -163,9 +166,18 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     블록(첫 번째)과 달리 이 두 번째 블록은 **kit 레포 자체를 개발할 때만** 의미가
     있다 — 다른 하네스가 kit 레포 자체를 작업할 때 CLAUDE.md의 `@import`를 못
     읽으므로 같은 내용을 여기 인라인해서 준다.
+
+    **이 검사가 도는 조건**(`warning-signal.md` §4): `CONVENTIONS_INLINE`에 등재된
+    파일이 **하나라도** 있을 때만 드리프트 판정으로 들어간다. 하나도 없으면 그 레포는
+    kit 레포가 아니므로(자기 관례 문서를 가진 소비자는 흔하다) 대상 아님(None)이고,
+    **일부만** 있으면 그건 kit 레포의 실제 드리프트이므로 red다. `conv_dir.is_dir()`
+    하나로 판정하면 자기 `docs/conventions/`를 가진 **모든 소비자**가 red가 됐다
+    (ATK-003, 재현 확인) — consumer-first 북극성의 정면 위반이었다.
     """
     conv_dir = _conventions_dir(target_root)
     if not conv_dir.is_dir():
+        return None
+    if not any((conv_dir / fname).is_file() for fname, _ in CONVENTIONS_INLINE):
         return None
 
     sections = []
@@ -1009,11 +1021,22 @@ def main(argv: list[str]) -> int:
     # 대고 돌려도 동작이 그대로여야 한다(consumer-first).
     conv_block: str | None = None
     conv_sha: str | None = None
+    conv_skipped = False
     try:
         conv_result = build_conventions_block(target_root)
     except ClassificationError as err:
-        print(f"[export-harness] ✗ conventions 블록: {err}", file=sys.stderr)
-        return 1
+        # **규범 블록 쓰기를 막지 않는다.** 예전에는 여기서 `return 1` 했기 때문에
+        # 진입점 루프에 들어가기 전에 종료됐고, 이 도구의 본래 목적인 규범 블록이
+        # 한 글자도 써지지 않았다 (ATK-003). 바로 아래 루프가 "하나가 실패해도
+        # 나머지를 건너뛰지 않는다"고 적어 놓고 정반대로 동작하던 지점이다.
+        # 조용히 넘기지도 않는다 — stderr 경고 + 전용 종료코드 3으로 구분한다.
+        print(
+            f"[export-harness] ! conventions 블록을 건너뛴다: {err}\n"
+            "  규범 블록(첫 번째)은 그대로 기록한다 — 종료코드 3.",
+            file=sys.stderr,
+        )
+        conv_result = None
+        conv_skipped = True
     if conv_result is not None:
         conv_block, conv_sha = conv_result
 
@@ -1047,7 +1070,9 @@ def main(argv: list[str]) -> int:
         except OSError as err2:
             print(f"[export-harness] ✗ {target} 기록 실패: {err2}", file=sys.stderr)
             rc = 1
-    return 1 if rc else 0
+    if rc:
+        return 1
+    return 3 if conv_skipped else 0
 
 
 if __name__ == "__main__":

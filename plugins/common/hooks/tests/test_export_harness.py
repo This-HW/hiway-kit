@@ -1043,3 +1043,51 @@ def test_in_tree_symlink_target_is_read_and_written_through_resolved_path(tmp_pa
     )
     assert (target / "AGENTS.md").is_symlink()
     assert "kit:begin" in real.read_text(encoding="utf-8")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-003 — conventions 블록 실패가 규범 블록 기록을 막으면 안 된다 (consumer-first)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_consumer_repo_with_its_own_conventions_dir_still_gets_rules_block(tmp_path):
+    """자기 관례 문서를 가진 소비자 레포에서도 규범 블록은 기록된다 (ATK-003).
+
+    `docs/conventions/`가 있으나 `CONVENTIONS_INLINE`의 파일이 **하나도** 없으면
+    그 레포는 kit 레포가 아니다 — 오류가 아니라 대상 아님이다. 수정 전에는
+    ClassificationError → `return 1`로 진입점 루프 **전에** 종료해서, 이 도구의
+    본래 목적인 규범 블록이 한 글자도 써지지 않았다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    (target / "docs" / "conventions").mkdir(parents=True)
+    (target / "docs" / "conventions" / "our-style.md").write_text(
+        "# 우리 레포의 관례\n", encoding="utf-8"
+    )
+
+    rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    assert rc == 0, "소비자 레포에서 실패했다 — consumer-first 위반"
+    body = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "kit:begin" in body, "규범 블록이 기록되지 않았다"
+    assert "kit2:begin" not in body, "대상이 아닌 레포에 conventions 블록이 생겼다"
+
+
+def test_partial_conventions_is_drift_but_rules_block_is_still_written(tmp_path, capsys):
+    """kit 레포의 **부분** 드리프트는 red 로 유지하되, 규범 블록은 기록한다.
+
+    `CONVENTIONS_INLINE`이 일부만 있으면 그건 실제 드리프트이므로 조용히 넘기지
+    않는다 — 전용 종료코드 3과 stderr 경고로 구분한다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    conv = target / "docs" / "conventions"
+    conv.mkdir(parents=True)
+    (conv / _mod.CONVENTIONS_INLINE[0][0]).write_text("# 하나만 있다\n", encoding="utf-8")
+
+    rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    assert rc == 3, "부분 드리프트가 green 이거나 일반 실패와 구별되지 않는다"
+    err = capsys.readouterr().err
+    assert "conventions 블록을 건너뛴다" in err, "조용히 넘어갔다"
+    assert "kit:begin" in (target / "AGENTS.md").read_text(encoding="utf-8"), (
+        "conventions 실패가 규범 블록 기록을 막았다 (ATK-003)"
+    )
