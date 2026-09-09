@@ -43,9 +43,17 @@ ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 `head` 미선언은 오류가 아니라 "신선도 모름" 경고로만 남긴다 — 미선언 레지스트리에서
 승격이 영구 차단되면 그 자체가 동작하지 않는 안전장치가 된다.
 
-이 파일이 채우는 설계 공백 하나를 명시한다: D-42/D-44의 describe 스키마
-(`name`·`args`·`effect`·`idempotent`)에는 "이 동사가 승격/등록용이다"를 나타내는
-필드가 없다. `promotionVerb`를 포인터 파일(컨트롤 소유·비-repo 파일)에 두는 것은
+이 파일이 실제로 읽는 describe 필드는 **`verbs[].name` 과 `verbs[].effect`, 그리고
+최상위 `head` 뿐**이다. D-42/D-44 스키마에는 `args`·`idempotent` 도 있으나 이 구현은
+**둘 다 참조하지 않는다** — 있다고 적고 안 쓰는 것이 최악이므로 명시한다.
+`idempotent` 를 안 봐도 되는 이유는 승격이 **성공분을 항상 차감**하기 때문이다(아래
+`promote()`): 성공한 항목은 원장에서 빠지므로 다음 호출이 같은 동사를 재호출하지 않는다.
+예외는 하나뿐이고 코드가 그 자리에 적어 뒀다 — 승격 직후 원장을 읽지 못해 차감을
+건너뛴 경우, 다음 호출이 재승격한다(원장 파괴보다 낫다는 의도된 선택). 비멱등 동사를
+쓰는 레지스트리는 그 경로에서 중복을 받을 수 있다.
+
+설계 공백 하나도 명시한다: D-42/D-44의 describe 스키마에는 "이 동사가 승격/등록용이다"를
+나타내는 필드가 없다. `promotionVerb`를 포인터 파일(컨트롤 소유·비-repo 파일)에 두는 것은
 그 필드가 킷 소스에 박히는 것이 아니라 **컨트롤이 자기 레지스트리를 소개할 때
 스스로 선언하는 값**이라 D-42의 "동사 이름을 하드코딩하지 않는다"를 어기지 않는다
 — 다만 이 구체적 필드명 자체는 설계 문서에 명문화돼 있지 않은 이 구현의 해석이다.
@@ -873,14 +881,13 @@ def promote(root: Path | None = None) -> dict:
             "mode": "fallback",
             "reason": f"승격 호출 전부 실패 — ledger 보존: {failures[:3]}",
         }
-    if failures:
-        return {
-            "promoted": True,
-            "mode": "partial",
-            "count": len(succeeded),
-            "failed": len(failures),
-            "reason": "일부 실패 — 재시도를 위해 ledger를 비우지 않음",
-        }
+    # **성공분은 partial 이든 아니든 차감한다.** 이전 구현은 `failures` 가 있으면 원장을
+    # 미변경으로 두고 곧장 반환했다 — 그러면 다음 promote 가 **이미 성공한 항목을 다시
+    # claim 해 승격 동사를 재호출**한다. describe 스키마가 동사를 `idempotent: false` 로
+    # 선언할 수 있는 이상 재호출은 frequency 를 부풀리고, frequency 가 digest 순위를
+    # 정하므로 진짜 반복 결함이 digest 밖으로 밀린다(ATK-008 이 막으려던 손해).
+    # "재시도를 위해 비우지 않는다" 의 올바른 구현은 **비우지 않는 것**이 아니라
+    # **실패분만 남기는 것**이고, `_remaining_after_promotion` 이 정확히 그것을 한다.
     with _ledger_lock(path):
         # 비우지 않고 **차집합을 다시 계산해** 쓴다. 승격 중 추가·증가된 것은 남는다.
         try:
@@ -895,6 +902,14 @@ def promote(root: Path | None = None) -> dict:
             return {"promoted": True, "mode": "partial", "count": len(succeeded),
                     "reason": "차감 실패 — 원장 보존"}
         _write_ledger(path, _remaining_after_promotion(current, succeeded))
+    if failures:
+        return {
+            "promoted": True,
+            "mode": "partial",
+            "count": len(succeeded),
+            "failed": len(failures),
+            "reason": "일부 실패 — 성공분만 차감하고 실패분은 재시도 대상으로 남김",
+        }
     return {"promoted": True, "mode": "promoted", "count": len(succeeded)}
 
 

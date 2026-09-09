@@ -370,6 +370,65 @@ class TestPromoteConcurrentWrite:
         # 승격에 성공한 것은 정확히 제거된다(전체 비우기가 아니라 차집합).
         assert "claimed before promote" not in patterns
 
+    PARTIAL_REGISTRY_BODY = """\
+def main():
+    head = subprocess_head()
+    if sys.argv[-1] == "describe":
+        print(json.dumps({{
+            "verbs": [
+                {{"name": "record", "args": ["payload"], "effect": "write", "idempotent": False}},
+            ],
+            "head": head,
+        }}))
+        return 0
+    if sys.argv[-2] == "record":
+        payload = json.loads(sys.argv[-1])
+        with open(calls_log, "a") as fh:
+            fh.write(sys.argv[-1] + "\\n")
+        # 이 항목만 실패시킨다 — partial 분기를 만든다.
+        return 1 if "BAD" in payload["pattern"] else 0
+    return 1
+
+def subprocess_head():
+    import subprocess
+    r = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip()
+
+sys.exit(main())
+"""
+
+    def test_partial_promotion_does_not_recall_succeeded_entries(self, tmp_path):
+        """partial 에서도 **성공분은 정확히 차감**한다 — 아니면 재승격이 일어난다 (W6 F-2).
+
+        기존 구현은 partial 분기에서 원장을 **미변경**으로 뒀다. 그러면 다음 promote 가
+        같은 항목을 다시 claim 해 **이미 성공한 승격 동사를 또 호출**한다. 승격 동사는
+        `idempotent: False` 로 선언될 수 있고(이 픽스처가 그렇다), 재호출은 frequency 를
+        부풀린다. frequency 가 digest 순위를 정하므로 **진짜 반복 결함이 digest 밖으로
+        밀린다** — 이관 순서를 뒤집어서까지(ATK-008) 막으려던 바로 그 손해다.
+        """
+        repo = _init_repo(tmp_path)
+        _mod.upsert("lint", "low", "GOOD pattern", root=repo)
+        _mod.upsert("security", "high", "BAD pattern", root=repo)
+        script = _write_fake_registry(tmp_path, self.PARTIAL_REGISTRY_BODY)
+        _install_pointer(repo, [sys.executable, str(script)])
+
+        first = _mod.promote(repo)
+        assert first["mode"] == "partial"
+        assert first["count"] == 1 and first["failed"] == 1
+
+        # 성공분은 원장에서 빠지고, 실패분만 재시도 대상으로 남는다.
+        patterns = [e["pattern"] for e in _mod.parse_ledger(_mod.ledger_path(repo))]
+        assert patterns == ["BAD pattern"], (
+            f"성공분이 차감되지 않았다 — 다음 호출이 재승격한다: {patterns}"
+        )
+
+        _mod.promote(repo)
+        calls = [json.loads(c) for c in (tmp_path / "calls.jsonl").read_text().splitlines()]
+        good = [c for c in calls if c["pattern"] == "GOOD pattern"]
+        assert len(good) == 1, (
+            f"성공했던 항목이 {len(good)}회 호출됐다 — 비멱등 동사를 재호출하고 있다"
+        )
+
     def test_lock_is_not_held_across_promotion_subprocess(self, tmp_path):
         """락을 잡은 채 subprocess 를 돌리지 않는다 — 구조 자체를 검사한다.
 
