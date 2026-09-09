@@ -8,6 +8,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.12.1] — 2026-09-09
+
+### Fixed — Codex 매니페스트의 `displayName` 이 구 제품명이었다
+
+`packaging/targets.json` 의 `interface.displayName` 이 **`"Claude Code Kit"`** 이었고,
+그대로 `.codex-plugin/plugin.json` 에 실려 나갔다 — **Codex 사용자에게 표시되는 이름**이다.
+
+§20 이 못 잡은 이유: `previousNames` 에 하이픈 형태(`claude-code-kit`)·약칭(`CCK`·`cck`)만
+있었고 **공백·타이틀케이스 형태(`Claude Code Kit`)가 없었다.** 개명 잔재는 정식 이름
+그대로만 남는 것이 아니라 **표기 변형**으로도 남는다 — v3.9.0 에서 약칭·경로 이름을
+넣으며 같은 교훈을 얻었는데 표기 변형 축을 빠뜨렸다.
+
+`previousNames` 에 추가했다. 이제 넷을 본다: `claude-code-kit` · `Claude Code Kit` ·
+`CCK` · `cck`.
+
+> **왜 이게 게이트로만 잡히는가**: 사람이 읽어도 "Claude Code Kit" 은 자연스러운 문구라
+> 눈에 안 걸린다. 실제로 v3.8.0 의 전수 정리에서도, v3.9.0 의 약칭 정리에서도 살아남았고,
+> 사용자가 *"codex·agy 호환이 실제로 되느냐"* 고 물어 **생성물을 직접 열어 보고서야**
+> 드러났다. 리터럴 목록 검사가 사람의 훑어보기보다 강한 이유다.
+
+
 ## [3.12.0] — 2026-09-09
 
 **보이지 않던 상시 비용 축을 예산에 넣었다.** §16 은 "세션 주입 예산"을 표방하면서

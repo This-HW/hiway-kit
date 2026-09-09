@@ -13,7 +13,7 @@
       "Write"
     ],
     "category": "Coding",
-    "displayName": "Claude Code Kit",
+    "displayName": "hiway-kit",
     "shortDescription": "Planning gates, adversarial review, and definition-of-done discipline for coding agents"
   },
   "keywords": [
@@ -29,5 +29,5 @@
   "name": "hiway-kit",
   "repository": "https://github.com/This-HW/hiway-kit",
   "skills": "./skills/",
-  "version": "3.12.0"
+  "version": "3.12.1"
 }

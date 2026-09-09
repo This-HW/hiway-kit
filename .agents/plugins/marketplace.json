@@ -1,6 +1,6 @@
 {
   "interface": {
-    "displayName": "Claude Code Kit"
+    "displayName": "hiway-kit"
   },
   "name": "hiway-kit-marketplace",
   "plugins": [

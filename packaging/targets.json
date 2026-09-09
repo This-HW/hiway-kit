@@ -41,7 +41,7 @@
         "_meta": "legacy 경로는 기존 파일이며 변경하지 않는다 [confirmed: developers.openai.com/codex/plugins/build]"
       },
       "interface": {
-        "displayName": "Claude Code Kit",
+        "displayName": "hiway-kit",
         "shortDescription": "Planning gates, adversarial review, and definition-of-done discipline for coding agents",
         "category": "Coding",
         "capabilities": [
