@@ -614,16 +614,67 @@ def _current_head(root: Path) -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def _pointer_source_is_safe(pointer_path: Path) -> bool:
+    """포인터 파일과 **그 부모 디렉토리**가 내 소유이고 남이 쓸 수 없는가.
+
+    이 포인터의 `command` 는 `subprocess.run` 으로 **실행**된다 — 이 파일에서 가장
+    위험한 경로다. 그런데 같은 파일이 `/tmp` 락 디렉토리에는 정확히 이 검사를 걸어
+    두고(`_lock_dir_is_safe`), 원장 심링크에도 걸어 두고(`_symlinked_target_is_safe`),
+    **exec 경로에만 걸어 두지 않았다.** 그 비대칭이 이 함수의 근거다
+    (`docs/conventions/path-containment.md` 규칙 3: 읽기 경로도 봉쇄한다 — 여기서는
+    읽은 값이 곧 실행이므로 더 강하게 적용된다).
+
+    부모 디렉토리까지 보는 이유: 파일만 검사하면 남이 쓸 수 있는 디렉토리에서
+    파일을 갈아치우는 경로가 남는다. `lstat` 을 쓴다(`stat` 이 아니라) — 심링크는
+    그 자체로 거절해야 하는데 `stat` 은 링크를 따라가 대상의 속성을 보여 준다.
+
+    **한계는 정직하게 적는다.** 같은 uid 로 도는 공격자(공유 CI 러너에서 모두가 같은
+    계정인 경우)는 이 검사를 통과한다. 그 시나리오에서는 `.git/hooks/` 도 쓸 수
+    있으므로 이 검사가 마지막 방어선이 아니다 — 여기서 막는 것은 **다른 사용자가
+    심어 두거나 갈아치울 수 있는 포인터**다.
+    """
+    for target, want_dir in ((pointer_path.parent, True), (pointer_path, False)):
+        try:
+            st = os.lstat(str(target))
+        except OSError:
+            return False
+        if want_dir and not stat.S_ISDIR(st.st_mode):
+            return False
+        if not want_dir and not stat.S_ISREG(st.st_mode):
+            return False  # 심링크·특수 파일 — 따라가지 않는다
+        try:
+            if st.st_uid != os.getuid():
+                return False
+        except AttributeError:
+            pass  # getuid 없는 플랫폼 — 소유권 개념이 없으니 퍼미션 검사만 한다
+        if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            return False
+    return True
+
+
 def discover_registry_pointer(root: Path | None = None) -> dict | None:
     """컨트롤 레지스트리 포인터를 읽는다. 없거나 부적합하면 None(fail-open, 폴백).
 
     `url` 필드가 있으면 무조건 거절한다(D-48) — 이 킷은 exec 전용 계약이다.
+    포인터 파일·부모 디렉토리의 소유권도 검사한다(`_pointer_source_is_safe`) —
+    여기서 읽은 `command` 는 실행되므로 남이 통제하는 파일을 신뢰하지 않는다.
     """
     root = root or _project_root()
     common = _git_common_dir(root)
     if common is None:
         return None
     pointer_path = common.joinpath(*_REGISTRY_POINTER_REL)
+    if not pointer_path.exists():
+        return None  # 없음은 정상 경로다(폴백) — 경고하지 않는다
+    if not _pointer_source_is_safe(pointer_path):
+        # 조용히 넘어가지 않는다: 관측 가능해야 다음 사람이 원인을 찾는다.
+        # 다만 막지도 않는다 — 폴백(킷 ledger 가 내구 진실)으로 계속 돈다.
+        print(
+            "[feedback_ledger] 레지스트리 포인터가 남의 소유이거나 남이 쓸 수 있다 — "
+            f"실행하지 않고 폴백한다: {pointer_path}",
+            file=sys.stderr,
+        )
+        return None
     try:
         raw = pointer_path.read_text(encoding="utf-8")
         data = json.loads(raw)

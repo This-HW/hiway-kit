@@ -142,6 +142,59 @@ class TestDiscoverPointer:
         assert _mod.discover_registry_pointer(repo) is None
 
 
+    def test_group_writable_pointer_is_rejected(self, tmp_path):
+        """포인터의 `command` 는 **실행**된다 — 남이 쓸 수 있으면 신뢰하지 않는다 (W6 F-6).
+
+        같은 파일이 `/tmp` 락 디렉토리(`_lock_dir_is_safe`)와 원장 심링크
+        (`_symlinked_target_is_safe`)에는 정확히 이 검사를 걸어 두고 **가장 위험한
+        exec 경로에만** 걸어 두지 않았다.
+        """
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        pointer = self._pointer_path(repo)
+        pointer.chmod(0o666)
+        assert _mod.discover_registry_pointer(repo) is None
+
+    def test_group_writable_parent_dir_is_rejected(self, tmp_path):
+        """파일만 검사하면 남이 쓸 수 있는 디렉토리에서 갈아치우는 경로가 남는다."""
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        pointer = self._pointer_path(repo)
+        pointer.parent.chmod(0o777)
+        try:
+            assert _mod.discover_registry_pointer(repo) is None
+        finally:
+            pointer.parent.chmod(0o755)
+
+    def test_symlinked_pointer_is_rejected(self, tmp_path):
+        """심링크는 따라가지 않는다 — `lstat` 이 `stat` 이 아닌 이유다."""
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        pointer = self._pointer_path(repo)
+        elsewhere = tmp_path / "elsewhere.json"
+        elsewhere.write_text(json.dumps({"command": ["/bin/echo", "pwned"]}))
+        pointer.unlink()
+        pointer.symlink_to(elsewhere)
+        assert _mod.discover_registry_pointer(repo) is None
+
+    def test_safe_pointer_still_works(self, tmp_path):
+        """검사가 정상 경로를 막으면 그것은 가드가 아니라 고장이다(양성 대조)."""
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        assert _mod.discover_registry_pointer(repo) == {"command": ["/bin/echo"]}
+
+    @staticmethod
+    def _pointer_path(repo: Path) -> Path:
+        common = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"], cwd=repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        cp = Path(common)
+        if not cp.is_absolute():
+            cp = (repo / cp).resolve()
+        return cp / "kit" / "registry.json"
+
+
 # ── promote(): 폴백 경로 ──────────────────────────────────────────────
 class TestPromoteFallback:
     def test_no_registry_falls_back(self, tmp_path):
