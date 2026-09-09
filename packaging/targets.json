@@ -62,7 +62,9 @@
         "keywords"
       ],
       "_passthroughReason": "SSOT에 있는데 생성물에서 빠지면 공개 디렉토리 게재 시 저작자·라이선스가 없는 패키지가 된다. 레퍼런스 구현(superpowers)도 전부 담는다. requiredFields만 정의하고 통과 필드를 정의하지 않은 것은 기획 누락이었다 [S2 관찰 승인, 2026-08-26]",
-      "verificationLevel": "runtime-verified"
+      "verificationLevel": "runtime-verified",
+      "_entrypointObservation": "[confirmed: codex-cli 0.153.4, 2026-09-09] **Codex 가 `AGENTS.md` 를 실제로 읽는다.** 빈 git 저장소에 서로 다른 토큰을 담은 `AGENTS.md`·`GEMINI.md` 를 두고 `codex exec --sandbox read-only \"Output only the context token.\"` 를 돌린 결과 **AGENTS.md 쪽 토큰**이 반환됐다(GEMINI.md 쪽 아님). 그때까지 이 킷의 '규범을 이식했다'는 주장은 **세 하네스 전부 미검증**이었다 — 파일을 만들고 sha256 으로 드리프트를 막고 있었을 뿐, 하네스가 그 파일을 읽는지는 관측한 적이 없었다. 이것이 첫 실측이다. 나머지 둘은 여전히 미측정: agy 는 개인 쿼터 소진, gemini-cli 는 API 키 무효(둘 다 환경 문제이지 킷 문제가 아니다).",
+      "_hookRuntimeObservation": "[confirmed: codex-cli 0.153.4, 2026-09-09] **Codex 에 작동하는 훅 런타임이 있다.** 위 프로브 실행 중 `SessionStart`·`UserPromptSubmit`·`Stop` 훅이 실제로 발화했고, 설정 스키마는 Claude Code 와 사실상 동일하다(`{hooks:{<Event>:[{hooks:[{type:'command',command,timeout}]}]}}`). 이벤트 8종: SessionStart·UserPromptSubmit·PreToolUse·PermissionRequest·PostToolUse·SubagentStart·SubagentStop·Stop — 이 킷이 쓰는 4종이 **전부 존재**한다. 훅은 신뢰(trust) 승인을 요구한다(`--dangerously-bypass-hook-trust` 존재). **위 omit.hooks 판정은 아직 유효하다** — 그 판정의 근거는 '형식이 안 된다'가 아니라 '각 훅이 기대하는 **입력 스키마**(tool_name 값·hookSpecificOutput 계약·decision=block 프로토콜)가 Codex 에도 있다는 근거가 없다' 였고, 그 스키마는 아직 실측하지 못했다. 다만 근거가 '부재 추론'에서 '미측정'으로 좁혀졌다 — 페이로드를 재면 Codex 집행 비대칭이 닫힐 가능성이 있다. 재려면 프로젝트 단위 훅 설정이 지원되는지부터 확인해야 한다(사용자 전역 `~/.codex/hooks.json` 을 건드리지 않고 재는 유일한 길)."
     },
     {
       "id": "antigravity",
