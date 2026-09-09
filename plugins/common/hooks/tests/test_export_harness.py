@@ -898,3 +898,148 @@ def test_entrypoints_flag_overrides_default(tmp_path):
     assert (target / "ONLY.md").exists()
     assert not (target / "AGENTS.md").exists()
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-002 / ATK-009 — 진입점 이름 경로 봉쇄 (docs/conventions/path-containment.md)
+#
+# `--entrypoints`는 사용자 입력이고 `target_root / name`은 name이 절대경로면
+# target_root를 통째로 버린다. 봉쇄 전에는 트리 밖 파일에 13,824바이트를 실제로 썼다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _resolve_contract_cases():
+    """`scripts/tests/resolve_in_repo_contract.py`의 공유 적대적 케이스 표 (D-15).
+
+    이 표는 **레포 로컬**이다 — 소비자의 플러그인 캐시에는 `scripts/`가 없으므로
+    없으면 건너뛴다. 여기서 케이스를 다시 베끼면 계약이 두 벌이 된다.
+    """
+    import sys as _sys
+
+    repo_tests = HOOKS_DIR.parent.parent.parent / "scripts" / "tests"
+    if not (repo_tests / "resolve_in_repo_contract.py").is_file():
+        return None
+    if str(repo_tests) not in _sys.path:
+        _sys.path.insert(0, str(repo_tests))
+    import resolve_in_repo_contract
+
+    return resolve_in_repo_contract
+
+
+def test_resolve_in_repo_matches_shared_contract(tmp_path):
+    """봉쇄 헬퍼가 다른 두 구현과 **같은 계약**을 만족한다 (절대경로·`..`·심링크·대조군).
+
+    관례를 새로 발명하는 것이 이 결함이 네 번 반복된 이유이므로, 이 구현도
+    `build-targets.py`·`check_eval_coverage.py`와 같은 표로 검증한다.
+    """
+    contract = _resolve_contract_cases()
+    if contract is None:  # 레포 밖(플러그인 캐시)에서는 표가 없다
+        return
+    for case in contract.CASES:
+        container = tmp_path / f"container-{case.name}"
+        rel = case.setup(container)
+        real, err = _mod._resolve_in_repo(container, rel)
+        if case.should_escape:
+            assert real is None and err, f"{case.name}: 탈출이 봉쇄되지 않았다"
+        else:
+            assert real is not None and err is None, f"{case.name}: 정상 경로를 막았다"
+
+
+def test_absolute_entrypoint_cannot_write_outside_target(tmp_path, capsys):
+    """절대경로 진입점은 트리 밖에 쓰지 못한다 (ATK-002, 재현 확인)."""
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    outside = tmp_path / "outside" / "pwned.md"
+    outside.parent.mkdir()
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", str(outside)]
+    )
+    assert rc == 1
+    assert not outside.exists(), "트리 밖에 파일이 생성됐다"
+    assert "절대경로" in capsys.readouterr().err
+
+
+def test_dotdot_entrypoint_cannot_write_outside_target(tmp_path, capsys):
+    """`..` 순회 진입점도 같은 봉쇄에 걸린다 (ATK-002)."""
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    (tmp_path / "outside").mkdir()
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", "../outside/dotdot.md"]
+    )
+    assert rc == 1
+    assert not (tmp_path / "outside" / "dotdot.md").exists(), "트리 밖에 파일이 생성됐다"
+    assert "순회" in capsys.readouterr().err
+
+
+def test_check_applies_the_same_entrypoint_containment(tmp_path):
+    """`--check`에도 **같은** 봉쇄를 건다 — 2.14.1은 쓰기에만 걸어 구멍이 남았다.
+
+    exit 1만 보면 "마커 없음"과 구별되지 않으므로, 트리 밖 파일을 **읽지 않았다**는
+    것까지 확인한다(존재·디코딩 오류가 오라클로 새어나가는 경로).
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("not-a-secret-placeholder\n", encoding="utf-8")
+
+    reads: list[str] = []
+    orig = _mod.Path.read_text
+
+    def spy(self, *a, **k):
+        reads.append(str(self))
+        return orig(self, *a, **k)
+
+    _mod.Path.read_text = spy
+    try:
+        rc = _mod.main(
+            ["--plugin-root", str(root), "--target", str(target),
+             "--entrypoints", str(outside), "--check"]
+        )
+    finally:
+        _mod.Path.read_text = orig
+
+    assert rc == 1
+    assert str(outside) not in reads, "봉쇄 전에 트리 밖 파일을 읽었다"
+
+
+def test_in_tree_symlink_target_is_read_and_written_through_resolved_path(tmp_path):
+    """검사한 객체와 읽고 쓰는 객체가 같아야 한다 (ATK-009).
+
+    트리 안 심링크는 정상 사용이므로 **보존**되고, 읽기·쓰기 모두 해석된 실경로
+    하나로만 일어난다 — 해석 전 경로를 따로 읽으면 그 사이가 TOCTOU 창이다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    (target / "shared").mkdir(parents=True)
+    real = target / "shared" / "agents-base.md"
+    real.write_text("USERLINE\n", encoding="utf-8")
+    (target / "AGENTS.md").symlink_to(real)
+
+    reads: list[str] = []
+    orig = _mod.Path.read_text
+
+    def spy(self, *a, **k):
+        reads.append(str(self))
+        return orig(self, *a, **k)
+
+    _mod.Path.read_text = spy
+    try:
+        rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    finally:
+        _mod.Path.read_text = orig
+
+    assert rc == 0
+    assert str(real) in reads, "해석된 실경로로 읽지 않았다"
+    assert str(target / "AGENTS.md") not in reads, (
+        "해석 전 경로를 따로 읽었다 — 검사한 객체와 쓰는 객체가 갈린다"
+    )
+    assert (target / "AGENTS.md").is_symlink()
+    assert "kit:begin" in real.read_text(encoding="utf-8")

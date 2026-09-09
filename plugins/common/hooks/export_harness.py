@@ -658,26 +658,42 @@ def _existing_marker(text: str) -> tuple[str | None, int, int]:
     return b.group(1), b.start(), e.end()
 
 
-def _resolve_target(path: Path, root: Path) -> tuple[Path | None, Path | None]:
-    """대상 경로를 **한 번만** 해석해 (실경로, 탈출경로)를 돌려준다.
+def _resolve_in_repo(
+    container_root: Path, rel_path: str
+) -> tuple[Path | None, str | None]:
+    """`rel_path`를 `container_root` 안으로만 한정해 **한 번만** 해석한다.
 
-    심링크 **보존** 자체는 kit의 관례다(os.replace가 링크를 파괴하지 않도록
-    realpath에 쓴다). 모노레포에서 AGENTS.md를 공용 파일로 링크하는 건 정상 사용이다.
-    다만 공유 CI 워크스페이스나 신뢰 못 할 체크아웃에 `AGENTS.md -> ~/.ssh/…` 같은
-    링크가 심겨 있으면, 그 관례가 **트리 밖 임의 파일 쓰기**로 바뀐다.
-    그래서 "보존하되 트리 밖은 거부"로 가른다.
+    시그니처·계약은 `scripts/build-targets.py::_resolve_in_repo`와 **동일**하다
+    (D-15: 구현은 여러 벌, 계약만 하나). 이 레포에서 같은 결함이 네 번 반복된 뒤
+    관례로 굳은 형태이므로 새로 발명하지 않는다 — `docs/conventions/path-containment.md`.
 
-    **해석은 한 번뿐이다.** 예전에는 검사(`_symlink_escapes`)와 쓰기(`_atomic_write`)가
-    각자 `realpath`를 불렀다. 그 사이에 파일 읽기·조립이 끼므로, 검사 직후 링크를
-    바꿔치기하면 검사받지 않은 경로에 쓰게 된다 (ATK-002 TOCTOU). 검사한 객체와
-    사용하는 객체가 다르면 그 검사는 장식이다.
+    막는 것 셋:
+
+    - **절대경로.** `container_root / rel_path`는 `rel_path`가 절대경로면
+      `container_root`를 통째로 버린다(pathlib의 문서화된 동작). `--entrypoints`로
+      절대경로를 넘기면 트리 밖 임의 파일에 13KB를 썼다 (ATK-002, 재현 확인).
+    - **`..` 순회.** 같은 경로로 트리를 벗어난다.
+    - **트리 밖 심링크.** 심링크 **보존** 자체는 kit의 관례다(모노레포에서 AGENTS.md를
+      공용 파일로 링크하는 건 정상 사용이라 os.replace가 링크를 파괴하지 않도록
+      realpath에 쓴다). 다만 `AGENTS.md -> ~/.ssh/…` 가 심긴 체크아웃에서는 그 관례가
+      트리 밖 쓰기로 바뀌므로 "보존하되 트리 밖은 거부"로 가른다.
+
+    **해석은 한 번뿐이고, 호출자는 이 결과(Path)를 읽기·쓰기 양쪽에 그대로 써야 한다.**
+    검사와 사용이 각자 resolve하면 그 사이가 TOCTOU 창이고(ATK-002), 검사한 객체와
+    사용하는 객체가 다르면 그 검사는 장식이다(ATK-009).
     """
-    real = Path(os.path.realpath(path))
-    if path.is_symlink():
-        try:
-            real.relative_to(root.resolve())
-        except ValueError:
-            return None, real
+    candidate = container_root / rel_path
+    real = candidate.resolve()
+    try:
+        real.relative_to(container_root.resolve())
+    except ValueError:
+        if candidate.is_symlink():
+            kind = "트리 밖을 가리키는 심링크다"
+        elif Path(rel_path).is_absolute():
+            kind = "절대경로다"
+        else:
+            kind = "`..` 순회로 트리를 벗어난다"
+        return None, f"{kind} → {real}"
     return real, None
 
 
@@ -762,7 +778,6 @@ def _read_target(target: Path) -> tuple[str | None, int]:
 
 
 def cmd_check(
-    target_root: Path,
     target: Path,
     block: str,
     sha: str,
@@ -774,19 +789,11 @@ def cmd_check(
     **블록 전문을 대조한다.** 마커의 sha는 파일이 스스로 신고한 값이라, 그것만 믿으면
     마커 줄을 그대로 둔 채 블록 안쪽을 지우거나 변조해도 초록이 된다 — 이 도구가
     막겠다고 선언한 상황(하네스마다 규범이 다름)이 그대로 게이트를 통과한다.
+
+    `target`은 `main()`이 `_resolve_in_repo()`로 **이미 봉쇄·해석한** 경로다. 여기서
+    다시 해석하지 않는다 — 해석이 두 번이면 그 사이가 TOCTOU 창이고, 봉쇄를 쓰기
+    경로에만 걸면 `--check`가 구멍으로 남는다 (ATK-002/004/009).
     """
-    # cmd_write와 **같은** 검사를 같은 순서로 한다. 예전에는 쓰기 경로에만 있었는데,
-    # 그러면 `AGENTS.md -> ~/.aws/credentials` 가 심긴 체크아웃에서 CI가 --check를
-    # 도는 것만으로 트리 밖 파일을 읽는다 (존재 여부·디코딩 오류 오프셋이 오라클로
-    # 새어나간다). 방어 논리를 한쪽에만 두면 그 논리는 절반만 참이다 (ATK-004).
-    _, escaped = _resolve_target(target, target_root)
-    if escaped is not None:
-        print(
-            f"[export-harness] ✗ {target} 는 대상 트리 밖을 가리키는 심링크다 → {escaped}\n"
-            "  읽기를 거부한다.",
-            file=sys.stderr,
-        )
-        return 1
     if not target.exists():
         print(
             f"[export-harness] ✗ {target} 없음 — 아직 내보내지 않았다.", file=sys.stderr
@@ -878,29 +885,17 @@ def _compose(text: str | None, block: str) -> str:
 
 
 def cmd_write(
-    target_root: Path,
     target: Path,
     block: str,
     sha: str,
     conv_block: str | None = None,
     conv_sha: str | None = None,
 ) -> int:
-    """블록을 기록한다. 마커 블록 밖의 사용자 콘텐츠는 불가침."""
-    if not target_root.is_dir():
-        # --target 오타 하나로 없는 디렉터리 트리를 통째로 만들지 않는다.
-        print(f"[export-harness] ✗ 대상 루트가 없다: {target_root}", file=sys.stderr)
-        return 1
-    # **읽기 전에** 심링크 탈출을 검사한다. 뒤에 두면 트리 밖 파일을 먼저 읽어
-    # 메모리에 올리고, "변경 없음" 조기반환이 존재/내용 오라클로 새어나간다.
-    real, escaped = _resolve_target(target, target_root)
-    if escaped is not None:
-        print(
-            f"[export-harness] ✗ {target} 는 대상 트리 밖을 가리키는 심링크다 → {escaped}\n"
-            "  읽기·기록을 모두 거부한다.",
-            file=sys.stderr,
-        )
-        return 1
+    """블록을 기록한다. 마커 블록 밖의 사용자 콘텐츠는 불가침.
 
+    `cmd_check`와 마찬가지로 `target`은 `main()`이 이미 봉쇄·해석한 경로다 —
+    읽기도 쓰기도 **그 객체 하나**만 쓴다 (ATK-009).
+    """
     text: str | None = None
     if target.exists():
         text, rc = _read_target(target)
@@ -922,10 +917,7 @@ def cmd_write(
         print(f"[export-harness] ✓ 변경 없음 ({target})")
         return 0
 
-    if real is None:  # pragma: no cover — escaped is None이면 real은 항상 있다
-        print(f"[export-harness] ✗ {target} 경로를 해석하지 못했다.", file=sys.stderr)
-        return 1
-    _atomic_write(real, new_text)
+    _atomic_write(target, new_text)
     if conv_block is not None:
         if conv_sha is None:
             raise ValueError("conv_block이 있으면 conv_sha도 있어야 한다 (호출자 계약)")
@@ -1028,16 +1020,32 @@ def main(argv: list[str]) -> int:
     # 진입점마다 독립적으로 처리한다. **하나가 실패해도 나머지를 건너뛰지 않는다** —
     # 첫 실패에서 멈추면 "AGENTS.md 만 낡았다"와 "둘 다 낡았다"를 구별할 수 없고,
     # 사람이 재실행을 두 번 하게 된다.
+    if not args.check and not target_root.is_dir():
+        # --target 오타 하나로 없는 디렉터리 트리를 통째로 만들지 않는다.
+        print(f"[export-harness] ✗ 대상 루트가 없다: {target_root}", file=sys.stderr)
+        return 1
+
     rc = 0
     for name in entrypoints:
-        target = target_root / name
+        # 진입점 이름은 **사용자 입력**이다(`--entrypoints`). `target_root / name`은
+        # name이 절대경로면 target_root를 통째로 버리므로, 봉쇄 없이는 트리 밖 임의
+        # 파일에 쓴다 (ATK-002, 재현 확인). 검사·쓰기 **양쪽**이 같은 헬퍼를 통과한다.
+        target, err = _resolve_in_repo(target_root, name)
+        if target is None:
+            print(
+                f"[export-harness] ✗ 진입점 {name!r} 은 {err}\n"
+                "  읽기·기록을 모두 거부한다.",
+                file=sys.stderr,
+            )
+            rc = 1
+            continue
         if args.check:
-            rc |= cmd_check(target_root, target, block, sha, conv_block, conv_sha)
+            rc |= cmd_check(target, block, sha, conv_block, conv_sha)
             continue
         try:
-            rc |= cmd_write(target_root, target, block, sha, conv_block, conv_sha)
-        except OSError as err:
-            print(f"[export-harness] ✗ {target} 기록 실패: {err}", file=sys.stderr)
+            rc |= cmd_write(target, block, sha, conv_block, conv_sha)
+        except OSError as err2:
+            print(f"[export-harness] ✗ {target} 기록 실패: {err2}", file=sys.stderr)
             rc = 1
     return 1 if rc else 0
 
