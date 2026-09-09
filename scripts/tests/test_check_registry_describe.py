@@ -270,3 +270,35 @@ class TestCliEndToEnd:
             check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr
+
+
+# ── 신선도 대조 대상 (실물 파사드에 처음 돌려 드러난 결함) ────────────────────
+#
+# 레지스트리는 보통 **다른 레포**에 있다. 그런데 프로브가 `current_git_head()` 를 인자
+# 없이 불러 **프로브를 실행한 레포**의 HEAD 와 비교했다. 두 레포의 HEAD 가 같을 리 없어
+# **항상 mismatch** 가 났고, D-49/D-50 은 지속 불일치를 "기동 커밋 파사드"로 보고
+# **강등**한다 — 멀쩡한 레지스트리를 거짓으로 강등시키는 경로였다.
+
+
+class TestFreshnessRepoResolution:
+    def test_repo_is_derived_from_pointer_location_not_cwd(self, tmp_path):
+        """포인터는 `<git-common-dir>/kit/registry.json` 에 산다 — 그 위치가 곧 레포다."""
+        pointer = tmp_path / "repo" / ".git" / "kit" / "registry.json"
+        pointer.parent.mkdir(parents=True)
+        got = _mod.resolve_registry_repo(None, pointer)
+        assert got == pointer.resolve().parent
+        # CWD 로 때려 맞히지 않는다 — 프로브를 어디서 돌리든 결과가 같아야 한다.
+        assert got != Path.cwd()
+
+    def test_explicit_repo_wins(self, tmp_path):
+        pointer = tmp_path / "registry.json"
+        explicit = tmp_path / "elsewhere"
+        assert _mod.resolve_registry_repo(explicit, pointer) == explicit
+
+    def test_unknown_repo_is_none_not_cwd(self):
+        """커맨드를 직접 지정했고 --repo 도 없으면 **모른다**. CWD 로 대체하지 않는다.
+
+        모르는 것을 CWD 로 채우면 그 순간 거짓 mismatch 가 되살아난다.
+        """
+        assert _mod.resolve_registry_repo(None, None) is None
+

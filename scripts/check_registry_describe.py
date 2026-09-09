@@ -30,9 +30,15 @@ exit 0 = green(적합), exit 1 = red(부적합 — 이유를 stdout에 나열)
 
 이 프로브는 **어떤 게이트에도 물려 있지 않다 — 의도적이다.**
 `verify-done.sh` 도 CI 도 이것을 부르지 않는다. 발화 조건은 *"컨트롤 프로젝트가 실제로
-`describe` 를 내놓았을 때, 사람이 그 커맨드를 지목해 부른다"* 이고, 그 실물이 아직
-없으므로(설계 SSOT §20.2) 자동 실행할 대상이 없다. 대조할 것이 없는데 게이트에 물리면
-"검사 대상 0개"를 green 으로 보고하게 되고, 그것은 정합이 아니라 손상이다.
+`describe` 를 내놓았을 때, 사람이 그 커맨드를 지목해 부른다"* 다. **이 레포에는 레지스트리
+포인터가 없으므로** 여기서 자동 실행할 대상은 없다 — 대조할 것이 없는데 게이트에 물리면
+"검사 대상 0개"를 green 으로 보고하게 되고, 그것은 정합이 아니라 손상이다(F-012).
+
+**실물은 2026-09-09 에 처음 나왔다** (컨트롤 프로젝트가 `registry_describe.py` +
+포인터 설치). 그 파사드에 이 프로브를 돌려 GREEN 을 확인했고, **그 과정에서 이 프로브
+자신의 결함을 하나 찾았다** — 신선도 비교 대상이 CWD 의 레포였다(아래
+`resolve_registry_repo` 참고). 계약을 검증하는 도구도 실물에 닿기 전에는 검증되지
+않는다는 실측 사례다.
 
 **적어 두는 이유**: 게이트에 물려 있다고 오해하면 없는 보호를 있다고 믿게 된다.
 검사를 넣을 때는 그 검사가 도는 조건을 한 문장으로 적는다 —
@@ -200,6 +206,28 @@ def current_git_head(cwd: Path | None = None) -> str | None:
     return r.stdout.strip()
 
 
+def resolve_registry_repo(explicit: Path | None, pointer: Path | None) -> Path | None:
+    """`head` 를 대조할 **레지스트리 쪽 레포**를 정한다.
+
+    **왜 CWD 를 쓰면 안 되는가.** 레지스트리는 보통 **다른 레포**에 있다 — 컨트롤
+    프로젝트가 자기 파사드를 내고, 킷은 그것을 바깥에서 부른다. 그런데 이 프로브는
+    `current_git_head()` 를 인자 없이 불러 **프로브를 실행한 레포의 HEAD** 와 비교하고
+    있었다. 두 레포의 HEAD 가 같을 리 없으므로 **항상 mismatch** 가 나고, D-49/D-50 은
+    지속 불일치를 "기동 커밋 파사드"로 보고 **강등**한다 — 멀쩡한 레지스트리를 거짓으로
+    강등시키는 경로였다(실물 파사드에 처음 돌려 보고 드러났다).
+
+    포인터는 `<git-common-dir>/kit/registry.json` 에 산다 — 즉 **포인터 파일의 위치가
+    곧 그 레지스트리의 레포**다. 추측이 필요 없다. 포인터 없이 커맨드를 직접 지정한
+    경우에는 알 수 없으므로 `--repo` 로 받고, 그것도 없으면 None(신선도 판정 생략)이다.
+    **모르는 것을 CWD 로 때려 맞히지 않는다.**
+    """
+    if explicit is not None:
+        return explicit
+    if pointer is None:
+        return None
+    return pointer.resolve().parent
+
+
 def classify_freshness(declared_head: str | None, actual_head: str | None) -> str:
     """'match' | 'mismatch' | 'undeclared' | 'unknown'(실제 HEAD를 알 수 없음)."""
     if declared_head is None:
@@ -330,6 +358,12 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--pointer", type=Path, help="레지스트리 포인터 JSON 경로")
     parser.add_argument(
+        "--repo",
+        type=Path,
+        help="head 를 대조할 레지스트리 쪽 레포 경로 "
+        "(기본: --pointer 위치에서 유도. 커맨드를 직접 지정했고 이것도 없으면 신선도 판정 생략)",
+    )
+    parser.add_argument(
         "--observe",
         type=Path,
         default=None,
@@ -370,7 +404,7 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    repo_head = current_git_head()
+    repo_head = current_git_head(resolve_registry_repo(args.repo, args.pointer))
     ok, lines = evaluate(response, repo_head, args.observe)
     for line in lines:
         print(line)
