@@ -1091,3 +1091,103 @@ def test_partial_conventions_is_drift_but_rules_block_is_still_written(tmp_path,
     assert "kit:begin" in (target / "AGENTS.md").read_text(encoding="utf-8"), (
         "conventions 실패가 규범 블록 기록을 막았다 (ATK-003)"
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATK-010 — 구/신 마커 공존은 영구 red 가 아니라 이행 경로다
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _seed_legacy_duplicate(target: Path, *, old: str = "kit", new: str = "cck") -> str:
+    """정상 생성물의 블록을 구 토큰으로 복제해 구 1 + 신 1 공존 상태를 만든다."""
+    import re as _re
+
+    path = target / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    b = _re.search(rf"^<!-- {old}:begin .*-->$", text, _re.MULTILINE)
+    e = _re.search(rf"^<!-- {old}:end -->$", text, _re.MULTILINE)
+    block = text[b.start() : e.end()]
+    legacy = block.replace(f"{old}:begin", f"{new}:begin").replace(
+        f"{old}:end", f"{new}:end"
+    )
+    marker = "USER-CONTENT-MUST-SURVIVE"
+    path.write_text(f"{legacy}\n\n{marker}\n\n{text}", encoding="utf-8")
+    return marker
+
+
+def test_legacy_and_new_block_coexistence_is_migrated_not_refused(tmp_path):
+    """구 토큰 블록 1개 + 신 토큰 블록 1개는 **구 블록을 제거하고 신 블록을 갱신**한다.
+
+    수정 전에는 `begins=2, ends=2` → MarkerError → 재생성으로도 못 고치는 영구 red였다
+    (LESSONS에 x3로 등재된 패턴). 마커 밖 사용자 콘텐츠는 그대로 살아 있어야 한다.
+    """
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    ) == 0
+    marker = _seed_legacy_duplicate(target)
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    )
+    assert rc == 0, "이행 가능한 공존이 거부됐다 — 영구 red"
+    body = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "cck:begin" not in body, "구 토큰 블록이 남았다"
+    assert body.count("<!-- kit:begin") == 1
+    assert marker in body, "마커 밖 사용자 콘텐츠가 삭제됐다"
+
+    # 재생성 후 --check가 초록이어야 "재생성으로 고쳐진다"가 실제로 참이다.
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", "AGENTS.md", "--check"]
+    ) == 0
+
+
+def test_check_reports_legacy_coexistence_as_drift_not_green(tmp_path, capsys):
+    """`--check`는 공존을 **초록으로 넘기지 않는다** — 그러면 구 블록이 영구히 남는다."""
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    ) == 0
+    _seed_legacy_duplicate(target)
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target),
+         "--entrypoints", "AGENTS.md", "--check"]
+    )
+    assert rc == 1
+    assert "공존" in capsys.readouterr().err, "공존을 다른 실패와 구별해 보고하지 않는다"
+
+
+def test_other_marker_corruption_is_still_refused(tmp_path):
+    """이행 경로는 **구 1 + 신 1** 한 형태만이다. 그 외 손상은 지금처럼 거부한다.
+
+    추측해서 고치면 사용자 콘텐츠를 잃는다 — 생성기는 해석이 하나가 아닐 때 멈춘다.
+    """
+    import re as _re
+
+    root = _minimal(tmp_path)
+    target = tmp_path / "proj"
+    target.mkdir()
+    assert _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    ) == 0
+    path = target / "AGENTS.md"
+    text = path.read_text(encoding="utf-8")
+    # begin 만 하나 더 (짝 없는 구 begin) — begins=2, ends=1
+    b = _re.search(r"^<!-- kit:begin .*-->$", text, _re.MULTILINE)
+    path.write_text(
+        text[: b.start()] + b.group(0).replace("kit:", "cck:") + "\n" + text[b.start() :],
+        encoding="utf-8",
+    )
+    before = path.read_text(encoding="utf-8")
+
+    rc = _mod.main(
+        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
+    )
+    assert rc == 1, "해석이 여럿인 손상을 추측해서 고쳤다"
+    assert path.read_text(encoding="utf-8") == before, "거부했는데 파일이 바뀌었다"

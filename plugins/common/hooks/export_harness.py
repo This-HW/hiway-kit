@@ -96,6 +96,55 @@ END_MARK = "<!-- kit:end -->"  # 생성 시 쓰는 정규형
 # 걸리지 않으므로 ATK-001이 되살아나지는 않는다.
 SUSPECT_RE = re.compile(r"^<!--[ \t]*(?:cck|kit):(begin|end)\b.*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 
+# 구 토큰 **만** 세는 짝. `BEGIN_RE`/`END_RE`는 구·신을 함께 잡으므로, 이행 중인
+# 파일(구 블록 1 + 신 블록 1)이 `begins=2, ends=2`가 되어 "손상"으로 거부됐다 —
+# 재생성으로도 못 고치는 영구 red다 (ATK-010). 아래 `_drop_legacy_duplicate()`가
+# 그 한 가지 형태만 이행 경로로 해석한다.
+_LEGACY_BEGIN_RE = re.compile(
+    r"^<!--[ \t]*cck:begin[ \t]+rules-v\S+[ \t]+sha256:[0-9a-f]{64}[ \t]*-->[ \t]*$",  # old-name-ok: 구 마커 인식 = 이행 경로
+    re.MULTILINE,
+)
+_LEGACY_END_RE = re.compile(r"^<!--[ \t]*cck:end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
+
+
+def _drop_legacy_duplicate(
+    text: str,
+    begin_re: re.Pattern[str],
+    end_re: re.Pattern[str],
+    legacy_begin_re: re.Pattern[str],
+    legacy_end_re: re.Pattern[str],
+) -> tuple[str, bool]:
+    """구 토큰 블록과 신 토큰 블록이 **각각 하나씩** 공존하면 구 블록을 제거한다.
+
+    이행 경로다. 구 토큰(`cck:`)은 읽기만 인식하므로 소비자의 AGENTS.md에는 구 블록이
+    이미 들어 있고, 새 토큰으로 한 번 내보내면 두 블록이 공존한다. 그 상태를 "손상"으로
+    거부하면 **재생성으로도 못 고치는** 영구 red가 된다(LESSONS에 x3로 등재된 패턴).
+
+    구 1 + 신 1은 해석이 하나뿐이다 — 구 블록을 지우고 신 블록을 갱신하는 것. 그
+    **외의** 손상(begin만 있음, 3개 이상, 두 블록이 서로 맞물림)은 해석이 여럿이므로
+    이 함수가 손대지 않고 `(text, False)`로 돌려보내 기존 거부 경로(exit 1)로 보낸다 —
+    생성기는 추측해서 고치지 않는다.
+    """
+    begins = list(begin_re.finditer(text))
+    ends = list(end_re.finditer(text))
+    if len(begins) != 2 or len(ends) != 2:
+        return text, False
+    lb = list(legacy_begin_re.finditer(text))
+    le = list(legacy_end_re.finditer(text))
+    if len(lb) != 1 or len(le) != 1:
+        return text, False
+    start, stop = lb[0].start(), le[0].end()
+    if stop <= start:
+        return text, False
+    legacy_spans = {lb[0].span(), le[0].span()}
+    # 신 블록이 구 블록 **안**에 있으면(마커가 서로 맞물림) 어느 쪽이 바깥인지
+    # 단정할 수 없다 — 추측하지 않고 그대로 둔다.
+    if any(
+        start < m.start() < stop for m in begins + ends if m.span() not in legacy_spans
+    ):
+        return text, False
+    return text[:start] + text[stop:].lstrip("\n"), True
+
 # ─────────────────────────────────────────────────────────────────────────────
 # conventions 블록 (W-022 R7) — **완전히 별도 마커 네임스페이스**(`kit2:`)다.
 #
@@ -116,6 +165,11 @@ CONV_BEGIN_RE = re.compile(
 CONV_END_RE = re.compile(r"^<!--[ \t]*(?:cck2|kit2):end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 CONV_END_MARK = "<!-- kit2:end -->"
 CONV_SUSPECT_RE = re.compile(r"^<!--[ \t]*(?:cck2|kit2):(begin|end)\b.*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
+_CONV_LEGACY_BEGIN_RE = re.compile(
+    r"^<!--[ \t]*cck2:begin[ \t]+conventions-v\S+[ \t]+sha256:[0-9a-f]{64}[ \t]*-->[ \t]*$",  # old-name-ok: 구 마커 인식 = 이행 경로
+    re.MULTILINE,
+)
+_CONV_LEGACY_END_RE = re.compile(r"^<!--[ \t]*cck2:end[ \t]*-->[ \t]*$", re.MULTILINE)  # old-name-ok: 구 마커 인식 = 이행 경로
 
 CONVENTIONS_VERSION = "1.0.0"
 
@@ -261,6 +315,9 @@ def _existing_conv_marker(text: str) -> tuple[str | None, int, int]:
 def _compose_conv(text: str, block: str) -> str:
     """`_compose()`(규범 블록용)와 같은 알고리즘의 kit2 버전. 첫 번째 블록 기록 **후**의
     텍스트를 받으므로 `text`가 빈 문자열일 일은 없다(PREAMBLE + 규범 블록이 이미 있다)."""
+    text, _ = _drop_legacy_duplicate(  # ATK-010 — kit2 네임스페이스의 같은 이행 경로
+        text, CONV_BEGIN_RE, CONV_END_RE, _CONV_LEGACY_BEGIN_RE, _CONV_LEGACY_END_RE
+    )
     meta, s, e = _existing_conv_marker(text)
     if meta is not None:
         return text[:s] + block.rstrip("\n") + text[e:]
@@ -814,6 +871,21 @@ def cmd_check(
     text, rc = _read_target(target)
     if text is None:
         return rc
+    # 이행 가능한 공존(구 1 + 신 1)은 손상이 아니다 — 재생성이 고친다. 그러니
+    # `--check`는 초록을 주지 않고(그러면 구 블록이 영구히 남는다) **재생성하라는
+    # 드리프트**로 보고한다 (ATK-010).
+    for label, res in (
+        ("규범", (BEGIN_RE, END_RE, _LEGACY_BEGIN_RE, _LEGACY_END_RE)),
+        ("conventions", (CONV_BEGIN_RE, CONV_END_RE, _CONV_LEGACY_BEGIN_RE, _CONV_LEGACY_END_RE)),
+    ):
+        if _drop_legacy_duplicate(text, *res)[1]:
+            print(
+                f"[export-harness] ✗ {target} 의 {label} 블록에 구 토큰 블록과 신 토큰 "
+                "블록이 공존한다 (이행 중).\n"
+                "  → ./scripts/export-harness.sh 로 재생성하면 구 블록이 제거된다.",
+                file=sys.stderr,
+            )
+            return 1
     try:
         meta, s, e = _existing_marker(text)
     except MarkerError as err:
@@ -888,6 +960,12 @@ def _compose(text: str | None, block: str) -> str:
         # 파일 없음과 **빈 파일**을 같게 취급한다. 빈 AGENTS.md로 시작한 소비자만
         # 안내 헤더를 영영 못 받는 비대칭을 없앤다.
         return PREAMBLE + "\n" + block
+    # 구 토큰 블록 + 신 토큰 블록 공존은 **이행 상태**다 — 구 블록을 제거하고 신
+    # 블록을 갱신하는 것이 유일한 해석이다 (ATK-010). 그 외 손상은 아래
+    # `_existing_marker()`가 그대로 거부한다.
+    text, _ = _drop_legacy_duplicate(
+        text, BEGIN_RE, END_RE, _LEGACY_BEGIN_RE, _LEGACY_END_RE
+    )
     meta, s, e = _existing_marker(text)
     if meta is not None:
         return text[:s] + block.rstrip("\n") + text[e:]
