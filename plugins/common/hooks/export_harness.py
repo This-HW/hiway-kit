@@ -39,13 +39,13 @@ AGENTS.md는 **텍스트 규범만** 이식한다. 훅(protect-sensitive·stop-v
 exit code:
   0 = 성공 (또는 --check 드리프트 없음)
   1 = --check 드리프트 / 분류 누락 / 기록 실패
-  3 = 규범 블록은 기록·검사했으나 conventions 블록(두 번째)을 건너뜀. kit 레포에서
-      `docs/conventions/`가 부분적으로만 있을 때(= 실제 드리프트)다. 소비자 레포처럼
-      해당 파일이 **하나도** 없으면 애초에 대상이 아니므로 0이다.
   2 = SKIPPED — 규범 소스(plugin root)를 **자동 탐색**으로 찾지 못함(kit 미설치 등).
       절대 0으로 위장하지 않는다. 반면 `--plugin-root`를 명시했는데 그곳에 rules/가
       없으면 SKIPPED가 아니라 exit 1이다 — 사용자가 지정한 것이 틀렸다는 뜻이고,
       이걸 2로 내면 CI가 "kit 미설치"로 오분류한다.
+  3 = 규범 블록은 기록·검사했으나 conventions 블록(두 번째)을 건너뜀. kit 레포에서
+      `docs/conventions/`가 부분적으로만 있을 때(= 실제 드리프트)다. 소비자 레포처럼
+      해당 파일이 **하나도** 없으면 애초에 대상이 아니므로 0이다.
 """
 
 from __future__ import annotations
