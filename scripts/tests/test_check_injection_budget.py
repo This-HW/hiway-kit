@@ -118,3 +118,58 @@ def test_zero_conditional_rules_is_an_error(tmp_path):
     root = _fake_plugin_root(tmp_path, conditional_names=())
     with pytest.raises(RuntimeError, match="conditional 규범을 하나도 파생하지 못했다"):
         _load(root).rules_bytes()
+
+
+def test_signal_key_schema_drift_is_red(tmp_path):
+    """파생한 신호가 `load_rules` 에 **닿았는지**를 따로 증명한다 (W6 F-4).
+
+    0-파생 가드만으로는 부족하다. `conditional_signals()` 와 `load_rules()` 는 신호 키가
+    **파일명 stem** 이라는 약속으로만 이어져 있고 그 정합을 아무도 강제하지 않았다.
+    `load_rules` 쪽 스키마가 stem 에서 바뀌면 신호가 전부 무시되는데, 파생은 여전히
+    성공하므로 0-파생 가드는 통과하고 게이트는 **green** 이었다 — 이 파일 독스트링이
+    고쳤다고 선언한 과소측정으로 조용히 되돌아간다.
+
+    `warning-signal.md` §측정 3: 음성 결과는 "그 지점에 도달했다"를 따로 증명해야 한다.
+    """
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
+    mod = _load(root)
+    # 키 스키마 드리프트 — stem 이 아닌 키를 준다. load_rules 는 전부 무시한다.
+    mod.conditional_signals = lambda: {f"rules/{k}.md": True for k in ("cond-one", "cond-two")}
+    with pytest.raises(RuntimeError, match="신호가 load_rules 에 닿지 않았다"):
+        mod.rules_bytes()
+
+
+def test_reached_signals_still_pass(tmp_path):
+    """**양성 대조** — 정상 신호는 그대로 통과해야 한다. 아니면 가드가 아니라 고장이다."""
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
+    always, peak, signals = _load(root).rules_bytes()
+    assert signals == {"cond-one": True, "cond-two": True}
+    assert peak > always
+
+
+def test_unparseable_agent_is_red_not_silently_skipped(tmp_path):
+    """에이전트 하나가 깨지면 그만큼 예산에서 빠져 **더 쉽게 통과**한다 (W6 F-4).
+
+    결함이 게이트를 느슨하게 만드는, 정확히 거꾸로 된 방향이다. `SkipTally` 로
+    건너뜀을 집계하고 1건이라도 있으면 경로·사유와 함께 red 다.
+    """
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
+    agents = root / "agents" / "dev"
+    agents.mkdir(parents=True)
+    (agents / "good.md").write_text(
+        "---\nname: good\ndescription: 정상 에이전트\n---\n\n본문\n", encoding="utf-8"
+    )
+    mod = _load(root)
+
+    entries, skipped = mod.agent_entries()
+    assert len(entries) == 1 and len(skipped) == 0
+    assert skipped.report(frozenset({"read-error", "no-frontmatter"})) == 0
+
+    (agents / "broken.md").write_text("frontmatter 가 없는 산문\n", encoding="utf-8")
+    entries, skipped = mod.agent_entries()
+    assert len(entries) == 1, "깨진 파일이 항목으로 들어갔다"
+    assert len(skipped) == 1 and skipped.attempted == 2
+    assert skipped.entries[0][1] == "no-frontmatter"
+    assert skipped.report(frozenset({"read-error", "no-frontmatter"})) == 1, (
+        "깨진 에이전트를 건너뛴 채 green 을 냈다"
+    )

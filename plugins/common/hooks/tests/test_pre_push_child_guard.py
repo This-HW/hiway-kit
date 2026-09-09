@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -212,6 +213,65 @@ def test_compact_json_marker_is_recognised(repo: Path, child: Path) -> None:
     """들여쓰기 없는 한 줄 JSON 도 같은 판정이어야 한다(포맷에 의존하지 않는다)."""
     _write_marker(child, json.dumps(MARKER, separators=(",", ":")))
     assert _push(child).returncode != 0
+
+
+def test_marker_is_recognised_regardless_of_key_order(repo: Path, child: Path) -> None:
+    """판정이 **JSON 키 순서에 의존하면** 그것은 파서가 아니라 우연이다.
+
+    회귀 고정(W6 F-1). 구현이 `grep -E '"schema"...[,}]'` 하나였을 때, `schema` 가
+    객체의 **마지막 키**이면(pretty-print 시 값 뒤에 `,` 도 `}` 도 없이 줄이 끝난다)
+    매치에 실패했고, 실패 방향이 `|| exit 0` = **push 허용** 이었다. 훅이 자백한 한계는
+    *"키와 값이 서로 다른 줄"* 뿐이었는데 이 경우는 **같은 줄인데도** 무너졌다.
+    """
+    ordered = {
+        "parent": "control",
+        "role": "worker",
+        "base_commit": "0" * 40,
+        "schema": 1,  # ← 마지막 키
+    }
+    _write_marker(child, json.dumps(ordered, indent=2))
+    assert _push(child).returncode != 0, "schema 가 마지막 키일 때 차단이 무너졌다"
+
+
+def test_marker_judgement_matches_child_git_guard(repo: Path, child: Path) -> None:
+    """두 훅은 같은 마커에 **같은 답**을 내야 한다.
+
+    경로가 같은지는 아래 `test_marker_path_matches_child_git_guard` 가 본다. 이것은
+    한 단계 더 들어가 **판정 자체**를 대조한다 — 경로가 같아도 한쪽만 통과시키면
+    "한쪽은 막고 한쪽은 통과하는 상태" 라는 훅 주석의 결함 정의가 그대로 성립한다.
+    """
+    driver = (
+        "import importlib.util,sys\n"
+        f"s=importlib.util.spec_from_file_location('g', r'{GUARD_SRC}')\n"
+        "m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\n"
+        "sys.exit(0 if m.is_child_session() else 1)\n"
+    )
+
+    def _guard_says_child() -> bool:
+        # 서브프로세스로 **자식 워크트리 안에서** 돌린다 — `is_child_session()` 은
+        # cwd 의 git 컨텍스트를 직접 조회하므로 monkeypatch 보다 이쪽이 실물에 가깝다.
+        return subprocess.run(
+            [sys.executable, "-c", driver], cwd=str(child),
+            capture_output=True, text=True, check=False,
+        ).returncode == 0
+
+    cases = [
+        json.dumps(MARKER, indent=2),
+        json.dumps(MARKER, separators=(",", ":")),
+        json.dumps({"parent": "c", "role": "r", "base_commit": "0" * 40, "schema": 1},
+                   indent=2),
+        json.dumps({**MARKER, "schema": 2}, indent=2),
+        json.dumps({**MARKER, "parent": ""}, indent=2),
+        "not json at all",
+    ]
+    for raw in cases:
+        marker_path = _write_marker(child, raw)
+        hook_blocks = _push(child).returncode != 0
+        guard_blocks = _guard_says_child()
+        assert hook_blocks == guard_blocks, (
+            f"두 훅의 판정이 갈렸다 (pre-push={hook_blocks}, guard={guard_blocks}): {raw}"
+        )
+        marker_path.unlink()
 
 
 # ── 6. 두 훅이 같은 것을 본다 ────────────────────────────────────────────────

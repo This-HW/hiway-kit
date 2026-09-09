@@ -142,6 +142,59 @@ class TestDiscoverPointer:
         assert _mod.discover_registry_pointer(repo) is None
 
 
+    def test_group_writable_pointer_is_rejected(self, tmp_path):
+        """포인터의 `command` 는 **실행**된다 — 남이 쓸 수 있으면 신뢰하지 않는다 (W6 F-6).
+
+        같은 파일이 `/tmp` 락 디렉토리(`_lock_dir_is_safe`)와 원장 심링크
+        (`_symlinked_target_is_safe`)에는 정확히 이 검사를 걸어 두고 **가장 위험한
+        exec 경로에만** 걸어 두지 않았다.
+        """
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        pointer = self._pointer_path(repo)
+        pointer.chmod(0o666)
+        assert _mod.discover_registry_pointer(repo) is None
+
+    def test_group_writable_parent_dir_is_rejected(self, tmp_path):
+        """파일만 검사하면 남이 쓸 수 있는 디렉토리에서 갈아치우는 경로가 남는다."""
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        pointer = self._pointer_path(repo)
+        pointer.parent.chmod(0o777)
+        try:
+            assert _mod.discover_registry_pointer(repo) is None
+        finally:
+            pointer.parent.chmod(0o755)
+
+    def test_symlinked_pointer_is_rejected(self, tmp_path):
+        """심링크는 따라가지 않는다 — `lstat` 이 `stat` 이 아닌 이유다."""
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        pointer = self._pointer_path(repo)
+        elsewhere = tmp_path / "elsewhere.json"
+        elsewhere.write_text(json.dumps({"command": ["/bin/echo", "pwned"]}))
+        pointer.unlink()
+        pointer.symlink_to(elsewhere)
+        assert _mod.discover_registry_pointer(repo) is None
+
+    def test_safe_pointer_still_works(self, tmp_path):
+        """검사가 정상 경로를 막으면 그것은 가드가 아니라 고장이다(양성 대조)."""
+        repo = _init_repo(tmp_path)
+        _install_pointer(repo, ["/bin/echo"])
+        assert _mod.discover_registry_pointer(repo) == {"command": ["/bin/echo"]}
+
+    @staticmethod
+    def _pointer_path(repo: Path) -> Path:
+        common = subprocess.run(
+            ["git", "rev-parse", "--git-common-dir"], cwd=repo,
+            capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        cp = Path(common)
+        if not cp.is_absolute():
+            cp = (repo / cp).resolve()
+        return cp / "kit" / "registry.json"
+
+
 # ── promote(): 폴백 경로 ──────────────────────────────────────────────
 class TestPromoteFallback:
     def test_no_registry_falls_back(self, tmp_path):
@@ -369,6 +422,129 @@ class TestPromoteConcurrentWrite:
         )
         # 승격에 성공한 것은 정확히 제거된다(전체 비우기가 아니라 차집합).
         assert "claimed before promote" not in patterns
+
+    PARTIAL_REGISTRY_BODY = """\
+def main():
+    head = subprocess_head()
+    if sys.argv[-1] == "describe":
+        print(json.dumps({{
+            "verbs": [
+                {{"name": "record", "args": ["payload"], "effect": "write", "idempotent": False}},
+            ],
+            "head": head,
+        }}))
+        return 0
+    if sys.argv[-2] == "record":
+        payload = json.loads(sys.argv[-1])
+        with open(calls_log, "a") as fh:
+            fh.write(sys.argv[-1] + "\\n")
+        # 이 항목만 실패시킨다 — partial 분기를 만든다.
+        return 1 if "BAD" in payload["pattern"] else 0
+    return 1
+
+def subprocess_head():
+    import subprocess
+    r = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip()
+
+sys.exit(main())
+"""
+
+    def test_partial_promotion_does_not_recall_succeeded_entries(self, tmp_path):
+        """partial 에서도 **성공분은 정확히 차감**한다 — 아니면 재승격이 일어난다 (W6 F-2).
+
+        기존 구현은 partial 분기에서 원장을 **미변경**으로 뒀다. 그러면 다음 promote 가
+        같은 항목을 다시 claim 해 **이미 성공한 승격 동사를 또 호출**한다. 승격 동사는
+        `idempotent: False` 로 선언될 수 있고(이 픽스처가 그렇다), 재호출은 frequency 를
+        부풀린다. frequency 가 digest 순위를 정하므로 **진짜 반복 결함이 digest 밖으로
+        밀린다** — 이관 순서를 뒤집어서까지(ATK-008) 막으려던 바로 그 손해다.
+        """
+        repo = _init_repo(tmp_path)
+        _mod.upsert("lint", "low", "GOOD pattern", root=repo)
+        _mod.upsert("security", "high", "BAD pattern", root=repo)
+        script = _write_fake_registry(tmp_path, self.PARTIAL_REGISTRY_BODY)
+        _install_pointer(repo, [sys.executable, str(script)])
+
+        first = _mod.promote(repo)
+        assert first["mode"] == "partial"
+        assert first["count"] == 1 and first["failed"] == 1
+
+        # 성공분은 원장에서 빠지고, 실패분만 재시도 대상으로 남는다.
+        patterns = [e["pattern"] for e in _mod.parse_ledger(_mod.ledger_path(repo))]
+        assert patterns == ["BAD pattern"], (
+            f"성공분이 차감되지 않았다 — 다음 호출이 재승격한다: {patterns}"
+        )
+
+        _mod.promote(repo)
+        calls = [json.loads(c) for c in (tmp_path / "calls.jsonl").read_text().splitlines()]
+        good = [c for c in calls if c["pattern"] == "GOOD pattern"]
+        assert len(good) == 1, (
+            f"성공했던 항목이 {len(good)}회 호출됐다 — 비멱등 동사를 재호출하고 있다"
+        )
+
+    SLOW_REGISTRY_BODY = """\
+def main():
+    head = subprocess_head()
+    if sys.argv[-1] == "describe":
+        print(json.dumps({{
+            "verbs": [
+                {{"name": "record", "args": ["payload"], "effect": "write", "idempotent": False}},
+            ],
+            "head": head,
+        }}))
+        return 0
+    if sys.argv[-2] == "record":
+        import time
+        time.sleep(0.05)
+        with open(calls_log, "a") as fh:
+            fh.write(sys.argv[-1] + "\\n")
+        return 0
+    return 1
+
+def subprocess_head():
+    import subprocess
+    r = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip()
+
+sys.exit(main())
+"""
+
+    def test_total_budget_stops_the_loop(self, tmp_path, monkeypatch):
+        """항목당 타임아웃만으로는 총 블로킹 시간이 묶이지 않는다 (W6 F-5).
+
+        항목당 10초 × CAP(50) = 최대 ~500초. 같은 파일이 락에는 5초 데드라인을 걸어
+        *"정지한 프로세스 때문에 파이프라인이 무한 대기하지 않게"* 해 두고 그보다
+        100배 긴 경로를 열어 뒀다. 예산을 넘으면 남은 항목은 **호출하지 않고** 실패로
+        계상되고, 성공분만 차감되므로(F-2) 원장에 남아 다음 호출이 이어서 시도한다.
+        """
+        repo = _init_repo(tmp_path)
+        _mod.upsert("lint", "low", "first entry", root=repo)
+        _mod.upsert("security", "high", "second entry", root=repo)
+        script = _write_fake_registry(tmp_path, self.SLOW_REGISTRY_BODY)
+        _install_pointer(repo, [sys.executable, str(script)])
+        # 첫 항목은 통과하고(진입 시 경과 ~0) 두 번째 진입에서 예산이 이미 소진된다.
+        monkeypatch.setattr(_mod, "_PROMOTE_TOTAL_BUDGET_SECONDS", 0.01)
+
+        result = _mod.promote(repo)
+        assert result["mode"] == "partial", result
+        assert result["count"] == 1 and result["failed"] == 1
+
+        calls = (tmp_path / "calls.jsonl").read_text().splitlines()
+        assert len(calls) == 1, f"예산을 넘겼는데도 계속 호출했다: {len(calls)}건"
+
+        # 호출되지 않은 항목은 원장에 남아 다음 호출이 재시도한다 — 유실 금지.
+        remaining = [e["pattern"] for e in _mod.parse_ledger(_mod.ledger_path(repo))]
+        called = json.loads(calls[0])["pattern"]
+        assert called not in remaining
+        assert len(remaining) == 1, remaining
+
+    def test_total_budget_is_smaller_than_worst_case_per_item_product(self):
+        """예산이 CAP × 항목당 타임아웃보다 작아야 실제로 묶는 것이다.
+
+        상수를 되돌리거나 예산을 최악값 이상으로 올리면 이 게이트는 의미가 없어진다.
+        """
+        worst_case = _mod.CAP * _mod._PROMOTE_CALL_TIMEOUT_SECONDS
+        assert worst_case > _mod._PROMOTE_TOTAL_BUDGET_SECONDS
 
     def test_lock_is_not_held_across_promotion_subprocess(self, tmp_path):
         """락을 잡은 채 subprocess 를 돌리지 않는다 — 구조 자체를 검사한다.

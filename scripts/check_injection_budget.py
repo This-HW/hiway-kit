@@ -73,8 +73,11 @@ import re
 import sys
 from pathlib import Path
 
+from git_tracked import SkipTally
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "common"
+LABEL = "injection-budget"
 
 RULES_CORE_CAP = 10240  # 10 KiB — **항상** 내는 비용 (core 규범 + WORKFLOW)
 RULES_PEAK_CAP = 22528  # 22 KiB — conditional 이 전부 겹칠 때의 **최대** 비용
@@ -132,22 +135,66 @@ def rules_bytes() -> tuple[int, int, dict[str, bool]]:
     workflow = len(mod.load_workflow_skill(PLUGIN_ROOT).encode())
     always = len(mod.load_rules(PLUGIN_ROOT, False).encode()) + workflow
     peak = len(mod.load_rules(PLUGIN_ROOT, True, signals=signals).encode()) + workflow
+
+    # ── 양성 대조 (W6 F-4) ────────────────────────────────────────────────
+    # 0-파생 가드만으로는 부족하다. `conditional_signals()` 와 `load_rules()` 는 신호
+    # 키가 **파일명 stem** 이라는 약속으로만 이어져 있고, **그 정합을 아무도 강제하지
+    # 않았다.** `load_rules` 쪽 스키마가 stem 에서 바뀌면 파생한 신호가 전부 무시되는데,
+    # `conditional_signals()` 는 여전히 4종을 파생하므로 0-파생 가드는 통과하고 게이트는
+    # **green** 이 된다 — 이 파일 독스트링이 고쳤다고 선언한 과소측정으로 조용히 되돌아간다.
+    #
+    # `warning-signal.md` §측정 3: *음성 결과는 "그 지점에 도달했다"를 따로 증명해야
+    # 한다.* 그래서 신호마다 **그 신호 하나만 켠 결과가 실제로 커지는지** 확인한다 —
+    # 커지지 않았다면 그 키는 `load_rules` 에 닿지 않은 것이다.
+    base = len(mod.load_rules(PLUGIN_ROOT, False).encode())
+    unreached = [
+        key
+        for key in sorted(signals)
+        if len(mod.load_rules(PLUGIN_ROOT, False, signals={key: True}).encode()) <= base
+    ]
+    if unreached:
+        raise RuntimeError(
+            f"신호가 load_rules 에 닿지 않았다: {', '.join(unreached)} — "
+            "conditional_signals() 의 키 스키마와 load_rules() 가 갈렸다. "
+            "이대로면 파생은 성공한 채 측정만 조용히 과소평가된다"
+        )
+    if peak <= always:
+        raise RuntimeError(
+            f"최악({peak}B)이 항상({always}B)보다 크지 않다 — conditional 규범이 "
+            "하나도 반영되지 않았다는 뜻이다"
+        )
     return always, peak, signals
 
 
-def agent_entries() -> list[tuple[int, str]]:
-    """하네스가 노출하는 형태(`<name>: <description>`)의 바이트 수를 에이전트마다."""
+def agent_entries() -> tuple[list[tuple[int, str]], SkipTally]:
+    """하네스가 노출하는 형태(`<name>: <description>`)의 바이트 수를 에이전트마다.
+
+    **건너뛴 파일을 함께 돌려준다** (W6 F-4). 예전에는 frontmatter 파싱 실패를 조용히
+    `continue` 했는데, 그러면 에이전트 하나가 깨질 때마다 그만큼 예산에서 빠져 게이트가
+    **더 쉽게 통과**한다 — 결함이 게이트를 느슨하게 만드는, 정확히 거꾸로 된 방향이다.
+    반환값이 목록뿐이면 호출부는 "N종 쟀다"가 *검사해서 N종* 인지 *못 읽어서 N종* 인지
+    구분할 수 없다.
+    """
     out: list[tuple[int, str]] = []
+    skipped = SkipTally(LABEL)
     for path in sorted((PLUGIN_ROOT / "agents").rglob("*.md")):
-        fm = FRONTMATTER_RE.match(path.read_text(encoding="utf-8"))
+        skipped.attempted += 1
+        rel = str(path.relative_to(PLUGIN_ROOT.parent.parent))
+        try:
+            raw = path.read_text(encoding="utf-8")
+        except OSError as err:
+            skipped.add(rel, "read-error", str(err))
+            continue
+        fm = FRONTMATTER_RE.match(raw)
         if fm is None:
+            skipped.add(rel, "no-frontmatter", "YAML frontmatter 를 찾지 못했다")
             continue
         name = NAME_RE.search(fm.group(1))
         desc = DESC_RE.search(fm.group(1))
         text = (desc.group(1) or desc.group(2) or "") if desc else ""
         entry = f"{name.group(1) if name else path.stem}: {text.strip()}"
         out.append((len(entry.encode()), path.stem))
-    return sorted(out, reverse=True)
+    return sorted(out, reverse=True), skipped
 
 
 def _report(label: str, used: int, cap: int, hint: str) -> int:
@@ -179,7 +226,10 @@ def main() -> int:
         " (워크트리 + 활성 Work + MCP 존재 + 원장 있음)",
     )
 
-    entries = agent_entries()
+    entries, skipped = agent_entries()
+    # 건너뛴 것이 1건이라도 있으면 red — 그만큼 예산에서 빠져 **더 쉽게 통과**한다.
+    # 두 사유 모두 치명이다: 못 읽은 것도, frontmatter 가 없는 것도 사각지대다.
+    rc |= skipped.report(frozenset({"read-error", "no-frontmatter"}))
     if not entries:
         print("[injection-budget] ✗ 에이전트를 하나도 찾지 못했다 — 측정 경로가 깨졌다")
         return 1

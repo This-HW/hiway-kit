@@ -99,13 +99,49 @@ marker="$git_dir/kit/child.json"
 # 자식" 으로 두면 쓰는 쪽이 키를 다르게 써도 통과한다(실측: 두 세션이 각각 `base_commit`·
 # `baseline_commit` 을 썼다). 모르는 스키마 버전은 판정 불가 = 보호하지 않는다(fail-open).
 #
-# 한계: bash 에는 JSON 파서가 없다. 이것은 **구조 검사이지 파서가 아니다** — 키와 값이
-# 서로 다른 줄에 놓인(유효하지만 드문) 포맷은 인식하지 못하고 통과 방향으로 실패한다.
-# 마커는 자식 스킬이 기계로 쓰므로 그 포맷은 실제로 발생하지 않는다.
-grep -Eq '"schema"[[:space:]]*:[[:space:]]*1[[:space:]]*[,}]' "$marker" || exit 0
-for _key in parent role base_commit; do
-  grep -Eq "\"$_key\"[[:space:]]*:[[:space:]]*\"[^\"]" "$marker" || exit 0
-done
+# **JSON 은 JSON 파서로 판정한다.** 이전 구현은 `grep -E` 하나로 판정했는데, grep 은
+# **줄 단위**라 `"schema": 1` 이 객체의 **마지막 키**이면(다음 줄이 `}`) 매치에 실패했다.
+# 실패 방향이 `|| exit 0`, 즉 **push 허용** 이었으므로 판정이 **JSON 키 순서에 의존**했다.
+# 훅이 자백한 한계는 *"키와 값이 서로 다른 줄"* 뿐이었는데, 이 경우는 **키와 값이 같은
+# 줄인데도** 무너졌다 — 자백보다 넓은 구멍이었다.
+# `hooks/examples/child-git-guard.py` 는 같은 판정을 파서로 정확히 하고 있었으므로,
+# 두 훅이 같은 마커를 **다르게 판정**하는 상태가 실재했다(훅 자신의 주석이 그것을 결함이라
+# 못 박았다). 이제 python3 가 있으면 그것으로 판정해 두 훅이 같은 답을 낸다.
+_marker_is_child() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$1" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(1)  # 손상된 마커는 없는 것과 동일하게 취급(fail-open)
+if not isinstance(data, dict) or data.get("schema") != 1:
+    sys.exit(1)  # 모르는 스키마 버전 = 판정 불가 = 보호하지 않는다(fail-open)
+if not all(
+    isinstance(data.get(k), str) and data[k]
+    for k in ("parent", "role", "base_commit")
+):
+    sys.exit(1)
+sys.exit(0)
+PY
+    return $?
+  fi
+
+  # python3 없음 — 정규식 폴백. 이것은 **구조 검사이지 파서가 아니다**: 키와 값이 서로
+  # 다른 줄에 놓인(유효하지만 드문) 포맷은 인식하지 못하고 통과 방향으로 실패한다.
+  # `([,}]|[[:space:]]*$)` 의 `$` 갈래가 위 결함을 막는다 — 값 뒤에 아무것도 없는
+  # (= 마지막 키) 줄도 받는다.
+  grep -Eq '"schema"[[:space:]]*:[[:space:]]*1[[:space:]]*([,}]|[[:space:]]*$)' "$1" || return 1
+  for _key in parent role base_commit; do
+    grep -Eq "\"$_key\"[[:space:]]*:[[:space:]]*\"[^\"]" "$1" || return 1
+  done
+  return 0
+}
+
+_marker_is_child "$marker" || exit 0
 
 # 탈출구 — 정당한 push 가 필요한 자식이 있을 수 있다(북극성: 소비자 환경을 깨뜨리지
 # 않는다). 막기만 하고 푸는 법을 안 알려주는 훅은 사람이 훅 자체를 지운다.
