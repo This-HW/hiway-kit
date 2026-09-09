@@ -5,7 +5,8 @@
     "known_limitation": "리터럴 치환은 위치·문맥을 모른다 — 대상 파일에 SSOT 와 다른 이름이 수기로 잘못 박히는 사고(오타 등)는 이 정책이 탐지하지 못한다. 탐지 가능한 것은 정확히 하나: 'SSOT 이름이 바뀌었는데 --write 를 안 돌린' 상태(정책의 lastAppliedName ≠ SSOT 이름, 또는 그 상태에서 대상 파일에 구 이름이 잔존). 탐지할 수 없는 것은 탐지한다고 주장하지 않는다(docs/conventions/warning-signal.md). 2026-09-08 보강: site/hugo.toml 의 baseURL 에 이름이 박혀 있는데 files 목록에 없어 개명 후 구 이름이 남았다 — 대상에 추가했다. 교훈은 '대상 목록은 이름이 박힐 수 있는 곳 전부여야 하고, 목록에 없는 파일은 결코 red 가 되지 않는다'(D-23).",
     "directories_note": "directories 는 재귀적으로 *.md 전체를 실측 스캔한다 — 대상 파일을 손으로 나열하지 않는다(D-23 원칙: 검사 대상이 아닌 것은 결코 red 가 되지 않는다). 새 site/content 문서가 추가되면 자동으로 파생 대상에 포함된다.",
     "old_name_scan": "scripts/check_old_names.py 가 previousNames 를 읽어 '구 이름이 살아있는 표면에 실렸는가'를 검사한다(verify-done.sh §20 + CI 동일 스크립트). §18 파생 정책은 files/directories 의 산문만 보므로 plugins/·site/·setup.sh 는 대상이 아니었고, 그 구멍으로 구 이름이 배포물 14건·설치 스크립트·사이트 브랜드에 남았다 — 그중 셋은 기능 결함이었다(스킬의 캐시 fallback glob 2건이 구 이름 디렉토리를 찾아 영영 매치되지 않았고, setup.sh 가 전임 플러그인을 설치했다). oldNameScanExclude 는 '구 이름이 사실로서 등장해야 하는 곳'만 담는다 — 역사 기록(docs/·CHANGELOG)과 정책 자신이다. 목록에 없는 것은 전부 검사 대상이다(D-23: 검사 대상이 아닌 것은 결코 red 가 되지 않는다).",
-    "abbreviation_note": "previousNames 는 정식 이름·약칭·경로 이름 셋을 모두 담는다 — 개명 잔재는 이 세 형태로 남는다. 실측: 정규식 \\bCCK\\b 는 한글 조사가 붙은 'CCK의' 를 놓쳤고(4건), 소문자 'cck' 는 자식 마커·레지스트리의 **디렉토리 이름**으로 남아 있었다. 리터럴 부분문자열 검사가 단어 경계 검사보다 강한 이유다. 그 경로는 v3.9.0 에서 'kit' 으로 옮겼다 — 제품명을 경로에 박은 것이 애초 결함이므로 다음 개명에 깨지지 않는 이름을 골랐다."
+    "abbreviation_note": "previousNames 는 정식 이름·약칭·경로 이름 셋을 모두 담는다 — 개명 잔재는 이 세 형태로 남는다. 실측: 정규식 \\bCCK\\b 는 한글 조사가 붙은 'CCK의' 를 놓쳤고(4건), 소문자 'cck' 는 자식 마커·레지스트리의 **디렉토리 이름**으로 남아 있었다. 리터럴 부분문자열 검사가 단어 경계 검사보다 강한 이유다. 그 경로는 v3.9.0 에서 'kit' 으로 옮겼다 — 제품명을 경로에 박은 것이 애초 결함이므로 다음 개명에 깨지지 않는 이름을 골랐다.",
+    "exclude_note": "제외는 **구 이름이 사실로서 등장해야 하는 곳**만이다. 처음엔 `docs/` 를 통째로 뺐는데 그건 너무 넓었다 — 살아있는 문서 6종(프로토콜 명세·제출 체크리스트·룰 해설 미러 2종 등)이 그 아래 있어 구 이름을 계속 쓰고 있었고, 그중 하나는 **소비 측이 지금 구현할 계약 명세**였다. 역사 서브트리(docs/specs·research·works·CHANGELOG-archive)와 전임 킷 등재 기록을 실측 근거로 인용하는 marketplace-submission.md 만 남긴다. warning-signal.md §검토 절차 5: 제외는 정당화할 수 있는 만큼만 좁게."
   },
   "source": {
     "manifest": "plugins/common/.claude-plugin/plugin.json",
@@ -29,7 +30,11 @@
   ],
   "previousNameAllowlist": {},
   "oldNameScanExclude": [
-    "docs/",
+    "docs/specs/",
+    "docs/research/",
+    "docs/works/",
+    "docs/CHANGELOG-archive.md",
+    "docs/marketplace-submission.md",
     "CHANGELOG.md",
     "packaging/name-targets.json"
   ]

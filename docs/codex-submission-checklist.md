@@ -9,7 +9,7 @@
 > This is distinct from **local/marketplace installation**, which already works
 > today without any submission — see the README's "Other Harnesses" section
 > (`codex plugin marketplace add <repo>` → `codex plugin add
-> claude-code-kit@claude-code-kit-marketplace`). Submission is only needed to be
+> hiway-kit@hiway-kit-marketplace`). Submission is only needed to be
 > listed in the shared ChatGPT/Codex "universal directory" alongside OpenAI-curated
 > plugins.
 
