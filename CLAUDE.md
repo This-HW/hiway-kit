@@ -70,7 +70,7 @@ plugins/
 | child-session              | (loaded, not invoked)       | Discipline a dispatched worker session loads at start |
 | native-watch             | `/native-watch`             | Audit native-feature absorption vs the kit (SSOT: docs/native-absorption.md) |
 | self-improve             | `/self-improve`             | Propose agent/skill/rule improvements from ledger+evals (proposal-only, gated) |
-| harness-export           | `/harness-export`           | Export host-neutral rules to AGENTS.md for Codex/OpenCode/Pi/Hermes (drift-gated) |
+| harness-export           | `/harness-export`           | Export host-neutral rules to AGENTS.md + GEMINI.md for hosts without hooks (drift-gated) |
 | eval-forge               | `/eval-forge`               | Forge an eval scenario from an observed defect — generated + self-validated       |
 | skill-forge              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft (proposal-only)         |
 
@@ -287,6 +287,18 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   continues and auto-fixes. Timeouts are non-blocking (`CLAUDE_STOP_TEST_TIMEOUT`)
 - `utils.py` — shared utilities
 
+### git 훅은 배포되지만 자동으로 켜지지 않는다
+
+`plugins/common/setup/` 에는 세션 훅이 아닌 **git 훅** 정본도 있다 — `pre-commit`
+(시크릿 스캔 등)과 `git-hooks/reference-transaction`(레퍼런스 변경 가드). `setup.sh`
+가 `pre-commit` 을 설치하고, `reference-transaction` 은 **opt-in** 이라 켜지 않은 것이
+결함이 아니다.
+
+**"배포됐다"와 "설치돼서 실제로 돈다"는 다른 상태다.** 정본을 고쳐도 각자의
+`.git/hooks/` 에 있는 사본은 그대로이므로, 고친 사람만 그 훅이 도는 줄 안다. 이
+결함 클래스를 실제로 밟은 뒤 `verify-done.sh` §21(`scripts/check_installed_hooks.py`)이
+설치된 사본과 레포 정본을 대조한다 — 미설치(opt-in)와 낡은 설치를 구분해서 보고한다.
+
 Hooks are defined in `plugins/common/hooks/hooks.json` using the **exec form**
 (`command` + `args[]`) so `${CLAUDE_PLUGIN_ROOT}` paths need no shell quoting.
 
@@ -324,23 +336,35 @@ actually loads every hook under 3.9). Four hooks were silently dead on 3.9 until
 6. Runs gitleaks security scan
 7. `python39-compat` job: loads every hook under Python 3.9 (consumer floor)
 
-### 드리프트 게이트는 셋이고, 통합하지 않는다 (2026-08-27 판정)
+### 드리프트 게이트는 통합하지 않는다 (2026-08-27 판정 · 2026-09-10 재검토)
 
-`verify-done.sh` 에는 "생성물이 SSOT와 일치하는가"를 묻는 게이트가 **셋** 있다.
+`verify-done.sh` 에는 "생성물·사본이 SSOT와 일치하는가"를 묻는 게이트가 여럿 있다
+(진입점 마커 · 타겟 매니페스트 · 이름 파생 · eval 기준선 · 룰 체크섬 · 버전 sync ·
+설치된 훅). **몇 개인지 여기 적지 않는다** — 이유는 아래에 있다.
 
-| § | 대상 | 판정 방식 |
-| --- | --- | --- |
-| **11** | `AGENTS.md` 마커 블록 ↔ `rules/` 원문 | **sha256 대조** |
-| **13** | eval 시나리오 ↔ 기준선 | **집합 양방향 대조** + 티어 커버리지 |
-| **14** | 타겟 매니페스트 ↔ `.claude-plugin/plugin.json` | **파일 존재 + 내용 대조** |
+**같은 질문처럼 보이지만 입력·판정 기준·실패 메시지가 전부 다르다.** 어떤 것은 입력의
+sha256 을 기록해 두고 대조하고, 어떤 것은 재생성해서 내용을 비교하고, 어떤 것은 집합
+양방향 대조다. 공통 프리미티브로 묶으면 추상이 모든 케이스를 감당하지 못해 분기
+파라미터가 늘고, **게이트 코드가 어려워진다.** 게이트는 읽기 쉬워야 신뢰된다 —
+아무도 이해하지 못하는 게이트는 red 가 떴을 때 무시된다(`no-gate-integration.md`).
 
-같은 질문처럼 보이지만 **입력·판정 기준·실패 메시지가 전부 다르다.** 공통 프리미티브로 묶으면
-추상이 세 케이스를 다 감당하지 못해 분기 파라미터가 늘고, **게이트 코드가 어려워진다.**
-게이트는 읽기 쉬워야 신뢰된다 — 아무도 이해하지 못하는 게이트는 red가 떴을 때 무시된다.
+**그래서 통합하지 않는다.** 중복은 코드가 아니라 **규약**으로 줄인다(위 경로 봉쇄
+관례가 그 예다).
 
-**그래서 통합하지 않는다.** 중복은 코드가 아니라 **규약**으로 줄인다 (위 경로 봉쇄 관례가 그 예다).
-네 번째 드리프트 게이트가 필요해지는 시점에 재검토한다 — rule of three는 세 번째에 묶으라는 뜻이
-아니라, **세 번째까지는 아직 패턴이 아닐 수 있다**는 뜻이다.
+**재검토(2026-09-10) — 원래 약속은 "네 번째가 필요해지면 재검토한다"였다.**
+그 시점은 조용히 지났고, 실제로는 넷째·다섯째·여섯째·일곱째까지 늘어난 뒤에야
+이 문단을 다시 읽었다. 통합 판정은 위와 같은 이유로 **유지** 한다. 바뀐 것은 서술
+방식이다:
+
+이 문단은 게이트를 **표로 열거** 하고 있었고, 게이트가 늘어날 때마다 아무도 고치지
+않아 **셋으로 멈춘 채 낡았다.** 이 레포는 바로 이 실패를 두 곳에 이미 적어 두었다 —
+`rules/definition-of-done.md` 의 *"기계 검사 목록은 게이트가 소유한다 — 열거하면 검사를
+더할 때마다 낡는다(실제로 그랬다)"*, `docs/conventions/warning-signal.md` §5 의
+*"대상을 나열하지 말고 제외를 나열한다"*. 자기 규약을 자기 문서가 어긴 것이다.
+
+**그래서 목록을 지웠다.** 무엇이 드리프트 게이트인지는 `scripts/verify-done.sh` 가
+소유한다 — 알고 싶으면 그것을 읽어라. 이 문단이 남기는 것은 **판정과 그 근거** 뿐이고,
+그 둘은 게이트가 몇 개든 변하지 않는다.
 
 ### Lint is one ruleset, everywhere
 
