@@ -16,7 +16,9 @@ import ast
 import json
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
+from typing import ClassVar
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -1533,3 +1535,57 @@ def test_run_scenario_and_run_judge_use_harness_indirection(monkeypatch, tmp_pat
     runner.run_judge("stdout text", {"rubric": "r"}, timeout=5)
     assert captured_cmds
     assert captured_cmds[0][0] == "fake-harness-cli"
+
+
+class TestFailExcerpt:
+    """ATK-011 / L-3 — 발췌의 인덱스 정렬과 시크릿 마스킹.
+
+    ① 인덱스를 `_norm(stdout)`(NFC + lower) 에서 계산해 **원본** `stdout` 을 잘랐다.
+       두 변환 모두 길이를 바꾸므로(NFD 자모 3 → NFC 음절 1) 한글이 섞인 출력에서
+       오프셋이 밀려 **엉뚱한 구간**이 발췌됐다.
+    ② 발췌가 그대로 리포트에 실렸다 — 리포트는 터미널에 머물지 않는다
+       (`warning-signal.md` §6). 시크릿 형식 문자열은 가려야 한다.
+    """
+
+    FAILED_CHECK: ClassVar[list[dict]] = [
+        {"ok": False, "detail": "발견됨 ['NEEDLE_MARKER']"}
+    ]
+
+    def test_excerpt_is_centred_on_the_needle_with_decomposed_hangul(self):
+        """NFD 한글이 앞에 깔려 있어도 발췌가 needle 주변이어야 한다."""
+        # NFD(자모 분해) — macOS 파일명 출력이 이 형태다. 코드포인트 3개 = 음절 1개.
+        prefix = unicodedata.normalize("NFD", "한글" * 400)
+        assert len(prefix) > len(unicodedata.normalize("NFC", prefix))
+        stdout = prefix + "NEEDLE_MARKER" + ("x" * 200)
+
+        excerpt = runner._fail_excerpt(stdout, self.FAILED_CHECK)
+
+        assert excerpt is not None
+        assert "NEEDLE_MARKER" in excerpt
+
+    def test_excerpt_masks_secret_shaped_strings(self):
+        """형식-확정 시크릿은 라벨로 치환돼야 한다."""
+        token = "AKIA" + "Q" * 16  # 형식만 맞춘 가짜 — 실제 자격증명이 아니다
+        stdout = f"NEEDLE_MARKER aws={token} done"
+
+        excerpt = runner._fail_excerpt(stdout, self.FAILED_CHECK)
+
+        assert excerpt is not None
+        assert token not in excerpt
+        assert "가려짐" in excerpt
+
+    def test_excerpt_is_suppressed_when_patterns_unavailable(self, monkeypatch):
+        """마스킹 패턴을 못 읽으면 발췌를 내지 않는다 — fail-closed."""
+        monkeypatch.setattr(runner, "_secret_patterns", lambda: None)
+
+        excerpt = runner._fail_excerpt("NEEDLE_MARKER secret-ish", self.FAILED_CHECK)
+
+        assert excerpt is not None
+        assert "발췌 생략" in excerpt
+        assert "NEEDLE_MARKER" not in excerpt
+
+    def test_secret_patterns_come_from_the_hook(self):
+        """패턴 목록을 복사하지 않고 훅에서 읽는다(SSOT)."""
+        patterns = runner._secret_patterns()
+        assert patterns, "훅에서 시크릿 패턴을 읽지 못했다"
+        assert any("AKIA" in p for p, _ in patterns)

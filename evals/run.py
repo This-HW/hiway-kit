@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import ast
 import concurrent.futures
+import importlib.util
 import json
 import os
 import pathlib
@@ -1181,6 +1182,43 @@ def build_claude_command(agent: AgentDef, task: str) -> list[str]:
 FAIL_EXCERPT_CHARS = 3000
 
 
+# 발췌를 인쇄하기 전에 가리는 시크릿 형식. 목록을 여기 복사하지 않고 훅에서 읽는다
+# (SSOT — 복사하면 한쪽만 갱신되어 갈린다). 못 읽으면 발췌를 아예 내지 않는다:
+# 걸러낼 수 없는 것을 인쇄하는 것보다 진단 정보를 잃는 편이 낫다(fail-closed).
+_SECRET_PATTERNS_SOURCE = REPO_ROOT / "plugins" / "common" / "hooks" / "protect-sensitive.py"
+
+
+def _secret_patterns() -> list[tuple[str, str]] | None:
+    """`protect-sensitive.py` 의 형식-확정 시크릿 패턴을 그대로 빌려온다."""
+    try:
+        spec = importlib.util.spec_from_file_location(
+            "_evals_protect_sensitive", _SECRET_PATTERNS_SOURCE
+        )
+        if spec is None or spec.loader is None:
+            return None
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        patterns = mod.HIGH_CONFIDENCE_CONTENT_PATTERNS
+    except (OSError, AttributeError, SyntaxError, ImportError):
+        # 어느 쪽이든 결과는 같다 — 가릴 수 없으면 발췌를 내지 않는다(호출부 fail-closed).
+        return None
+    if not patterns:
+        return None  # 빈 목록으로 "전부 통과"시키지 않는다
+    return list(patterns)
+
+
+def _mask_secrets(text: str, patterns: list[tuple[str, str]]) -> str:
+    """발췌에 실린 시크릿 형식 문자열을 라벨로 치환한다.
+
+    `warning-signal.md` §6("이 출력은 어디까지 가는가") — 리포트는 터미널에 머물지
+    않는다. 에이전트 트랜스크립트·CI 로그·이슈 첨부로 이동하므로, 원문 그대로 싣는
+    순간 그 값은 커밋되지 않아도 퍼진다.
+    """
+    for pattern, label in patterns:
+        text = re.sub(pattern, f"[가려짐: {label}]", text)
+    return text
+
+
 def _fail_excerpt(stdout: str, checks: list[dict]) -> str | None:
     """실패한 어서션 주변 출력을 잘라 둔다.
 
@@ -1192,9 +1230,27 @@ def _fail_excerpt(stdout: str, checks: list[dict]) -> str | None:
 
     실패한 검사의 detail 에 나온 문자열을 출력에서 찾아 그 **주변**을 남긴다.
     못 찾으면 앞부분을 남긴다(그것만으로도 형식·길이 판단이 된다).
+
+    **인덱스는 자른 문자열과 같은 공간에서 계산한다.** 예전에는 `_norm(stdout)` 에서
+    찾은 인덱스로 **원본** `stdout` 을 잘랐다. `_norm` 은 NFC 정규화 + `lower()` 라
+    둘 다 **길이를 바꾼다** — NFD 자모 3코드포인트가 NFC 음절 1개가 되고(macOS 파일명
+    출력이 대표적), `İ`.lower() 는 2코드포인트가 된다. 한글이 섞인 출력에서는 오프셋이
+    수백 자씩 밀려 **엉뚱한 구간이 발췌**됐다. 이제 NFC 정규화한 문자열 하나를
+    haystack 으로 삼고 대소문자 무시는 `re.IGNORECASE` 로 처리한다 — 정규식은 원본
+    인덱스를 그대로 주므로 정렬이 깨지지 않는다.
+
+    **그리고 발췌는 마스킹해서 내보낸다** (`_mask_secrets` 참고).
     """
     if not stdout:
         return None
+    patterns = _secret_patterns()
+    if patterns is None:
+        return (
+            "[발췌 생략] 시크릿 마스킹 패턴을 "
+            f"{_SECRET_PATTERNS_SOURCE.name} 에서 읽지 못했다 — "
+            "가릴 수 없는 출력은 리포트에 싣지 않는다"
+        )
+    haystack = unicodedata.normalize("NFC", stdout)
     needle = None
     for c in checks:
         if c.get("ok"):
@@ -1206,11 +1262,14 @@ def _fail_excerpt(stdout: str, checks: list[dict]) -> str | None:
             needle = m.group(1)
             break
     if needle:
-        i = _norm(stdout).find(_norm(needle))
-        if i >= 0:
+        found = re.search(
+            re.escape(unicodedata.normalize("NFC", needle)), haystack, re.IGNORECASE
+        )
+        if found is not None:
             half = FAIL_EXCERPT_CHARS // 2
-            return stdout[max(0, i - half): i + half]
-    return stdout[:FAIL_EXCERPT_CHARS]
+            i = found.start()
+            return _mask_secrets(haystack[max(0, i - half): i + half], patterns)
+    return _mask_secrets(haystack[:FAIL_EXCERPT_CHARS], patterns)
 
 
 def _result(
