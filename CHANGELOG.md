@@ -8,6 +8,153 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.20.0] — 2026-09-10
+
+전수 적대적 리뷰에서 **실측된** 결함을 워크트리 워커 3인이 분담해 고친 배치다. 모든
+전제는 재현 명령과 실제 출력으로 확인했고, 결함마다 되돌려-FAIL 을 실측했다.
+
+### Fixed — `export_harness.py` 가 대상 트리 밖에 파일을 썼다 (Critical, 배포 차단)
+
+`--entrypoints` 는 사용자 입력인데 `target_root / name` 은 **name 이 절대경로면
+target_root 를 통째로 버린다**(pathlib 의 문서화된 동작). `_resolve_target()` 은
+`if path.is_symlink():` 일 때만 봉쇄를 걸어 절대경로·`..` 는 검사 자체를 통과했다.
+
+실측: `--entrypoints '/tmp/…/pwned.md' --target /tmp/…` 로 **트리 밖에 13,824 바이트가
+실제로 기록**됐다. `--check` 경로에도 같은 구멍이 있어, CI 가 검사만 돌려도 트리 밖
+파일을 읽었다(존재 여부·디코딩 오류가 오라클로 샌다).
+
+`docs/conventions/path-containment.md` 에 기록된 **같은 결함 클래스의 네 번째
+인스턴스**다. 그래서 새 봉쇄를 발명하지 않고 `scripts/build-targets.py::_resolve_in_repo`
+와 **동일한 시그니처·계약**의 헬퍼로 교체했다 — 관례를 새로 발명하는 것이 이 결함이
+네 번 반복된 이유다. 해석은 한 번뿐이고 그 결과를 읽기·쓰기 끝까지 쓴다(검사와 사용이
+각자 resolve 하면 그 사이가 TOCTOU 창이다).
+
+### Fixed — `docs/conventions/` 를 가진 소비자 레포에서 `AGENTS.md` 가 아예 안 써졌다 (Critical, 배포 차단)
+
+`build_conventions_block()` 이 `conv_dir.is_dir()` 하나로 "kit 레포인가"를 판정했다.
+자기 관례 문서를 가진 레포(= **모든** 소비자가 그럴 수 있다)에서는 등재 파일이 없어
+`ClassificationError` → `main` 이 `return 1` → **진입점 루프에 들어가기 전에 종료**.
+이 도구의 본래 목적인 규범 블록이 **한 글자도 써지지 않았다.** 바로 아래 루프가
+*"하나가 실패해도 나머지를 건너뛰지 않는다"* 고 적어 놓고 정반대로 동작하던 지점이고,
+consumer-first 북극성의 정면 위반이다.
+
+판정을 둘로 나눴다: 등재 파일이 **하나도 없으면** 소비자 레포이므로 대상 아님(정상),
+**일부만 있으면** kit 레포의 실제 드리프트이므로 red. 그 red 도 규범 블록 기록을
+막지 않고 **전용 종료코드 3** 으로 구분한다(조용히 넘기지도 않는다).
+
+### Fixed — `feedback_ledger.promote()` 가 읽지 않은 원장 항목을 지웠다 (Critical, 데이터 유실)
+
+`promote()` 가 `_ledger_lock` **안에서** 항목마다 subprocess 를 돌렸다. 그런데 그 락은
+5 초를 넘기면 경고만 찍고 **무락으로 진행**한다(의도된 fail-open). 따라서 promote 가
+도는 동안 다른 프로세스의 `upsert` 는 락 없이 원장에 새 항목을 쓰는데, promote 는 자기가
+**루프 시작 시** 읽은 목록만 알고 마지막에 `_write_ledger(path, [])` 로 **파일 전체를
+비웠다** — 그 사이 항목은 승격되지도, 보존되지도 않고 사라졌다.
+
+fail-open 은 *"막지 않는다"* 이지 *"지운다"* 가 아니다. 승격 호출을 락 밖으로 빼고,
+전체 비우기를 **dedupe 키별 차집합 재계산**으로 바꿨다. `_LOCK_TIMEOUT_SECONDS` 의
+fail-open 자체는 의도된 설계라 건드리지 않았다.
+
+### Fixed — 구 원장 이관이 멱등하지 않고 실패를 침묵시켰다
+
+`_write_ledger` 를 먼저, `legacy.rename(backup)` 을 나중에 했고 호출부가
+`contextlib.suppress(Exception)` 으로 예외를 삼켰다. rename 이 실패하면 **매 SessionStart
+마다 같은 항목이 다시 병합돼 frequency 가 부풀고**, 부푼 항목이 진짜 반복 결함을 digest
+밖으로 밀어냈다. 개명을 먼저·병합쓰기를 나중으로 뒤집고, 실패에 stderr 경고 한 줄을
+남겼다(fail-open 은 유지 — 학습 루프가 본 작업을 막지 않는다).
+
+### Fixed — 락 디렉토리 소유권을 확인하지 않았다
+
+`mkdir(mode=0o700, exist_ok=True)` 는 **이미 있는 디렉토리를 그대로 받아들이고**,
+`mode=` 는 생성 시에만 적용된다. 공용 `/tmp` 에서 그 이름이 선점돼 있으면 남이 통제하는
+디렉토리에 락 파일을 열었다(`O_NOFOLLOW` 는 파일의 심링크만 막지 디렉토리는 못 막는다).
+`lstat` 으로 소유자·심링크 여부·group/other 쓰기 비트를 확인하고, 아니면 기존 폴백으로
+내려간다.
+
+### Fixed — 게이트 스크립트의 false-green 경로 4종
+
+이 레포에서 false-green 은 **가장 나쁜 결함 등급**이다 — "통과했다"와 "돌지 않았다"가
+집계에서 구분되지 않으면 게이트 전체의 신뢰가 무너진다.
+
+- **검사 대상 0개가 초록이었다.** `check_old_names.py` 는 `previousNames` 가 비면 매치
+  0건으로 exit 0 했다. 바로 옆 `check_shadowed_defs.py` 는 정반대로 *"검사 대상 0개는
+  green 이 아니다"* 라며 exit 1 했다 — **같은 레포의 두 게이트가 같은 질문에 반대로
+  답하고 있었다.** 후자의 정책으로 통일했다.
+- **비-ASCII 파일명이 조용히 빠졌다.** `git ls-files` 를 `-z` 없이, `core.quotePath=false`
+  없이 불렀다. git 기본값은 비-ASCII 경로를 따옴표+8진 이스케이프로 출력하므로 그
+  문자열은 실제 경로가 아니고, 읽기가 실패하면 두 스크립트 모두 조용히 건너뛰었다.
+  공용 헬퍼 `scripts/git_tracked.py` 로 묶었다.
+- **읽기·파싱 실패가 집계되지 않았다.** "N개 파일"은 *시도한* 수였지 *파싱한* 수가
+  아니었다 — 전부 못 읽어도 그 줄은 초록으로 나왔다. 이제 둘을 나눠 보고한다.
+- **레지스트리 신선도 판정이 CWD 로 샜다.** `resolve_registry_repo` 가 None 을 줘도
+  호출부의 `current_git_head(None)` 이 `cwd=None` 으로 **현재 디렉토리 레포의 HEAD** 를
+  읽었다 — 엉뚱한 레포와 비교하고 통과시켰다.
+
+### Changed — 주입 예산(§16)을 3축으로: 항상 / 최악 / 에이전트
+
+`check_injection_budget.py` 가 `load_rules(PLUGIN_ROOT, False)` 를 불렀다 — `signals`
+인자가 없어 `tier: conditional` 규범이 하나도 포함되지 않았고 결국 **core 만** 쟀다.
+실제 세션은 신호를 켜서 부른다. **예산 게이트가 실제 주입량보다 적게 재고 통과시켰다.**
+
+캡을 올리는 대신 축을 늘렸다:
+
+| 축 | 묻는 것 | 상한 | 실측 |
+| --- | --- | --- | --- |
+| 규범(항상) | 모든 세션이 무조건 내는 비용 | 10 KiB | 10,069B |
+| 규범(최악) | conditional 이 다 겹칠 때의 최대 | 22 KiB | 20,675B |
+| 에이전트 | 하네스가 노출하는 목록 | 8 KiB | 7,837B |
+
+'항상'만 재면 과소측정하고, '최악'만 재면 평범한 세션에 대해 과대보고해서 경고가
+죽는다. conditional 신호 이름은 하드코딩하지 않고 `rules/*.md` frontmatter 에서
+파생한다 — 나열하면 새 규범이 추가될 때 조용히 커버리지를 잃는다.
+
+### Changed — `rules/parallel-worktree.md` 를 운송 중립으로 (block sha `c582f0f6e514…`)
+
+주입되는 이 규범이 `isolation: worktree` + `ExitWorktree` 를 **유일한 격리 수단**인
+것처럼 지목하고 있었다. 그 메커니즘을 훅으로 차단하고 외부 오케스트레이터를 정본으로
+쓰는 레포가 실재하며, 그런 곳에서 이 규범은 "규범 없음"보다 나쁘다 — **없는 위임
+수단이 있다고 오인하게 만든다.**
+
+뿌리는 킷 내부 일관성 위반이다. 다른 주입 규범은 이미 전부 운송 중립이다
+(feedback-loop·definition-of-done·planning-protocol·planning-check). 이것만
+아웃라이어였고, 따라서 그 한 레포가 아니라 **`Agent isolation` 이 없는 모든 소비자
+하네스**에서 같은 오인이 난다.
+
+불변식(파일 소유권 disjoint · 임의 ours/theirs 금지 · 격리 트리 안 공유 상태 갱신
+금지)만 규범에 남기고 구체 메커니즘은 "킷이 자기 에이전트를 저작할 때의 한 가지 구현"
+으로 강등했다. 내용이 운송 중립이 된 이상 `portable: false` → `true` 로 바꿔
+Codex·Gemini 진입점에도 같은 규범이 간다.
+
+### Changed — 구/신 마커 공존을 이행 경로로 해석한다
+
+구 토큰 블록과 신 토큰 블록이 **각각 하나씩** 공존하면 해석이 하나뿐이다 — 구 블록을
+지우고 신 블록을 갱신하는 것. 그것을 "손상"으로 거부하면 **재생성으로도 못 고치는
+영구 red** 가 된다(LESSONS 에 x3 로 등재된 패턴). 그 **외의** 손상(begin 만 있음,
+3개 이상, 서로 맞물림)은 해석이 여럿이므로 계속 거부한다.
+
+### Changed — 킷 이름·홈페이지를 매니페스트에서 파생 / eval 발췌 마스킹
+
+`PREAMBLE`·`BLOCK_HEADER` 가 이름을 하드코딩하고 있었다(마커 토큰은 불변 — 바꾸면
+기존 소비자의 `AGENTS.md` 가 전부 손상 판정된다). `evals/run.py` 의 실패 발췌는
+인덱스 정렬을 고치고 시크릿 형태 문자열을 마스킹한다 — 훅·게이트의 출력은 터미널에
+머물지 않는다(`warning-signal.md` §6).
+
+### Changed — 문서: 드리프트 게이트 목록을 지우고 판정만 남긴다
+
+CLAUDE.md 의 *"드리프트 게이트는 셋"* 문단이 게이트를 표로 열거했는데, 실제로는
+일곱으로 늘어난 뒤에도 **셋에서 멈춘 채 낡아 있었다.** 같은 문단의 *"네 번째가
+필요해지면 재검토한다"* 약속도 조용히 지나갔다. 이 레포는 바로 이 실패를 이미
+`rules/definition-of-done.md`("열거하면 검사를 더할 때마다 낡는다")와
+`warning-signal.md` §5("대상을 나열하지 말고 제외를 나열한다")에 적어 두었다 —
+자기 규약을 자기 문서가 어긴 것이다. 통합 판정은 유지하고 열거만 지웠다.
+
+`plugins/common/setup/git-hooks/` 의 존재와 "배포됐다 ≠ 설치돼서 돈다" 결함 클래스,
+`/harness-export` 가 `GEMINI.md` 도 낸다는 사실도 채웠다(둘 다 CLAUDE.md grep 0건이었다).
+
+`skills/review/SKILL.md` 에는 두 리뷰 에이전트가 `maxTurns: 10` 이라 한 번에 10여 개
+파일을 넘기면 **리포트 없이 종료**한다는 실측을 호출 규약으로 적었다 — 빈 반환은
+"결함 0건"과 구별되지 않는다.
+
+
 ## [3.19.0] — 2026-09-09
 
 ### Fixed — `git-workflow` 이 충돌 후 작업 트리를 되돌리지 않았다 (eval 이 찾아낸 첫 실제 결함)
