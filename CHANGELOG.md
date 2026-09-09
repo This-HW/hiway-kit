@@ -8,6 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — 공개 README 의 하네스 표에 **한 번도 검사되지 않은 틀린 수치**가 있었다 (2026-09-09, 레포 로컬)
+
+`plugins/` 무변경. 둘을 고쳤다.
+
+**① `Rules (13)` — 실제는 15.** `check_doc_counts.py` 가 `rules \((\d+)\)` 를 **소문자로만**
+찾아, 하네스 표의 대문자 `Rules (13)` 이 검사 대상 밖이었다. 같은 파일의 소문자 주장
+(`rules (15)`)은 정상이라 **게이트가 계속 초록**이었다 — 검사 대상 밖에 결함이 쌓이는
+`warning-signal.md` §검토 절차 5 형태 그대로다. 대소문자 무관 매칭으로 고쳤고,
+되돌려-FAIL 로 확인했다(매치 2건을 전부 본다).
+
+**② Antigravity 가 `rules/` 를 인식한다는 주장 — 거짓.** 오늘 실측했다: `rules/` 가
+있을 때와 없을 때 `agy plugin validate` 출력이 **완전히 동일**하고, 그 도구가 세는
+컴포넌트는 skills·agents·commands·mcpServers·hooks 다섯뿐이다. 표를
+*"❌ not recognized — 규범은 진입점 파일로만 도달한다"* 로 정정했다.
+(`packaging/targets.json` 은 앞서 정정했으나 **공개 README 는 그대로였다** — 같은 사실을
+두 곳에 적으면 한쪽만 고치게 된다는 SSOT 교훈의 또 한 사례다.)
+
+
 ## [3.17.0] — 2026-09-09
 
 ### Fixed — 배포물이 **제거된 스킬을 아직 광고**하고 있었다

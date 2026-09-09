@@ -99,7 +99,7 @@ differs by platform capability, verified against the real CLIs (not assumed):
 | Component | Codex | Antigravity |
 | --- | --- | --- |
 | Skills (20) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
-| Rules (13) | ⚠ no dedicated field → carried via `AGENTS.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ✅ recognized |
+| Rules (15) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
 | Agents (32) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`backend`/`dev`/`meta`/`planning`); it miscounts the 4 category folders as agent entries and finds none of the real 32. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
 | Hooks | ❌ not shipped — Codex's hook runtime does not load the exec-array form (`command`+`args`) this kit uses; confirmed by direct testing, not just reading docs | ❌ not shipped this batch — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |

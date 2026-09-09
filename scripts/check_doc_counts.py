@@ -59,7 +59,11 @@ def check_claim(root: Path, rel: str, pattern: str, actual: int, label: str) -> 
         print(f"{OK} {label}: 파일 없음 (skip)")
         return True
     text = p.read_text(encoding="utf-8")
-    matches = list(re.finditer(pattern, text))
+    # **대소문자 무관**으로 찾는다. 소문자 패턴(`rules \(N\)`)만 보던 시절 README 의
+    # 하네스 표에 있는 `Rules (13)` 이 **한 번도 검사되지 않았고**, 실제로 15 와 어긋난
+    # 채 공개 표면에 남아 있었다(2026-09-09 실측). 같은 파일의 소문자 주장은 정상이라
+    # 게이트가 초록이었다 — 검사 대상 밖에 결함이 쌓이는 §5 형태 그대로다.
+    matches = list(re.finditer(pattern, text, re.IGNORECASE))
     if len(matches) > 1:
         bad = [int(m.group(1)) for m in matches if int(m.group(1)) != actual]
         if bad:
