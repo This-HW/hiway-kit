@@ -53,11 +53,11 @@ ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 
 from __future__ import annotations
 
-import contextlib
 import fcntl
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -186,11 +186,21 @@ def migrate_legacy_ledger(root: Path | None = None) -> str:
         incoming = parse_ledger(legacy)
         if not incoming:
             return "noop"
+        # **개명이 먼저다** (ATK-008). 병합·쓰기를 먼저 하고 개명을 나중에 하면 둘이
+        # 원자적이지 않아, 개명이 실패했을 때(권한·파일시스템·경합) 구 원장이 그대로
+        # 남는다. 그러면 다음 SessionStart 마다 같은 항목이 다시 병합돼 frequency 가
+        # 부푼다 — frequency 는 digest 순위를 정하므로 부푼 항목이 진짜 반복 결함을
+        # digest 밖으로 밀어낸다. 개명이 성공한 뒤에는 구 경로가 없으므로 재실행돼도
+        # 중복 병합이 없다(멱등).
+        #
+        # 반대 방향의 손해는 감수한다: 개명 뒤 쓰기가 실패하면 이번 병합분이 정본에
+        # 반영되지 않는다. 그러나 원본은 .migrated 로 **디스크에 남아 있어** 되돌릴 수
+        # 있고, 반대편(중복 계수)은 조용히 순위를 오염시켜 되돌릴 수 없다.
+        backup = legacy.with_suffix(".md.migrated")
+        legacy.rename(backup)
         merged = _merge_entries(parse_ledger(target), incoming)
         kept = _decay(merged)
         _write_ledger(target, kept)
-        backup = legacy.with_suffix(".md.migrated")
-        legacy.rename(backup)
     dropped = len(merged) - len(kept)
     if dropped:
         # **조용히 지우지 않는다.** 상한·감쇠는 설계된 동작이지만, 이관 중에 일어나면
@@ -319,12 +329,39 @@ def _lock_path_for(path: Path) -> Path:
     key = hashlib.md5(str(path.resolve()).encode(), usedforsecurity=False).hexdigest()[
         :12
     ]
+    fallback = path.with_name(path.name + ".lock")  # 폴백: 기존 위치
     d = Path(tempfile.gettempdir()) / f"claude-{uid}"
     try:
         d.mkdir(mode=0o700, exist_ok=True)
-        return d / f"ledger_{key}.lock"
     except Exception:
-        return path.with_name(path.name + ".lock")  # 폴백: 기존 위치
+        return fallback
+    # `exist_ok=True` 는 **이미 있는 디렉토리를 그대로 받아들이고**, `mode=` 는 생성
+    # 시에만 적용된다. 다중 사용자 머신의 공용 /tmp 에서 이 이름이 선점돼 있으면
+    # (소유자가 다르거나 group/other 쓰기 가능) 남이 통제하는 디렉토리에 락 파일을
+    # 연다 — O_NOFOLLOW 는 락 **파일**의 심링크만 막지 디렉토리 자체는 막지 못한다(M-1).
+    if not _lock_dir_is_safe(d):
+        return fallback
+    return d / f"ledger_{key}.lock"
+
+
+def _lock_dir_is_safe(d: Path) -> bool:
+    """락 디렉토리를 재사용해도 되는가 — 실제 디렉토리 · 내 소유 · 남이 쓸 수 없음.
+
+    `lstat` 을 쓴다(`stat` 이 아니라) — 심링크면 그 자체로 거절해야 하는데 `stat` 은
+    링크를 따라가 대상 디렉토리의 속성을 보여 준다.
+    """
+    try:
+        st = os.lstat(str(d))
+    except OSError:
+        return False
+    if not stat.S_ISDIR(st.st_mode):
+        return False  # 심링크·일반 파일 등 — 디렉토리가 아니면 쓰지 않는다
+    try:
+        if st.st_uid != os.getuid():
+            return False
+    except AttributeError:
+        pass  # getuid 없는 플랫폼 — 소유권 개념이 없으니 퍼미션 검사만 한다
+    return not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
 
 
 def _write_ledger(path: Path, entries: list[dict]) -> None:
@@ -408,9 +445,25 @@ def _try_migrate(root: Path | None) -> None:
 
     학습 루프는 opt-in·fail-open 이 원칙이다(rules/feedback-loop.md). 이관 실패로
     upsert/digest 가 죽으면 그 원칙이 깨진다.
+
+    **다만 완전히 침묵하지는 않는다** — 초판은 `contextlib.suppress(Exception)` 으로
+    삼켜, 개명 실패로 구 원장이 남아 매 세션 중복 병합되는 상태가 어디에서도 드러나지
+    않았다(ATK-008). fail-open 은 유지하되 stderr 한 줄로 관측 가능하게 한다.
+
+    warning-signal §4 — **이 경고가 도는 조건을 한 문장으로**: *"구 원장이 실제로
+    존재해서 이관을 시도했고, 그 이관이 예외로 실패했을 때만 발화한다."* 구 원장이
+    없으면 `migrate_legacy_ledger` 가 예외 없이 "noop" 을 돌려주므로 정상 운영에서는
+    한 번도 발화하지 않는다 — 상시 참인 경고가 아니다.
     """
-    with contextlib.suppress(Exception):
+    try:
         migrate_legacy_ledger(root)
+    except Exception as ex:
+        print(
+            f"[feedback_ledger] warning: 구 원장 이관 실패 — 구 위치 그대로 진행합니다 "
+            f"({type(ex).__name__}: {ex}). 반복되면 구 원장이 매 세션 재병합돼 "
+            f"frequency 가 부풀 수 있습니다.",
+            file=sys.stderr,
+        )
 
 
 def load_digest(top_k: int = DEFAULT_DIGEST_K, root: Path | None = None) -> str:
@@ -577,6 +630,71 @@ def _select_promotion_verb(pointer: dict, verbs: list[dict]) -> tuple[str | None
     )
 
 
+def _call_promotion_verb(
+    command: list[str], verb_name: str, entries: list[dict], root: Path
+) -> tuple[list[dict], list[str]]:
+    """승격 동사를 항목마다 호출한다. **락 밖에서** 돈다 (ATK-001).
+
+    반환: (승격에 성공한 항목들, 실패 사유들).
+    """
+    succeeded: list[dict] = []
+    failures: list[str] = []
+    for e in entries:
+        payload = json.dumps(
+            {
+                "category": e["category"],
+                "severity": e["severity"],
+                "pattern": e["pattern"],
+                "frequency": e["frequency"],
+                "lastSeen": e["last_seen"],
+            }
+        )
+        try:
+            r = subprocess.run(
+                [*command, verb_name, payload],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=_PROMOTE_CALL_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as ex:
+            failures.append(str(ex))
+            continue
+        if r.returncode == 0:
+            succeeded.append(e)
+        else:
+            failures.append(r.stderr.strip() or f"exit {r.returncode}")
+    return succeeded, failures
+
+
+def _remaining_after_promotion(current: list[dict], promoted: list[dict]) -> list[dict]:
+    """원장에서 **승격에 성공한 만큼만 정확히 차감**한 결과를 돌려준다 (ATK-001).
+
+    `promoted` 는 락을 놓기 **전** 스냅샷이다. 락 밖에서 승격이 도는 동안 다른
+    프로세스가 새 항목을 쓰거나 기존 항목의 frequency 를 올렸을 수 있고, 그 증분은
+    아직 승격되지 않았으므로 **남겨야 한다.** 불변식: promote 가 도는 동안 추가된
+    항목은 절대 사라지지 않는다.
+    """
+    debit: dict[str, int] = {}
+    for e in promoted:
+        key = _normalize(e["category"], e["pattern"])
+        debit[key] = debit.get(key, 0) + e["frequency"]
+    kept: list[dict] = []
+    for e in current:
+        key = _normalize(e["category"], e["pattern"])
+        owed = debit.get(key, 0)
+        if not owed:
+            kept.append(e)
+            continue
+        debit[key] = 0  # 차감은 한 번만 — 같은 키의 행이 둘이면 뒤엣것은 그대로 남긴다
+        remaining = e["frequency"] - owed
+        if remaining <= 0:
+            continue  # 승격된 만큼으로 전부 상쇄됐다 → 제거
+        kept.append({**e, "frequency": remaining})
+    return kept
+
+
 def promote(root: Path | None = None) -> dict:
     """스테이징된 ledger를 컨트롤 레지스트리로 승격하고 비운다(D-43).
 
@@ -658,56 +776,36 @@ def promote(root: Path | None = None) -> dict:
         return {"promoted": False, "mode": "held", "reason": reason}
 
     path = ledger_path(root)
+    # **락 안에서는 읽기(claim)만 한다.** 승격 subprocess 는 락 밖에서 돈다 — 항목 수 ×
+    # _PROMOTE_CALL_TIMEOUT_SECONDS 만큼 락을 붙잡으면 _LOCK_TIMEOUT_SECONDS(5초,
+    # **의도된 fail-open**) 를 넘긴 다른 프로세스의 upsert 가 **무락으로** 원장에 쓴다.
+    # 그 상태에서 원장을 통째로 비우면 그 항목은 승격도 보존도 되지 않고 사라진다(ATK-001).
+    # fail-open 은 "막지 않는다"이지 "지운다"가 아니다.
     with _ledger_lock(path):
-        entries = parse_ledger(path)
-        if not entries:
-            return {"promoted": True, "mode": "promoted", "count": 0}
+        claimed = parse_ledger(path)
+    if not claimed:
+        return {"promoted": True, "mode": "promoted", "count": 0}
 
-        failures: list[str] = []
-        promoted_count = 0
-        for e in entries:
-            payload = json.dumps(
-                {
-                    "category": e["category"],
-                    "severity": e["severity"],
-                    "pattern": e["pattern"],
-                    "frequency": e["frequency"],
-                    "lastSeen": e["last_seen"],
-                }
-            )
-            try:
-                r = subprocess.run(
-                    [*command, verb_name, payload],
-                    cwd=root,
-                    capture_output=True,
-                    text=True,
-                    timeout=_PROMOTE_CALL_TIMEOUT_SECONDS,
-                    check=False,
-                )
-            except (OSError, subprocess.SubprocessError) as ex:
-                failures.append(str(ex))
-                continue
-            if r.returncode == 0:
-                promoted_count += 1
-            else:
-                failures.append(r.stderr.strip() or f"exit {r.returncode}")
+    succeeded, failures = _call_promotion_verb(command, verb_name, claimed, root)
 
-        if promoted_count == 0:
-            return {
-                "promoted": False,
-                "mode": "fallback",
-                "reason": f"승격 호출 전부 실패 — ledger 보존: {failures[:3]}",
-            }
-        if failures:
-            return {
-                "promoted": True,
-                "mode": "partial",
-                "count": promoted_count,
-                "failed": len(failures),
-                "reason": "일부 실패 — 재시도를 위해 ledger를 비우지 않음",
-            }
-        _write_ledger(path, [])
-        return {"promoted": True, "mode": "promoted", "count": promoted_count}
+    if not succeeded:
+        return {
+            "promoted": False,
+            "mode": "fallback",
+            "reason": f"승격 호출 전부 실패 — ledger 보존: {failures[:3]}",
+        }
+    if failures:
+        return {
+            "promoted": True,
+            "mode": "partial",
+            "count": len(succeeded),
+            "failed": len(failures),
+            "reason": "일부 실패 — 재시도를 위해 ledger를 비우지 않음",
+        }
+    with _ledger_lock(path):
+        # 비우지 않고 **차집합을 다시 계산해** 쓴다. 승격 중 추가·증가된 것은 남는다.
+        _write_ledger(path, _remaining_after_promotion(parse_ledger(path), succeeded))
+    return {"promoted": True, "mode": "promoted", "count": len(succeeded)}
 
 
 def _main(argv: list[str]) -> int:
