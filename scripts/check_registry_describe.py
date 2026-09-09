@@ -220,12 +220,32 @@ def resolve_registry_repo(explicit: Path | None, pointer: Path | None) -> Path |
     곧 그 레지스트리의 레포**다. 추측이 필요 없다. 포인터 없이 커맨드를 직접 지정한
     경우에는 알 수 없으므로 `--repo` 로 받고, 그것도 없으면 None(신선도 판정 생략)이다.
     **모르는 것을 CWD 로 때려 맞히지 않는다.**
+
+    **이 함수만으로는 부족했다(실측).** None 을 돌려줘도 호출부가 `current_git_head(None)`
+    를 부르면 `subprocess` 의 `cwd=None` 이 곧 **프로브를 실행한 레포**라, 결국 CWD 의
+    HEAD 와 비교하게 된다 — 이 함수가 없애려던 바로 그 경로가 한 단계 아래에 남아
+    있었다. 신선도 판정 생략은 **호출부가 아예 git 을 부르지 않아야** 성립한다
+    (`registry_head()` 참고).
     """
     if explicit is not None:
         return explicit
     if pointer is None:
         return None
     return pointer.resolve().parent
+
+
+def registry_head(repo: Path | None) -> str | None:
+    """레지스트리 레포의 HEAD. **레포를 모르면 git 을 부르지 않는다.**
+
+    `current_git_head(None)` 은 `cwd=None` 이므로 *프로브를 실행한 레포*의 HEAD 를
+    돌려준다. 그 값을 신선도 대조에 쓰면 **항상 불일치**가 나고, D-49/D-50 은 지속
+    불일치를 "기동 커밋 파사드"로 보고 **강등**한다 — 멀쩡한 레지스트리를 거짓으로
+    강등시키는 경로다. 모르는 것은 모른다고 말한다: None → `classify_freshness` 가
+    'unknown' 을 내고 판정을 생략한다.
+    """
+    if repo is None:
+        return None
+    return current_git_head(repo)
 
 
 def classify_freshness(declared_head: str | None, actual_head: str | None) -> str:
@@ -404,7 +424,7 @@ def main(argv: list[str]) -> int:
         )
         return 1
 
-    repo_head = current_git_head(resolve_registry_repo(args.repo, args.pointer))
+    repo_head = registry_head(resolve_registry_repo(args.repo, args.pointer))
     ok, lines = evaluate(response, repo_head, args.observe)
     for line in lines:
         print(line)

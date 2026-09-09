@@ -31,14 +31,30 @@
 구 이름은 매직 리터럴로 박지 않고 이름 정책에서 읽는다(F-022: 게이트를 매직 리터럴에
 커플링하면 값이 바뀔 때 검사가 조용히 skip-green 된다). 매칭은 정규식이 아니라
 **리터럴 부분문자열**이다 — 이름에 정규식 메타문자가 있어도 오작동하지 않는다.
+
+## 검사 대상 0개는 green 이 아니다
+
+`previousNames` 가 비면 **exit 1** 이다. 예전에는 *"검사 대상 없음"* 이라며 exit 0 을
+냈는데, 그 상태의 게이트는 **영원히 아무것도 잡지 않으면서 초록**이다 — 정책 파일이
+편집돼 목록이 비는 순간 §20 은 장식이 된다. 바로 옆 `check_shadowed_defs.py` 가 같은
+질문에 이미 *"검사 대상 0개는 green 이 아니다"* 로 답하고 있었다. 같은 레포의 두
+게이트가 같은 질문에 반대로 답하면, 둘 중 하나는 반드시 틀린 것이다(F-012).
+
+## 읽지 못한 파일은 집계해서 보고한다
+
+읽기 실패를 `continue` 로 삼키면 *"구 이름 0건"* 과 *"파일을 한 개도 못 읽었다"* 가
+출력에서 구분되지 않는다. `git_tracked.SkipTally` 로 사유별로 모아 개수·비율·경로를
+인쇄한다. `OSError` 는 **red** 다(경로가 틀렸거나 권한이 없다 = 사각지대), 비-UTF-8
+바이너리는 노란 보고다(줄 단위 텍스트 검사의 대상이 아닌 것이 정상).
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
+
+from git_tracked import SkipTally, tracked_files
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 POLICY = REPO_ROOT / "packaging" / "name-targets.json"
@@ -49,10 +65,17 @@ DEFAULT_EXCLUDE = ("docs/", "CHANGELOG.md", "packaging/name-targets.json")
 # "검사 대상이 아닌 것은 결코 red 가 되지 않는다"). 구 이름이 정당한 줄은 소수이고
 # 이유가 분명하므로(구 마커 인식 = 이행 경로), 그 줄만 표기하고 나머지는 계속 검사한다.
 LINE_OPT_OUT = "old-name-ok"
+LABEL = "check-old-names"
+
+# 읽기 실패는 사각지대이므로 red, 바이너리는 정상이므로 노란 보고다(위 독스트링).
+FATAL_SKIP_REASONS = frozenset({"읽기실패"})
 
 
 def load_previous_names() -> list[str]:
-    """이름 정책에서 구 이름 목록을 읽는다. 정책이 없으면 빈 목록(검사 대상 없음)."""
+    """이름 정책에서 구 이름 목록을 읽는다. 정책을 못 읽으면 exit 1.
+
+    빈 목록을 그대로 반환한다 — 그것을 통과로 볼지 결함으로 볼지는 `main` 이 정한다.
+    """
     try:
         policy = json.loads(POLICY.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as err:
@@ -74,28 +97,33 @@ def load_exclude() -> tuple[str, ...]:
     return tuple(x for x in raw if isinstance(x, str) and x.strip())
 
 
-def tracked_files(exclude: tuple[str, ...]) -> list[str]:
-    """git 이 추적하는 파일 중 제외 대상이 아닌 것 — 생성물·캐시의 우연한 매치를 배제한다."""
-    result = subprocess.run(
-        ["git", "ls-files"],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, check=False,
-    )
-    if result.returncode != 0:
-        print(f"[check-old-names] git ls-files 실패: {result.stderr.strip()}")
-        raise SystemExit(1)
+def scan_targets(exclude: tuple[str, ...]) -> list[str]:
+    """추적 파일 중 제외 접두사에 걸리지 않는 것 — 생성물·캐시의 우연한 매치를 배제한다."""
     return [
-        line for line in result.stdout.splitlines()
-        if line and not any(line.startswith(pre) for pre in exclude)
+        rel for rel in tracked_files(REPO_ROOT, label=LABEL)
+        if not any(rel.startswith(pre) for pre in exclude)
     ]
 
 
-def find_hits(names: list[str], exclude: tuple[str, ...]) -> list[tuple[str, str]]:
-    """(파일, 걸린 이름) 목록. 읽을 수 없는 파일은 건너뛴다(바이너리·권한)."""
+def find_hits(
+    names: list[str], exclude: tuple[str, ...]
+) -> tuple[list[tuple[str, str]], SkipTally]:
+    """(파일, 걸린 이름) 목록과 **못 읽은 파일 집계**를 함께 반환한다.
+
+    집계를 함께 돌려주는 것이 핵심이다 — 반환값이 hits 뿐이면 호출부는 "0건"이
+    *검사해서 없음* 인지 *못 읽어서 없음* 인지 구분할 수 없다.
+    """
     hits: list[tuple[str, str]] = []
-    for rel in tracked_files(exclude):
+    skipped = SkipTally(LABEL)
+    for rel in scan_targets(exclude):
+        skipped.attempted += 1
         try:
             text = (REPO_ROOT / rel).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+        except OSError as err:
+            skipped.add(rel, "읽기실패", str(err))
+            continue
+        except UnicodeDecodeError:
+            skipped.add(rel, "비-UTF-8", "바이너리 — 줄 단위 텍스트 검사 대상 아님")
             continue
         for lineno, line in enumerate(text.splitlines(), 1):
             if LINE_OPT_OUT in line:
@@ -104,23 +132,31 @@ def find_hits(names: list[str], exclude: tuple[str, ...]) -> list[tuple[str, str
                 if name in line:
                     hits.append((f"{rel}:{lineno}", name))
                     break
-    return hits
+    return hits, skipped
 
 
 def main() -> int:
     names = load_previous_names()
     if not names:
-        print("[check-old-names] ✓ previousNames 비어 있음 — 검사 대상 없음")
-        return 0
+        print(
+            f"[{LABEL}] ✗ 검사할 이름이 0개다 — 통과가 아니라 설정 결함이다. "
+            f"{POLICY.relative_to(REPO_ROOT)} 의 'previousNames' 가 비어 있으면 "
+            "이 게이트는 영원히 아무것도 잡지 않으면서 초록을 낸다."
+        )
+        return 1
     exclude = load_exclude()
-    hits = find_hits(names, exclude)
-    if not hits:
-        print(f"[check-old-names] ✓ 살아있는 표면에 구 이름 0건 ({', '.join(names)})")
-        return 0
-    print(f"[check-old-names] ✗ 구 이름 {len(hits)}건 — 살아있는 표면에 개명 잔재")
-    for rel, name in hits:
-        print(f"    {rel}  ({name})")
-    return 1
+    hits, skipped = find_hits(names, exclude)
+    rc = skipped.report(FATAL_SKIP_REASONS)
+    if hits:
+        print(f"[{LABEL}] ✗ 구 이름 {len(hits)}건 — 살아있는 표면에 개명 잔재")
+        for rel, name in hits:
+            print(f"    {rel}  ({name})")
+        return 1
+    print(
+        f"[{LABEL}] {'✗' if rc else '✓'} 살아있는 표면에 구 이름 0건 "
+        f"({', '.join(names)}) — {skipped.parsed}개 파일 검사"
+    )
+    return rc
 
 
 if __name__ == "__main__":

@@ -31,35 +31,57 @@ green 으로 보고하는 것은 정합이 아니라 손상이다).
 
 클래스 메서드는 별개 스코프이므로 최상위만 본다. 정규식이 아니라 **AST** 로 읽는다 —
 이름을 자르는 오탐(`test_tier1…`/`test_tier2…`)과 문자열·주석 안 코드를 둘 다 피한다.
+
+## 파싱하지 못한 파일은 red 다
+
+`ast.parse` 가 실패한 파일을 `return {}` 로 삼키면 *"그림자 정의 0건"* 과 *"이 파일을
+읽지도 못했다"* 가 출력에서 같아진다 — 이 게이트가 막으려는 바로 그 false-green 이다.
+`git_tracked.SkipTally` 로 집계해 개수·비율·경로를 인쇄하고, `.py` 는 전부 파싱돼야
+정상이므로 **읽기 실패도 문법 오류도 red** 로 둔다.
+
+`({len(files)}개 파일)` 이라는 성공 줄도 고쳤다 — 그것은 **시도한 수**였지 실제로
+파싱한 수가 아니었다. 전부 못 읽어도 그 줄은 그대로 초록으로 나왔다.
 """
 
 from __future__ import annotations
 
 import ast
 import collections
-import subprocess
 import sys
 from pathlib import Path
 
+from git_tracked import SkipTally, tracked_files
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
+LABEL = "shadowed-defs"
+
+# `.py` 는 전부 파싱돼야 정상이다 — 못 읽은 파일은 예외 없이 사각지대다(위 독스트링).
+FATAL_SKIP_REASONS = frozenset({"읽기실패", "문법오류", "디코딩실패"})
 
 
 def tracked_python_files() -> list[str]:
-    result = subprocess.run(
-        ["git", "ls-files", "*.py"],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, check=False,
-    )
-    if result.returncode != 0:
-        print(f"[shadowed-defs] git ls-files 실패: {result.stderr.strip()}")
-        raise SystemExit(1)
-    return [line for line in result.stdout.splitlines() if line]
+    return tracked_files(REPO_ROOT, ("*.py",), label=LABEL)
 
 
-def shadowed_in(path: Path) -> dict[str, int]:
-    """최상위 def/class 중 두 번 이상 나오는 이름 → 등장 횟수."""
+def shadowed_in(path: Path, rel: str, skipped: SkipTally) -> dict[str, int]:
+    """최상위 def/class 중 두 번 이상 나오는 이름 → 등장 횟수.
+
+    읽거나 파싱하지 못하면 `skipped` 에 사유를 기록한다 — 조용히 `{}` 를 돌려주면
+    "검사했는데 없음"과 구분되지 않는다.
+    """
+    skipped.attempted += 1
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError):
+        source = path.read_text(encoding="utf-8")
+    except OSError as err:
+        skipped.add(rel, "읽기실패", str(err))
+        return {}
+    except UnicodeDecodeError as err:
+        skipped.add(rel, "디코딩실패", str(err))
+        return {}
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as err:
+        skipped.add(rel, "문법오류", f"line {err.lineno}: {err.msg}")
         return {}
     names: collections.Counter[str] = collections.Counter()
     for node in tree.body:
@@ -71,18 +93,23 @@ def shadowed_in(path: Path) -> dict[str, int]:
 def main() -> int:
     files = tracked_python_files()
     if not files:
-        print("[shadowed-defs] 추적 중인 .py 가 없다 — 검사 대상 0개는 green 이 아니다")
+        print(f"[{LABEL}] ✗ 추적 중인 .py 가 없다 — 검사 대상 0개는 green 이 아니다")
         return 1
-    hits = [(rel, shadowed_in(REPO_ROOT / rel)) for rel in files]
+    skipped = SkipTally(LABEL)
+    hits = [(rel, shadowed_in(REPO_ROOT / rel, rel, skipped)) for rel in files]
     hits = [(rel, dup) for rel, dup in hits if dup]
-    if not hits:
-        print(f"[shadowed-defs] ✓ 최상위 그림자 정의 0건 ({len(files)}개 파일)")
-        return 0
-    print(f"[shadowed-defs] ✗ 그림자 정의 {len(hits)}개 파일 — 나중 정의가 앞선 것을 덮는다")
-    for rel, dup in hits:
-        for name, count in sorted(dup.items()):
-            print(f"    {rel}: {name} x{count}")
-    return 1
+    rc = skipped.report(FATAL_SKIP_REASONS)
+    if hits:
+        print(f"[{LABEL}] ✗ 그림자 정의 {len(hits)}개 파일 — 나중 정의가 앞선 것을 덮는다")
+        for rel, dup in hits:
+            for name, count in sorted(dup.items()):
+                print(f"    {rel}: {name} x{count}")
+        return 1
+    print(
+        f"[{LABEL}] {'✗' if rc else '✓'} 최상위 그림자 정의 0건 "
+        f"({skipped.parsed}개 파일 파싱 / 시도 {skipped.attempted}개)"
+    )
+    return rc
 
 
 if __name__ == "__main__":

@@ -25,6 +25,21 @@
 하네스가 노출하는 목록) **줄이는 수단도 다르다.** 합치면 "규범을 깎아 에이전트를 늘리는"
 교환이 조용히 통과한다 — 그 둘은 교환 가능한 자원이 아니다.
 
+## 왜 **최악의 경우**를 재는가
+
+`rules_bytes()` 는 `load_rules(PLUGIN_ROOT, False)` 를 불렀다 — `signals` 인자가 **없는**
+호출이라 `tier: conditional` 규범이 하나도 포함되지 않았고, 결국 **core 규범만** 재고
+있었다. 그런데 실제 세션은 `parallel-worktree`·`feedback-loop`·`mcp-usage`·`task-resume`
+신호를 켜서 부른다(`session-start.py` 의 호출부). 즉 **게이트가 실제 주입량보다 적게
+재고 통과시켰다.** 예산 게이트의 존재 이유가 *"매 세션 이만큼을 쓴다"* 인데 그 숫자가
+실제보다 작으면, 그 게이트는 예산이 아니라 장식이다.
+
+이제 **conditional 신호를 전부 켠 상태**를 잰다. 신호 이름은 **하드코딩하지 않고**
+`rules/*.md` 의 frontmatter `tier: conditional` 에서 파생한다 — 목록을 코드에 나열하면
+새 conditional 규범이 추가될 때 **조용히 커버리지를 잃는다**(`warning-signal.md`
+§검토 절차 5: "대상을 나열하지 말고 제외를 나열한다"). 파생 결과가 0개면 red 다:
+파싱 경로가 깨진 채 "core 만 쟀다"로 되돌아가는 것을 막는다.
+
 ## 상한 도출
 
 **먼저 깎고 나서 숫자를 정한다(D-46)** — 반대로 하면 예산이 압력을 잃고 장식이 된다.
@@ -54,8 +69,33 @@ DESC_RE = re.compile(
 )
 
 
-def rules_bytes() -> int:
-    """session-start.py 가 실제로 주입하는 바이트 수. 재구현하지 않고 그 함수를 부른다."""
+TIER_RE = re.compile(r"^tier:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def conditional_signals() -> dict[str, bool]:
+    """`rules/*.md` 의 frontmatter 에서 `tier: conditional` 규범을 **파생**해 전부 켠다.
+
+    신호 키는 `load_rules` 가 쓰는 것과 같은 **파일명 stem** 이다. 목록을 하드코딩하지
+    않는 이유는 위 독스트링 참고 — 새 conditional 규범이 조용히 측정에서 빠지면
+    예산은 실제보다 작게 나오고, 그것이 바로 이 게이트가 막아야 할 false-green 이다.
+    """
+    signals: dict[str, bool] = {}
+    for path in sorted((PLUGIN_ROOT / "rules").glob("*.md")):
+        fm = FRONTMATTER_RE.match(path.read_text(encoding="utf-8"))
+        if fm is None:
+            continue
+        tier = TIER_RE.search(fm.group(1))
+        if tier is not None and tier.group(1) == "conditional":
+            signals[path.stem] = True
+    return signals
+
+
+def rules_bytes() -> tuple[int, dict[str, bool]]:
+    """**최악의 경우** 주입 바이트 수. 재구현하지 않고 session-start.py 의 함수를 부른다.
+
+    최악 = core 전부 + conditional 전부 + reference 색인. `include_task_resume` 도
+    True 다(활성 Work 가 있는 세션).
+    """
     spec = importlib.util.spec_from_file_location(
         "session_start", PLUGIN_ROOT / "hooks" / "session-start.py"
     )
@@ -63,9 +103,16 @@ def rules_bytes() -> int:
         raise RuntimeError("session-start.py 를 로드할 수 없다")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return len(mod.load_rules(PLUGIN_ROOT, False).encode()) + len(
+    signals = conditional_signals()
+    if not signals:
+        raise RuntimeError(
+            "conditional 규범을 하나도 파생하지 못했다 — frontmatter 파싱 경로가 깨졌다. "
+            "이대로면 core 만 재고 통과시키던 옛 결함으로 되돌아간다"
+        )
+    used = len(mod.load_rules(PLUGIN_ROOT, True, signals=signals).encode()) + len(
         mod.load_workflow_skill(PLUGIN_ROOT).encode()
     )
+    return used, signals
 
 
 def agent_entries() -> list[tuple[int, str]]:
@@ -94,13 +141,17 @@ def _report(label: str, used: int, cap: int, hint: str) -> int:
 
 def main() -> int:
     try:
-        used_rules = rules_bytes()
+        used_rules, signals = rules_bytes()
     except Exception as err:  # noqa: BLE001 — 측정 실패를 green 으로 위장하지 않는다
         print(f"[injection-budget] ✗ 규범 축 측정 실패: {err}")
         return 1
 
+    print(
+        f"[injection-budget] · 최악의 경우로 측정 — conditional {len(signals)}종 전부 켬: "
+        + ", ".join(sorted(signals))
+    )
     rc = _report(
-        "규범+WORKFLOW", used_rules, RULES_CAP,
+        "규범+WORKFLOW(최악)", used_rules, RULES_CAP,
         "core 티어를 축약하거나 상시 필요 없는 것을 conditional/reference 로 내려라 (D-17)",
     )
 
