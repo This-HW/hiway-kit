@@ -37,7 +37,6 @@ A selection below — 20 skills total, auto-discovered from `skills/` (not hand-
 | `/agent-creator`            | Generate plugin agents with correct frontmatter |
 | `/skill-creator`            | Generate plugin skills                          |
 | `/mcp-builder`              | Scaffold MCP servers                            |
-| `/agent-teams`              | Parallel tasks via Agent Teams (experimental)   |
 
 ## Agents
 

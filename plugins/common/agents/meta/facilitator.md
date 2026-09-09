@@ -314,7 +314,7 @@ Facilitator 완료
 
 이 파일이 **기본이자 활성 경로**입니다. 대규모 병렬 조율이 필요하면 사용자가 네이티브
 `ultracode`(dynamic workflow)를 직접 트리거합니다 — 스킬에서 자동 분기하지 않습니다
-(`plugins/common/skills/agent-teams/SKILL.md` 참고).
+(대화형 전용이라 스킬에서 프로그래밍 트리거가 불가능합니다).
 
 ### 역할 분담
 

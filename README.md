@@ -342,7 +342,6 @@ Merge-back rules (verify-then-exit, sequential merge, conflict escalation to
 | `agent-creator`            | `/agent-creator`            | Generate hiway-kit plugin agents with correct frontmatter            |
 | `skill-creator`            | `/skill-creator`            | Generate hiway-kit skills with best practices                        |
 | `mcp-builder`              | `/mcp-builder`              | Scaffold MCP servers and configure Claude Code integration                 |
-| `agent-teams`              | `/agent-teams`              | Large-scale parallel work — routes to native `ultracode` (dynamic workflow) |
 | `native-watch`             | `/native-watch`             | Audit native-feature absorption against the SSOT ledger (`docs/native-absorption.md`) |
 | `self-improve`             | `/self-improve`             | Propose agent/skill improvements from ledger + evals — proposal-only, double-gated    |
 | `harness-export`           | `/harness-export`           | Export host-neutral rules to `AGENTS.md` so Codex/OpenCode/Pi/Hermes share the discipline |

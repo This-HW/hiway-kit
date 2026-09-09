@@ -66,7 +66,6 @@ plugins/
 | agent-creator            | `/agent-creator`            | Generate plugin agents                          |
 | skill-creator            | `/skill-creator`            | Generate plugin skills                          |
 | mcp-builder              | `/mcp-builder`              | Scaffold MCP servers                            |
-| agent-teams              | `/agent-teams`              | DEPRECATED (removal in v3.0.0) — large-scale parallel work, see control-loop |
 | control-loop              | `/control-loop`             | Multi-session control discipline — investigate/decide/dispatch/verify/merge |
 | child-session              | (loaded, not invoked)       | Discipline a dispatched worker session loads at start |
 | native-watch             | `/native-watch`             | Audit native-feature absorption vs the kit (SSOT: docs/native-absorption.md) |

@@ -8,6 +8,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.17.0] — 2026-09-09
+
+### Fixed — 배포물이 **제거된 스킬을 아직 광고**하고 있었다
+
+`agent-teams` 는 이 킷에서 제거됐는데(control-loop 로 대체) 참조가 다섯 곳 살아 있었다:
+
+| 위치 | 무엇을 |
+| --- | --- |
+| `plugins/common/README.md` | `/agent-teams` 를 **사용 가능한 스킬로 표에 광고** |
+| `README.md` | 같음 (공개 표면) |
+| `CLAUDE.md` | 스킬 표에 등재 |
+| `agents/meta/facilitator.md` | *"`skills/agent-teams/SKILL.md` 참고"* — **없는 파일을 모델에게 지시** |
+| `skills/control-loop/SKILL.md` | "관련" 표가 같은 없는 파일을 가리킴 |
+
+사용자가 `/agent-teams` 를 치면 아무것도 없고, `facilitator` 는 존재하지 않는 문서를
+읽으라고 말한다. **"약속 ≠ 실물"** 이 배포 표면에 그대로 있었다.
+
+### Added — §7 이 `skills/` 와 컴포넌트 상호참조를 보게 됐다
+
+§7(stale 참조)이 `rules/` 와 `agents/` 만 봤다. **`skills/` 는 대상 밖이었고**, 위 죽은
+참조 중 둘이 정확히 그 사각에 있었다. 오늘 기능 결함 2건(캐시 fallback glob)도 스킬의
+경로 참조였다 — 같은 사각이다.
+
+`warning-signal.md` §검토 절차 5("이 검사의 대상 밖은 어디인가")를 **§7 자신에게** 적용한
+결과다. 넓힌 범위 둘:
+
+- `scripts/*.sh` 참조 스캔에 `skills/` 추가
+- **컴포넌트 상호참조**(`plugins/common/{skills,agents,rules,hooks}/…`)가 실재하는지 —
+  제거된 컴포넌트를 가리키는 문서는 "없는 기능을 모델에게 안내하는 문서"다
+
+**`tests/` 는 제외한다** — 오탐이 아니라 성질이 다르다. 테스트는 가짜 경로를 **일부러**
+만들고(가짜 `git ls-files` 출력 등), 모델이 그것을 지시로 읽지 않는다. 실제로 이 제외가
+없을 때 `hooks/new.py`(테스트 픽스처 문자열)가 잡혔다 — 오탐을 남기면 그 검사는 곧
+무시당한다.
+
+되돌려-FAIL 확인: 배포 산문에 없는 컴포넌트를 가리키게 하니 잡혔다.
+
+
 ## [3.16.1] — 2026-09-09
 
 ### Fixed — 원장 이관의 TOCTOU (같은 배치에서 만든 코드를 적대적으로 재검토해 찾았다)

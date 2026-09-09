@@ -281,17 +281,35 @@ else
   printf '  \033[33m! origin 원격 없음 — 원격 태그 검사 생략\033[0m\n'
 fi
 
-hdr "7. stale 참조 (hooks.json + rules/agents가 가리키는 스크립트 존재)"
+hdr "7. stale 참조 (hooks.json + rules/agents/skills 가 가리키는 대상 존재)"
 MISSING=0
 for s in $(grep -oE '\$\{CLAUDE_PLUGIN_ROOT\}/[A-Za-z0-9_./-]+\.py' plugins/common/hooks/hooks.json 2>/dev/null | sed 's|${CLAUDE_PLUGIN_ROOT}|plugins/common|'); do
   [ -f "$s" ] || { red "hooks.json → 없는 스크립트: $s"; MISSING=1; }
 done
-# rules/agents 산문이 가리키는 ./scripts/<name>.sh 가 실재하는지 검증 — always-injected
-# 룰의 죽은 스크립트 참조(예: 존재하지 않는 db-tunnel.sh)가 매 세션 주입되던 문제 방지.
-for ref in $(grep -rhoE '(\./)?scripts/[A-Za-z0-9_/-]+\.sh' plugins/common/rules plugins/common/agents 2>/dev/null | sed 's|^\./||' | sort -u); do
-  [ -f "$ref" ] || { red "rules/agents → 없는 스크립트 참조: $ref"; MISSING=1; }
+# rules/agents/skills 산문이 가리키는 ./scripts/<name>.sh 가 실재하는지 검증 —
+# always-injected 룰의 죽은 스크립트 참조(예: 존재하지 않는 db-tunnel.sh)가 매 세션
+# 주입되던 문제 방지.
+#
+# **skills/ 가 원래 빠져 있었다**(2026-09-09 추가). 그 사이로 죽은 참조가 실제로 샜다 —
+# `control-loop` 이 제거된 `agent-teams/SKILL.md` 를 "관련" 표에 걸어 두고 있었고,
+# `facilitator` 에이전트는 없는 파일을 "참고" 하라고 지시했다. warning-signal.md
+# §검토 절차 5("이 검사의 대상 밖은 어디인가")를 §7 자신에게 적용해 찾았다.
+for ref in $(grep -rhoIE '(\./)?scripts/[A-Za-z0-9_/-]+\.sh' plugins/common/rules plugins/common/agents plugins/common/skills 2>/dev/null | sed 's|^\./||' | sort -u); do
+  [ -f "$ref" ] || { red "rules/agents/skills → 없는 스크립트 참조: $ref"; MISSING=1; }
 done
-[ "$MISSING" -eq 0 ] && green "hooks.json + rules/agents 참조 스크립트 모두 존재"
+# 배포물 안에서 서로를 가리키는 plugins/common/** 경로도 실재해야 한다. 제거된 스킬·
+# 에이전트를 가리키는 참조는 "없는 기능을 안내하는 문서"이고, 그걸 읽는 것은 모델이다.
+#
+# **tests/ 는 제외한다** — 오탐이 아니라 성질이 다르다. 테스트는 가짜 경로를 **일부러**
+# 만든다(예: 가짜 `git ls-files` 출력에 `hooks/new.py`). 그리고 이 검사의 목적은
+# "배포물이 없는 기능을 **모델에게 안내**하지 않는다"이므로, 모델이 지시로 읽지 않는
+# 테스트 픽스처는 애초에 대상이 아니다. 오탐을 남기면 그 검사는 곧 무시당한다
+# (docs/conventions/warning-signal.md).
+# -I: 바이너리(__pycache__ 등)를 건너뛴다 — 없으면 'Binary file … matches' 가 경로로 오인된다.
+for ref in $(grep -rhoIE --exclude-dir=tests --exclude-dir=__pycache__ 'plugins/common/(skills|agents|rules|hooks)/[A-Za-z0-9_/.-]+\.(md|py|json)' plugins/common 2>/dev/null | sort -u); do
+  [ -f "$ref" ] || { red "배포물 → 없는 컴포넌트 참조: $ref"; MISSING=1; }
+done
+[ "$MISSING" -eq 0 ] && green "hooks.json + rules/agents/skills 참조 대상 모두 존재"
 # rules 무결성 매니페스트 강제 — 해시 일치 + **집합 동등성**(매니페스트에 없는
 # 신규 파일도 red — 나열-파일만 검사하는 -c의 맹점 보완, 재감사 ATK-002/007)
 if command -v shasum >/dev/null 2>&1; then _SHA="shasum -a 256"; elif command -v sha256sum >/dev/null 2>&1; then _SHA="sha256sum"; else _SHA=""; fi

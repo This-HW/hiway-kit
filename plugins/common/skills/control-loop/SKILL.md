@@ -217,4 +217,3 @@ P1 산출물을 놓고 채택·금지를 결정하고, 그 결정을 4블록 브
 | 워커 세션이 로드하는 규율 | `plugins/common/skills/child-session/SKILL.md` |
 | 워크트리 격리·병합 규율(네이티브 서브에이전트) | `plugins/common/rules/parallel-worktree.md` |
 | 루프 종료 가드 | `plugins/common/rules/loop-engineering.md` |
-| 대규모 병렬 작업 안내 | `plugins/common/skills/agent-teams/SKILL.md` |
