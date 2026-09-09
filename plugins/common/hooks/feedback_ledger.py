@@ -577,6 +577,71 @@ def _select_promotion_verb(pointer: dict, verbs: list[dict]) -> tuple[str | None
     )
 
 
+def _call_promotion_verb(
+    command: list[str], verb_name: str, entries: list[dict], root: Path
+) -> tuple[list[dict], list[str]]:
+    """승격 동사를 항목마다 호출한다. **락 밖에서** 돈다 (ATK-001).
+
+    반환: (승격에 성공한 항목들, 실패 사유들).
+    """
+    succeeded: list[dict] = []
+    failures: list[str] = []
+    for e in entries:
+        payload = json.dumps(
+            {
+                "category": e["category"],
+                "severity": e["severity"],
+                "pattern": e["pattern"],
+                "frequency": e["frequency"],
+                "lastSeen": e["last_seen"],
+            }
+        )
+        try:
+            r = subprocess.run(
+                [*command, verb_name, payload],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                timeout=_PROMOTE_CALL_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as ex:
+            failures.append(str(ex))
+            continue
+        if r.returncode == 0:
+            succeeded.append(e)
+        else:
+            failures.append(r.stderr.strip() or f"exit {r.returncode}")
+    return succeeded, failures
+
+
+def _remaining_after_promotion(current: list[dict], promoted: list[dict]) -> list[dict]:
+    """원장에서 **승격에 성공한 만큼만 정확히 차감**한 결과를 돌려준다 (ATK-001).
+
+    `promoted` 는 락을 놓기 **전** 스냅샷이다. 락 밖에서 승격이 도는 동안 다른
+    프로세스가 새 항목을 쓰거나 기존 항목의 frequency 를 올렸을 수 있고, 그 증분은
+    아직 승격되지 않았으므로 **남겨야 한다.** 불변식: promote 가 도는 동안 추가된
+    항목은 절대 사라지지 않는다.
+    """
+    debit: dict[str, int] = {}
+    for e in promoted:
+        key = _normalize(e["category"], e["pattern"])
+        debit[key] = debit.get(key, 0) + e["frequency"]
+    kept: list[dict] = []
+    for e in current:
+        key = _normalize(e["category"], e["pattern"])
+        owed = debit.get(key, 0)
+        if not owed:
+            kept.append(e)
+            continue
+        debit[key] = 0  # 차감은 한 번만 — 같은 키의 행이 둘이면 뒤엣것은 그대로 남긴다
+        remaining = e["frequency"] - owed
+        if remaining <= 0:
+            continue  # 승격된 만큼으로 전부 상쇄됐다 → 제거
+        kept.append({**e, "frequency": remaining})
+    return kept
+
+
 def promote(root: Path | None = None) -> dict:
     """스테이징된 ledger를 컨트롤 레지스트리로 승격하고 비운다(D-43).
 
@@ -658,56 +723,36 @@ def promote(root: Path | None = None) -> dict:
         return {"promoted": False, "mode": "held", "reason": reason}
 
     path = ledger_path(root)
+    # **락 안에서는 읽기(claim)만 한다.** 승격 subprocess 는 락 밖에서 돈다 — 항목 수 ×
+    # _PROMOTE_CALL_TIMEOUT_SECONDS 만큼 락을 붙잡으면 _LOCK_TIMEOUT_SECONDS(5초,
+    # **의도된 fail-open**) 를 넘긴 다른 프로세스의 upsert 가 **무락으로** 원장에 쓴다.
+    # 그 상태에서 원장을 통째로 비우면 그 항목은 승격도 보존도 되지 않고 사라진다(ATK-001).
+    # fail-open 은 "막지 않는다"이지 "지운다"가 아니다.
     with _ledger_lock(path):
-        entries = parse_ledger(path)
-        if not entries:
-            return {"promoted": True, "mode": "promoted", "count": 0}
+        claimed = parse_ledger(path)
+    if not claimed:
+        return {"promoted": True, "mode": "promoted", "count": 0}
 
-        failures: list[str] = []
-        promoted_count = 0
-        for e in entries:
-            payload = json.dumps(
-                {
-                    "category": e["category"],
-                    "severity": e["severity"],
-                    "pattern": e["pattern"],
-                    "frequency": e["frequency"],
-                    "lastSeen": e["last_seen"],
-                }
-            )
-            try:
-                r = subprocess.run(
-                    [*command, verb_name, payload],
-                    cwd=root,
-                    capture_output=True,
-                    text=True,
-                    timeout=_PROMOTE_CALL_TIMEOUT_SECONDS,
-                    check=False,
-                )
-            except (OSError, subprocess.SubprocessError) as ex:
-                failures.append(str(ex))
-                continue
-            if r.returncode == 0:
-                promoted_count += 1
-            else:
-                failures.append(r.stderr.strip() or f"exit {r.returncode}")
+    succeeded, failures = _call_promotion_verb(command, verb_name, claimed, root)
 
-        if promoted_count == 0:
-            return {
-                "promoted": False,
-                "mode": "fallback",
-                "reason": f"승격 호출 전부 실패 — ledger 보존: {failures[:3]}",
-            }
-        if failures:
-            return {
-                "promoted": True,
-                "mode": "partial",
-                "count": promoted_count,
-                "failed": len(failures),
-                "reason": "일부 실패 — 재시도를 위해 ledger를 비우지 않음",
-            }
-        _write_ledger(path, [])
-        return {"promoted": True, "mode": "promoted", "count": promoted_count}
+    if not succeeded:
+        return {
+            "promoted": False,
+            "mode": "fallback",
+            "reason": f"승격 호출 전부 실패 — ledger 보존: {failures[:3]}",
+        }
+    if failures:
+        return {
+            "promoted": True,
+            "mode": "partial",
+            "count": len(succeeded),
+            "failed": len(failures),
+            "reason": "일부 실패 — 재시도를 위해 ledger를 비우지 않음",
+        }
+    with _ledger_lock(path):
+        # 비우지 않고 **차집합을 다시 계산해** 쓴다. 승격 중 추가·증가된 것은 남는다.
+        _write_ledger(path, _remaining_after_promotion(parse_ledger(path), succeeded))
+    return {"promoted": True, "mode": "promoted", "count": len(succeeded)}
 
 
 def _main(argv: list[str]) -> int:

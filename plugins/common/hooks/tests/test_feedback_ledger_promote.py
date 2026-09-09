@@ -307,3 +307,139 @@ sys.exit(main())
         _install_pointer(repo, [sys.executable, str(script)])
         result = _mod.promote(repo)
         assert result["mode"] == "promoted"
+
+
+# ── ATK-001: promote()가 도는 동안 추가된 항목은 사라지지 않는다 ─────
+class TestPromoteConcurrentWrite:
+    """불변식: promote 가 도는 동안 원장에 추가된 항목은 **절대 사라지지 않는다.**
+
+    초판은 `_ledger_lock` 을 **잡은 채** 항목마다 승격 subprocess 를 돌리고, 끝나면
+    `_write_ledger(path, [])` 로 파일 전체를 비웠다. `_LOCK_TIMEOUT_SECONDS`(5초)는
+    **의도된 fail-open** 이라 그 사이 다른 프로세스의 upsert 는 **무락으로** 원장에
+    쓴다 — 그 항목은 승격도 보존도 되지 않고 소멸했다(ATK-001, 배포 차단).
+
+    스레드로는 이 창을 결정적으로 못 벌린다. 그래서 **승격 호출 자체**가 원장에
+    쓰게 만든다 — 락 밖 무락 쓰기와 관측적으로 동일하고, 결정적이다.
+    """
+
+    @staticmethod
+    def _racing_registry(tmp_path: Path, ledger: Path, row: str) -> Path:
+        script = tmp_path / "racing_registry.py"
+        script.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env python3
+                import json, sys
+                LEDGER = {ledger!r}
+                ROW = {row!r}
+                def main():
+                    if sys.argv[-1] == "describe":
+                        print(json.dumps({{"verbs": [
+                            {{"name": "record", "args": ["payload"], "effect": "write"}}
+                        ]}}))
+                        return 0
+                    # 승격 호출이 도는 **동안** 다른 프로세스가 원장에 쓴다.
+                    with open(LEDGER, "a", encoding="utf-8") as fh:
+                        fh.write(ROW)
+                    return 0
+                sys.exit(main())
+                """
+            ).format(ledger=str(ledger), row=row)
+        )
+        return script
+
+    def test_entry_added_during_promotion_is_not_lost(self, tmp_path):
+        repo = _init_repo(tmp_path)
+        _mod.upsert("security", "high", "claimed before promote", root=repo)
+        ledger = _mod.ledger_path(repo)
+        script = self._racing_registry(
+            tmp_path,
+            ledger,
+            "| F-900 | lint | arrived during promote | 1 | 2026-01-01 | low |\n",
+        )
+        _install_pointer(repo, [sys.executable, str(script)])
+
+        result = _mod.promote(repo)
+        assert result["mode"] == "promoted"
+        assert result["count"] == 1
+
+        patterns = [e["pattern"] for e in _mod.parse_ledger(ledger)]
+        assert "arrived during promote" in patterns, (
+            "승격 중 추가된 항목이 사라졌다 — promote 가 원장을 통째로 비웠다(ATK-001)"
+        )
+        # 승격에 성공한 것은 정확히 제거된다(전체 비우기가 아니라 차집합).
+        assert "claimed before promote" not in patterns
+
+    def test_lock_is_not_held_across_promotion_subprocess(self, tmp_path):
+        """락을 잡은 채 subprocess 를 돌리지 않는다 — 구조 자체를 검사한다.
+
+        결과만 보는 위 테스트는 "비우지 않는다"로도 통과할 수 있다. 이 테스트는
+        원인(락 보유 중 외부 호출)을 직접 잡는다.
+        """
+        repo = _init_repo(tmp_path)
+        _mod.upsert("lint", "low", "x", root=repo)
+        script = _write_fake_registry(tmp_path, GOOD_REGISTRY_BODY)
+        _install_pointer(repo, [sys.executable, str(script)])
+
+        held = {"depth": 0}
+        real_lock = _mod._ledger_lock
+        real_run = _mod.subprocess.run
+
+        @_mod.contextmanager
+        def counting_lock(path):
+            held["depth"] += 1
+            try:
+                with real_lock(path):
+                    yield
+            finally:
+                held["depth"] -= 1
+
+        calls_under_lock = []
+
+        def watching_run(cmd, **kw):
+            if held["depth"] > 0 and isinstance(cmd, list) and "record" in cmd:
+                calls_under_lock.append(cmd)
+            return real_run(cmd, **kw)
+
+        _mod._ledger_lock = counting_lock
+        _mod.subprocess.run = watching_run
+        try:
+            assert _mod.promote(repo)["mode"] == "promoted"
+        finally:
+            _mod._ledger_lock = real_lock
+            _mod.subprocess.run = real_run
+
+        assert calls_under_lock == [], (
+            f"락을 잡은 채 승격 subprocess 를 호출했다: {calls_under_lock}"
+        )
+
+
+# ── ATK-001: 차집합 계산 단위 테스트 ─────────────────────────────────
+class TestRemainingAfterPromotion:
+    @staticmethod
+    def _row(pattern, freq, category="lint"):
+        return {
+            "id": "F-001",
+            "category": category,
+            "pattern": pattern,
+            "frequency": freq,
+            "last_seen": "2026-01-01",
+            "severity": "low",
+        }
+
+    def test_promoted_entry_is_removed(self):
+        claimed = [self._row("a", 1)]
+        assert _mod._remaining_after_promotion(list(claimed), claimed) == []
+
+    def test_new_entry_survives(self):
+        claimed = [self._row("a", 1)]
+        current = [*claimed, self._row("b", 1)]
+        kept = _mod._remaining_after_promotion(current, claimed)
+        assert [e["pattern"] for e in kept] == ["b"]
+
+    def test_frequency_increment_during_promotion_survives(self):
+        """승격 중 같은 패턴이 다시 관측돼 freq 가 올랐으면 그 증분은 남아야 한다."""
+        claimed = [self._row("a", 2)]
+        current = [self._row("a", 5)]
+        kept = _mod._remaining_after_promotion(current, claimed)
+        assert len(kept) == 1 and kept[0]["frequency"] == 3
