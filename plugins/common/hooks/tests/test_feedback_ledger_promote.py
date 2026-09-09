@@ -429,6 +429,70 @@ sys.exit(main())
             f"성공했던 항목이 {len(good)}회 호출됐다 — 비멱등 동사를 재호출하고 있다"
         )
 
+    SLOW_REGISTRY_BODY = """\
+def main():
+    head = subprocess_head()
+    if sys.argv[-1] == "describe":
+        print(json.dumps({{
+            "verbs": [
+                {{"name": "record", "args": ["payload"], "effect": "write", "idempotent": False}},
+            ],
+            "head": head,
+        }}))
+        return 0
+    if sys.argv[-2] == "record":
+        import time
+        time.sleep(0.05)
+        with open(calls_log, "a") as fh:
+            fh.write(sys.argv[-1] + "\\n")
+        return 0
+    return 1
+
+def subprocess_head():
+    import subprocess
+    r = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip()
+
+sys.exit(main())
+"""
+
+    def test_total_budget_stops_the_loop(self, tmp_path, monkeypatch):
+        """항목당 타임아웃만으로는 총 블로킹 시간이 묶이지 않는다 (W6 F-5).
+
+        항목당 10초 × CAP(50) = 최대 ~500초. 같은 파일이 락에는 5초 데드라인을 걸어
+        *"정지한 프로세스 때문에 파이프라인이 무한 대기하지 않게"* 해 두고 그보다
+        100배 긴 경로를 열어 뒀다. 예산을 넘으면 남은 항목은 **호출하지 않고** 실패로
+        계상되고, 성공분만 차감되므로(F-2) 원장에 남아 다음 호출이 이어서 시도한다.
+        """
+        repo = _init_repo(tmp_path)
+        _mod.upsert("lint", "low", "first entry", root=repo)
+        _mod.upsert("security", "high", "second entry", root=repo)
+        script = _write_fake_registry(tmp_path, self.SLOW_REGISTRY_BODY)
+        _install_pointer(repo, [sys.executable, str(script)])
+        # 첫 항목은 통과하고(진입 시 경과 ~0) 두 번째 진입에서 예산이 이미 소진된다.
+        monkeypatch.setattr(_mod, "_PROMOTE_TOTAL_BUDGET_SECONDS", 0.01)
+
+        result = _mod.promote(repo)
+        assert result["mode"] == "partial", result
+        assert result["count"] == 1 and result["failed"] == 1
+
+        calls = (tmp_path / "calls.jsonl").read_text().splitlines()
+        assert len(calls) == 1, f"예산을 넘겼는데도 계속 호출했다: {len(calls)}건"
+
+        # 호출되지 않은 항목은 원장에 남아 다음 호출이 재시도한다 — 유실 금지.
+        remaining = [e["pattern"] for e in _mod.parse_ledger(_mod.ledger_path(repo))]
+        called = json.loads(calls[0])["pattern"]
+        assert called not in remaining
+        assert len(remaining) == 1, remaining
+
+    def test_total_budget_is_smaller_than_worst_case_per_item_product(self):
+        """예산이 CAP × 항목당 타임아웃보다 작아야 실제로 묶는 것이다.
+
+        상수를 되돌리거나 예산을 최악값 이상으로 올리면 이 게이트는 의미가 없어진다.
+        """
+        worst_case = _mod.CAP * _mod._PROMOTE_CALL_TIMEOUT_SECONDS
+        assert worst_case > _mod._PROMOTE_TOTAL_BUDGET_SECONDS
+
     def test_lock_is_not_held_across_promotion_subprocess(self, tmp_path):
         """락을 잡은 채 subprocess 를 돌리지 않는다 — 구조 자체를 검사한다.
 

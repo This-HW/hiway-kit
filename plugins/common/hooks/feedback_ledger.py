@@ -87,6 +87,12 @@ _DESCRIBE_TIMEOUT_SECONDS = 10
 _PROMOTE_CALL_TIMEOUT_SECONDS = 10
 _MISMATCH_DEMOTE_THRESHOLD = 3  # head 연속 불일치 임계 — 초과 시 레지스트리 미신뢰 강등
 _LOCK_TIMEOUT_SECONDS = 5  # 락 획득 데드라인 — 초과 시 무락 진행(fail-open)
+# 승격 **총량** 데드라인. 항목당 타임아웃만 있으면 최악은 CAP(50) × 10s = ~500초이고,
+# 그 시간 내내 호출자(세션 훅·파이프라인)가 블로킹된다. 락에는 5초 데드라인을 걸어
+# "정지한 프로세스 때문에 파이프라인이 무한 대기하지 않게" 해 놓고 그보다 100배 긴
+# 경로를 열어 두는 것은 같은 파일 안의 비대칭이다. 초과분은 실패로 계상돼 partial 로
+# 떨어지고, 남은 항목은 원장에 남아 다음 호출이 재시도한다 — 유실되지 않는다.
+_PROMOTE_TOTAL_BUDGET_SECONDS = 60
 
 _HEADER = (
     "# Feedback Ledger\n\n"
@@ -718,11 +724,24 @@ def _call_promotion_verb(
 ) -> tuple[list[dict], list[str]]:
     """승격 동사를 항목마다 호출한다. **락 밖에서** 돈다 (ATK-001).
 
+    항목당 타임아웃(`_PROMOTE_CALL_TIMEOUT_SECONDS`)과 **총량 예산**
+    (`_PROMOTE_TOTAL_BUDGET_SECONDS`)을 둘 다 건다 — 항목당만 있으면 최악이
+    CAP × 항목당 = ~500초이고 그동안 호출자가 블로킹된다.
+
     반환: (승격에 성공한 항목들, 실패 사유들).
     """
     succeeded: list[dict] = []
     failures: list[str] = []
-    for e in entries:
+    deadline = time.monotonic() + _PROMOTE_TOTAL_BUDGET_SECONDS
+    for idx, e in enumerate(entries):
+        if time.monotonic() >= deadline:
+            # 남은 항목은 **호출하지 않고** 실패로 계상한다. 차감은 성공분만 하므로
+            # (F-2) 이것들은 원장에 그대로 남아 다음 호출이 이어서 시도한다.
+            failures.append(
+                f"총량 예산 {_PROMOTE_TOTAL_BUDGET_SECONDS}초 초과 — "
+                f"남은 {len(entries) - idx}건은 다음 호출로 미룸"
+            )
+            break
         payload = json.dumps(
             {
                 "category": e["category"],
