@@ -286,3 +286,39 @@ def test_symlinked_legacy_is_left_alone(tmp_path):
     assert _mod.migrate_legacy_ledger(repo) == "noop"
     assert legacy.is_symlink()
 
+
+def test_legacy_vanishing_at_lock_entry_does_not_double_count(tmp_path, monkeypatch):
+    """다른 프로세스가 먼저 이관한 뒤 잠금을 얻으면 **다시 세지 않아야** 한다.
+
+    초판은 존재 검사·`parse_ledger(legacy)`·개명이 모두 **잠금 밖**이었다. 그래서 잠금을
+    기다리는 쪽이 이미 읽어 둔 항목을 그대로 병합해 **frequency 가 두 배**가 됐다 —
+    검사와 상태 변경 사이의 틈이 곧 TOCTOU 다.
+
+    스레드로는 이 창을 결정적으로 못 벌린다(스케줄러가 정하므로 **깨진 코드에서도
+    통과한다** — 커버리지를 주장하면서 아무것도 안 잡는 테스트가 된다). 그래서 경합의
+    **결과 상태**를 직접 만든다: 잠금에 진입하는 순간 legacy 가 이미 개명돼 있는 상황.
+    """
+    repo = _init_repo(tmp_path)
+    legacy = _mod.legacy_ledger_path(repo)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    row = {"id": "F-001", "category": "test", "pattern": "정확히 한 번",
+           "frequency": 1, "last_seen": "2026-01-01", "severity": "low"}
+    _mod._write_ledger(legacy, [row])
+    # 먼저 이관한 쪽이 남긴 상태: 정본에 이미 반영돼 있다.
+    _mod._write_ledger(_mod.ledger_path(repo), [dict(row)])
+
+    real_lock = _mod._ledger_lock
+
+    def racing_lock(path):
+        # 잠금을 얻는 순간 legacy 는 이미 개명돼 있다(먼저 이관한 쪽이 끝냈다).
+        if legacy.is_file():
+            legacy.rename(legacy.with_suffix(".md.migrated"))
+        return real_lock(path)
+
+    monkeypatch.setattr(_mod, "_ledger_lock", racing_lock)
+    assert _mod.migrate_legacy_ledger(repo) == "noop"
+
+    hits = [e for e in _mod.parse_ledger(_mod.ledger_path(repo))
+            if e["pattern"] == "정확히 한 번"]
+    assert len(hits) == 1
+    assert hits[0]["frequency"] == 1, f"중복 계수: {hits[0]['frequency']}"

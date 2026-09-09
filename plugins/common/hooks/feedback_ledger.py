@@ -170,17 +170,27 @@ def migrate_legacy_ledger(root: Path | None = None) -> str:
     root = root or _project_root()
     legacy = legacy_ledger_path(root)
     target = ledger_path(root)
-    if target == legacy or legacy.is_symlink() or not legacy.is_file():
+    if target == legacy:
         return "noop"
-    incoming = parse_ledger(legacy)
-    if not incoming:
+    # 잠금 **밖**의 검사는 값싼 조기 탈출일 뿐 판정 근거가 아니다.
+    if legacy.is_symlink() or not legacy.is_file():
         return "noop"
     with _ledger_lock(target):
+        # **잠금 안에서 다시 본다.** 밖의 검사와 실제 병합 사이에 다른 프로세스가 이미
+        # 이관했을 수 있다 — 그대로 진행하면 같은 항목을 두 번 세어 frequency 가 부푼다.
+        # 개명도 **잠금 안**이어야 한다. 밖에 두면 두 번째 프로세스가 이 재검사를 통과해
+        # 버린다(검사와 상태 변경 사이의 틈이 곧 TOCTOU다 — 이 레포가 경로 봉쇄에서
+        # 배운 것과 같은 형태다).
+        if legacy.is_symlink() or not legacy.is_file():
+            return "noop"
+        incoming = parse_ledger(legacy)
+        if not incoming:
+            return "noop"
         merged = _merge_entries(parse_ledger(target), incoming)
         kept = _decay(merged)
         _write_ledger(target, kept)
-    backup = legacy.with_suffix(".md.migrated")
-    legacy.rename(backup)
+        backup = legacy.with_suffix(".md.migrated")
+        legacy.rename(backup)
     dropped = len(merged) - len(kept)
     if dropped:
         # **조용히 지우지 않는다.** 상한·감쇠는 설계된 동작이지만, 이관 중에 일어나면
