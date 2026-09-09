@@ -155,11 +155,22 @@ def main() -> int:
         (r"스킬\s*\*\*(\d+)\s*개\*\*", "skills"),
         (r"(\d+)\s+skills", "skills"),
         (r"\*\*(\d+)\*\*\s+skills", "skills"),
+        # 룰 카운트는 **대상 밖이었다.** agents·skills 만 걸어 두고 rules 를 빼 놓았더니
+        # 사이트 두 페이지가 13 에 멈춘 채 실제 15 와 어긋나 있었다(2026-09-10 실측).
+        # 이 파일이 위에서 두 번이나 적은 §5 형태를 이 목록 자신이 또 밟았다.
+        (r"(\d+)\s*개 거버넌스 룰", "rules"),
+        (r"거버넌스 룰\s*\*\*(\d+)\s*개\*\*", "rules"),
+        (r"(\d+)\s+governance rules", "rules"),
+        (r"\*\*(\d+)\*\*\s+governance rules", "rules"),
     ]
+    kind_actual = {
+        "agents": a["agents"],
+        "skills": a["skills_common"],
+        "rules": a["rules"],
+    }
     for rel in ("site/content/_index.md", "site/content/_index.en.md"):
         for pat, kind in site_patterns:
-            actual = a["agents"] if kind == "agents" else a["skills_common"]
-            ok &= check_claim(root, rel, pat, actual, f"{kind}({rel}: {pat[:18]}…)")
+            ok &= check_claim(root, rel, pat, kind_actual[kind], f"{kind}({rel}: {pat[:18]}…)")
 
     if ok:
         print(f"{OK} doc counts: {a['agents']} agents / {a['skills_common']} skills / {a['rules']} rules — 문서와 일치")

@@ -37,7 +37,7 @@ git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 
 ```
 plugins/
-└── common/      — Core agents (32) + skills (20) + rules (15) + hooks
+└── common/      — Core agents (32) + skills (21) + rules (15) + hooks
 ```
 
 `plugins/common/` contains:
@@ -73,6 +73,7 @@ plugins/
 | harness-export           | `/harness-export`           | Export host-neutral rules to AGENTS.md + GEMINI.md for hosts without hooks (drift-gated) |
 | eval-forge               | `/eval-forge`               | Forge an eval scenario from an observed defect — generated + self-validated       |
 | skill-forge              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft (proposal-only)         |
+| cross-engine-review      | `/cross-engine-review`      | Evidence-backed consensus between sessions on **different engines** (Claude ↔ Codex ↔ …) |
 
 ## Agent Architecture
 

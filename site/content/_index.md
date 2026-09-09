@@ -1,6 +1,6 @@
 ---
 title: "hiway-kit"
-description: "Claude Code용 유니버설 툴킷 — 32개 전문 에이전트, 20개 스킬, 13개 거버넌스 룰로 멀티 에이전트 개발 파이프라인을 구축한다."
+description: "Claude Code용 유니버설 툴킷 — 32개 전문 에이전트, 21개 스킬, 15개 거버넌스 룰로 멀티 에이전트 개발 파이프라인을 구축한다."
 keywords: ["claude code", "claude code plugin", "멀티 에이전트", "AI 코딩 에이전트", "harness engineering", "loop engineering"]
 ---
 
@@ -13,8 +13,8 @@ keywords: ["claude code", "claude code plugin", "멀티 에이전트", "AI 코�
 <strong>핵심 지표</strong>
 
 - 전문 에이전트 **32개** (계획·구현·리뷰·리팩토링 전 단계)
-- 스킬 **20개** (`/plan-task`, `/auto-dev`, `/review`, `/debug`, `/test` 등)
-- 거버넌스 룰 **13개** (병렬 worktree, 위임 체인, 완료 정의 등)
+- 스킬 **21개** (`/plan-task`, `/auto-dev`, `/review`, `/debug`, `/test` 등)
+- 거버넌스 룰 **15개** (병렬 worktree, 위임 체인, 완료 정의 등)
 - 유닛 테스트 **220개 이상**
 - Agent Behavior Evals **11개 시나리오** (deterministic-first 채점)
 - 기계 게이트(machine gate) **8개 이상** (`verify-done.sh`)

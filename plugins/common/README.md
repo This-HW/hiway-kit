@@ -16,13 +16,13 @@
 /plugin install hiway-kit@hiway-kit
 ```
 
-> The published plugin is **`hiway-kit`** (the `common` set — 32 agents + 20 skills).
+> The published plugin is **`hiway-kit`** (the `common` set — 32 agents + 21 skills).
 > Project-specific extensions live in a user's own `project-local/` tier, not as separate
 > published plugins.
 
 ## Key Skills
 
-A selection below — 20 skills total, auto-discovered from `skills/` (not hand-listed here).
+A selection below — 21 skills total, auto-discovered from `skills/` (not hand-listed here).
 
 | Command                     | Description                                     |
 | --------------------------- | ----------------------------------------------- |

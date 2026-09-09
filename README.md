@@ -1,6 +1,6 @@
 # hiway-kit
 
-> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 32 agents + 20 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
+> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 32 agents + 21 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
 
 A focused, single-plugin AI agent system built for Claude Code. Covers the full software development lifecycle: planning, implementation, review, testing, and meta-tooling. (Not a TUI component library or a scaffolding installer — this is the agents + skills plugin.)
 
@@ -98,7 +98,7 @@ differs by platform capability, verified against the real CLIs (not assumed):
 
 | Component | Codex | Antigravity |
 | --- | --- | --- |
-| Skills (20) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
+| Skills (21) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
 | Rules (15) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
 | Agents (32) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`backend`/`dev`/`meta`/`planning`); it miscounts the 4 category folders as agent entries and finds none of the real 32. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
 | Hooks | ❌ not shipped — Codex's hook runtime does not load the exec-array form (`command`+`args`) this kit uses; confirmed by direct testing, not just reading docs | ❌ not shipped this batch — format unverified |
@@ -266,7 +266,7 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 
 | Plugin            | Agents | Skills | Description                               |
 | ----------------- | ------ | ------ | ----------------------------------------- |
-| `hiway-kit` | 32     | 20     | Core: planning, development, review, meta |
+| `hiway-kit` | 32     | 21     | Core: planning, development, review, meta |
 
 ---
 
@@ -450,7 +450,7 @@ clarify-requirements → analyze-domain → design-user-journey → define-busin
 
 ```
 plugins/
-└── common/      — Core agents (32) + skills (20) + rules (15) + hooks
+└── common/      — Core agents (32) + skills (21) + rules (15) + hooks
 ```
 
 The plugin contains:
