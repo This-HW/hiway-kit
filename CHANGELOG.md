@@ -8,6 +8,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.21.0] — 2026-09-10
+
+### Fixed — 게이트를 파이프에 물리면 종료코드가 사라진다 (`definition-of-done` · `control-loop`)
+
+파이프라인의 rc 는 **마지막 명령의 rc** 다. `gate | tail -25` 의 rc 는 `tail` 것이고
+`tail` 은 거의 항상 0 이다 — **출력을 읽기 좋게 만들려던 습관이 게이트를 로그로 바꾼다.**
+
+양성 대조까지 실측했다:
+
+```bash
+sh -c 'exit 7'            ; echo $?   # 7
+sh -c 'exit 7' | tail -1  ; echo $?   # 0  ← 삼켜졌다
+sh -c 'exit 7' | tail -1 && echo through   # "through" 가 찍힌다
+bash -c 'set -o pipefail; sh -c "exit 7" | tail -1'; echo $?   # 7
+```
+
+`[confirmed: 2026-09-10, 두 세션 독립]` — 한 세션이 병합 게이트를 `--dry-run 2>&1 |
+tail -25` 로 돌려 rc 0 을 통과 신호로 읽었다. 같은 날 **이 세션도** 완료 게이트를 파이프에
+물려 돌리고 있었다. 인쇄된 `N pass / M fail` 줄을 읽었기에 v3.20.0 의 결론 자체는 맞았지만,
+판정을 **사람이 읽는 텍스트**에 의존하고 있었다는 점은 같다. 그래서 릴리스 직후 rc 를 따로
+잡아 재확인했다 — `./scripts/verify-done.sh > out 2>&1; echo $?` → **0**.
+
+이 레포의 규범은 이미 같은 클래스를 둘 알고 있었다(판정이 stdout 에만 있는 검증 · 검증과
+상태 변경을 한 호출에 잇는 것). **파이프가 세 번째 인스턴스**다. 셋 다 `&&` 를 통과시킨다.
+
+- `rules/definition-of-done.md`: "rc 를 잃는 둘" 로 압축해 두 인스턴스를 나란히 적었다.
+  §16 '항상' 축이 29B 초과로 **red 를 냈고**(새로 만든 축이 바로 다음 변경에서 작동했다),
+  캡을 올리는 대신 같은 문단을 압축해 통과시켰다 — 10,163B / 10,240B.
+- `skills/control-loop/SKILL.md`: 재현 스니펫과 실측, 그리고 처방을 적었다 — 게이트의 rc 를
+  쓸 거면 파이프에 물리지 말고 **파일로 받고 rc 를 따로 잡아라**(`cmd > out 2>&1; rc=$?`).
+  `set -o pipefail` 도 답이지만 **그 셸에서만 참이라 호출자가 잊으면 조용히 되돌아간다.**
+
+rules 블록 sha256: `e503d55d82e1…`
+
+
 ## [3.20.0] — 2026-09-10
 
 전수 적대적 리뷰에서 **실측된** 결함을 워크트리 워커 3인이 분담해 고친 배치다. 모든

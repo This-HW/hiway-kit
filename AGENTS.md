@@ -4,7 +4,7 @@
 > 재생성: `./scripts/export-harness.sh` (플러그인 사용자는 `/harness-export` 스킬 참조)
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:c582f0f6e51419a4859f541011a401aaf2682dd4912ab51add48e58b5002c1ef -->
+<!-- kit:begin rules-v1.4.0 sha256:e503d55d82e17f76d72340dc4641452c5edbd7e4983dce4b5b24ff03d2c5fe35 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -124,8 +124,9 @@ FAIL 있으면 "완료" 대신 실제 상태를 증거와 함께 보고 → 수�
 "구현 + self-validation 완료, 미결: [...]"로 말한다.
 
 **검증과 상태 변경(push·merge·release·deploy)을 한 도구 호출에 잇지 마라** — 출력을
-읽는 시점엔 이미 실행된 뒤라 게이트가 아니라 로그다(실측 n=2). 판정이 stdout 에 있는
-검증(`gh pr view` — CI 가 빨개도 exit 0)은 `&&` 로도 게이트가 안 된다. 상세: control-loop.
+읽는 시점엔 이미 실행된 뒤라 게이트가 아니라 로그다. **rc 를 잃는 둘**(실측): 판정이
+stdout 에만 있다(`gh pr view` — CI 가 빨개도 exit 0) · 파이프가 삼킨다(`gate | tail` 의
+rc 는 `tail` 것이다). 둘 다 `&&` 를 통과시킨다 — `pipefail`. 상세: control-loop.
 
 #### DoD 체크리스트
 
