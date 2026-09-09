@@ -8,6 +8,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — `targets.json` 이 agy 의 `rules` 인식을 근거 없이 주장했다 (2026-09-09, 레포 로컬)
+
+`plugins/` 무변경. Antigravity 타겟의 `recognizedDirs` 가 `["skills","rules"]` 였는데
+**`rules` 는 사실이 아니다** `[confirmed: agy 1.1.27]`. 스크래치 플러그인에 `rules/` 를
+두었을 때와 지웠을 때 `agy plugin validate` 출력이 **완전히 동일**했고, 그 도구가 세는
+컴포넌트는 skills·agents·commands·mcpServers·hooks **다섯뿐**이다.
+
+파급: **agy 로 가는 규범 경로는 플러그인이 아니라 진입점 파일뿐이다.** 그리고 agy 가
+API 성 호출로 쓰이는 레인(세션이 아니라 함수 호출)에서는 진입점 파일조차 개념적으로
+없으므로, 그 경우 규범은 **호출자가 프롬프트에 실어야 한다** —
+`export_harness.py --stdout` 이 마커 없이 규범 블록만 표준출력으로 낸다.
+
+에이전트 오집계는 1.1.20 → 1.1.27 에서 그대로다(카테고리 4개를 4로 세고 실제 32종 인식 0).
+
+### 규범 도달을 실제로 관측할 수단이 없다 (한계 기록)
+
+세 하네스가 **어느 진입점을 실제로 읽는지** 마커 프로브로 재려 했으나 **측정하지 못했다**:
+
+| 하네스 | 결과 |
+| --- | --- |
+| agy 1.1.27 | **쿼터 소진** — "Individual quota reached, resets in 36h" |
+| gemini-cli | API 400 (이 환경의 인증·설정 문제) |
+| codex 0.153.4 | 응답 없음(장시간) |
+
+**그래서 "규범을 이식했다"는 지금도 미검증이다.** 파일을 만들었고 sha256 으로 드리프트를
+막고 있을 뿐, 그 파일을 하네스가 **실제로 읽는지는 관측한 적이 없다.** 소비 측 컨트롤
+세션도 같은 상태임을 확인했다 `[confirmed: 관측 장치 부재]`. 없는 검증을 있다고 적지
+않는다(`docs/conventions/warning-signal.md`) — 관측 장치는 별도 작업으로 남긴다.
+
+
 ## [3.12.1] — 2026-09-09
 
 ### Fixed — Codex 매니페스트의 `displayName` 이 구 제품명이었다
