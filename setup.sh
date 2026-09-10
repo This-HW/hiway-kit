@@ -108,6 +108,49 @@ if ! _step_done "plugin-common"; then
 fi
 echo "  ℹ 훅(protect-sensitive, auto-format 등)은 플러그인이 자동으로 처리합니다"
 
+# 1b. Codex 플러그인 설치 (선택 — `codex`가 PATH에 있을 때만)
+#
+# 침묵 조건(warning-signal.md §검토 절차 1·4): `codex`가 없으면 **아무것도 인쇄하지
+# 않는다.** 대부분의 사용자에게 상시 참인 안내는 정보가 아니라 소음이고, 소음은 옆에
+# 있는 진짜 경고까지 죽인다.
+#
+# 무단 실행 금지: `claude` 쪽과 대칭이되 **묻고 나서** 설치한다. 사용자의 전역
+# `~/.codex/**`를 스크립트가 조용히 고치지 않는다. 비대화형(파이프·CI)에서는 물을 수
+# 없으므로 설치하지 않고 수동 명령만 안내한다 — EOF에서 `read`가 1을 반환해 `set -e`로
+# 셋업 전체가 중단되는 것도 이 분기가 막는다.
+if command -v codex >/dev/null 2>&1 && ! _step_done "plugin-codex"; then
+    echo "[1b/5] Codex 감지됨 — 플러그인 설치 (선택)"
+    CODEX_ANSWER="n"
+    if [ -t 0 ]; then
+        printf "  Codex에도 hiway-kit을 설치할까요? [y/N] "
+        read -r CODEX_ANSWER || CODEX_ANSWER="n"
+    else
+        echo "  - 비대화형 실행이라 묻지 않고 건너뜁니다"
+    fi
+    case "$CODEX_ANSWER" in
+        [yY]*)
+            codex plugin marketplace add "$SCRIPT_DIR" 2>/dev/null || true
+            if codex plugin add hiway-kit@hiway-kit-marketplace; then
+                _mark_done "plugin-codex"
+                echo "  ✓ Codex 플러그인 설치됨"
+            else
+                echo "  ⚠ Codex 플러그인 설치 실패 — 수동으로 다시 시도하세요"
+            fi
+            ;;
+        *)
+            echo "  - 건너뜀. 나중에: codex plugin marketplace add $SCRIPT_DIR"
+            echo "                    codex plugin add hiway-kit@hiway-kit-marketplace"
+            ;;
+    esac
+    # 설치 여부와 무관하게 신뢰 단계를 안내한다 — 설치만으로는 훅이 돌지 않는다.
+    echo "  ★ 설치 후 한 번: Codex는 훅 **신뢰**를 승인하기 전까지 훅을 조용히 건너뜁니다"
+    echo "    (경고도 오류도 없습니다 — 규범이 주입된 줄 알기 쉽습니다)"
+    echo "    · 대화형: 프로젝트에서 codex 세션을 한 번 열어 훅 신뢰 프롬프트를 승인"
+    echo "    · codex exec: 프롬프트가 없으므로 --dangerously-bypass-hook-trust 필요"
+    echo "    신뢰가 없어도 규범 자체는 AGENTS.md 진입점으로 도달합니다 — 훅은 더 나은"
+    echo "    경로이지 유일한 경로가 아닙니다."
+fi
+
 # (2.7.0) 도메인 플러그인은 제거됨 — core 단일 플러그인 구성.
 
 # 2. ruff.toml 전역 설치
