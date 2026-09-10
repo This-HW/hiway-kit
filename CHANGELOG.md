@@ -8,6 +8,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.33.0] — 2026-09-10
+
+### Fixed — 훅 주입이 진입점 파일과 **다른 기준**으로 걸러 Codex 에 Claude 전용 규범을 보냈다
+
+두 전달 경로가 서로 다른 기준을 쓰고 있었다:
+
+| 경로 | 거르는 기준 |
+| --- | --- |
+| 진입점 파일 (`export_harness.py`) | **`portable`** |
+| 훅 주입 (`session-start.py::load_rules`) | **`tier` 뿐** |
+
+v3.30.0 에서 Codex 도 훅으로 규범을 받게 되면서 그 비대칭이 **곧바로 결함**이 됐다.
+실측: `mcp-usage`(portable:false) **본문이 통째로** 주입되고(`mcp__` 툴 이름·에이전트
+`tools:` allowlist 를 말한다 — Claude Code 플러그인 개념), `task-resume` 도 동일하며,
+`reference` 티어 색인 줄이 **없는 수단을 가리켰다**:
+
+```
+- 서브에이전트 위임 전 rules/agent-delegation-chain.md 를 읽어라
+- 에이전트 선택·모델 정책은 rules/agent-system.md 를 읽어라
+```
+
+둘 다 `portable:false` 이고 `Task`·`subagent` 를 전제하는데 **Codex 에는 그 수단이 없다.**
+스킬 4종(v3.32.0)과 같은 결함 클래스인데 **이쪽은 자동이고 매 세션**이라 더 나쁘다.
+
+`load_rules` 에 이식성 필터를 **옵션(기본 OFF)** 으로 넣고 **본문과 색인 줄 양쪽**에
+적용했다. Codex 훅 매니페스트만 `--portable-only` 를 싣는다 — **런타임 추측으로 하네스를
+판별하지 않는다**(그건 조용히 틀린다).
+
+**규범을 재분류하지 않았다.** `mcp-usage` 가 실제로 이식 가능한지(Codex 에도 MCP 가 있다)는
+별개 판단이고 이 배치 밖이다. 고친 것은 **두 경로가 같은 선언을 다르게 취급하던 것**뿐이다.
+
+### 검증 — Claude Code 회귀 0, Codex 실물 확인
+
+- **기본 경로 불변**: 필터 OFF 에서 19,398B, `mcp__`·`agent-system` 색인 그대로.
+  기본값을 True 로 뒤집으면 **기존 Claude Code 테스트 9건이 먼저 깨진다**(안전망 실측).
+- **필터 경로**: 13,672B(−5,726B), `mcp__` 없음, 두 색인 줄 없음.
+- **실물 A/B**: 격리 `CODEX_HOME` 에 실제 설치하고 `codex exec` 를 돌려 **rollout 원문**에서
+  확인 — `mcp__` False · `agent-system` False · `agent-delegation-chain` False ·
+  `=== RULES ===` True · `LESSONS` True.
+
+> **모델 자기보고를 근거로 쓰지 않았다.** 같은 세션에서 모델에게 *"컨텍스트에 `mcp__` 가
+> 있나"* 라고 묻자 **`YES` 라고 틀리게 답했다.** rollout 원문은 `False` 다. 하네스가
+> 무엇을 받았는지는 **모델이 아니라 기록**이 말한다.
+
+### 주입 예산 — 축을 늘리지 않는다
+
+필터가 켜지면 Codex 쪽 주입량이 **줄어든다**(−5,726B). 상한은 최악의 경우를 재는
+것이므로 Claude Code 기준이 곧 상한이고, Codex 전용 축은 지금 필요 없다.
+필요해지는 시점은 **Codex 쪽이 더 커질 때**이고 그때 다시 본다.
+
+
 ## [3.32.0] — 2026-09-10
 
 ### Fixed — 스킬 4종이 Codex 에 **없는 도구를 쓰라고 지시**하고 있었다
