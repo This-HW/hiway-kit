@@ -70,7 +70,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -428,7 +428,13 @@ def _symlinked_target_is_safe(path: Path, real: Path) -> bool:
 
 
 def _write_ledger(path: Path, entries: list[dict]) -> None:
-    """tmp 파일 작성 후 os.replace로 원자 교체 — 부분 쓰기 상태 노출 방지.
+    """tmp + os.replace 원자 교체 **+ fsync** — 부분 쓰기·크래시 유실 방지.
+
+    시그니처·계약은 `export_harness.py::_atomic_write` 와 **동일하다**
+    (D-15: 구현은 여러 벌, 계약만 하나). **한쪽을 고치면 다른 쪽도 고쳐라.**
+    공용 모듈로 뽑지 않는 이유: 두 파일 모두 킷 내부 의존이 없는 standalone 이고
+    플러그인 캐시에서 CLI 로 직접 실행된다 — 공용 import 경로는 그 호출 형태에서
+    성립하지 않는다(소비자 환경을 깨는 쪽이 중복보다 나쁘다).
 
     대상이 심링크면 링크 자체가 아니라 **링크가 가리키는 실제 파일**을 교체한다 —
     사용자가 ledger.md를 공유 원장으로 심링크해 둔 경우를 보존한다(F7). 다만 그
@@ -450,15 +456,45 @@ def _write_ledger(path: Path, entries: list[dict]) -> None:
         f"{e['frequency']} | {e['last_seen']} | {e['severity']} |"
         for e in entries
     ]
-    tmp = real.with_name(f"{real.name}.tmp.{os.getpid()}")
-    tmp.unlink(missing_ok=True)
-    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+    text = _HEADER + "\n".join(rows) + ("\n" if rows else "")
+    # 기존 파일의 모드를 보존한다. 무조건 0644 로 덮으면 공유 원장을 0600 으로 두거나
+    # 팀이 0664 로 공동 편집하던 설정이 조용히 바뀐다 — 원장은 심링크로 공유되는
+    # 것이 의도된 기능(F7)이므로 모드도 남의 결정이다.
+    try:
+        mode = os.stat(real).st_mode & 0o7777
+    except OSError:
+        cur = os.umask(0)
+        os.umask(cur)
+        mode = 0o666 & ~cur
+    # mkstemp: 이름이 예측 불가하고 O_EXCL 로 원자 생성된다(0600).
+    #   이전에는 `<name>.tmp.<pid>` 고정 이름이었다 — 이름을 선점당하면 죽고,
+    #   컨테이너처럼 낮은 PID 가 재사용되는 환경에서는 우연한 충돌도 가능하다.
+    fd, tmp_name = tempfile.mkstemp(
+        dir=str(real.parent), prefix=f".{real.name}.", suffix=".tmp"
+    )
+    tmp = Path(tmp_name)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            fh.write(_HEADER + "\n".join(rows) + ("\n" if rows else ""))
+            fh.write(text)
+            # tmp+replace 는 **프로세스 사망**에는 원자적이지만 호스트 크래시에는
+            # 아니다. rename 만 반영되고 데이터가 안 반영되면 최대 CAP 개의 학습
+            # 항목이 빈/잘린 원장으로 남는다 — 이 파일에서 고친 유실 결함 둘
+            # (`promote()` 전체 비우기 · `parse_ledger` 부재/실패 뭉갬)과 같은 계열이다.
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.chmod(tmp, mode)
         os.replace(tmp, real)
+        # 디렉토리 fsync 실패는 무시한다 — 일부 파일시스템·플랫폼이 지원하지 않고,
+        # 여기서 죽으면 fail-open 원칙(학습 루프가 본 작업을 막지 않는다)이 깨진다.
+        with suppress(OSError):
+            dfd = os.open(str(real.parent), os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
     finally:
-        tmp.unlink(missing_ok=True)
+        with suppress(OSError):
+            tmp.unlink()
 
 
 def upsert(category: str, severity: str, pattern: str, root: Path | None = None) -> str:

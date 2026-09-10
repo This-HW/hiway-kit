@@ -1,7 +1,9 @@
 """Unit tests for feedback_ledger.py (Spec 3 / W-007)."""
 
+import contextlib
 import importlib.util
 import os
+import stat
 from pathlib import Path
 from types import ModuleType
 
@@ -196,10 +198,18 @@ def test_concurrent_upserts_preserve_all_entries(tmp_path):
 
 
 def test_write_ledger_leaves_no_tmp_files(tmp_path):
-    """원자 교체 후 tmp 파일이 잔존하지 않는다."""
+    """원자 교체 후 tmp 파일이 잔존하지 않는다.
+
+    **glob 을 이름 패턴으로 좁히지 않는다.** 구 구현은 `<name>.tmp.<pid>` 였고 이
+    테스트는 `*.tmp.*` 를 봤다 — 구현이 `mkstemp` 로 바뀌면 그 glob 은 아무것도 잡지
+    못한 채 **초록으로 남는다**(false-green). 대신 "원장 파일 하나만 남았다"를 본다.
+    """
     _mod.upsert("lint", "low", "atomic write check", root=tmp_path)
-    leftovers = list(_mod.ledger_path(tmp_path).parent.glob("*.tmp.*"))
-    assert leftovers == []
+    ledger = _mod.ledger_path(tmp_path)
+    leftovers = [
+        p for p in ledger.parent.iterdir() if p.name != ledger.name
+    ]
+    assert leftovers == [], f"tmp 잔여물: {[p.name for p in leftovers]}"
 
 
 # ── F7: 심링크된 ledger.md는 링크 대상을 보존하며 갱신 ──────────────
@@ -542,6 +552,117 @@ def test_symlinked_ledger_owned_by_someone_else_is_refused(tmp_path, monkeypatch
 
     assert victim.read_text(encoding="utf-8") == "DO NOT OVERWRITE\n", "남의 파일이 덮였다"
     assert "남의 소유" in capsys.readouterr().err
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 내구성 계약 — `export_harness.py::_atomic_write` 와 **동일**해야 한다
+# (D-15: 구현은 여러 벌, 계약만 하나). 한쪽을 고치면 다른 쪽도 고쳐라.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_write_ledger_preserves_existing_file_mode(tmp_path):
+    """기존 파일 모드를 보존한다 — 0600 으로 관리하던 원장이 world-readable 이 되면 안 된다.
+
+    구 구현은 tmp 를 `0o644` 로 만들고 그대로 replace 했으므로 **무조건 0644 로 덮였다.**
+    원장은 심링크로 공유되는 것이 의도된 기능(F7)이므로 모드도 남의 결정이다.
+    """
+    ledger = tmp_path / "ledger.md"
+    _mod._write_ledger(ledger, [_row("M-1")])
+    os.chmod(ledger, 0o600)
+
+    _mod._write_ledger(ledger, [_row("M-2")])
+
+    mode = stat.S_IMODE(os.stat(ledger).st_mode)
+    assert mode == 0o600, f"모드가 보존되지 않았다: {oct(mode)}"
+    assert "M-2" in ledger.read_text(encoding="utf-8")
+
+
+def test_write_ledger_preserves_mode_through_symlink(tmp_path):
+    """심링크 대상의 모드도 보존한다 — 봉쇄·내구성 강화가 F7 을 깨면 안 된다."""
+    shared = tmp_path / "shared-ledger.md"
+    shared.write_text(_mod._HEADER, encoding="utf-8")
+    os.chmod(shared, 0o640)
+    link = tmp_path / "ledger.md"
+    link.symlink_to(shared)
+
+    _mod._write_ledger(link, [_row("M-3")])
+
+    assert link.is_symlink(), "심링크가 일반 파일로 교체됐다 — F7 이 깨졌다"
+    mode = stat.S_IMODE(os.stat(shared).st_mode)
+    assert mode == 0o640, f"심링크 대상의 모드가 보존되지 않았다: {oct(mode)}"
+    assert "M-3" in shared.read_text(encoding="utf-8")
+
+
+def test_write_ledger_does_not_clobber_the_predictable_tmp_name(tmp_path):
+    """tmp 이름이 pid 로 예측 가능하면 안 된다 — `mkstemp` 를 쓴다.
+
+    이름을 직접 볼 수는 없으므로 **구 이름 자리에 있던 파일이 살아남는가**로 본다.
+    구 구현은 `<name>.tmp.<pid>` 를 `unlink(missing_ok=True)` 로 **먼저 지우고**
+    `O_EXCL` 로 만들었다 — 그 이름을 선점당하면(컨테이너의 PID 재사용, 또는 고의)
+    남의 파일이 조용히 사라진다. `mkstemp` 는 이름이 예측 불가하므로 건드리지 않는다.
+    """
+    ledger = tmp_path / "ledger.md"
+    squatter = tmp_path / f"ledger.md.tmp.{os.getpid()}"
+    squatter.write_text("squatted", encoding="utf-8")
+
+    _mod._write_ledger(ledger, [_row("T-1")])
+
+    assert "T-1" in ledger.read_text(encoding="utf-8")
+    assert squatter.exists(), "예측 가능한 tmp 이름의 기존 파일이 지워졌다"
+    assert squatter.read_text(encoding="utf-8") == "squatted"
+
+
+def test_write_ledger_content_is_exact(tmp_path):
+    """기록 후 내용이 정확하다 — 헤더 + 행, 잘리지 않는다."""
+    ledger = tmp_path / "ledger.md"
+    _mod._write_ledger(ledger, [_row("C-1"), _row("C-2")])
+
+    text = ledger.read_text(encoding="utf-8")
+    assert text.startswith(_mod._HEADER)
+    assert text.endswith("\n")
+    rows = [line for line in text.splitlines() if line.startswith("| C-")]
+    assert rows == [
+        "| C-1 | lint | sample pattern | 1 | 2026-09-10 | low |",
+        "| C-2 | lint | sample pattern | 1 | 2026-09-10 | low |",
+    ], rows
+
+
+def test_write_ledger_fsyncs_file_and_directory(tmp_path, monkeypatch):
+    """파일 fsync + 디렉토리 fsync 를 **실제로** 호출한다.
+
+    `os.replace` 는 원자적이지만 **디스크 도달을 보장하지 않는다** — 호스트가 죽으면
+    rename 만 반영되고 내용이 안 반영돼 빈/잘린 원장이 남는다. 이 어서션이 없으면
+    fsync 를 지워도 다른 모든 테스트가 초록이다.
+    """
+    synced = []
+    real_fsync = os.fsync
+
+    def spy(fd):
+        with contextlib.suppress(OSError):
+            synced.append(os.fstat(fd).st_mode)
+        return real_fsync(fd)
+
+    monkeypatch.setattr(_mod.os, "fsync", spy)
+    _mod._write_ledger(tmp_path / "ledger.md", [_row("S-1")])
+
+    assert any(stat.S_ISREG(m) for m in synced), "파일 fsync 가 호출되지 않았다"
+    assert any(stat.S_ISDIR(m) for m in synced), "디렉토리 fsync 가 호출되지 않았다"
+
+
+def test_write_ledger_survives_unsupported_directory_fsync(tmp_path, monkeypatch):
+    """디렉토리 fsync 가 지원되지 않는 파일시스템에서도 쓰기는 성공한다(fail-open)."""
+    real_fsync = os.fsync
+
+    def picky(fd):
+        if stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise OSError("directory fsync unsupported")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(_mod.os, "fsync", picky)
+    ledger = tmp_path / "ledger.md"
+    _mod._write_ledger(ledger, [_row("S-2")])
+
+    assert "S-2" in ledger.read_text(encoding="utf-8")
 
 
 def test_plain_ledger_file_is_unaffected(tmp_path):
