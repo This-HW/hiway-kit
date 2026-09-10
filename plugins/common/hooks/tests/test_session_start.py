@@ -427,3 +427,177 @@ def test_lessons_absence_is_silent(tmp_path, capsys):
 
     assert out == ""
     assert capsys.readouterr().err == ""
+
+
+class TestPortableOnlyFilter:
+    """훅 주입이 진입점 파일과 **같은 기준**으로 거르는지 (W11).
+
+    두 전달 경로가 서로 다른 기준으로 걸렀다: 진입점(`export_harness.py`)은
+    `portable` 로, 훅 주입(`load_rules`)은 `tier` 만으로. v3.30.0 에서 Codex 도
+    훅으로 규범을 받게 되자 그 비대칭이 곧바로 결함이 됐다 — non-portable 규범이
+    **매 Codex 세션마다** 주입돼, 그 하네스에 없는 수단을 가리켰다.
+    """
+
+    def _rules(self, tmp_path):
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        return rules_dir
+
+    def test_default_is_unfiltered(self, tmp_path):
+        """★가장 중요한 회귀 방어 — Claude Code 에서는 전부 주입이 옳다.
+
+        기본값이 필터를 켜면 Claude Code 세션이 조용히 규범을 잃는다.
+        """
+        rules_dir = self._rules(tmp_path)
+        _write_rule(
+            rules_dir, "mcp-usage.md", "core", "MCP body", portable="false"
+        )
+        _write_rule(rules_dir, "ssot.md", "core", "SSOT body", portable="true")
+        result = load_rules(tmp_path, include_task_resume=False)
+        assert "MCP body" in result
+        assert "SSOT body" in result
+
+    def test_non_portable_body_excluded(self, tmp_path):
+        rules_dir = self._rules(tmp_path)
+        _write_rule(
+            rules_dir, "mcp-usage.md", "core", "MCP body", portable="false"
+        )
+        _write_rule(rules_dir, "ssot.md", "core", "SSOT body", portable="true")
+        result = load_rules(
+            tmp_path, include_task_resume=False, portable_only=True
+        )
+        assert "MCP body" not in result
+        assert "SSOT body" in result
+
+    def test_non_portable_conditional_body_excluded_even_when_signalled(
+        self, tmp_path
+    ):
+        """신호가 켜져도 non-portable 이면 안 나간다 — 실측된 결함 그대로."""
+        rules_dir = self._rules(tmp_path)
+        _write_rule(
+            rules_dir,
+            "mcp-usage.md",
+            "conditional",
+            "MCP body",
+            portable="false",
+        )
+        on = load_rules(
+            tmp_path, include_task_resume=False, signals={"mcp-usage": True}
+        )
+        filtered = load_rules(
+            tmp_path,
+            include_task_resume=False,
+            signals={"mcp-usage": True},
+            portable_only=True,
+        )
+        assert "MCP body" in on
+        assert "MCP body" not in filtered
+
+    def test_non_portable_index_line_excluded(self, tmp_path):
+        """색인 줄도 걸러야 한다 — 색인만 남으면 '읽어라'가 없는 대상을 가리킨다."""
+        rules_dir = self._rules(tmp_path)
+        _write_rule(
+            rules_dir,
+            "agent-system.md",
+            "reference",
+            "body",
+            portable="false",
+            indexLine="에이전트 정책은 rules/agent-system.md 를 읽어라",
+        )
+        unfiltered = load_rules(tmp_path, include_task_resume=False)
+        filtered = load_rules(
+            tmp_path, include_task_resume=False, portable_only=True
+        )
+        assert "rules/agent-system.md" in unfiltered
+        assert "rules/agent-system.md" not in filtered
+        # 색인이 전부 걸러지면 안내 문구 자체가 남지 않아야 한다.
+        assert "참고(필요할 때 읽어라)" not in filtered
+
+    def test_portable_index_line_kept(self, tmp_path):
+        rules_dir = self._rules(tmp_path)
+        _write_rule(
+            rules_dir,
+            "delegation-contract.md",
+            "reference",
+            "body",
+            portable="true",
+            indexLine="위임 계약은 rules/delegation-contract.md 를 읽어라",
+        )
+        filtered = load_rules(
+            tmp_path, include_task_resume=False, portable_only=True
+        )
+        assert "rules/delegation-contract.md" in filtered
+
+    def test_undeclared_portable_excluded_when_filtering(self, tmp_path):
+        """미선언은 '모름'이므로 내보내지 않는다.
+
+        `export_harness.py::_rule_portability` 도 미선언을 None 으로 돌려주고
+        호출부가 red 로 만든다. 훅은 차단할 수 없으니 제외로 대응한다.
+        """
+        rules_dir = self._rules(tmp_path)
+        _write_rule(rules_dir, "no-portable.md", "core", "Undeclared body")
+        assert "Undeclared body" in load_rules(tmp_path, include_task_resume=False)
+        assert "Undeclared body" not in load_rules(
+            tmp_path, include_task_resume=False, portable_only=True
+        )
+
+    def test_bogus_portable_value_excluded_when_filtering(self, tmp_path):
+        """`true`/`false` 리터럴만 인정한다 — 진입점 정규식과 같은 엄격도."""
+        rules_dir = self._rules(tmp_path)
+        _write_rule(rules_dir, "weird.md", "core", "Weird body", portable="yes")
+        assert "Weird body" not in load_rules(
+            tmp_path, include_task_resume=False, portable_only=True
+        )
+
+    def test_real_rules_non_portable_gone_core_kept(self, tmp_path):
+        """픽스처가 아니라 **실물 규범 디렉토리**로 확인한다.
+
+        픽스처에서 초록인 것은 '동작한다'가 아니다
+        (`docs/conventions/warning-signal.md` §측정 1).
+        """
+        plugin_root = HOOKS_DIR.parent
+        signals = {"mcp-usage": True, "parallel-worktree": True}
+        filtered = load_rules(
+            plugin_root,
+            include_task_resume=True,
+            signals=signals,
+            portable_only=True,
+        )
+        assert filtered, "실물 규범에서 필터를 켜면 빈 문자열이 나오면 안 된다"
+        # non-portable 4종이 본문으로도 색인으로도 남지 않는다.
+        assert "mcp__" not in filtered
+        assert "# Task Resume Rules" not in filtered
+        assert "rules/agent-system.md" not in filtered
+        assert "rules/agent-delegation-chain.md" not in filtered
+        # portable 규범은 그대로 남는다.
+        assert "verify-done.sh" in filtered
+        assert "ExitWorktree" in filtered
+
+
+class TestPortableOnlyFlagWiring:
+    """플래그 문자열이 정책과 모듈 사이에서 갈리지 않는지 (드리프트 게이트).
+
+    갈리면 Codex 훅은 모르는 인자를 넘기고 `load_rules` 는 필터를 끈 채 돈다 —
+    출력이 필터 도입 전과 같아 **어디에서도 드러나지 않는다**.
+    """
+
+    def _codex_session_start_command(self):
+        manifest = json.loads(
+            (HOOKS_DIR / "hooks-codex.json").read_text(encoding="utf-8")
+        )
+        entries = manifest["hooks"]["SessionStart"][0]["hooks"]
+        commands = [e["command"] for e in entries if "session-start.py" in e["command"]]
+        assert len(commands) == 1, f"SessionStart 훅이 1개가 아니다: {commands}"
+        return commands[0]
+
+    def test_codex_hook_passes_the_flag_the_module_reads(self):
+        command = self._codex_session_start_command()
+        assert _mod._PORTABLE_ONLY_FLAG in command.split()
+
+    def test_claude_code_hook_does_not_pass_the_flag(self):
+        """Claude Code 쪽은 켜지 않는다 — 전부 주입이 옳다."""
+        manifest = json.loads(
+            (HOOKS_DIR / "hooks.json").read_text(encoding="utf-8")
+        )
+        blob = json.dumps(manifest)
+        assert _mod._PORTABLE_ONLY_FLAG not in blob
