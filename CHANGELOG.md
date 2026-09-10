@@ -8,6 +8,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.30.0] — 2026-09-10
+
+### Added — Codex 가 규범과 **학습 원장**을 훅으로 받는다 (파일이 아니라)
+
+**측정이 판정을 뒤집었다.** 이 킷은 지금까지 *"Codex 훅은 싣지 않는다 — 발화 근거가
+없다"* 로 막아 두고 규범을 `AGENTS.md` **파일**로만 보냈다. 그래서 Codex 는 32 KiB 병합
+한도에 눌렸고 **LESSONS(학습 원장)는 아예 못 받았다.**
+
+이번에 격리 `CODEX_HOME` 에서 넷을 실측했다:
+
+| 측정 | 결과 |
+| --- | --- |
+| SessionStart 훅 stdout → 모델 컨텍스트 | **도달한다** (토큰 프로브) |
+| 훅 페이로드 스키마 | **Claude Code 와 동일** (`hook_event_name`·`tool_name`·`tool_input`·`cwd`·`transcript_path`) |
+| 플러그인이 훅을 배송하는가 | **한다** — `.codex-plugin/plugin.json` 의 `hooks` 필드. 소비자가 `~/.codex/hooks.json` 을 손댈 필요 없다 |
+| 플러그인 루트 변수 | **`${CLAUDE_PLUGIN_ROOT}` 가 Codex 에서도 치환된다.** `${CODEX_PLUGIN_ROOT}` 는 **없다**(음성 대조로 확인) |
+
+페이로드가 동일하므로 **훅 스크립트를 새로 쓰지 않았다** — 같은 `session-start.py`·
+`auto-format.py` 를 그대로 쓰고, 하네스 차이는 **경로 추출 한 함수**로 흡수했다.
+Codex 는 파일을 `tool_name:"apply_patch"` + 패치 봉투로 쓰므로(Claude Code 의
+`Edit`/`Write` + `file_path` 와 다르다) 그 한 겹만 더했다.
+
+**싣지 않은 것**: `protect-sensitive`(PreToolUse 차단). `codex exec` 에서 훅이 실행돼도
+**명령이 그대로 실행됐다** — 차단이 성립하지 않는다. **돌지 않는 보호를 실으면 소비자가
+보호받는다고 믿는다.** 집행은 엔진 무관인 git 훅 층이 담당한다.
+
+### ★한계 — 신뢰(trust) 없이는 **조용히 건너뛴다**
+
+컨트롤이 독립 재현한 결과다. 정책대로 만든 매니페스트를 실제로 설치하고 `codex exec` 를
+돌렸더니 **훅이 한 줄도 발화하지 않았고 경고도 없었다** — 모델은 규범을 못 받은 채
+정상 응답했다(완료 게이트 명령을 묻자 `NONE`). 같은 설치본에
+`--dangerously-bypass-hook-trust` 만 더하자 즉시 `hook: SessionStart` 가 뜨고
+**주입된 규범에만 있는 값**(`scripts/verify-done.sh`)을 회신했다. 차이는 신뢰뿐이다.
+
+승인 관문이 있는 것은 정상이고 바람직하다. **문제는 침묵이다** — 비대화형(CI·자동화)에서
+신뢰가 없으면 훅이 경고 없이 빠지고, 소비자는 규범이 주입된 줄 안다. 이 킷이 최악으로
+다루는 형태와 같다. 그래서 **한계로 명기했고**, 워커 기록에 이 단계가 빠져 있던 것도
+같이 적었다 — 스크래치 픽스처와 실물의 차이였다(`warning-signal.md` §측정 1).
+
+### 확인 — **하나의 원장, N 개의 주입기**가 두 하네스에서 성립한다
+
+신뢰를 준 상태에서 kit 레포를 cwd 로 물었더니 Codex 가 **로컬 `feedback_ledger.py digest`
+첫 줄과 동일한 문장**을 인용했다. 원장은 `<git-common-dir>/kit/` 에 있어 하네스와 무관하게
+한 벌이므로, 이것으로 규범뿐 아니라 **메모리도 Claude Code + Codex 두 하네스에 같은
+출처에서 도달**함이 실증됐다.
+
+
 ## [3.29.0] — 2026-09-10
 
 ### Fixed — 원장 쓰기의 내구성을 export 쪽 계약과 맞춘다 (리뷰 잔여 마지막 1건)
