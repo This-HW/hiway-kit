@@ -2,7 +2,7 @@
 """
 PostToolUse Hook: 파일 저장 후 자동 포맷팅 + Lint 피드백
 
-Edit 또는 Write 도구 사용 후 파일 타입에 따라:
+파일을 쓴 도구(Claude Code `Edit`/`Write`, Codex `apply_patch`) 사용 후 파일 타입에 따라:
 1. 자동 수정 (FIX)   - ruff --fix, eslint --fix 등 (토큰 0)
 2. 자동 포맷 (FORMAT) - ruff format, prettier 등 (토큰 0)
 3. 잔여 에러 피드백   - 수정 불가 에러만 exit 2로 Claude에게 전달
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -335,6 +336,57 @@ def run_pipeline(file_path: str) -> int:
     return 0
 
 
+# `apply_patch` 패치 봉투에서 **쓰기 대상 파일**을 뽑는 줄 앵커 패턴.
+#
+# 관대한 패턴을 쓰지 않는 이유: 이 마커를 *설명하는* 텍스트(문서·테스트 픽스처)가
+# 패치 본문 안에 diff 로 들어올 수 있고, 관대한 패턴은 그것을 진짜 마커로 오인한다
+# (원장 교훈 — 구조 마커는 줄 앵커 + 형식 제약으로 좁힌다). 그래서 `^`/`$` 로 줄
+# 전체를 고정하고, diff 본문 줄(` `/`+`/`-` 로 시작)은 구조적으로 매치될 수 없다.
+_APPLY_PATCH_TARGET = re.compile(
+    r"^\*\*\* (?:Update|Add) File: (.+)$|^\*\*\* Move to: (.+)$",
+    re.MULTILINE,
+)
+
+
+def _targets_from_apply_patch(command: str) -> list[str]:
+    """Codex `apply_patch` 의 patch 봉투에서 포맷 대상 경로들을 뽑는다.
+
+    `*** Delete File:` 는 제외한다 — 지워진 파일을 포맷할 수 없다.
+    `*** Move to:` 는 이동 **후** 경로가 실재하므로 대상이다.
+    """
+    out: list[str] = []
+    for update_or_add, move_to in _APPLY_PATCH_TARGET.findall(command):
+        path = (update_or_add or move_to).strip()
+        if path and path not in out:
+            out.append(path)
+    return out
+
+
+def _targets_from_payload(input_data: dict) -> list[str]:
+    """훅 페이로드에서 포맷 대상 파일 경로 목록을 뽑는다 — 하네스 무관.
+
+    두 하네스가 **같은 페이로드 스키마**(`tool_name`/`tool_input`)를 쓰지만 파일을
+    쓰는 도구가 다르다 [confirmed: codex-cli 0.153.4 실측, 2026-09-10]:
+
+    - Claude Code — `Edit`/`Write`, 경로는 `tool_input.file_path`
+    - Codex — `apply_patch`, 경로는 `tool_input.command` 의 patch 봉투 안
+
+    모르는 도구 이름은 빈 목록이다(no-op). 여기서 도구 이름을 넓게 받으면 그 순간
+    "무엇을 보는가"가 흐려진다 — 대상은 실측된 둘뿐이다.
+    """
+    tool_name = input_data.get("tool_name", "")
+    tool_input = input_data.get("tool_input", {})
+    if not isinstance(tool_input, dict):
+        return []
+    if tool_name in ("Edit", "Write"):
+        file_path = tool_input.get("file_path", "")
+        return [file_path] if isinstance(file_path, str) and file_path else []
+    if tool_name == "apply_patch":
+        command = tool_input.get("command", "")
+        return _targets_from_apply_patch(command) if isinstance(command, str) else []
+    return []
+
+
 def main():
     try:
         # stdin이 TTY면 json.load 무한 블록 방지 — 즉시 통과.
@@ -342,17 +394,14 @@ def main():
             sys.exit(0)
         input_data = json.load(sys.stdin)
 
-        tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input", {})
-
-        if tool_name not in ("Edit", "Write"):
+        targets = _targets_from_payload(input_data)
+        if not targets:
             sys.exit(0)
 
-        file_path = tool_input.get("file_path", "")
-        if not file_path:
-            sys.exit(0)
-
-        exit_code = run_pipeline(file_path)
+        exit_code = 0
+        for file_path in targets:
+            if run_pipeline(file_path) == 2:
+                exit_code = 2
         sys.exit(exit_code)
 
     except json.JSONDecodeError:

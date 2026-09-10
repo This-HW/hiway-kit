@@ -462,3 +462,121 @@ def test_write_continues_after_one_target_fails_and_reports_both(tmp_path, capsy
     alpha_manifest = root / "plugins" / "common" / ".alpha-plugin" / "plugin.json"
     assert alpha_manifest.exists()  # evil이 막혀도 alpha는 계속 시도돼 기록됐다
     assert "기록: plugins/common/.alpha-plugin/plugin.json" in out
+
+
+# ── 7. 훅 매니페스트 생성 (W9 / Codex) ───────────────────────────────────────
+#
+# Codex 는 exec form(command+args[])을 로드하지 않고, `${CLAUDE_PLUGIN_ROOT}` 를
+# 치환한다 [confirmed: codex-cli 0.153.4 실측, 2026-09-10]. 그래서 훅 매니페스트를
+# 타겟별로 **생성**한다 — 손으로 두 벌 유지하면 조용히 갈린다.
+
+_HOOKS_SPEC = {
+    "path": "plugins/common/hooks/hooks-delta.json",
+    "manifestField": "./hooks/hooks-delta.json",
+    "interpreter": "python3",
+    "events": {
+        "SessionStart": [{"script": "hooks/inject.py", "timeout": 10}],
+        "PostToolUse": [{"script": "hooks/fmt.py", "timeout": 30}],
+    },
+}
+
+
+def _hooks_repo(tmp_path: Path, *, with_scripts: bool = True) -> Path:
+    """alpha 타겟에 훅 스펙을 붙인 픽스처 레포."""
+    root = _fake_repo(tmp_path)
+    policy = json.loads(
+        (root / "packaging" / "targets.json").read_text(encoding="utf-8")
+    )
+    policy["targets"][0]["hooks"] = _HOOKS_SPEC
+    (root / "packaging" / "targets.json").write_text(
+        json.dumps(policy), encoding="utf-8"
+    )
+    hooks_dir = root / "plugins" / "common" / "hooks"
+    hooks_dir.mkdir(parents=True)
+    if with_scripts:
+        (hooks_dir / "inject.py").write_text("", encoding="utf-8")
+        (hooks_dir / "fmt.py").write_text("", encoding="utf-8")
+    return root
+
+
+def test_hooks_manifest_is_generated_in_string_form(tmp_path):
+    root = _hooks_repo(tmp_path)
+    assert _run(root, "--write", "--only", "alpha") == 0
+    hooks = json.loads(
+        (root / "plugins" / "common" / "hooks" / "hooks-delta.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    entry = hooks["hooks"]["SessionStart"][0]["hooks"][0]
+    # 문자열 하나여야 한다 — args[] 가 있으면 Codex 가 로드하지 않는다.
+    assert "args" not in entry
+    assert entry["command"] == 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/inject.py"'
+    assert entry["timeout"] == 10
+    # matcher 는 쓰지 않는다 (Codex 해석 여부 미측정).
+    assert "matcher" not in hooks["hooks"]["SessionStart"][0]
+
+
+def test_manifest_gains_hooks_field_when_hooks_dir_present(tmp_path):
+    root = _hooks_repo(tmp_path)
+    assert _run(root, "--write", "--only", "alpha") == 0
+    manifest = json.loads(
+        (root / "plugins" / "common" / ".alpha-plugin" / "plugin.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest["hooks"] == "./hooks/hooks-delta.json"
+
+
+def test_no_hooks_field_and_no_artifact_when_hooks_dir_absent(tmp_path):
+    """훅 디렉토리가 없으면 필드도 산출물도 없다 — 컴포넌트는 실측으로 판정한다."""
+    root = _fake_repo(tmp_path)
+    policy = json.loads(
+        (root / "packaging" / "targets.json").read_text(encoding="utf-8")
+    )
+    policy["targets"][0]["hooks"] = _HOOKS_SPEC
+    (root / "packaging" / "targets.json").write_text(
+        json.dumps(policy), encoding="utf-8"
+    )
+    assert _run(root, "--write", "--only", "alpha") == 0
+    manifest = json.loads(
+        (root / "plugins" / "common" / ".alpha-plugin" / "plugin.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert "hooks" not in manifest
+    assert not (root / "plugins" / "common" / "hooks" / "hooks-delta.json").exists()
+
+
+def test_declared_hook_script_missing_is_exit_1(tmp_path, capsys):
+    """없는 스크립트를 가리키는 훅은 소비자 세션에서 매번 조용히 실패한다 — 여기서 막는다."""
+    root = _hooks_repo(tmp_path, with_scripts=False)
+    assert _run(root, "--write", "--only", "alpha") == 1
+    err = capsys.readouterr().err + capsys.readouterr().out
+    assert "hooks/inject.py" in err
+
+
+def test_hook_script_path_escaping_plugin_root_is_exit_1(tmp_path):
+    root = _hooks_repo(tmp_path)
+    policy = json.loads(
+        (root / "packaging" / "targets.json").read_text(encoding="utf-8")
+    )
+    policy["targets"][0]["hooks"]["events"]["SessionStart"][0]["script"] = (
+        "../../../etc/passwd"
+    )
+    (root / "packaging" / "targets.json").write_text(
+        json.dumps(policy), encoding="utf-8"
+    )
+    assert _run(root, "--write", "--only", "alpha") == 1
+
+
+def test_check_detects_hooks_manifest_drift_and_deletion(tmp_path):
+    root = _hooks_repo(tmp_path)
+    assert _run(root, "--write", "--only", "alpha") == 0
+    assert _run(root, "--check", "--only", "alpha") == 0
+    generated = root / "plugins" / "common" / "hooks" / "hooks-delta.json"
+    generated.write_text('{"hooks": {}}\n', encoding="utf-8")
+    assert _run(root, "--check", "--only", "alpha") == 1
+    assert _run(root, "--write", "--only", "alpha") == 0
+    assert _run(root, "--check", "--only", "alpha") == 0
+    generated.unlink()
+    assert _run(root, "--check", "--only", "alpha") == 1
