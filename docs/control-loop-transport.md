@@ -174,6 +174,75 @@ GPT-6 기반)를 별도 워크트리에 띄워 Claude 코디네이터에게 구�
 
 ---
 
+## 부록 — 스킬 **강등 사다리 2단**의 구체 수단 (Codex)
+
+> **위 사다리와 다른 사다리다.** 위쪽 1~4단은 *컨트롤이 자식 세션을 어떻게 띄우는가*
+> (control-loop 디스패치 운송)이고, 이 부록은 *배포되는 스킬이 위임 수단이 없는
+> 하네스에서 어떻게 강등하는가*(`skills/{debug,review,test,skill-creator}` 의
+> **강등 경로** 절)의 2단이다. 그 절은 배포물이라 수단의 이름을 적지 않는다 — 여기
+> 적는다. `plugins/` 쪽으로 이 이름들을 옮기지 마라(§17 · G-D6).
+
+스킬의 강등 사다리는 셋이다: **1단** 네이티브 서브에이전트(격리 있음) → **2단**
+호스트가 제공하는 위임 수단(격리 있음) → **3단** 세션 내 직접 수행(격리 없음).
+2단이 존재한다는 것이 v3.32.0 이 놓친 사실이고, 그래서 그 문서는 격리 상실을
+필연으로 적었다. **Codex 에서 2단은 성립한다.**
+
+### 실측 `[confirmed: 2026-09-10, codex-cli 0.153.4, 격리 CODEX_HOME]`
+
+측정은 `CODEX_HOME` 을 스크래치로 격리하고 `auth.json` 만 복사해서 했다(사용자 전역
+`~/.codex/**` 는 읽기만). 재현 명령의 뼈대:
+
+```bash
+export CODEX_HOME=/tmp/probe-home && mkdir -p "$CODEX_HOME" && cp ~/.codex/auth.json "$CODEX_HOME/"
+codex exec --json -C "$PROBE" -s workspace-write --dangerously-bypass-approvals-and-sandbox '<프롬프트>' < /dev/null
+```
+
+**수단(6종).** 세션의 도구 목록에 실재한다:
+`collaboration.spawn_agent` · `wait_agent` · `list_agents` · `send_message` ·
+`interrupt_agent` · `followup_task`.
+
+**`spawn_agent` 파라미터 — 실행으로 확인한 것.** `task_name`(소문자·숫자·밑줄) ·
+`message` · `fork_turns="none"` 세 개를 보내 성공했고, 반환은
+`{"task_name": "/root/probe_reviewer"}` 였다. `model` · `reasoning_effort` 는
+**이번에 보내지 않았다 — 미검증**이다(모델 자기보고로만 존재한다).
+
+**종단 확인 — 킷 에이전트 하나로.** `plugins/common/agents/dev/review-code.md`
+**본문 전체**(요약 없이, 26,336 B)를 `message` 로 넘기고 대상 파일 지시를 뒤에
+붙였다. 돌아온 것은 그 정의의 계약 형식 그대로였다 — `## 판정: [REJECT]` ·
+`Scope Used: adversarial` · `ATK-001` 취약점 항목 · 종료 선언 `## 완료:`.
+**정의 본문을 그대로 넘기면 계약이 살아서 건너간다**는 것이 2단의 근거다.
+
+### 함정 넷 (전부 이번 측정에서 실제로 밟았다)
+
+1. **`wait_agent` 는 타임아웃한다.** 첫 회신이
+   `{"message":"Wait timed out.","timed_out":true}` 였고 산출물은 아직 없었다.
+   **타임아웃은 실패도 완료도 아니다** — `timed_out:false` 가 될 때까지 다시 기다려라.
+   한 번만 기다리고 끝낸 회차는 리포트를 받지 못했고(파일 미생성), 두 번 기다린
+   회차는 받았다(`wait_calls: 2`).
+2. **최종 회신은 자기보고이고, 지어낼 수 있다.** 첫 회차에서 모델은
+   `wait_result_token: "REVIEW-OK-8842"` 를 반환했지만 **그 토큰은 내 프롬프트에
+   있던 값**이었고, 이벤트 스트림에는 `receiver_thread_ids: []` 인 `wait` 호출
+   하나뿐 — **아무것도 띄우지 않았다.** 판정은 회신 텍스트가 아니라 **부수효과**로
+   하라(자식만 만들 수 있는 파일·`--json` 이벤트 스트림). 이것이 스킬 본문에
+   *"회신은 자기보고다"* 를 넣은 이유다.
+3. **`codex exec` 는 stdin 을 닫지 않으면 시작조차 하지 않는다.** 프롬프트를 인자로
+   줘도 파이프된 stdin 을 기다리며 `Reading additional input from stdin...` 에서
+   멈춘다 — 캡처 0건이 "수단 없음"으로 오독된다(`warning-signal.md` §측정 3 의
+   그 사례가 이것이다). **`< /dev/null` 을 붙여라.**
+4. **이벤트 스트림의 `collab_tool_call` 은 `tool:"wait"` 로만 렌더된다** —
+   `spawn_agent` 가 별도 항목으로 보이지 않고 `receiver_thread_ids` 도 비어 있다.
+   **스트림만 보고 "spawn 이 없었다"고 판정하지 마라**(2와 반대 방향의 오독이다).
+   실제 발생 여부는 부수효과로 가른다.
+
+### 미검증 · 한계
+
+- **플러그인의 `agents/` 는 서브에이전트로 자동 등록되지 않는다**(선행 측정 M-3).
+  이번에 재확인하지 않았다. 어느 쪽이든 2단의 레시피는 바뀌지 않는다 — 등록에
+  기대지 않고 **정의 파일 본문을 지시문으로 실어 보내기** 때문이다.
+- `model` · `reasoning_effort` 파라미터: 미검증(위 참고).
+- `codex exec` 비대화형에서 부모 턴이 끝나면 자식이 함께 끝난다 — 자식이 오래
+  걸리는 작업이면 부모가 계속 기다려야 한다(함정 1과 같은 뿌리).
+
 ## 파리티 · 하네스 범위
 
 규범과 절차(L0·L1)는 모든 하네스 공통이고, 전용 실행자·자동 강제(L2·L3)는 Claude Code
