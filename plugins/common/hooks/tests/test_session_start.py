@@ -393,3 +393,37 @@ def test_load_stale_tasks_prefers_recent_sessions(tmp_path, monkeypatch):
     _os.utime(tmp_path / "tasks" / "old", (1, 1))
     out = _stale(tmp_path)
     assert "최신" in out and "옛날" not in out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LESSONS: "배운 게 없다"(조용) 와 "얻지 못했다"(한 줄) 를 구분한다
+#
+# 이 자리는 원래 `except Exception: return ""` 로 **완전히 조용했다.** 그래서 원장이
+# 영구히 죽어도 "아직 배운 게 없다"와 구별되지 않았다 — 폴백이 발화한 것을 세는 곳이
+# 없으면 폴백은 보호가 아니라 은폐다(`docs/conventions/warning-signal.md` §측정 8).
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_lessons_failure_is_fail_open_but_observable(tmp_path, capsys):
+    """실패해도 세션은 막지 않되(빈 문자열), **한 줄은 남긴다.**"""
+    import types
+
+    fake = types.ModuleType("feedback_ledger")
+
+    def boom(*_a, **_k):
+        raise RuntimeError("ledger backend exploded")
+
+    fake.load_digest = boom
+    with patch.dict(sys.modules, {"feedback_ledger": fake}):
+        out = _mod.load_lessons(tmp_path)
+
+    assert out == "", "fail-open 이 깨졌다 — 학습 루프가 세션을 막으면 안 된다"
+    assert "digest 를 얻지 못했다" in capsys.readouterr().err
+
+
+def test_lessons_absence_is_silent(tmp_path, capsys):
+    """배운 게 없을 뿐이면 **조용해야 한다** — 상시 참 경고는 옆의 진짜 경고를 죽인다."""
+    out = _mod.load_lessons(tmp_path / "no-such-project")
+
+    assert out == ""
+    assert capsys.readouterr().err == ""

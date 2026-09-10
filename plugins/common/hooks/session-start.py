@@ -305,10 +305,16 @@ def load_lessons(project_root: Path) -> str:
 
         os.environ.setdefault("CLAUDE_PROJECT_DIR", str(project_root))
         digest = load_digest(root=project_root)
-    except Exception:
+    except Exception as err:  # 학습 루프는 세션을 막지 않는다(fail-open)
+        # **막지는 않되 보이지 않게 하지도 않는다.** 이 자리는 원래 완전히 조용했다:
+        # 실패해도 `""` 를 돌려주므로 "아직 배운 게 없다"와 **구별되지 않았다.**
+        # 폴백이 발화한 것을 세는 곳이 없으면 원장이 영구히 죽어도 아무도 모른다
+        # (`docs/conventions/warning-signal.md` §측정 8 — 이 규약을 쓰자마자 이 레포에서
+        # 나온 첫 인스턴스다). 한 줄이면 다음 사람이 원인을 찾을 수 있다.
+        print(f"[session-start] LESSONS 주입 생략 — digest 를 얻지 못했다: {err}", file=sys.stderr)
         return ""
     if not digest:
-        return ""
+        return ""  # 배운 게 없다 = 정상. 조용한 것이 맞다.
     # 방어 프레이밍 선치 (F-024/F-028, OWASP ASI06): 원장 pattern 은 리뷰·검증에서
     # 수집된 자유텍스트라 외부 유래 문자열이 실릴 수 있다. STALE TASKS 와 동일하게
     # 페이로드보다 *먼저* 비신뢰 선언을 둔다(순서가 방어의 핵심).
