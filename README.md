@@ -101,7 +101,7 @@ differs by platform capability, verified against the real CLIs (not assumed):
 | Skills (21) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
 | Rules (15) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
 | Agents (32) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`backend`/`dev`/`meta`/`planning`); it miscounts the 4 category folders as agent entries and finds none of the real 32. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
-| Hooks | ❌ not shipped — Codex's hook runtime does not load the exec-array form (`command`+`args`) this kit uses; confirmed by direct testing, not just reading docs | ❌ not shipped this batch — format unverified |
+| Hooks | ⚠ shipped (`session-start`, `auto-format`) but **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is deliberately **not** shipped: hooks fired but the command still ran, so the block does not hold | ❌ not shipped this batch — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
 
 **Parity contract**: rules and skills (norms and procedures) work on every harness —
@@ -133,6 +133,40 @@ codex plugin list   # shows hiway-kit@hiway-kit-marketplace
 codex plugin remove hiway-kit@hiway-kit-marketplace
 codex plugin marketplace remove hiway-kit-marketplace
 ```
+
+#### Trusting Codex hooks (do this once, or the norms never arrive)
+
+Installing is not enough. Codex asks for **hook trust** before it will run a plugin's
+hooks, and until you grant it the hooks are **skipped in silence** — no warning, no
+error, and nothing in the session says the rules were not injected. Measured directly:
+the same install answered `NONE` when asked about the completion gate, then answered
+correctly once trust was in place.
+
+- **Interactive `codex`**: start a session in the project once and approve the hook
+  trust prompt. After that, `SessionStart` fires and the rules plus the feedback-ledger
+  digest are injected the same way Claude Code injects them.
+- **Non-interactive `codex exec`**: there is no prompt to answer, so hooks stay skipped
+  unless you pass `--dangerously-bypass-hook-trust`. Read the flag's name literally —
+  it bypasses the approval gate, so use it only where you already trust the plugin.
+
+**Hooks are the better path, not the only one.** Even with hooks off, the norms still
+reach Codex through the entrypoint file (`AGENTS.md`, see
+[`/harness-export`](plugins/common/skills/harness-export/SKILL.md)), and a session can
+fetch the ledger digest itself — the `feedback-loop` rule tells it how. What you lose
+without trust is automatic delivery, not the discipline.
+
+#### Skills that name a sub-agent: read them as a contract, not a transport
+
+Codex loads all 21 skills, but it exposes **no sub-agents**. Four skills (`debug`,
+`review`, `test`, `skill-creator`) contain `Task tool 사용:` / `subagent_type:` blocks.
+Each of those skills now carries an explicit degradation path: the delegation is one
+**transport**, and the invariant is the **contract** inside the block — persona, checks,
+output format, completion declaration. On a harness with no delegation, perform the same
+contract in the session itself and produce the same output. **Do not skip the step, and
+do not report a delegation that did not happen.** The cost is stated in each skill:
+performing it inline shares the session's context, so the blind-spot separation a
+separate agent would give you is gone — which matters most for `review`'s adversarial
+pass, where the isolation is part of the value.
 
 Codex also reads the repo's existing `.claude-plugin/marketplace.json` as a legacy
 path, alongside the generated `.agents/plugins/marketplace.json`. Public listing in
