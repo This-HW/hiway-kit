@@ -197,6 +197,10 @@ _MAX_ACTIVE_WORKS = 10
 
 _VALID_TIERS = {"core", "conditional", "reference"}
 
+#: 이식 가능한 규범만 주입하라는 하네스 신호. `packaging/targets.json` 이 이 문자열의
+#: SSOT 이고, 여기서는 그것을 **읽기만** 한다 — 값이 갈리면 플래그가 조용히 무시된다.
+_PORTABLE_ONLY_FLAG = "--portable-only"
+
 
 def _strip_frontmatter(raw: str) -> str:
     """YAML frontmatter(--- ... ---)를 제거하고 본문만 반환. 없으면 그대로."""
@@ -213,11 +217,28 @@ def _strip_frontmatter(raw: str) -> str:
     return "\n".join(lines[end + 1 :]).strip()
 
 
+def _rule_is_portable(fm: dict) -> bool | None:
+    """규범 frontmatter 의 `portable` 선언을 읽는다. 미선언·무효면 None.
+
+    **판정 기준은 `export_harness.py::_rule_portability` 와 동일하다**
+    (D-15: 구현은 여러 벌, 계약만 하나 — 두 훅은 서로를 import 하지 않는다).
+    한쪽을 고치면 다른 쪽도 고쳐라. 양쪽 모두 `true`/`false` 리터럴만 인정하고,
+    그 밖의 값·미선언은 "모름"이다.
+    """
+    raw = fm.get("portable", "")
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    return None
+
+
 def load_rules(
     plugin_root: Path,
     include_task_resume: bool,
     *,
     signals: dict | None = None,
+    portable_only: bool = False,
 ) -> str:
     """
     plugin_root/rules/ 디렉토리를 스캔해 각 규범의 frontmatter `tier` 선언에 따라
@@ -229,6 +250,16 @@ def load_rules(
       (기존 활성 Work 감지 신호 — signals에 있으면 그쪽이 우선).
     - reference: 본문은 주입하지 않고 frontmatter `indexLine`만 색인으로 남는다.
     - tier 선언이 없거나 무효한 파일은 건너뛴다 (fail-open — 누락 검사는 별도 게이트 몫).
+
+    `portable_only=True` 면 `portable: true` 를 선언한 규범만 남긴다 — **본문과 색인
+    줄 양쪽에** 적용한다. 색인만 남기면 *"읽어라"* 가 그 하네스에 없는 대상을 가리켜
+    필터를 켜기 전과 같아진다. 미선언(`None`)도 제외한다 — 이식 가능하다는 근거가
+    없는 규범을 내보내지 않는다(미선언 자체를 red 로 만드는 것은 진입점 게이트 몫).
+
+    **기본값은 False 여야 한다.** Claude Code 에서는 전부 주입하는 것이 옳다 —
+    이 필터는 진입점 파일(`export_harness.py`)이 이미 `portable` 로 거르는 것과
+    훅 주입 경로를 **일치**시키기 위한 것이고, 켜는 주체는 하네스별 훅 매니페스트다
+    (런타임 추측으로 하네스를 판별하지 않는다 — 그건 조용히 틀린다).
 
     파일이 없거나 읽기 실패해도 무시 (fail-open).
     반환값: '=== RULES ===' 섹션 전체 문자열 (내용 없으면 빈 문자열)
@@ -250,6 +281,8 @@ def load_rules(
         fm = parse_frontmatter(rule_path)
         tier = fm.get("tier", "")
         if tier not in _VALID_TIERS:
+            continue
+        if portable_only and _rule_is_portable(fm) is not True:
             continue
 
         if tier == "core":
@@ -311,7 +344,10 @@ def load_lessons(project_root: Path) -> str:
         # 폴백이 발화한 것을 세는 곳이 없으면 원장이 영구히 죽어도 아무도 모른다
         # (`docs/conventions/warning-signal.md` §측정 8 — 이 규약을 쓰자마자 이 레포에서
         # 나온 첫 인스턴스다). 한 줄이면 다음 사람이 원인을 찾을 수 있다.
-        print(f"[session-start] LESSONS 주입 생략 — digest 를 얻지 못했다: {err}", file=sys.stderr)
+        print(
+            f"[session-start] LESSONS 주입 생략 — digest 를 얻지 못했다: {err}",
+            file=sys.stderr,
+        )
         return ""
     if not digest:
         return ""  # 배운 게 없다 = 정상. 조용한 것이 맞다.
@@ -568,10 +604,25 @@ def main() -> None:
         "parallel-worktree": _in_worktree(project_root),
         "mcp-usage": _mcp_config_present(project_root),
     }
+    # 이식 가능성 필터는 **훅 매니페스트가 켠다** — 런타임에 하네스를 추측하지 않는다.
+    # Codex 용 `hooks-codex.json` 만 이 플래그를 실어 보낸다(packaging/targets.json 이 SSOT).
+    argv = sys.argv[1:]
+    portable_only = _PORTABLE_ONLY_FLAG in argv
+    # 모르는 인자는 **조용히 삼키지 않는다.** 매니페스트 쪽 철자가 갈리면 필터가 꺼진
+    # 채로 계속 도는데, 그 상태는 필터를 넣기 전과 출력이 같아 어디에서도 드러나지
+    # 않는다(warning-signal §8 — 흡수는 보호가 아니라 은폐다). 막지는 않는다(fail-open).
+    unknown = [a for a in argv if a != _PORTABLE_ONLY_FLAG]
+    if unknown:
+        print(
+            f"[hiway-kit] session-start: 모르는 인자 무시 — {' '.join(unknown)}. "
+            f"아는 인자는 {_PORTABLE_ONLY_FLAG} 뿐이다.",
+            file=sys.stderr,
+        )
     rules_text = load_rules(
         _file_based_root,
         include_task_resume=has_active_work,
         signals=conditional_signals,
+        portable_only=portable_only,
     )
 
     # stdin의 session_id로 현재 세션 제외 (fail-open)

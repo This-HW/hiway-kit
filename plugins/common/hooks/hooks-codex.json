@@ -15,7 +15,7 @@
       {
         "hooks": [
           {
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py\"",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.py\" --portable-only",
             "timeout": 10,
             "type": "command"
           }

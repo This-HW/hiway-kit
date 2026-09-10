@@ -69,11 +69,15 @@
         "path": "plugins/common/hooks/hooks-codex.json",
         "manifestField": "./hooks/hooks-codex.json",
         "interpreter": "python3",
+        "_args": "훅 커맨드 뒤에 그대로 이어 붙는 인자. `--portable-only` 는 훅 주입을 진입점 파일(export_harness.py)과 **같은 기준**으로 거르게 한다. 두 경로가 갈려 있었다 — 진입점은 `portable` 로 걸렀는데 훅 주입(session-start.py::load_rules)은 `tier` 만 봐서, non-portable 규범이 매 Codex 세션마다 주입됐다: `mcp-usage`·`task-resume` 는 **본문 통째로**, `agent-system`·`agent-delegation-chain` 은 **색인 줄로**. 전자는 `mcp__` 툴 이름과 에이전트 `tools:` allowlist 를, 후자는 subagent 위임을 전제하는데 **Codex 에는 그 수단이 없다**(실측). 즉 없는 수단을 가리키는 지시가 자동으로, 매 세션 주입됐다 — 판정은 `parallel-worktree`·스킬 4종에서와 같은 '규범 없음보다 나쁘다'. **하네스 식별은 여기(매니페스트)서 준다** — 런타임 추측은 조용히 틀린다. 이 배치는 두 경로의 **일관성만** 고쳤고, `portable` 선언 자체가 맞는지(예: Codex 에도 MCP 가 있으니 `mcp-usage` 가 이식 가능한가)는 별개 판단이라 범위 밖이다. 인자 문자열의 SSOT 는 이 파일이고 `session-start.py::_PORTABLE_ONLY_FLAG` 가 그것을 읽기만 한다 — 갈리면 테스트가 red 다.",
         "events": {
           "SessionStart": [
             {
               "script": "hooks/session-start.py",
-              "timeout": 10
+              "timeout": 10,
+              "args": [
+                "--portable-only"
+              ]
             }
           ],
           "PostToolUse": [
