@@ -104,13 +104,21 @@ differs by platform capability, verified against the real CLIs (not assumed):
 | Hooks | ⚠ shipped (`session-start`, `auto-format`) but **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is deliberately **not** shipped: hooks fired but the command still ran, so the block does not hold | ❌ not shipped this batch — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
 
-**Parity contract**: rules and skills (norms and procedures) work on every harness —
-Claude Code injects rules each session and Codex/Antigravity carry them via `AGENTS.md`
-(see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) or read skills
-directly. Dedicated executors and automatic enforcement (agents and hooks) are a Claude
-Code deepening feature. Put plainly: **what a non-Claude-Code harness loses is exactly
-one thing — automatic blocking (hooks).** Everything else keeps working, because it
-depends only on git and external processes, not on any harness-specific runtime:
+**Parity contract**: rules and skills (norms and procedures) work on every harness.
+How they arrive differs, and the difference is measured, not assumed:
+
+| | Claude Code | Codex | Antigravity |
+| --- | --- | --- | --- |
+| Rules | hook injection | **hook injection** (measured) — `AGENTS.md` is the fallback | `AGENTS.md`/`GEMINI.md` only |
+| Ledger digest (memory) | hook injection | **hook injection** (measured); rules also tell the agent to fetch it itself | self-fetch per the rule |
+| Skills | native | **all 21 recognized** (measured) | recognized |
+| Subagents | 32 agents | **not exposed** — skills degrade to in-session execution | not supported (nested layout) |
+| Automatic blocking | `PreToolUse` veto | **no** — the hook runs but cannot veto | no |
+
+Put plainly: **what a non-Claude-Code harness loses is dedicated executors (subagents)
+and automatic blocking.** Injection is no longer on that list for Codex. Everything else
+keeps working, because it depends only on git and external processes, not on any
+harness-specific runtime:
 discipline (rules), procedure (skills), state (child session markers under
 `gitdir/kit/child.json`), and the registry `describe` seam all carry over unchanged.
 One caveat: behavioral evals (`evals/`) currently drive only Claude Code — the harness
