@@ -237,12 +237,47 @@ class TestPromoteSuccess:
         assert payload["category"] == "security"
         assert payload["pattern"] == "hardcoded secret"
 
-    def test_empty_ledger_promotes_trivially(self, tmp_path):
+    def test_empty_ledger_is_noop_not_promoted(self, tmp_path):
+        """빈 원장은 **레지스트리 미접촉** 이다 — 'promoted' 로 뭉개면 셋을 구분 못 한다.
+
+        `promoted: True` 하나가 빈 원장 · partial · 전량 성공을 모두 뜻했다. 불리언으로
+        분기하는 호출자는 "레지스트리에 반영됐다"와 "부를 것이 없었다"를 구별할 수 없다.
+        """
         repo = _init_repo(tmp_path)
         script = _write_fake_registry(tmp_path, GOOD_REGISTRY_BODY)
         _install_pointer(repo, [sys.executable, str(script)])
         result = _mod.promote(repo)
-        assert result == {"promoted": True, "mode": "promoted", "count": 0}
+        assert result == {"promoted": True, "mode": "noop", "count": 0}
+
+    def test_noop_does_not_call_the_registry_verb(self, tmp_path):
+        """계약의 실질: noop 은 승격 동사를 **한 번도 부르지 않았다**는 뜻이다."""
+        repo = _init_repo(tmp_path)
+        script = _write_fake_registry(tmp_path, GOOD_REGISTRY_BODY)
+        _install_pointer(repo, [sys.executable, str(script)])
+        calls: list = []
+        real_run = _mod.subprocess.run
+
+        def watching_run(cmd, **kw):
+            if isinstance(cmd, list) and "record" in cmd:
+                calls.append(cmd)
+            return real_run(cmd, **kw)
+
+        _mod.subprocess.run = watching_run
+        try:
+            assert _mod.promote(repo)["mode"] == "noop"
+        finally:
+            _mod.subprocess.run = real_run
+        assert calls == [], f"빈 원장인데 승격 동사를 불렀다: {calls}"
+
+    def test_nonempty_success_is_promoted_not_noop(self, tmp_path):
+        """대칭 확인 — 실제로 승격한 경우는 noop 이 아니다(계약이 뒤집히지 않았다)."""
+        repo = _init_repo(tmp_path)
+        _mod.upsert("test", "low", "flaky test", root=repo)
+        script = _write_fake_registry(tmp_path, GOOD_REGISTRY_BODY)
+        _install_pointer(repo, [sys.executable, str(script)])
+        result = _mod.promote(repo)
+        assert result["mode"] == "promoted"
+        assert result["count"] == 1
 
     def test_explicit_promotion_verb_used(self, tmp_path):
         repo = _init_repo(tmp_path)

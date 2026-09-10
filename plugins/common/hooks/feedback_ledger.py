@@ -470,6 +470,20 @@ def upsert(category: str, severity: str, pattern: str, root: Path | None = None)
     양쪽 기록이 모두 보존되고 F-id가 중복 채번되지 않는다.
     """
     if category not in VALID_CATEGORIES:
+        # **재분류는 유지하되 조용히 하지 않는다.** 바로 아래 `severity` 는 화이트리스트
+        # 밖 값을 `''` 로 비워 **기존값을 보존**하는데, category 만 강제 재분류였다 —
+        # 비대칭이다. 게다가 `_normalize` 가 category 를 dedupe 키에 넣으므로, 오타
+        # 하나가 잘못된 버킷에 누적되면서 **키까지 오염**시킨다(같은 결함이 두 항목으로
+        # 갈리거나 무관한 항목과 합쳐진다).
+        #
+        # category 는 severity 와 달리 dedupe 키의 일부라 빈 값으로 둘 수 없으므로
+        # 재분류 자체는 유지한다. 고치는 것은 **침묵**뿐이다 — 무엇을 무엇으로 바꿨는지
+        # 한 줄 남기면 오타를 낸 호출자가 그 자리에서 본다.
+        print(
+            f"[feedback_ledger] category {category!r} 는 화이트리스트 밖이다 "
+            f"({', '.join(sorted(VALID_CATEGORIES))}) — 'convention' 으로 기록한다.",
+            file=sys.stderr,
+        )
         category = "convention"
     # severity도 화이트리스트 강제 — pattern만 sanitize하는 비대칭은 '|'/개행 주입으로
     # 테이블 행을 깨뜨려 엔트리 유실·세션 주입 벡터가 된다 (ATK-006/M-2).
@@ -851,9 +865,20 @@ def _remaining_after_promotion(current: list[dict], promoted: list[dict]) -> lis
 def promote(root: Path | None = None) -> dict:
     """스테이징된 ledger를 컨트롤 레지스트리로 승격하고 비운다(D-43).
 
-    반환 dict의 `mode`: 'fallback'(레지스트리 없음/응답 손상 — ledger 보존),
-    'held'(신선도 불일치 또는 동사 미특정 — ledger 보존), 'promoted'(성공 — 비움),
-    'partial'(일부만 성공 — ledger 보존, 재시도를 위해 비우지 않음).
+    **`mode` 가 계약이고 `promoted` 는 편의값이다.** 불리언으로 분기하지 마라 —
+    `promoted: True` 는 세 상태를 뭉뚱그렸었다(빈 원장 / partial / 전량 성공). 그중
+    빈 원장은 **레지스트리를 아예 건드리지 않은** 상태라 "승격했다"와 성질이 다르다.
+
+    반환 dict의 `mode`:
+
+    - `'fallback'` — 레지스트리 없음/응답 손상. ledger 보존.
+    - `'held'` — 신선도 불일치 또는 동사 미특정. ledger 보존.
+    - `'noop'` — **승격할 항목이 없다**(`count: 0`). 레지스트리 미접촉, ledger 불변.
+    - `'promoted'` — 전량 성공. 성공분을 원장에서 차감했다.
+    - `'partial'` — 일부만 성공. 성공분만 차감하고 실패분은 재시도 대상으로 남긴다.
+
+    `promoted` 는 `mode in {'noop', 'promoted', 'partial'}` 의 편의 표현이다 —
+    "실패하지 않았다"는 뜻이지 "무언가를 승격했다"는 뜻이 아니다.
     """
     root = root or _project_root()
     pointer = discover_registry_pointer(root)
@@ -941,7 +966,9 @@ def promote(root: Path | None = None) -> dict:
             # 읽지 못한 원장은 승격하지 않는다 — 그리고 **비우지도 않는다.**
             return {"promoted": False, "mode": "fallback", "reason": f"원장 읽기 실패: {err}"}
     if not claimed:
-        return {"promoted": True, "mode": "promoted", "count": 0}
+        # 빈 원장은 **승격이 아니다** — 레지스트리 동사를 한 번도 부르지 않았다.
+        # `mode: "promoted"` 로 뭉개면 호출자가 "레지스트리에 반영됐다"로 읽는다.
+        return {"promoted": True, "mode": "noop", "count": 0}
 
     succeeded, failures = _call_promotion_verb(command, verb_name, claimed, root)
 

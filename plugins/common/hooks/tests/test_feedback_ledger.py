@@ -98,6 +98,28 @@ def test_invalid_category_falls_back(tmp_path):
     assert entries[0]["category"] == "convention"
 
 
+def test_invalid_category_reclassification_is_announced(tmp_path, capsys):
+    """재분류는 유지하되 **조용하지 않다**.
+
+    바로 아래 `severity` 는 화이트리스트 밖 값을 `''` 로 비워 기존값을 보존하는
+    대칭 처리를 하는데, category 만 강제 재분류였다. 게다가 `_normalize` 가 category
+    를 dedupe 키에 넣으므로 오타 하나가 잘못된 버킷에 누적되면서 **키까지 오염**된다.
+    한 줄 남기면 오타를 낸 호출자가 그 자리에서 본다.
+    """
+    _mod.upsert("securty", "low", "typo in category", root=tmp_path)
+    err = capsys.readouterr().err
+    assert "securty" in err, f"재분류가 조용히 일어났다: {err!r}"
+    assert "convention" in err
+    for known in _mod.VALID_CATEGORIES:
+        assert known in err, "허용 목록을 알려주지 않으면 호출자가 무엇을 쓸지 모른다"
+
+
+def test_valid_category_is_not_announced(tmp_path, capsys):
+    """상시 참인 줄은 소음이다 (`warning-signal.md`) — 정상 경로는 침묵한다."""
+    _mod.upsert("security", "low", "hardcoded secret", root=tmp_path)
+    assert capsys.readouterr().err == ""
+
+
 # ── '|' 포함 패턴: 테이블 깨짐 없이 저장·dedupe ──────────────────
 def test_pipe_in_pattern_is_sanitized(tmp_path):
     # review 결함에 '|'가 흔함 (예: 'string | null')

@@ -1405,3 +1405,125 @@ def test_agent_count_is_omitted_when_uncountable(tmp_path):
     block, _ = eh.build_block(root)
     assert "서브에이전트 정의 |" in block
     assert "종)" not in block.split("서브에이전트 정의")[1].split("|")[0]
+
+
+# ── L-1: frontmatter 는 파일 맨 앞에서만 인정된다 ──────────────────────
+
+
+def test_body_horizontal_rules_are_not_parsed_as_frontmatter(tmp_path):
+    """frontmatter 가 **없고** 본문에 수평선 `---` 이 둘 있는 규범.
+
+    이전 판(`read_text().split("---", 2)`)은 파일 어디에 있는 `---` 든 잘라서 **본문
+    일부를 frontmatter 로 파싱**했다 — 아래 픽스처의 `tier: core` / `portable: true`
+    는 사람이 읽는 산문이지 선언이 아닌데, 무앵커 split 은 그것을 선언으로 읽는다.
+    앵커링 후에는 frontmatter 없음 → 미분류(red) 로 잡혀야 한다.
+    """
+    body = (
+        "# 잠복 오파싱\n"
+        "\n"
+        "---\n"
+        "\n"
+        "이 규범은 frontmatter 가 없다. 아래는 frontmatter 를 **설명하는 산문**이다.\n"
+        "tier: core\n"
+        "portable: true\n"
+        "portable_reason: 이것은 선언이 아니라 예시다\n"
+        "\n"
+        "---\n"
+        "\n"
+        "본문 끝.\n"
+    )
+    root = _fake_plugin_root(tmp_path, {"ssot": "# SSOT\n"})
+    (root / "rules" / "no-frontmatter-rule.md").write_text(body, encoding="utf-8")
+
+    # 파서 수준 — 산문의 `---` 은 frontmatter 가 아니다
+    path = root / "rules" / "no-frontmatter-rule.md"
+    assert _mod._frontmatter(path) is None
+    assert _mod._rule_tier(path) == ""
+    assert _mod._rule_portability(path) == (None, "")
+
+    # 게이트 수준 — 조용히 인라인되지 않고 red 가 된다
+    try:
+        _mod.build_block(root)
+    except _mod.ClassificationError as e:
+        assert "no-frontmatter-rule" in str(e)
+    else:
+        raise AssertionError("본문의 `---` 을 frontmatter 로 오인해 조용히 통과했다")
+
+
+def test_frontmatter_must_start_at_offset_zero(tmp_path):
+    """맨 앞이 아닌 위치의 `---` 블록은 frontmatter 가 아니다 (빈 줄 하나로도 무효)."""
+    root = _fake_plugin_root(tmp_path, {"ssot": "# SSOT\n"})
+    path = root / "rules" / "shifted.md"
+    path.write_text("\n---\ntier: core\nportable: true\n---\n\n# Shifted\n", encoding="utf-8")
+    assert _mod._frontmatter(path) is None
+
+
+# ── L-2: tier 미선언은 portable 미선언과 대칭으로 red ──────────────────
+
+
+def test_missing_tier_is_red_not_silently_inlined(tmp_path):
+    """`portable: true` 인데 `tier` 가 없는 규범.
+
+    이전 판은 `_rule_tier` 가 "" 를 돌려주고 `_classify` 의 else 가지가 그것을
+    **인라인 대상**으로 넣었다. 그런데 `session-start.py::load_rules` 는
+    `tier not in _VALID_TIERS: continue` 로 주입하지 않는다 — Claude Code 는 안 읽는
+    규범이 다른 하네스에는 나가는 상태였다.
+    """
+    root = _fake_plugin_root(tmp_path, {"ssot": "# SSOT\n"})
+    (root / "rules" / "tierless.md").write_text(
+        "---\nportable: true\nportable_reason: 호스트 무관\n---\n\n# Tierless\n\n본문.\n",
+        encoding="utf-8",
+    )
+    try:
+        block, _ = _mod.build_block(root)
+    except _mod.ClassificationError as e:
+        assert "tierless" in str(e)
+        assert "tier: core|conditional|reference" in str(e)
+    else:
+        raise AssertionError(f"tier 미선언 규범이 조용히 인라인됐다:\n{block}")
+
+
+def test_unknown_tier_value_is_red(tmp_path):
+    """오타난 tier 값도 red — session-start 의 화이트리스트와 같은 판정이다."""
+    root = _fake_plugin_root(tmp_path, {"ssot": "# SSOT\n"})
+    (root / "rules" / "typo-tier.md").write_text(
+        "---\ntier: coore\nportable: true\nportable_reason: 호스트 무관\n---\n\n# Typo\n",
+        encoding="utf-8",
+    )
+    try:
+        _mod.build_block(root)
+    except _mod.ClassificationError as e:
+        assert "typo-tier" in str(e)
+    else:
+        raise AssertionError("tier 오타가 조용히 통과했다")
+
+
+def test_valid_tiers_match_session_start(tmp_path):
+    """두 훅은 서로 import 하지 않는다 — 값이 갈리면 규범이 하네스마다 다르게 도달한다."""
+    spec = importlib.util.spec_from_file_location(
+        "session_start_for_tier_parity", HOOKS_DIR / "session-start.py"
+    )
+    ss = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ss)
+    assert set(_mod._VALID_TIERS) == set(ss._VALID_TIERS)
+
+
+# ── L-3: rules/VERSION 읽기 실패는 폴백하지 않는다 ─────────────────────
+
+
+def test_unreadable_rules_version_refuses_instead_of_falling_back(tmp_path):
+    """`"unknown"` 폴백은 **sha 입력을 바꾼다** — 전량 재기록 2회 + 그 사이 red.
+
+    쓰지 않는 것이 잘못 쓰는 것보다 낫다.
+    """
+    root = _minimal(tmp_path)
+    (root / "rules" / "VERSION").unlink()
+    assert _mod.main(["--plugin-root", str(root), "--target", str(tmp_path)]) == 1
+    assert not (tmp_path / "AGENTS.md").exists(), "폴백 sha 로 진입점을 기록했다"
+
+
+def test_empty_rules_version_refuses(tmp_path):
+    root = _minimal(tmp_path)
+    (root / "rules" / "VERSION").write_text("\n", encoding="utf-8")
+    assert _mod.main(["--plugin-root", str(root), "--target", str(tmp_path)]) == 1
+    assert not (tmp_path / "AGENTS.md").exists()

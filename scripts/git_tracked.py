@@ -89,16 +89,28 @@ class SkipTally:
     def parsed(self) -> int:
         return self.attempted - len(self.entries)
 
-    def report(self, fatal_reasons: frozenset[str]) -> int:
-        """건너뜀을 인쇄하고 종료코드 기여분을 반환한다(치명 사유가 있으면 1).
+    def report(self, nonfatal_reasons: frozenset[str]) -> int:
+        """건너뜀을 인쇄하고 종료코드 기여분을 반환한다(**기본이 치명**, 예외만 노랑).
 
         사유가 하나도 없으면 아무것도 인쇄하지 않는다 — 상시 참인 줄은 소음이고,
         소음은 옆의 진짜 경고까지 죽인다(`warning-signal.md`).
+
+        ## 왜 `fatal_reasons` 가 아니라 `nonfatal_reasons` 인가
+
+        이 인자는 원래 **치명 사유의 화이트리스트**였다. 그러면 호출부가 새 건너뜀
+        사유를 추가할 때 그 사유는 목록에 없으므로 **기본이 노랑**이 되고, 게이트는
+        조용히 커버리지를 잃는다 — 이 모듈 독스트링이 비판하는 바로 그 구조다
+        (`warning-signal.md` §검토 절차 5: *"대상을 나열하는 검사는 목록에 없는 것을
+        결코 red 로 만들지 못한다. 가능하면 대상을 나열하지 말고 제외를 나열한다."*).
+
+        뒤집으면 **새 사유는 기본으로 red** 가 되고, 노랑으로 내리려면 호출부가
+        그 사유를 명시적으로 등재해 정당화해야 한다. 사각지대는 침묵이 아니라
+        선언을 요구한다.
         """
         if not self.entries:
             return 0
         pct = 100.0 * len(self.entries) / self.attempted if self.attempted else 100.0
-        fatal = [e for e in self.entries if e[1] in fatal_reasons]
+        fatal = [e for e in self.entries if e[1] not in nonfatal_reasons]
         mark = "✗" if fatal else "!"
         print(
             f"[{self.label}] {mark} 검사하지 못한 파일 {len(self.entries)}건 "

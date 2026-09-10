@@ -376,6 +376,32 @@ def _compose_conv(text: str, block: str) -> str:
 # 도구 allowlist·Task 재개)에 의존하는 룰은 이식해봐야 지킬 수단이 없으므로 제외하고,
 # 제외 사유를 생성물에 명시한다 — "왜 없는지"를 남기지 않으면 다음 사람이 버그로 읽는다.
 # ─────────────────────────────────────────────────────────────────────────────
+#: 규범이 선언해야 하는 tier 값. `session-start.py::_VALID_TIERS` 와 같은 집합이다 —
+#: 두 훅은 서로 import 하지 않으므로(각각 독립 실행) 값을 맞추는 것은 규약이고,
+#: **갈리면 이 게이트가 red 로 알린다**(주입되지 않는 규범이 내보내지는 상태).
+_VALID_TIERS = frozenset({"core", "conditional", "reference"})
+
+#: frontmatter 는 **파일 맨 앞(offset 0)에서 시작할 때만** frontmatter 다.
+#
+# 이전 판은 `read_text().split("---", 2)` 였다 — 그것은 **파일 어디에 있는 `---` 든**
+# 자르므로, frontmatter 가 없고 본문에 수평선 `---` 이 둘 있는 규범 파일이면 **본문
+# 일부를 frontmatter 로 파싱**한다. 마크다운에서 `---` 은 흔하다. 지금 규범 15종이
+# 전부 frontmatter 를 갖고 있어 발현하지 않았을 뿐인 **잠복 오파싱**이었다
+# (LESSONS: "관대한 정규식으로 구조 마커를 인식하면 그 구조를 설명하는 문서를 진짜
+# 구조로 오인한다" — 여기서는 정규식조차 아니고 무앵커 split 이었다).
+#
+# 이 레포의 기존 관례(`scripts/check_injection_budget.py::FRONTMATTER_RE`)를 그대로
+# 따른다 — 줄 앵커 + `re.match`(offset 0). 관례를 새로 발명하는 것이 반복 결함의
+# 원인이라는 것이 `docs/conventions/path-containment.md` 의 교훈이다.
+_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
+
+
+def _frontmatter(path: Path) -> str | None:
+    """파일 맨 앞의 YAML frontmatter 본문. 없으면 None (빈 frontmatter 와 구분된다)."""
+    m = _FRONTMATTER_RE.match(path.read_text(encoding="utf-8"))
+    return m.group(1) if m else None
+
+
 def _rule_tier(path: Path) -> str:
     """규범의 tier frontmatter (core|conditional|reference). 없으면 "".
 
@@ -384,10 +410,10 @@ def _rule_tier(path: Path) -> str:
     블록이 CONVENTIONS_INLINE / REFERENCE_ONLY 로 하는 구분과 같은 논리이며,
     이제 그 구분을 손 목록이 아니라 **규범 자신의 tier** 가 정한다.
     """
-    head = path.read_text(encoding="utf-8").split("---", 2)
-    if len(head) < 3:
+    fm = _frontmatter(path)
+    if fm is None:
         return ""
-    m = re.search(r"^tier:\s*(\w+)\s*$", head[1], re.MULTILINE)
+    m = re.search(r"^tier:\s*(\w+)\s*$", fm, re.MULTILINE)
     return m.group(1) if m else ""
 
 
@@ -400,10 +426,9 @@ def _rule_portability(path: Path) -> tuple[bool | None, str]:
     이제 **규범이 자기 이식성을 선언**하고 생성기는 그것을 읽기만 한다 — 규범을 지우면
     분류도 함께 사라진다.
     """
-    head = path.read_text(encoding="utf-8").split("---", 2)
-    if len(head) < 3:
+    fm = _frontmatter(path)
+    if fm is None:
         return None, ""
-    fm = head[1]
     m = re.search(r"^portable:\s*(true|false)\s*$", fm, re.MULTILINE)
     if m is None:
         return None, ""
@@ -620,11 +645,20 @@ def _classify(
     portable, unknown, index_only, not_portable = [], [], [], []
     for p in rules:
         flag, _ = _rule_portability(p)
+        tier = _rule_tier(p)
+        # **tier 미선언도 red 다** — `portable` 미선언과 대칭이다. 예전에는 tier 가
+        # 없으면 `_rule_tier` 가 "" 를 돌려주고 아래 `else` 가지가 그것을 **인라인
+        # 대상으로** 넣었다. 그런데 `session-start.py::load_rules` 는
+        # `tier not in _VALID_TIERS: continue` 로 **주입하지 않는다** — 즉 Claude Code
+        # 는 안 읽는 규범이 다른 하네스에는 나가는, 하네스마다 규율이 갈리는 상태였다.
+        # 조용한 기본값 대신 선언을 요구한다.
         if flag is None:
-            unknown.append(p.stem)
+            unknown.append(f"{p.stem} (portable 미선언)")
+        elif tier not in _VALID_TIERS:
+            unknown.append(f"{p.stem} (tier 미선언/불명: {tier or '없음'})")
         elif not flag:
             not_portable.append(p)
-        elif _rule_tier(p) == "reference":
+        elif tier == "reference":
             index_only.append(p)  # 본문은 인라인하지 않고 **이름만** 광고한다
         else:
             portable.append(p)
@@ -638,22 +672,32 @@ _VERSION_RE = re.compile(r"[0-9A-Za-z._+-]{1,32}")
 
 
 def _rules_version(plugin_root: Path) -> str:
-    """rules/VERSION. 읽기 실패는 **조용히** 넘기지 않는다.
+    """rules/VERSION. 읽기 실패는 **판정 불가**이므로 멈춘다.
 
     이 값은 `<!-- kit:begin rules-v{...} sha256:… -->` 줄에 직접 들어간다. 조용히
     "unknown"으로 폴백하면 버전 추적이 소실된 채 마커만 그럴듯해진다 (ATK-007).
+
+    **경고를 찍고 "unknown" 을 쓰는 것으로도 부족하다.** 이 값은 **sha 입력**이므로
+    일시적 읽기 실패 한 번이 모든 진입점 파일의 sha 를 바꿔 **전량 재기록**하고, 다음
+    정상 실행이 **또 전량 재기록**한다 — 소비자 레포에 의미 없는 diff 가 두 번 나고
+    그 사이 `--check` 는 red 다. 이 파일의 다른 모든 "판정 불가" 상황과 같이
+    `ClassificationError`(exit 1) 로 멈춘다: 쓰지 않는 것이 잘못 쓰는 것보다 낫다.
     """
     v = plugin_root / "rules" / "VERSION"
     try:
         raw = v.read_text(encoding="utf-8").strip()
     except OSError as err:
-        print(
-            f"[export-harness] ! rules/VERSION을 읽지 못했다 ({err})"
-            " — rules-vunknown으로 기록한다.",
-            file=sys.stderr,
+        raise ClassificationError(
+            f"rules/VERSION 을 읽지 못했다 ({err}) — 진입점을 기록하지 않는다.\n"
+            "  → 이 값은 마커 sha 의 입력이다. 폴백값으로 쓰면 모든 진입점의 sha 가"
+            " 바뀌어 전량 재기록되고, 다음 정상 실행이 또 전량 재기록한다."
+        ) from err
+    if not raw:
+        raise ClassificationError(
+            f"rules/VERSION 이 비어 있다 ({v}) — 진입점을 기록하지 않는다.\n"
+            "  → 위와 같은 이유로 폴백값을 쓰지 않는다."
         )
-        return "unknown"
-    return raw or "unknown"
+    return raw
 
 
 _FENCE_RE = re.compile(r"^(`{3,}|~{3,})")
@@ -735,9 +779,12 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     portable = sorted(portable, key=lambda x: (x.stem != "untrusted-text", x.stem))
     if unknown:
         raise ClassificationError(
-            "이식 가능성 미분류 룰: "
+            "분류 미선언 룰: "
             + ", ".join(sorted(unknown))
             + "\n  → 규범 파일 frontmatter 에 `portable: true|false` 를 선언하라 (D-45)."
+            "\n  → 그리고 `tier: core|conditional|reference` 를 선언하라 — tier 가 없으면"
+            "\n    session-start 는 주입하지 않는데 이 내보내기는 인라인해, 같은 규범이"
+            "\n    하네스마다 다르게 도달한다."
             "\n  (조용히 빠뜨리면 '내보냈다고 믿는데 안 나간' 구멍이 된다)"
         )
     if ghosts:

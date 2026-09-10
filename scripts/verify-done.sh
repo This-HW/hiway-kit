@@ -549,6 +549,14 @@ if [ -f scripts/export-harness.sh ] && [ -f plugins/common/hooks/export_harness.
   elif [ "$EH_RC" -eq 2 ]; then
     red "export-harness SKIPPED — 규범 소스 미탐지"
     sed 's/^/      /' "$TMPD/agents_md" | head -6
+  elif [ "$EH_RC" -eq 3 ]; then
+    # 3은 **부분 성공**이다: 규범 블록(첫 번째)은 기록·검사했고, conventions
+    # 블록(두 번째)만 건너뛰었다. red 인 것 자체는 맞지만 아래 else 로 뭉개면
+    # "진입점 검사 실패"로 인쇄돼, 규범 블록까지 드리프트한 줄 알고 재생성을 돌린다
+    # — 그리고 재생성은 이 상태를 안 고친다(conventions 소스 쪽 문제다).
+    # 무엇이 red 인지 정확히 말한다.
+    red "conventions 블록만 건너뜀 (규범 블록은 정상) — docs/conventions/ 소스를 확인하라"
+    sed 's/^/      /' "$TMPD/agents_md" | head -10
   else
     # exit 1은 드리프트만이 아니다 — 분류 미등재/유령 엔트리, 마커 손상, 본문 변조,
     # 인코딩 실패가 모두 여기 모인다. 원인을 안 보여주면 "재생성하라"가 무한루프가 된다
