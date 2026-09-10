@@ -64,11 +64,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_POLICY = REPO_ROOT / "packaging" / "targets.json"
+
+#: 훅 인자는 정책 파일에서 와서 **셸 명령 문자열에 그대로 이어 붙는다**. 경로 봉쇄와
+#: 같은 계열의 규율이다(`docs/conventions/path-containment.md`) — 설정값을 검증 없이
+#: 명령으로 조립하지 않는다. 인용·치환·구분자를 깰 수 있는 문자를 원천 배제한다.
+_HOOK_ARG_RE = re.compile(r"--[A-Za-z0-9][A-Za-z0-9._-]*(=[A-Za-z0-9._-]+)?")
 
 
 class PolicyError(Exception):
@@ -233,6 +239,13 @@ def build_hooks(repo_root: Path, policy: dict, target: dict) -> dict | None:
                 )
             quoted = '"${CLAUDE_PLUGIN_ROOT}/' + rel + '"'
             command = f"{interpreter} {quoted}" if interpreter else quoted
+            for arg in entry.get("args", []):
+                if not _HOOK_ARG_RE.fullmatch(arg):
+                    raise PolicyError(
+                        f"타겟 '{target['id']}': 훅 인자에 허용되지 않는 문자 — {arg!r}\n"
+                        f"  (packaging/targets.json 의 hooks.events.{event}[].args)"
+                    )
+                command += f" {arg}"
             hook: dict = {"type": "command", "command": command}
             if entry.get("timeout"):
                 hook["timeout"] = entry["timeout"]

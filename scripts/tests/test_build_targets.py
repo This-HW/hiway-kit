@@ -580,3 +580,73 @@ def test_check_detects_hooks_manifest_drift_and_deletion(tmp_path):
     assert _run(root, "--check", "--only", "alpha") == 0
     generated.unlink()
     assert _run(root, "--check", "--only", "alpha") == 1
+
+
+# ── 훅 인자 (W11) ────────────────────────────────────────────────────────────
+#
+# 하네스별 동작 차이는 **매니페스트가 인자로 전달**한다 — 런타임에 하네스를 추측하면
+# 조용히 틀린다. 인자는 정책 파일에서 와서 셸 명령 문자열에 그대로 이어 붙으므로,
+# 경로 봉쇄와 같은 계열의 검증을 건다(`docs/conventions/path-containment.md`).
+
+
+def _hooks_repo_with_args(tmp_path: Path, args: list) -> Path:
+    root = _fake_repo(tmp_path)
+    policy = json.loads(
+        (root / "packaging" / "targets.json").read_text(encoding="utf-8")
+    )
+    spec = json.loads(json.dumps(_HOOKS_SPEC))
+    spec["events"]["SessionStart"][0]["args"] = args
+    policy["targets"][0]["hooks"] = spec
+    (root / "packaging" / "targets.json").write_text(
+        json.dumps(policy), encoding="utf-8"
+    )
+    hooks_dir = root / "plugins" / "common" / "hooks"
+    hooks_dir.mkdir(parents=True)
+    (hooks_dir / "inject.py").write_text("", encoding="utf-8")
+    (hooks_dir / "fmt.py").write_text("", encoding="utf-8")
+    return root
+
+
+def test_hook_args_are_appended_to_the_command_string(tmp_path):
+    root = _hooks_repo_with_args(tmp_path, ["--portable-only"])
+    assert _run(root, "--write", "--only", "alpha") == 0
+    hooks = json.loads(
+        (root / "plugins" / "common" / "hooks" / "hooks-delta.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    entry = hooks["hooks"]["SessionStart"][0]["hooks"][0]
+    # 여전히 문자열 하나다 — exec form 은 Codex 가 로드하지 않는다.
+    assert "args" not in entry
+    assert entry["command"] == (
+        'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/inject.py" --portable-only'
+    )
+    # 인자가 없는 훅은 그대로다.
+    other = hooks["hooks"]["PostToolUse"][0]["hooks"][0]
+    assert other["command"] == 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/fmt.py"'
+
+
+def test_no_args_key_leaves_command_unchanged(tmp_path):
+    root = _hooks_repo(tmp_path)
+    assert _run(root, "--write", "--only", "alpha") == 0
+    hooks = json.loads(
+        (root / "plugins" / "common" / "hooks" / "hooks-delta.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    entry = hooks["hooks"]["SessionStart"][0]["hooks"][0]
+    assert entry["command"] == 'python3 "${CLAUDE_PLUGIN_ROOT}/hooks/inject.py"'
+
+
+def test_hook_arg_with_shell_metacharacters_is_exit_1(tmp_path):
+    """인용을 깨거나 명령을 이어붙일 수 있는 값은 생성 단계에서 막는다."""
+    for bad in ('--x"; rm -rf /', "--x $(id)", "--x;y", "--x`id`", "--x|y", "--x&y"):
+        root = _hooks_repo_with_args(tmp_path / bad.replace("/", "_"), [bad])
+        assert _run(root, "--write", "--only", "alpha") == 1, bad
+
+
+def test_hook_arg_must_be_a_flag(tmp_path):
+    """플래그 형태만 허용한다 — 자유 문자열은 검증 표면을 넓힌다."""
+    for bad in ("portable-only", "-p", "--", "-", ""):
+        root = _hooks_repo_with_args(tmp_path / f"x{abs(hash(bad))}", [bad])
+        assert _run(root, "--write", "--only", "alpha") == 1, bad
