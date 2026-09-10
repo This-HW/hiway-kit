@@ -158,6 +158,9 @@ def build_manifest(ssot: dict, target: dict, present_dirs: set[str]) -> dict:
     for field, rel in target.get("componentFields", {}).items():
         if field in present_dirs:
             out[field] = rel
+    hooks = target.get("hooks")
+    if hooks and "hooks" in present_dirs:
+        out["hooks"] = hooks["manifestField"]
     if target.get("interface"):
         out["interface"] = target["interface"]
     return out
@@ -189,6 +192,53 @@ def build_marketplace(ssot: dict, target: dict, plugin_root_rel: str) -> dict | 
     if iface.get("category"):
         entry["plugins"][0]["category"] = iface["category"]
     return entry
+
+
+def build_hooks(repo_root: Path, policy: dict, target: dict) -> dict | None:
+    """타겟의 훅 매니페스트(있는 경우만). 현재는 codex 전용.
+
+    **왜 별도 파일인가.** Claude Code 의 `plugins/common/hooks/hooks.json` 은 exec
+    form(`command` + `args[]`)이고, Codex 는 그 형식을 **로드하지 않는다** — 한 문자열
+    안에 인터프리터와 인용된 경로가 들어가야 한다 [confirmed: W-022 S4/R5]. 형식이
+    다르므로 한 파일을 둘이 공유할 수 없다. 그래서 SSOT 는 정책(`packaging/targets.json`)
+    에 두고 타겟별 파일을 **생성**한다 — 손으로 두 벌 유지하면 조용히 갈린다.
+
+    **matcher 를 쓰지 않는다.** Codex 가 `matcher` 를 해석하는지 실측하지 않았다.
+    필터링은 훅 스크립트 자신이 페이로드의 `tool_name` 으로 한다(측정하지 않은 것을
+    싣지 않는다는 계약).
+
+    선언된 스크립트가 실재하지 않으면 **exit 1** 이다. 없는 스크립트를 가리키는
+    훅은 소비자 세션에서 매번 조용히 실패하고, 그 침묵이 "훅이 돌고 있다"는
+    착각을 유지시킨다.
+    """
+    spec = target.get("hooks")
+    if not spec:
+        return None
+    plugin_root = repo_root / policy["source"]["pluginRoot"]
+    interpreter = spec.get("interpreter", "")
+    events: dict = {}
+    for event, entries in spec["events"].items():
+        built = []
+        for entry in entries:
+            rel = entry["script"]
+            resolved, err = _resolve_in_repo(plugin_root, rel)
+            if resolved is None:
+                raise PolicyError(
+                    f"타겟 '{target['id']}': 훅 스크립트 경로가 플러그인 루트 밖이다 — {rel} ({err})"
+                )
+            if not resolved.is_file():
+                raise PolicyError(
+                    f"타겟 '{target['id']}': 선언된 훅 스크립트가 없다 — {rel}\n"
+                    f"  (packaging/targets.json 의 hooks.events.{event} 가 가리킨다)"
+                )
+            quoted = '"${CLAUDE_PLUGIN_ROOT}/' + rel + '"'
+            command = f"{interpreter} {quoted}" if interpreter else quoted
+            hook: dict = {"type": "command", "command": command}
+            if entry.get("timeout"):
+                hook["timeout"] = entry["timeout"]
+            built.append(hook)
+        events[event] = [{"hooks": built}]
+    return {"hooks": events}
 
 
 def _dumps(d: dict) -> str:
@@ -232,7 +282,7 @@ class Artifact:
         self, target_id: str, kind: str, rel_path: str, content: dict, repo_root: Path
     ):
         self.target_id = target_id
-        self.kind = kind  # "manifest" | "marketplace"
+        self.kind = kind  # "manifest" | "hooks" | "marketplace"
         self.rel_path = rel_path
         self.content = content
         self.text = _dumps(content)
@@ -252,6 +302,16 @@ def artifacts_for(
             repo_root,
         )
     ]
+    # 훅 디렉토리가 없으면 스펙 자체를 계산하지 않는다 — 컴포넌트는 실측으로 판정하므로
+    # (`_meta.detection`), 없는 컴포넌트의 스크립트 존재를 따지는 것은 의미가 없다.
+    if "hooks" in present:
+        hooks = build_hooks(repo_root, policy, target)
+        if hooks is not None:
+            out.append(
+                Artifact(
+                    target["id"], "hooks", target["hooks"]["path"], hooks, repo_root
+                )
+            )
     mk = build_marketplace(ssot, target, policy["source"]["pluginRoot"])
     if mk is not None:
         out.append(
