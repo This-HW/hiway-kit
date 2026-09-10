@@ -67,8 +67,10 @@ DEFAULT_EXCLUDE = ("docs/", "CHANGELOG.md", "packaging/name-targets.json")
 LINE_OPT_OUT = "old-name-ok"
 LABEL = "check-old-names"
 
-# 읽기 실패는 사각지대이므로 red, 바이너리는 정상이므로 노란 보고다(위 독스트링).
-FATAL_SKIP_REASONS = frozenset({"읽기실패"})
+# **기본은 red 다** — 노랑으로 내릴 사유만 등재한다(git_tracked.SkipTally.report 참고).
+# 바이너리는 줄 단위 텍스트 검사 대상이 아니므로 정상이고, 읽기 실패는 사각지대이므로
+# 등재하지 않는다(= red). 새 사유가 생기면 여기 없으므로 red 가 된다 — 의도한 기본값이다.
+NONFATAL_SKIP_REASONS = frozenset({"비-UTF-8"})
 
 
 def load_previous_names() -> list[str]:
@@ -146,7 +148,7 @@ def main() -> int:
         return 1
     exclude = load_exclude()
     hits, skipped = find_hits(names, exclude)
-    rc = skipped.report(FATAL_SKIP_REASONS)
+    rc = skipped.report(NONFATAL_SKIP_REASONS)
     if hits:
         print(f"[{LABEL}] ✗ 구 이름 {len(hits)}건 — 살아있는 표면에 개명 잔재")
         for rel, name in hits:

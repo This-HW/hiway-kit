@@ -56,7 +56,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 LABEL = "shadowed-defs"
 
 # `.py` 는 전부 파싱돼야 정상이다 — 못 읽은 파일은 예외 없이 사각지대다(위 독스트링).
-FATAL_SKIP_REASONS = frozenset({"읽기실패", "문법오류", "디코딩실패"})
+# 그래서 **노랑 예외가 하나도 없다**. 기본이 red 이므로 이 빈 집합이 곧 "전부 red" 다
+# (git_tracked.SkipTally.report 참고 — 예전의 치명 화이트리스트는 새 사유를 놓쳤다).
+NONFATAL_SKIP_REASONS: frozenset = frozenset()
 
 
 def tracked_python_files() -> list[str]:
@@ -98,7 +100,7 @@ def main() -> int:
     skipped = SkipTally(LABEL)
     hits = [(rel, shadowed_in(REPO_ROOT / rel, rel, skipped)) for rel in files]
     hits = [(rel, dup) for rel, dup in hits if dup]
-    rc = skipped.report(FATAL_SKIP_REASONS)
+    rc = skipped.report(NONFATAL_SKIP_REASONS)
     if hits:
         print(f"[{LABEL}] ✗ 그림자 정의 {len(hits)}개 파일 — 나중 정의가 앞선 것을 덮는다")
         for rel, dup in hits:

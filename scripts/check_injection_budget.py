@@ -229,7 +229,9 @@ def main() -> int:
     entries, skipped = agent_entries()
     # 건너뛴 것이 1건이라도 있으면 red — 그만큼 예산에서 빠져 **더 쉽게 통과**한다.
     # 두 사유 모두 치명이다: 못 읽은 것도, frontmatter 가 없는 것도 사각지대다.
-    rc |= skipped.report(frozenset({"read-error", "no-frontmatter"}))
+    # 노랑으로 내릴 사유만 등재한다 — 없다. 읽기 실패도 frontmatter 부재도 사각지대다
+    # (`git_tracked.SkipTally.report`: 기본이 red, 예외에만 정당화를 요구한다).
+    rc |= skipped.report(frozenset())
     if not entries:
         print("[injection-budget] ✗ 에이전트를 하나도 찾지 못했다 — 측정 경로가 깨졌다")
         return 1
