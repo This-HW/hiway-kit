@@ -108,3 +108,52 @@ def test_consumer_owned_hook_is_left_alone(tmp_path, capsys):
 
     assert mod.main() == 0
     assert "킷 소유가 아니다" in capsys.readouterr().out
+
+
+# ── hooks 경로는 저장소당 한 번 구한다 (L-9) ─────────────────────────────
+
+
+def test_hooks_dir_is_resolved_once_per_run(tmp_path):
+    """`check_one` 이 훅마다 `git rev-parse` 를 다시 부르지 않는다.
+
+    결과는 이 저장소에서 불변이므로 비용이 문제가 아니다 — 읽는 사람에게 **"훅마다
+    hooks 경로가 다를 수 있다"는 잘못된 인상**을 주는 것이 문제다. 게이트는 읽기
+    쉬워야 신뢰된다(`docs/conventions/no-gate-integration.md`).
+    """
+    mod, root, _hooks = _mod(tmp_path, installed={"a-hook": MARKED, "b-hook": MARKED})
+    for name in ("a-hook", "b-hook", "c-hook"):
+        (_opt_in(root) / name).write_text(MARKED, encoding="utf-8")
+
+    calls = []
+    real = mod.hooks_dir
+
+    def counting():
+        calls.append(1)
+        return real()
+
+    mod.hooks_dir = counting
+    mod.main()
+    assert len(calls) == 1, (
+        f"훅 3종에 대해 hooks_dir() 를 {len(calls)}회 불렀다 — 저장소당 1회여야 한다"
+    )
+
+
+def test_check_one_takes_hooks_as_a_parameter(tmp_path):
+    """의존성은 주입된다 — `check_one` 이 내부에서 경로를 조회하면 시그니처가 다르다."""
+    import inspect
+
+    mod, _, _ = _mod(tmp_path)
+    params = list(inspect.signature(mod.check_one).parameters)
+    assert params[0] == "hooks", f"check_one 이 hooks 를 인자로 받지 않는다: {params}"
+
+
+def test_unavailable_hooks_dir_reports_once_not_per_hook(tmp_path, capsys):
+    """경로를 못 얻으면 훅마다 같은 줄을 반복하지 않고 한 번 말한다 — 그리고 통과가 아니다."""
+    mod, root, _ = _mod(tmp_path)
+    for name in ("a-hook", "b-hook", "c-hook"):
+        (_opt_in(root) / name).write_text(MARKED, encoding="utf-8")
+    mod.hooks_dir = lambda: None
+    mod.main()
+    out = capsys.readouterr().out
+    assert out.count("git hooks 경로를 얻지 못했다") == 1, out
+    assert "통과가 아니다" in out, "검사하지 못한 것을 초록처럼 보이게 두지 않는다"

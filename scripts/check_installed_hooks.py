@@ -127,14 +127,20 @@ def hooks_dir() -> Path | None:
     return path if path.is_absolute() else (REPO_ROOT / path)
 
 
-def check_one(src_rel: str, name: str, marker: str, notify_missing: bool) -> tuple[int, str]:
-    """(빨강 수, 출력 한 줄)."""
+def check_one(
+    hooks: Path, src_rel: str, name: str, marker: str, notify_missing: bool
+) -> tuple[int, str]:
+    """(빨강 수, 출력 한 줄).
+
+    `hooks` 는 **호출자가 한 번 구해 넘긴다.** 예전에는 이 함수가 훅마다
+    `git rev-parse --git-path hooks` 를 다시 불렀다. 결과는 이 저장소에서 불변이므로
+    비용이 문제인 것이 아니다 — 읽는 사람에게 **"훅마다 hooks 경로가 다를 수 있다"는
+    잘못된 인상**을 주는 것이 문제다. 게이트는 읽기 쉬워야 신뢰된다
+    (`docs/conventions/no-gate-integration.md`).
+    """
     src = REPO_ROOT / src_rel
     if not src.is_file():
         return 1, f"  ✗ 훅 정본 없음: {src_rel}"
-    hooks = hooks_dir()
-    if hooks is None:
-        return 0, f"  {YELLOW}! git hooks 경로를 얻지 못했다 — {name} 대조 생략{RESET}"
     dst = hooks / name
     if not dst.is_file():
         if notify_missing:
@@ -159,6 +165,9 @@ def check_one(src_rel: str, name: str, marker: str, notify_missing: bool) -> tup
 def main() -> int:
     targets, unmarked = discover_hooks()
     reds = 0
+    # 저장소당 한 번. 여기서 못 얻으면 어느 훅도 대조할 수 없다 — 훅마다 같은 실패를
+    # 반복 인쇄하지 않고 한 줄로 말한다.
+    hooks = hooks_dir()
     for rel in unmarked:
         reds += 1
         print(f"  ✗ 킷 훅 정본에 드리프트 마커가 없다: {rel}")
@@ -167,8 +176,12 @@ def main() -> int:
         # 0 건은 통과가 아니다 — 파생 경로가 깨졌다는 뜻이다 (이 레포의 false-green 정책).
         print("  ✗ 킷 훅 정본을 하나도 찾지 못했다 — 파생 경로가 깨졌다(통과가 아니다)")
         return 1
+    if hooks is None:
+        print(f"  {YELLOW}! git hooks 경로를 얻지 못했다 — 대조 전량 생략{RESET}")
+        print(f"      (정본 {len(targets)}건은 찾았다 — 검사하지 못한 것이지 통과가 아니다)")
+        return 1 if reds else 0
     for src_rel, name, marker, notify in targets:
-        red, line = check_one(src_rel, name, marker, notify)
+        red, line = check_one(hooks, src_rel, name, marker, notify)
         reds += red
         print(line)
     return 1 if reds else 0
