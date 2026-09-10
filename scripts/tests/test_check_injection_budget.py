@@ -152,6 +152,10 @@ def test_unparseable_agent_is_red_not_silently_skipped(tmp_path):
 
     결함이 게이트를 느슨하게 만드는, 정확히 거꾸로 된 방향이다. `SkipTally` 로
     건너뜀을 집계하고 1건이라도 있으면 경로·사유와 함께 red 다.
+
+    `report()` 는 **비치명 사유**를 받는다(치명 사유가 아니다) — 이 게이트에 노랑
+    예외는 없으므로 빈 집합을 넘긴다. 옛 치명 화이트리스트를 그대로 넘기면 의미가
+    정반대로 뒤집혀 사각지대가 전부 노랑이 된다.
     """
     root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
     agents = root / "agents" / "dev"
@@ -163,13 +167,13 @@ def test_unparseable_agent_is_red_not_silently_skipped(tmp_path):
 
     entries, skipped = mod.agent_entries()
     assert len(entries) == 1 and len(skipped) == 0
-    assert skipped.report(frozenset({"read-error", "no-frontmatter"})) == 0
+    assert skipped.report(frozenset()) == 0
 
     (agents / "broken.md").write_text("frontmatter 가 없는 산문\n", encoding="utf-8")
     entries, skipped = mod.agent_entries()
     assert len(entries) == 1, "깨진 파일이 항목으로 들어갔다"
     assert len(skipped) == 1 and skipped.attempted == 2
     assert skipped.entries[0][1] == "no-frontmatter"
-    assert skipped.report(frozenset({"read-error", "no-frontmatter"})) == 1, (
+    assert skipped.report(frozenset()) == 1, (
         "깨진 에이전트를 건너뛴 채 green 을 냈다"
     )

@@ -87,3 +87,35 @@ def test_all_callers_pass_a_nonfatal_set_not_a_fatal_set():
             assert not re.search(r"(?<!NON)FATAL_SKIP_REASONS", arg), (
                 f"{rel} 이 치명 화이트리스트를 비치명 인자로 넘긴다 — 의미가 정반대다: {arg}"
             )
+
+
+# 사각지대 사유 — 어떤 호출부도 이것을 **비치명**으로 선언해서는 안 된다.
+# (바이너리 = "비-UTF-8" 은 정상 건너뜀이므로 여기 없다.)
+BLIND_SPOT_REASONS = ("읽기실패", "문법오류", "디코딩실패", "read-error", "no-frontmatter")
+
+
+def test_no_caller_declares_a_blind_spot_reason_nonfatal():
+    """인자 이름이 아니라 **내용**으로 뒤집힘을 잡는다.
+
+    이름 검사(`test_all_callers_pass_a_nonfatal_set_not_a_fatal_set`)만으로는 부족하다 —
+    실측: `test_check_injection_batch.py` 가 옛 치명 집합을 **인라인 리터럴**로 넘기고
+    있었고, 이름이 없으니 이름 검사는 통과했다. 전체 스위트를 돌려서야 잡혔다.
+    리터럴로 넘겨도 잡히도록 인자의 내용을 본다.
+    """
+    import re
+
+    calls = re.compile(r"\.report\(\s*([^)]*(?:\([^)]*\))?[^)]*)\)")
+    scanned = 0
+    for src_path in sorted(SCRIPTS_DIR.rglob("*.py")):
+        if src_path.name == "test_git_tracked.py":
+            continue  # 이 파일 자신은 상수 목록을 정의한다
+        src = src_path.read_text(encoding="utf-8")
+        for arg in calls.findall(src):
+            scanned += 1
+            for reason in BLIND_SPOT_REASONS:
+                assert reason not in arg, (
+                    f"{src_path.name} 이 사각지대 사유 {reason!r} 를 비치명으로 선언한다 "
+                    f"— 의미가 정반대로 뒤집혔다: .report({arg})"
+                )
+    # 음성 결과는 도달을 따로 증명한다 (`warning-signal.md` §측정 3).
+    assert scanned >= 3, f"report() 호출을 {scanned}건밖에 못 찾았다 — 스캔이 안 돌았다"
