@@ -249,9 +249,34 @@ def build_hooks(repo_root: Path, policy: dict, target: dict) -> dict | None:
             hook: dict = {"type": "command", "command": command}
             if entry.get("timeout"):
                 hook["timeout"] = entry["timeout"]
+            limit = _context_limit(target["id"], event, entry)
+            if limit is not None:
+                hook["additionalContextLimit"] = limit
             built.append(hook)
         events[event] = [{"hooks": built}]
     return {"hooks": events}
+
+
+def _context_limit(target_id: str, event: str, entry: dict) -> int | None:
+    """훅 엔트리의 `additionalContextLimit` — 없으면 None(생성물에 키를 싣지 않는다).
+
+    Codex 핸들러 설정 필드다(`codex-rs/config/src/hook_config.rs`, 상류 PR #34393):
+    미설정이면 2,500 토큰에서 훅 출력을 잘라 머리·꼬리만 모델에 주고, `0` 이면 자르지
+    않는다. 값의 근거는 `packaging/targets.json` 의 `hooks._evidence.hookContextSpill`.
+
+    `bool` 을 따로 거부하는 이유: `True` 는 `int` 의 하위 타입이라 `isinstance` 를
+    통과하고, 직렬화하면 `true` 가 된다 — Codex 가 그것을 무엇으로 읽든 **우리가 정한
+    값이 아니다.**
+    """
+    if "additionalContextLimit" not in entry:
+        return None
+    value = entry["additionalContextLimit"]
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise PolicyError(
+            f"타겟 '{target_id}': additionalContextLimit 은 0 이상의 정수여야 한다 — "
+            f"{value!r}\n  (packaging/targets.json 의 hooks.events.{event}[])"
+        )
+    return value
 
 
 def _dumps(d: dict) -> str:

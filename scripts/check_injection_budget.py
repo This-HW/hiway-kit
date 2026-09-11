@@ -42,6 +42,32 @@
 최악 상한 22 KiB 는 판정 시점 실측 20,675B 위 약 1.8 KiB 다. 넉넉하지 않은 것이
 의도다 — 이 레포의 상한은 미학이 아니라 **조용한 증가를 막는 래칫**이다.
 
+## 왜 넷째 축인가 — 호스트 전달 한도 (2026-09-11, W13)
+
+셋 다 *"우리가 얼마를 내보내는가"* 만 물었다. **"그것이 모델에 닿는가"** 는 아무도 묻지
+않았다. Codex 는 SessionStart 훅 출력이 **2,500 토큰**(`ceil(bytes / 4)`)을 넘으면 머리·
+꼬리만 모델에 주고 가운데를 버린다. 우리 규범 최악 상한 22 KiB 는 그 자체로 5,632 토큰 —
+**기본 한도의 2.25배**다. 예산 게이트는 green 이었는데 실제 세션에서는:
+
+| 세션 | 훅 출력 | 모델에 도착 | 사라진 규범 |
+| --- | --- | --- | --- |
+| 이 킷 워크트리 (원장 있음) | 16,622B (4,156 토큰) | 10,028B | Feedback Loop · Loop Engineering · Parallel Worktree |
+| 다른 레포 워크트리 (원장 없음) | 13,843B | 10,026B | Parallel Worktree |
+
+출력 순서상 RULES 가 가운데라 **규범이** 잘렸고, 머리와 꼬리가 살아 있어 겉보기엔 온전했다.
+두 숫자(Codex 의 2,500 · 우리의 22 KiB)가 **따로 움직였고 대조하는 곳이 없었다.**
+
+그래서 이 축은 `packaging/targets.json` 의 session-start 훅마다 한도를 읽는다. 키가 없으면
+상류 기본값이고, `0`(spill 비활성)이면 한도의 소유자가 이 게이트 하나라 통과, 유한값이면
+`ceil((RULES_PEAK_CAP + LESSONS 최악) / bytes_per_token) ≤ 한도` 여야 통과한다.
+LESSONS 최악은 `feedback_ledger.DIGEST_CHAR_CAP` 을 **import** 해 UTF-8 최악(4B/문자)으로
+환산하고 섹션 머리말을 더한다 — 상수를 복사하면 저쪽이 바뀔 때 이 축이 조용히 낡는다.
+active work·stale 은 개수 상한으로 따로 묶여 있어 여기서 더하지 않는다.
+
+Claude Code 는 SessionStart 주입을 자르지 않으므로(2.1.268 실측) 이 축에 들어가지 않는다.
+훅을 싣는 새 호스트가 생기면 그 호스트의 한도 모델을 `HOST_HOOK_LIMITS` 에 **조사해서**
+등재해야 한다 — 등재 전에는 red 다.
+
 ## 왜 **최악의 경우**도 재는가
 
 `rules_bytes()` 는 `load_rules(PLUGIN_ROOT, False)` 를 불렀다 — `signals` 인자가 **없는**
@@ -68,20 +94,46 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import json
+import math
+import os
 import re
 import sys
+import types
 from pathlib import Path
 
 from git_tracked import SkipTally
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_ROOT = REPO_ROOT / "plugins" / "common"
+TARGETS_POLICY = REPO_ROOT / "packaging" / "targets.json"
 LABEL = "injection-budget"
+
+# ── 호스트 전달 한도 (넷째 축) — 값의 소유자는 각 호스트의 상류다.
+#    근거·실측: packaging/targets.json `hooks._evidence.hookContextSpill`
+#: 타겟 id → 훅 출력 한도 모델. 여기 없는 호스트가 훅을 실으면 red 다 — 다른 호스트의
+#: 기본값을 빌려 쓰면 이번 결함(아무도 대조하지 않은 두 번째 숫자)이 다시 생긴다.
+HOST_HOOK_LIMITS: dict[str, dict[str, int]] = {
+    "codex": {
+        # openai/codex codex-rs/hooks/src/output_spill.rs — DEFAULT_HOOK_OUTPUT_TOKEN_LIMIT
+        # (핸들러에 additionalContextLimit 이 없을 때의 한도)
+        "default_tokens": 2_500,
+        # openai/codex codex-rs/utils/string/src/truncate.rs — APPROX_BYTES_PER_TOKEN
+        # (approx_token_count = ceil(bytes / 4))
+        "bytes_per_token": 4,
+    },
+}
+#: UTF-8 한 문자의 최대 바이트 — LESSONS 상한은 **문자** 수라 바이트 최악을 곱으로 구한다.
+UTF8_MAX_BYTES_PER_CHAR = 4
+#: `feedback_ledger.load_digest` 가 절단 시 붙이는 `" …"` 의 바이트 수(공백 1 + U+2026 3).
+DIGEST_TRUNCATION_SUFFIX_BYTES = 4
+SESSION_START_SCRIPT = "hooks/session-start.py"
 
 RULES_CORE_CAP = 10240  # 10 KiB — **항상** 내는 비용 (core 규범 + WORKFLOW)
 RULES_PEAK_CAP = 22528  # 22 KiB — conditional 이 전부 겹칠 때의 **최대** 비용
-AGENTS_CAP = 8192       # 8 KiB — 에이전트 name + description
+AGENTS_CAP = 8192  # 8 KiB — 에이전트 name + description
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 NAME_RE = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
@@ -197,6 +249,153 @@ def agent_entries() -> tuple[list[tuple[int, str]], SkipTally]:
     return sorted(out, reverse=True), skipped
 
 
+@contextlib.contextmanager
+def _stubbed_ledger(digest: str):
+    """`session-start.load_lessons` 가 import 하는 `feedback_ledger` 를 잠시 바꿔 끼운다.
+
+    `load_lessons` 는 `CLAUDE_PROJECT_DIR` 도 `setdefault` 하므로 함께 되돌린다 —
+    게이트 프로세스의 상태를 측정이 오염시키지 않게.
+    """
+    stub = types.ModuleType("feedback_ledger")
+    stub.load_digest = lambda **_kw: digest  # type: ignore[attr-defined]
+    saved_mod = sys.modules.get("feedback_ledger")
+    saved_env = os.environ.get("CLAUDE_PROJECT_DIR")
+    sys.modules["feedback_ledger"] = stub
+    try:
+        yield
+    finally:
+        if saved_mod is None:
+            sys.modules.pop("feedback_ledger", None)
+        else:
+            sys.modules["feedback_ledger"] = saved_mod
+        if saved_env is None:
+            os.environ.pop("CLAUDE_PROJECT_DIR", None)
+        else:
+            os.environ["CLAUDE_PROJECT_DIR"] = saved_env
+
+
+def _load_hook(plugin_root: Path, stem: str) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        f"budget_{stem.replace('-', '_')}", plugin_root / "hooks" / f"{stem}.py"
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"{stem}.py 를 로드할 수 없다")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def lessons_worst_bytes(plugin_root: Path | None = None) -> int:
+    """LESSONS 섹션이 낼 수 있는 최대 바이트 — 상한도 머리말도 **실물에서 읽는다**.
+
+    상한은 `feedback_ledger.DIGEST_CHAR_CAP`(문자 수)를 import 해 UTF-8 최악 바이트로
+    환산하고, 머리말은 `session-start.load_lessons` 에 탐침 digest 를 넣어 잰다.
+    둘 중 하나라도 복사하면 저쪽이 바뀔 때 이 축이 조용히 낡는다.
+    """
+    root = plugin_root or PLUGIN_ROOT
+    ledger = _load_hook(root, "feedback_ledger")
+    session_start = _load_hook(root, "session-start")
+    probe = "\x00"
+    with _stubbed_ledger(probe):
+        section = session_start.load_lessons(REPO_ROOT)
+    if probe not in section:
+        raise RuntimeError(
+            "LESSONS 섹션이 탐침 digest 를 싣지 않았다 — 머리말 측정 경로가 깨졌다"
+        )
+    framing = len(section.encode()) - len(probe.encode())
+    digest = ledger.DIGEST_CHAR_CAP * UTF8_MAX_BYTES_PER_CHAR
+    return framing + digest + DIGEST_TRUNCATION_SUFFIX_BYTES
+
+
+def session_start_limits(policy: dict) -> tuple[list[tuple[str, object, bool]], int]:
+    """enabled 타겟의 session-start 훅마다 (타겟 id, 한도 원값, 명시 여부) + 훅 타겟 수."""
+    found: list[tuple[str, object, bool]] = []
+    hook_targets = 0
+    for target in policy.get("targets", []):
+        hooks = target.get("hooks")
+        if not target.get("enabled") or not hooks:
+            continue
+        hook_targets += 1
+        for entry in hooks.get("events", {}).get("SessionStart", []):
+            if entry.get("script") != SESSION_START_SCRIPT:
+                continue
+            explicit = "additionalContextLimit" in entry
+            found.append((target["id"], entry.get("additionalContextLimit"), explicit))
+    return found, hook_targets
+
+
+def _effective_limit(
+    target_id: str, raw: object, explicit: bool
+) -> tuple[int | None, str]:
+    """(한도, 출처 설명). 한도가 None 이면 두 번째 값이 red 사유다."""
+    host = HOST_HOOK_LIMITS.get(target_id)
+    if host is None:
+        return None, (
+            f"'{target_id}' 의 훅 출력 한도 모델이 조사되지 않았다 — 상류 기본값·토큰 근사를 "
+            "HOST_HOOK_LIMITS 에 출처와 함께 등재하라(다른 호스트의 기본값을 빌려 쓰지 않는다)"
+        )
+    if not explicit:
+        return host["default_tokens"], "키 부재 → 상류 기본값"
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        return None, f"additionalContextLimit 이 0 이상의 정수가 아니다 — {raw!r}"
+    return raw, "명시"
+
+
+def _report_delivery(
+    target_id: str, raw: object, explicit: bool, worst_bytes: int
+) -> int:
+    label = f"호스트 전달 한도[{target_id} SessionStart]"
+    limit, source = _effective_limit(target_id, raw, explicit)
+    if limit is None:
+        print(f"[injection-budget] ✗ {label}: {source}")
+        return 1
+    if limit == 0:
+        print(f"[injection-budget] ✓ {label} 0 — spill 비활성, 한도 소유자는 이 게이트")
+        return 0
+    tokens = math.ceil(worst_bytes / HOST_HOOK_LIMITS[target_id]["bytes_per_token"])
+    if tokens <= limit:
+        print(
+            f"[injection-budget] ✓ {label} 최악 {tokens:,} ≤ {limit:,} 토큰 ({source})"
+        )
+        return 0
+    print(
+        f"[injection-budget] ✗ {label} 최악 {tokens:,} > {limit:,} 토큰 ({source}) "
+        "— 넘는 만큼 가운데(RULES)가 잘려 모델에 닿지 않는다"
+    )
+    print(
+        "    → packaging/targets.json 의 그 SessionStart 엔트리에 "
+        '"additionalContextLimit": 0 (근거: hooks._evidence.hookContextSpill)'
+    )
+    return 1
+
+
+def check_host_delivery(policy_path: Path, peak_cap: int, lessons_worst: int) -> int:
+    """넷째 축. 훅 출력이 **호스트에서 잘리지 않고** 모델에 닿는가.
+
+    최악 출력 = 규범 최악 상한 + LESSONS 최악. 경로를 인자로 받는 것은 테스트가
+    픽스처 정책을 주입하기 위해서다.
+    """
+    try:
+        policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        print(f"[injection-budget] ✗ 호스트 전달 한도: 정책을 읽지 못했다 — {err}")
+        return 1
+    entries, hook_targets = session_start_limits(policy)
+    if hook_targets == 0:
+        print("[injection-budget] · 호스트 전달 한도: 훅을 싣는 enabled 타겟 없음")
+        return 0
+    if not entries:
+        print(
+            f"[injection-budget] ✗ 호스트 전달 한도: 훅을 싣는 타겟 {hook_targets}개에서 "
+            f"{SESSION_START_SCRIPT} 엔트리를 하나도 찾지 못했다 — 파싱 경로가 깨졌다"
+        )
+        return 1
+    rc = 0
+    for target_id, raw, explicit in entries:
+        rc |= _report_delivery(target_id, raw, explicit, peak_cap + lessons_worst)
+    return rc
+
+
 def _report(label: str, used: int, cap: int, hint: str) -> int:
     if used <= cap:
         print(f"[injection-budget] ✓ {label} {used:,}B ≤ {cap:,}B")
@@ -214,17 +413,29 @@ def main() -> int:
         return 1
 
     print(
-        f"[injection-budget] · conditional {len(signals)}종: " + ", ".join(sorted(signals))
+        f"[injection-budget] · conditional {len(signals)}종: "
+        + ", ".join(sorted(signals))
     )
     rc = _report(
-        "규범+WORKFLOW(항상)", always, RULES_CORE_CAP,
+        "규범+WORKFLOW(항상)",
+        always,
+        RULES_CORE_CAP,
         "core 티어를 축약하거나 상시 필요 없는 것을 conditional/reference 로 내려라 (D-17)",
     )
     rc |= _report(
-        "규범+WORKFLOW(최악)", peak, RULES_PEAK_CAP,
+        "규범+WORKFLOW(최악)",
+        peak,
+        RULES_PEAK_CAP,
         "conditional 규범을 축약하거나 신호 조건을 좁혀라 — 최악은 흔한 조합이다"
         " (워크트리 + 활성 Work + MCP 존재 + 원장 있음)",
     )
+
+    try:
+        lessons_worst = lessons_worst_bytes()
+    except Exception as err:  # noqa: BLE001 — 측정 실패를 green 으로 위장하지 않는다
+        print(f"[injection-budget] ✗ LESSONS 최악 측정 실패: {err}")
+        return 1
+    rc |= check_host_delivery(TARGETS_POLICY, RULES_PEAK_CAP, lessons_worst)
 
     entries, skipped = agent_entries()
     # 건너뛴 것이 1건이라도 있으면 red — 그만큼 예산에서 빠져 **더 쉽게 통과**한다.
@@ -237,7 +448,9 @@ def main() -> int:
         return 1
     used_agents = sum(b for b, _ in entries)
     rc |= _report(
-        f"에이전트 설명({len(entries)}종)", used_agents, AGENTS_CAP,
+        f"에이전트 설명({len(entries)}종)",
+        used_agents,
+        AGENTS_CAP,
         "에이전트를 줄이거나 description 을 짧게 — 상위: "
         + ", ".join(f"{n}({b}B)" for b, n in entries[:3]),
     )

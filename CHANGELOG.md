@@ -8,6 +8,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [3.34.1] — 2026-09-11
+
+### Fixed — Codex 가 훅 주입을 **가운데에서** 잘라 규범이 사라지고 있었다
+
+Codex 는 SessionStart 훅의 `additionalContext` 가 **2,500 토큰**을 넘으면 전문을
+`<tmp>/hook_outputs/<thread>/<uuid>.txt` 에 쓰고 모델에게는 **머리·꼬리 미리보기**만 준다.
+토큰은 `ceil(bytes / 4)` 로 센다. 이 킷의 출력은 그보다 크다. rollout 원문을 기대 출력과
+대조한 결과(모델 자기보고 아님):
+
+| 세션 | 훅 출력 | 모델에 도착 | 사라진 규범 |
+| --- | --- | --- | --- |
+| 이 킷 워크트리 (원장 있음) | 16,622B | 10,028B | Feedback Loop · Loop Engineering · Parallel Worktree |
+| 다른 레포 워크트리 (원장 없음) | 13,843B | 10,026B | Parallel Worktree |
+
+출력 순서가 WORKFLOW → active work → LESSONS → stale → RULES 라 **가운데인 RULES 가**
+잘린다. 머리와 꼬리(`=== END RULES ===`)는 살아 있어 겉보기엔 온전하다.
+
+**상류 출처**: `openai/codex` 의 `codex-rs/hooks/src/output_spill.rs`
+(`DEFAULT_HOOK_OUTPUT_TOKEN_LIMIT = 2_500`) · `codex-rs/utils/string/src/truncate.rs`
+(`APPROX_BYTES_PER_TOKEN = 4`) · `codex-rs/config/src/hook_config.rs` 의 핸들러 필드
+`additionalContextLimit` (PR #34393 에서 도입) — *"Unset uses 2,500 tokens; `0` disables
+spilling for this hook."* 필드를 모르는 옛 Codex 는 이 필드를 **무시**하고 지금처럼
+자른다. 깨지지는 않는다.
+
+**고친 것**: 생성되는 `hooks-codex.json` 의 SessionStart 엔트리에
+`"additionalContextLimit": 0` 을 넣었다(`packaging/targets.json` → `build-targets.py` 가
+그대로 전달, 0 이상의 정수가 아니면 생성 단계에서 거부).
+
+**왜 유한값이 아니라 0 인가.** 유한값을 고르면 `RULES_PEAK_CAP` 과 **따로 움직이는 두 번째
+숫자**가 생긴다. 이번 결함이 정확히 그것이었다 — Codex 의 숫자와 우리 예산을 아무도
+대조하지 않았다. 0 이면 한도의 소유자는 우리 예산 게이트 하나다: 규범은
+`check_injection_budget.py`, LESSONS 는 `feedback_ledger.DIGEST_CHAR_CAP`, active work 와
+stale 은 개수 상한이 묶는다.
+
+**게이트 — 이 결함을 잡았을 축을 넣었다.** `check_injection_budget.py` 에 넷째 축
+**호스트 전달 한도**를 추가했다. `packaging/targets.json` 의 session-start 훅마다 한도를
+구해(키가 없으면 상류 기본값 2,500), 0 이면 통과, 유한값이면
+`ceil((RULES_PEAK_CAP + LESSONS 최악) / 4) ≤ 한도` 여야 통과한다. 필드를 지우면 red 가 된다.
+
+> **⚠️ 사용자 조치 — Codex 에서 훅을 한 번 다시 신뢰해야 한다.** Codex 는 핸들러 설정
+> **전체**를 해시해 신뢰 여부를 기억하므로(`discovery.rs::hook_hash`), 필드가 추가된 이
+> 버전은 새 훅으로 취급된다. 업데이트 후 대화형 세션에서 신뢰 프롬프트를 승인하라.
+> 승인 전에는 비대화형(`codex exec`·CI)에서 훅이 **경고 없이 건너뛰어진다**.
+
+Claude Code 는 SessionStart 주입을 자르지 않는다(2.1.268 트랜스크립트에서 `=== END RULES ===`
+까지 온전). 그래서 Claude 쪽 축은 만들지 않았다.
+
+### ★정정 — 그동안 "Codex 도 메모리가 일치한다"고 보고한 것은 틀렸다
+
+3.31.0 의 *"하나의 원장, N 개의 주입기가 두 하네스에서 성립한다"* 는 Codex 가 **LESSONS 첫
+항목**을 정확히 인용한 것을 근거로 삼았다. 그런데 머리와 꼬리를 남기는 중간 절단에서는
+**첫 줄이 항상 살아남는다.** 그 프로브는 온전 도착과 절단을 **가르지 못했다** — 머리만
+확인한 것이다(`warning-signal.md` §측정 9 규칙 3: 두 가설을 가르지 못하는 값은 증거가
+아니라 배경이다). 관측(첫 줄 일치)은 참이었고, 그 위에 얹은 추론(*"주입이 온전하다"*)은
+거짓이었다.
+
+`packaging/targets.json` 의 `memoryInjection` 라벨을 `[관측: LESSONS 머리 도착 / 추론
+'메모리 동일' 은 반증됨]` 으로 고치고 다시 잡는 방법을 적었다. rollout 의 developer 메시지를
+기대 출력과 **바이트로** 대조하는 것이다. 이 결함을 가린 또 하나의 기록
+`knownLimitation_outputTruncation`(*"상한값 미특정"*)도 상한값·출처·해결책으로 갱신했다.
+README 의 Codex 전달 표에도 같은 사실을 적었다.
+
 ## [3.34.0] — 2026-09-10
 
 ### Changed — 강등 사다리를 3단으로: **Codex 도 격리 위임이 된다**

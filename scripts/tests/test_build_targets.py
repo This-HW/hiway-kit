@@ -650,3 +650,59 @@ def test_hook_arg_must_be_a_flag(tmp_path):
     for bad in ("portable-only", "-p", "--", "-", ""):
         root = _hooks_repo_with_args(tmp_path / f"x{abs(hash(bad))}", [bad])
         assert _run(root, "--write", "--only", "alpha") == 1, bad
+
+
+# ── 훅 출력 한도 (W13) ───────────────────────────────────────────────────────
+#
+# Codex 는 훅 출력을 기본 2,500 토큰에서 잘라 머리·꼬리만 모델에 준다. 핸들러 필드
+# `additionalContextLimit` 이 그 한도이고 `0` 이면 자르지 않는다 — 정책 값을 생성물로
+# **그대로** 옮겨야 한다. `0` 은 falsy 라 `if entry.get(...)` 식 전달이면 조용히
+# 사라진다(바로 위 `timeout` 이 그 형태다). 그래서 0 을 명시적으로 검사한다.
+
+
+def _hooks_repo_with_limit(tmp_path: Path, limit: object) -> Path:
+    root = _hooks_repo(tmp_path)
+    policy_path = root / "packaging" / "targets.json"
+    policy = json.loads(policy_path.read_text(encoding="utf-8"))
+    policy["targets"][0]["hooks"]["events"]["SessionStart"][0][
+        "additionalContextLimit"
+    ] = limit
+    policy_path.write_text(json.dumps(policy), encoding="utf-8")
+    return root
+
+
+def _generated_hooks(root: Path) -> dict:
+    return json.loads(
+        (root / "plugins" / "common" / "hooks" / "hooks-delta.json").read_text(
+            encoding="utf-8"
+        )
+    )["hooks"]
+
+
+def test_context_limit_is_passed_through_including_zero(tmp_path):
+    for limit in (0, 8000):
+        root = _hooks_repo_with_limit(tmp_path / f"l{limit}", limit)
+        assert _run(root, "--write", "--only", "alpha") == 0
+        hooks = _generated_hooks(root)
+        assert hooks["SessionStart"][0]["hooks"][0]["additionalContextLimit"] == limit
+        # 필드를 준 엔트리만 — 다른 이벤트로 번지지 않는다.
+        assert "additionalContextLimit" not in hooks["PostToolUse"][0]["hooks"][0]
+
+
+def test_context_limit_absent_emits_no_key(tmp_path):
+    """없으면 **키 부재** — 기본값을 지어내 싣지 않는다(상류 기본값의 소유자는 Codex)."""
+    root = _hooks_repo(tmp_path)
+    assert _run(root, "--write", "--only", "alpha") == 0
+    entry = _generated_hooks(root)["SessionStart"][0]["hooks"][0]
+    assert "additionalContextLimit" not in entry
+
+
+def test_context_limit_invalid_is_exit_1(tmp_path, capsys):
+    """음수·bool·문자열은 생성 단계에서 막는다 — `True` 는 `int` 의 하위 타입이라 따로 거른다."""
+    for i, bad in enumerate((-1, True, "0")):
+        root = _hooks_repo_with_limit(tmp_path / f"b{i}", bad)
+        assert _run(root, "--write", "--only", "alpha") == 1, bad
+        err = capsys.readouterr().err
+        assert "additionalContextLimit" in err and "'alpha'" in err, err
+        assert "SessionStart" in err and repr(bad) in err, err
+        assert not (root / "plugins" / "common" / "hooks" / "hooks-delta.json").exists()

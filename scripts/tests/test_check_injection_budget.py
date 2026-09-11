@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -66,12 +67,12 @@ def test_conditional_signals_are_derived_not_hardcoded(tmp_path):
     }
 
 
-
 def _rules_text(root: Path, *, signals):
     session_start = load_module_by_path(
         root / "hooks" / "session-start.py", "session_start_probe"
     )
     return session_start.load_rules(root, False, signals=signals)
+
 
 def test_worst_case_includes_conditional_bodies(tmp_path):
     """최악 측정이 conditional 본문을 실제로 포함해야 한다 — core 만 재면 안 된다."""
@@ -134,7 +135,9 @@ def test_signal_key_schema_drift_is_red(tmp_path):
     root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
     mod = _load(root)
     # 키 스키마 드리프트 — stem 이 아닌 키를 준다. load_rules 는 전부 무시한다.
-    mod.conditional_signals = lambda: {f"rules/{k}.md": True for k in ("cond-one", "cond-two")}
+    mod.conditional_signals = lambda: {
+        f"rules/{k}.md": True for k in ("cond-one", "cond-two")
+    }
     with pytest.raises(RuntimeError, match="신호가 load_rules 에 닿지 않았다"):
         mod.rules_bytes()
 
@@ -174,6 +177,108 @@ def test_unparseable_agent_is_red_not_silently_skipped(tmp_path):
     assert len(entries) == 1, "깨진 파일이 항목으로 들어갔다"
     assert len(skipped) == 1 and skipped.attempted == 2
     assert skipped.entries[0][1] == "no-frontmatter"
-    assert skipped.report(frozenset()) == 1, (
-        "깨진 에이전트를 건너뛴 채 green 을 냈다"
+    assert skipped.report(frozenset()) == 1, "깨진 에이전트를 건너뛴 채 green 을 냈다"
+
+
+# ── 넷째 축: 호스트 전달 한도 (W13) ──────────────────────────────────────────
+#
+# Codex 는 훅 출력을 기본 2,500 토큰에서 잘라 머리·꼬리만 모델에 준다. 실측: 16,622B
+# 출력 중 10,028B 만 도착했고 RULES 가운데 규범 3종이 사라졌다. 우리 예산은 22 KiB 인데
+# 호스트 한도와 **아무도 대조하지 않았다** — 이 축이 그 대조다.
+
+_PEAK = 22528
+_LESSONS_WORST = 5000
+
+
+def _real_module():
+    return load_module_by_path(
+        SCRIPTS_DIR / "check_injection_budget.py", "check_injection_budget_host"
     )
+
+
+def _policy_file(tmp_path: Path, session_start: dict | None, **target_extra) -> Path:
+    events: dict = {"PostToolUse": [{"script": "hooks/auto-format.py", "timeout": 30}]}
+    if session_start is not None:
+        events["SessionStart"] = [
+            {"script": "hooks/session-start.py", "timeout": 10, **session_start}
+        ]
+    target = {
+        "id": "codex",
+        "enabled": True,
+        "hooks": {"events": events},
+        **target_extra,
+    }
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    path = tmp_path / "targets.json"
+    path.write_text(json.dumps({"targets": [target]}), encoding="utf-8")
+    return path
+
+
+def _host_check(tmp_path: Path, capsys, session_start: dict | None, **extra):
+    rc = _real_module().check_host_delivery(
+        _policy_file(tmp_path, session_start, **extra), _PEAK, _LESSONS_WORST
+    )
+    return rc, capsys.readouterr().out
+
+
+def test_host_limit_absent_falls_back_to_upstream_default_and_is_red(tmp_path, capsys):
+    """키가 없으면 Codex 기본 2,500 — 우리 최악(≈6,882 토큰)은 그걸 넘는다. 이번 결함 그대로."""
+    rc, out = _host_check(tmp_path, capsys, {})
+    assert rc == 1, out
+    assert "2,500" in out and "키 부재" in out
+
+
+def test_host_limit_zero_is_green(tmp_path, capsys):
+    rc, out = _host_check(tmp_path, capsys, {"additionalContextLimit": 0})
+    assert rc == 0, out
+    assert "spill 비활성" in out
+
+
+def test_host_limit_small_finite_is_red(tmp_path, capsys):
+    rc, out = _host_check(tmp_path, capsys, {"additionalContextLimit": 3000})
+    assert rc == 1, out
+    assert "3,000" in out
+
+
+def test_host_limit_sufficient_finite_is_green(tmp_path, capsys):
+    """양성 대조 — 유한값 자체를 거부하는 게 아니라 **예산과 대조**한다."""
+    worst_tokens = -(-(_PEAK + _LESSONS_WORST) // 4)
+    rc, out = _host_check(tmp_path, capsys, {"additionalContextLimit": worst_tokens})
+    assert rc == 0, out
+    rc, out = _host_check(
+        tmp_path, capsys, {"additionalContextLimit": worst_tokens - 1}
+    )
+    assert rc == 1, out
+
+
+def test_host_limit_no_session_start_entry_is_red(tmp_path, capsys):
+    """훅을 싣는 타겟이 있는데 session-start 를 못 찾으면 파싱 경로가 깨진 것이다(false-green 금지)."""
+    rc, out = _host_check(tmp_path, capsys, None)
+    assert rc == 1, out
+    assert "하나도 찾지 못했다" in out
+
+
+def test_host_limit_invalid_value_is_red(tmp_path, capsys):
+    for bad in (-1, True, "0"):
+        rc, out = _host_check(
+            tmp_path / str(bad), capsys, {"additionalContextLimit": bad}
+        )
+        assert rc == 1, (bad, out)
+
+
+def test_host_limit_unknown_host_is_red_not_borrowed(tmp_path, capsys):
+    """다른 호스트가 훅을 싣기 시작하면 Codex 기본값을 빌려 쓰지 않고 멈춘다."""
+    rc, out = _host_check(tmp_path, capsys, {}, id="newhost")
+    assert rc == 1, out
+    assert "조사되지 않았다" in out
+
+
+def test_real_policy_passes_and_lessons_worst_reads_the_ledger_cap():
+    """실물 대조 — 픽스처 초록은 "동작한다"가 아니다(`warning-signal.md` §측정 1)."""
+    mod = _real_module()
+    ledger = load_module_by_path(
+        REPO_ROOT / "plugins" / "common" / "hooks" / "feedback_ledger.py", "fl_probe"
+    )
+    worst = mod.lessons_worst_bytes()
+    assert worst > ledger.DIGEST_CHAR_CAP * 4  # 머리말까지 더해졌다
+    assert mod.check_host_delivery(mod.TARGETS_POLICY, mod.RULES_PEAK_CAP, worst) == 0

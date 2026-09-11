@@ -109,8 +109,18 @@ How they arrive differs, and the difference is measured, not assumed:
 
 | | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |
-| Rules | hook injection | **hook injection** (measured) — `AGENTS.md` is the fallback | `AGENTS.md`/`GEMINI.md` only |
+| Rules | hook injection | **hook injection** (measured) — `AGENTS.md` is the fallback. Before 3.34.1 Codex cut the hook output at 2,500 tokens and the **middle rules were lost**; see the note below | `AGENTS.md`/`GEMINI.md` only |
 | Ledger digest (memory) | hook injection | **hook injection** (measured); rules also tell the agent to fetch it itself | self-fetch per the rule |
+
+**Codex hook output limit (fixed in 3.34.1).** Codex trims any hook's `additionalContext`
+above 2,500 tokens (≈ bytes / 4) down to a head + tail preview, and the kit's output was
+over that — in a measured session 16,622 B went in and 10,028 B reached the model; three
+rules in the middle (Feedback Loop, Loop Engineering, Parallel Worktree) never arrived.
+The earlier "memory arrives intact" result was wrong: that probe only checked the *first*
+LESSONS line, which survives a middle cut every time. The generated Codex hook now sets
+`additionalContextLimit: 0` (no trimming), so the kit's own injection budget gate is the
+only limit. **Codex will ask you to trust the hook once more** after this update, because
+the trust hash covers the whole handler config.
 | Skills | native | **all 21 recognized** (measured) | recognized |
 | Subagents | 32 agents | **not exposed** — skills degrade to in-session execution | not supported (nested layout) |
 | Automatic blocking | `PreToolUse` veto | **no** — the hook runs but cannot veto | no |
