@@ -1641,3 +1641,27 @@ def test_validate_all_collects_invalid_assertion_types(tmp_path, value):
     errors = runner.validate_all(scenarios_root=tmp_path)
     assert len(errors) == 2
     assert all("알 수 없는 type" in error for error in errors)
+
+
+@pytest.mark.parametrize("invocation", ["scenario", "judge"])
+def test_eval_prompts_do_not_inherit_launcher_stdin(tmp_path, monkeypatch, invocation):
+    calls = []
+
+    def isolated_run(cmd, **kwargs):
+        assert kwargs.get("stdin") == subprocess.DEVNULL
+        assert "-p" in cmd
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "SCORE: 8", "")
+
+    monkeypatch.setattr(runner.subprocess, "run", isolated_run)
+    if invocation == "judge":
+        result = runner.run_judge("output to grade", {"rubric": "review output"}, 5)
+        assert result["score"] == 8
+        assert "output to grade" in calls[0][calls[0].index("-p") + 1]
+    else:
+        sc = _scenario(
+            tmp_path, {"assertions": [{"type": "output_regex", "pattern": "SCORE"}]}
+        )
+        assert runner.run_scenario(_agent(tmp_path), sc, 5)["status"] == "pass"
+        assert sc.task in calls[0]
+    assert len(calls) == 1

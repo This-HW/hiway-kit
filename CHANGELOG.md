@@ -50,6 +50,7 @@ run 2 가 2배인 이유는 모른다 `[원인 미상]`. 성공 봉투에는 `er
 - Eval validation reports malformed git/expect shapes and continues checking other scenarios instead of crashing during cross-field checks.
 - Stop-validator rejects preexisting state symlinks, foreign ownership and permissive modes. Unsafe stable state falls back to a private temporary directory, never the shared temporary root; cross-process retry/marker reuse is unavailable in that fallback.
 - Regression tests cover the reproduced failures, valid paths and commands, and malformed input diagnostics.
+- Eval scenario and judge subprocesses ignore inherited standard input so launch scripts cannot contaminate argv prompts.
 - Release CI uses an explicit fixture branch and includes each script's directory in the Python 3.9 smoke-test import path, removing dependence on local Git and Python configuration.
 
 ## [3.34.1] — 2026-09-11

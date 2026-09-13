@@ -1159,6 +1159,7 @@ def run_judge(stdout: str, judge_cfg: dict, timeout: int) -> dict:
     try:
         r = subprocess.run(
             HARNESS.judge_cmd(prompt),
+            stdin=subprocess.DEVNULL,  # Prompt is in argv; inherited pipes are not input.
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -1373,6 +1374,7 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
             r = subprocess.run(
                 cmd,
                 cwd=str(work_dir),
+                stdin=subprocess.DEVNULL,  # Keep launcher stdin out of the task prompt.
                 capture_output=True,
                 text=True,
                 timeout=timeout,
