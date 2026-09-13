@@ -70,10 +70,10 @@ def _write_marker(repo: Path, data: object) -> Path:
 def repo(tmp_path: Path) -> Path:
     """주 저장소 + 로컬 bare 원격 + 설치된 pre-push 훅. 네트워크를 쓰지 않는다."""
     remote = tmp_path / "remote.git"
-    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    _git(tmp_path, "init", "-q", "-b", "main", "--bare", str(remote))
     r = tmp_path / "main"
     r.mkdir()
-    _git(r, "init", "-q", ".")
+    _git(r, "init", "-q", "-b", "main", ".")
     _git(r, "config", "user.email", "t@t")
     _git(r, "config", "user.name", "t")
     _git(r, "remote", "add", "origin", str(remote))
