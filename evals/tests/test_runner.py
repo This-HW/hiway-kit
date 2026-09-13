@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import run as runner
@@ -1589,3 +1591,53 @@ class TestFailExcerpt:
         patterns = runner._secret_patterns()
         assert patterns, "훅에서 시크릿 패턴을 읽지 못했다"
         assert any("AKIA" in p for p, _ in patterns)
+
+
+@pytest.mark.parametrize("spec", [[], None, {"version": 1, "ops": None}])
+def test_validate_scenario_invalid_git_shape_returns_errors(tmp_path, spec):
+    sc_dir = tmp_path / "git-workflow" / "invalid-git-shape"
+    _write_scenario(sc_dir)
+    (sc_dir / "git.json").write_text(json.dumps(spec))
+    errors = runner.validate_scenario(sc_dir)
+    assert any("git.json" in error for error in errors)
+
+
+@pytest.mark.parametrize("expect", [[], None, {"assertions": None}])
+def test_validate_scenario_invalid_expect_shape_with_git(tmp_path, expect):
+    sc_dir = tmp_path / "git-workflow" / "invalid-expect-shape"
+    _write_scenario(sc_dir, {"version": 1, "ops": [{"op": "init"}]})
+    (sc_dir / "expect.json").write_text(json.dumps(expect))
+    errors = runner.validate_scenario(sc_dir)
+    assert any("expect.json" in error for error in errors)
+
+
+def test_validate_all_continues_after_invalid_scenario_shapes(tmp_path):
+    cases = [
+        ("a-invalid", []),
+        ("b-invalid", None),
+        ("d-invalid", {"version": 1, "ops": [{"op": []}]}),
+        ("e-invalid", {"version": 1, "ops": [{"op": {}}]}),
+    ]
+    for name, content in cases:
+        sc_dir = tmp_path / "git-workflow" / name
+        _write_scenario(sc_dir)
+        (sc_dir / "git.json").write_text(json.dumps(content))
+    _write_scenario(tmp_path / "git-workflow" / "c-valid")
+    errors = runner.validate_all(scenarios_root=tmp_path)
+    assert len(errors) == 4
+    assert any("a-invalid" in error for error in errors)
+    assert any("b-invalid" in error for error in errors)
+
+
+@pytest.mark.parametrize("value", [[], {}])
+def test_validate_all_collects_invalid_assertion_types(tmp_path, value):
+    for name in ("a-invalid-type", "b-invalid-type"):
+        sc_dir = tmp_path / "git-workflow" / name
+        _write_scenario(sc_dir)
+        (sc_dir / "expect.json").write_text(
+            json.dumps({"assertions": [{"type": value}]})
+        )
+    _write_scenario(tmp_path / "git-workflow" / "c-valid")
+    errors = runner.validate_all(scenarios_root=tmp_path)
+    assert len(errors) == 2
+    assert all("알 수 없는 type" in error for error in errors)

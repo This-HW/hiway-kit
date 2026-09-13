@@ -19,9 +19,13 @@ S3에서 `passthroughFields`가 추가됐다(SSOT에 있으면 싣고 없으면 
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
 from module_loader import load_module_by_path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent
@@ -103,6 +107,57 @@ def _run(root: Path, *extra: str) -> int:
         *extra,
     ]
     return _mod.main(argv)
+
+
+def _update_source(root: Path, field: str, value: str) -> None:
+    path = root / "packaging" / "targets.json"
+    policy = json.loads(path.read_text())
+    policy["source"][field] = value
+    path.write_text(json.dumps(policy))
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        (mode, field, escape)
+        for mode in ("--check", "--write")
+        for field in ("manifest", "pluginRoot")
+        for escape in ("absolute", "parent", "symlink")
+    ],
+)
+def test_source_paths_cannot_escape(tmp_path, capsys, case):
+    mode, field, escape = case
+    root = _fake_repo(tmp_path)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "plugin.json").write_text(json.dumps(SSOT))
+    (root / "link").symlink_to(outside, target_is_directory=True)
+    base = {"absolute": str(outside), "parent": "../outside", "symlink": "link"}[escape]
+    value = base + "/plugin.json" if field == "manifest" else base
+    _update_source(root, field, value)
+    assert _run(root, mode) == 1
+    assert f"source.{field}: 경로 탈출 차단" in capsys.readouterr().err
+    assert not (root / "plugins/common/.alpha-plugin").exists()
+
+
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+def test_component_discovery_cannot_follow_external_symlink(tmp_path, capsys, mode):
+    root = _fake_repo(tmp_path, with_skills=False)
+    outside = tmp_path / "external-skills"
+    outside.mkdir()
+    (root / "plugins/common/skills").symlink_to(outside, target_is_directory=True)
+    assert _run(root, mode) == 1
+    assert "source.componentDirs: 경로 탈출 차단" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("field", ["manifest", "pluginRoot"])
+def test_internal_source_symlink_remains_supported(tmp_path, field):
+    root = _fake_repo(tmp_path)
+    original = POLICY["source"][field]
+    (root / "internal-link").symlink_to(root / original)
+    _update_source(root, field, "internal-link")
+    assert _run(root, "--write") == 0
+    assert _run(root, "--check") == 0
 
 
 # ── 1. 정상 생성 ─────────────────────────────────────────────────────────────
@@ -497,6 +552,77 @@ def _hooks_repo(tmp_path: Path, *, with_scripts: bool = True) -> Path:
         (hooks_dir / "inject.py").write_text("", encoding="utf-8")
         (hooks_dir / "fmt.py").write_text("", encoding="utf-8")
     return root
+
+
+def _set_session_hook(root: Path, script: str, interpreter: str) -> None:
+    path = root / "packaging/targets.json"
+    policy = json.loads(path.read_text())
+    hooks = policy["targets"][0]["hooks"]
+    hooks["interpreter"] = interpreter
+    hooks["events"]["SessionStart"][0]["script"] = script
+    path.write_text(json.dumps(policy))
+
+
+def _run_generated_hook(root: Path) -> subprocess.CompletedProcess:
+    assert _run(root, "--write", "--only", "alpha") == 0
+    plugin = root / "plugins/common"
+    manifest = json.loads((plugin / "hooks/hooks-delta.json").read_text())
+    command = manifest["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    return subprocess.run(
+        ["/bin/sh", "-c", command],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(plugin)},
+        check=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "space name.py",
+        "$(printf PROBE).py",
+        "`printf PROBE`.py",
+        'quote"name.py',
+        "single'name.py",
+        "back\\slash.py",
+        "semi;name.py",
+    ],
+)
+def test_generated_hook_preserves_literal_script_name(tmp_path, name):
+    root = _hooks_repo(tmp_path / "plugin path with spaces")
+    relative = "hooks/" + name
+    script = root / "plugins/common" / relative
+    script.write_text("import sys\nprint(sys.argv[0])\n")
+    _set_session_hook(root, relative, sys.executable)
+    result = _run_generated_hook(root)
+    assert result.stdout.strip() == str(script)
+
+
+def test_generated_hook_accepts_interpreter_path_with_spaces(tmp_path):
+    root = _hooks_repo(tmp_path)
+    interpreter = tmp_path / "python with spaces"
+    interpreter.symlink_to(sys.executable)
+    _set_session_hook(root, "hooks/inject.py", str(interpreter))
+    assert _run_generated_hook(root).returncode == 0
+
+
+@pytest.mark.parametrize(
+    "interpreter",
+    [
+        "python3; printf PROBE",
+        "$(printf python3)",
+        "`printf python3`",
+        "python3\n",
+        None,
+    ],
+)
+def test_interpreter_shell_commands_are_rejected(tmp_path, interpreter):
+    root = _hooks_repo(tmp_path)
+    _set_session_hook(root, "hooks/inject.py", interpreter)
+    assert _run(root, "--write", "--only", "alpha") == 1
+    assert _run(root, "--check", "--only", "alpha") == 1
 
 
 def test_hooks_manifest_is_generated_in_string_form(tmp_path):

@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -50,25 +51,44 @@ def _get_project_root() -> Path:
     return Path.cwd()
 
 
-def _state_dir() -> Path:
-    """훅 상태(마커/카운터)를 담는 **현재 사용자 전용** 0700 디렉토리.
+_EPHEMERAL_STATE: list[tempfile.TemporaryDirectory] = []
 
-    이전엔 상태를 world-writable /tmp의 예측 가능한 경로에 직접 뒀다 — 공유 호스트의
-    다른 사용자가 심링크 없이도 평범한 파일을 미리 만들어 두는 것만으로 카운터를
-    '999'로 오염(cap 상시 발동→검증 무력화)하거나 유효 마커를 심어 검증을 우회할 수
-    있었다. `$TMPDIR/claude-{uid}`(0700)로 격리하면 타 사용자가 경로 자체에 접근할 수
-    없다. auto-dev 마커 스니펫은 이 모듈의 VALIDATED_MARKER를 직접 사용한다(v2.10.1 단일소스화).
+
+def _private_state_directory(path: Path, uid: int) -> bool:
+    """Inspect the directory itself, never a preexisting symlink's target."""
+    info = path.lstat()
+    return (
+        stat.S_ISDIR(info.st_mode)
+        and info.st_uid == uid
+        and stat.S_IMODE(info.st_mode) == 0o700
+    )
+
+
+def _ephemeral_state_dir() -> Path:
+    """Keep private fallback state alive until process exit, then clean it up."""
+    directory = tempfile.TemporaryDirectory(prefix="claude-state-")
+    _EPHEMERAL_STATE.append(directory)
+    print("[WARN] private stop state unavailable; using temporary state", file=sys.stderr)
+    return Path(directory.name)
+
+
+def _state_dir() -> Path:
+    """Reuse only owned, private state; unsafe counters must never skip validation.
+
+    A safe stable path preserves auto-dev's VALIDATED_MARKER interoperability.
+    Rejected state instead gets an isolated lifetime and no shared retry history.
     """
+    if not hasattr(os, "getuid"):
+        return _ephemeral_state_dir()
+    uid = os.getuid()
+    directory = Path(tempfile.gettempdir()) / f"claude-{uid}"
     try:
-        uid = os.getuid()
-    except AttributeError:  # 비-POSIX(Windows 등) — kit 주 대상은 darwin/linux
-        uid = os.environ.get("USER", "user")
-    d = Path(tempfile.gettempdir()) / f"claude-{uid}"
-    try:
-        d.mkdir(mode=0o700, exist_ok=True)
-    except Exception:
-        return Path(tempfile.gettempdir())
-    return d
+        directory.mkdir(mode=0o700, exist_ok=True)
+        if _private_state_directory(directory, uid):
+            return directory
+    except OSError:
+        return _ephemeral_state_dir()
+    return _ephemeral_state_dir()
 
 
 PROJECT_ROOT = _get_project_root()

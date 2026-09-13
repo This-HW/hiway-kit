@@ -794,3 +794,100 @@ def test_is_eval_fixture_narrowed_to_fixture_segment():
     assert sv._is_eval_fixture("evals/scenarios/fix-bugs/off-by-one/fixture/stats.py")
     assert not sv._is_eval_fixture("evals/scenarios/fix-bugs/off-by-one/helper.py")
     assert not sv._is_eval_fixture("evals/scenarios/helper.py")
+
+
+@pytest.fixture
+def state_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(_mod.tempfile, "gettempdir", lambda: str(tmp_path))
+    yield tmp_path / f"claude-{_mod.os.getuid()}"
+    for directory in _mod._EPHEMERAL_STATE:
+        directory.cleanup()
+    _mod._EPHEMERAL_STATE.clear()
+
+
+def test_state_directory_created_private_and_reused(state_root):
+    assert _mod._state_dir() == state_root
+    assert state_root.stat().st_mode & 0o777 == 0o700
+    marker = state_root / ".claude_validated_example"
+    marker.write_text("validated", encoding="utf-8")
+    assert _mod._state_dir() == state_root
+    assert marker.read_text(encoding="utf-8") == "validated"
+
+
+@pytest.mark.parametrize("mode", [0o755, 0o777, 0o770])
+def test_state_directory_rejects_permissive_modes(state_root, mode):
+    state_root.mkdir()
+    state_root.chmod(mode)
+    private = _mod._state_dir()
+    assert private != state_root and private != state_root.parent
+    assert private.stat().st_mode & 0o777 == 0o700
+    assert state_root.stat().st_mode & 0o777 == mode
+
+
+def test_state_directory_rejects_symlink(state_root):
+    target = state_root.parent / "attacker"
+    target.mkdir(mode=0o700)
+    state_root.symlink_to(target, target_is_directory=True)
+    private = _mod._state_dir()
+    assert private != state_root and private != target
+    assert private != state_root.parent
+    assert state_root.is_symlink()
+
+
+def test_state_directory_rejects_foreign_owner(state_root, monkeypatch):
+    from types import SimpleNamespace
+
+    state_root.mkdir(mode=0o700)
+    original = Path.lstat
+
+    def foreign_owner(path):
+        if path == state_root:
+            return SimpleNamespace(st_mode=0o40700, st_uid=_mod.os.getuid() + 1)
+        return original(path)
+
+    monkeypatch.setattr(Path, "lstat", foreign_owner)
+    private = _mod._state_dir()
+    assert private != state_root and private != state_root.parent
+
+
+def test_state_directory_creation_failure_uses_private_fallback(state_root, monkeypatch):
+    def deny_creation(*args, **kwargs):
+        raise PermissionError("stable state unavailable")
+
+    monkeypatch.setattr(Path, "mkdir", deny_creation)
+    private = _mod._state_dir()
+    assert private != state_root and private != state_root.parent
+    assert private.is_dir() and private.stat().st_mode & 0o777 == 0o700
+
+
+def test_state_directory_file_collision_uses_private_fallback(state_root):
+    state_root.write_text("attacker", encoding="utf-8")
+    assert _mod._state_dir() != state_root.parent
+    assert state_root.read_text(encoding="utf-8") == "attacker"
+
+
+def test_unsafe_state_counters_cannot_bypass_validation(state_root, monkeypatch, capsys):
+    state_root.mkdir(mode=0o777)
+    state_root.chmod(0o777)
+    counter = _mod.RETRY_COUNTER.name
+    (state_root / counter).write_text("999", encoding="utf-8")
+    (state_root.parent / counter).write_text("999", encoding="utf-8")
+    monkeypatch.setattr(_mod, "RETRY_COUNTER", _mod._state_dir() / counter)
+    monkeypatch.setattr(_mod, "get_modified_py_files", lambda: ["test_app.py"])
+    monkeypatch.setattr(_mod, "check_lint", lambda files: (True, ""))
+    monkeypatch.setattr(_mod, "check_tests", lambda files: (False, "FAILED real test"))
+    assert _mod.get_retry_count() == 0
+    with pytest.raises(SystemExit):
+        _mod.main()
+    assert _extract_json(capsys.readouterr().out)["decision"] == "block"
+
+
+def test_fallback_allocation_failure_never_returns_shared_root(state_root, monkeypatch):
+    state_root.write_text("attacker", encoding="utf-8")
+
+    def no_temporary_space(*args, **kwargs):
+        raise OSError("no temporary space")
+
+    monkeypatch.setattr(_mod.tempfile, "TemporaryDirectory", no_temporary_space)
+    with pytest.raises(OSError, match="no temporary space"):
+        _mod._state_dir()

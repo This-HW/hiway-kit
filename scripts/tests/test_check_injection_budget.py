@@ -282,3 +282,88 @@ def test_real_policy_passes_and_lessons_worst_reads_the_ledger_cap():
     worst = mod.lessons_worst_bytes()
     assert worst > ledger.DIGEST_CHAR_CAP * 4  # 머리말까지 더해졌다
     assert mod.check_host_delivery(mod.TARGETS_POLICY, mod.RULES_PEAK_CAP, worst) == 0
+
+
+@pytest.mark.parametrize("style", ["|", ">", "|-", ">-", "|+", ">+"])
+def test_agent_block_description_exceeds_budget(tmp_path, style):
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
+    agents = root / "agents"
+    agents.mkdir()
+    body = "한" * 3000
+    (agents / "large.md").write_text(
+        f"---\nname: large\ndescription: {style}\n  {body}\n\n  끝\nmodel: sonnet\n---\n",
+        encoding="utf-8",
+    )
+    mod = _load(root)
+    entries, skipped = mod.agent_entries()
+    assert not len(skipped)
+    assert entries[0][0] >= len(f"large: {body}\n\n끝".encode())
+    assert mod._report("agents", entries[0][0], mod.AGENTS_CAP, "reduce") == 1
+
+
+@pytest.mark.parametrize(
+    "description",
+    [
+        "",
+        "|2\n  body",
+        ">oops\n  body",
+        "|",
+        "*alias",
+        "[one, two]",
+        '"unclosed',
+        "|\n    first\n  bad",
+        "|\n\tbody",
+        "plain\n  continued",
+        "plain\n\n  continued",
+    ],
+)
+def test_unsupported_agent_description_is_red(tmp_path, description):
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
+    agents = root / "agents"
+    agents.mkdir()
+    (agents / "bad.md").write_text(
+        f"---\nname: bad\ndescription: {description}\nmodel: sonnet\n---\n",
+        encoding="utf-8",
+    )
+    entries, skipped = _load(root).agent_entries()
+    assert entries == []
+    assert skipped.entries[0][1] == "invalid-description"
+    assert skipped.report(frozenset()) == 1
+
+
+def test_block_description_keeps_blank_lines_and_stops_at_next_key():
+    text = "description: >- # folded\n  one\n\n  two\nmodel: sonnet"
+    assert _real_module()._agent_description(text) == "  one\n\n  two\n"
+
+
+@pytest.mark.parametrize("style", ["|+", ">+"])
+def test_keep_chomping_trailing_blank_lines_exceed_budget(tmp_path, style):
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
+    agents = root / "agents"
+    agents.mkdir()
+    trailing = "\n" * 9000
+    (agents / "large.md").write_text(
+        f"---\nname: large\ndescription: {style}\n  body{trailing}model: sonnet\n---\n",
+        encoding="utf-8",
+    )
+    mod = _load(root)
+    entries, skipped = mod.agent_entries()
+    assert not len(skipped)
+    assert entries[0][0] >= len(f"large: body{trailing}".encode())
+    assert mod._report("agents", entries[0][0], mod.AGENTS_CAP, "reduce") == 1
+
+
+@pytest.mark.parametrize("style", ["|", ">", "|-", ">-", "|+", ">+"])
+def test_leading_block_blank_lines_exceed_budget(tmp_path, style):
+    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
+    agents = root / "agents"
+    agents.mkdir()
+    leading = "\n" * 9000
+    (agents / "large.md").write_text(
+        f"---\nname: large\ndescription: {style}\n{leading}  body\n---\n",
+        encoding="utf-8",
+    )
+    mod = _load(root)
+    entries, skipped = mod.agent_entries()
+    assert not len(skipped)
+    assert entries[0][0] > mod.AGENTS_CAP

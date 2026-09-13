@@ -26,8 +26,7 @@ python3 scripts/build-targets.py --check
 # Check a single target
 python3 scripts/build-targets.py --check --only codex
 
-# Write. Requires --only — there is no bare "write everything" mode by design,
-# so a stray invocation can't silently regenerate every target at once.
+# Write one target, or omit --only to regenerate every enabled target.
 python3 scripts/build-targets.py --write --only codex
 python3 scripts/build-targets.py --write --only antigravity
 ```
@@ -35,6 +34,13 @@ python3 scripts/build-targets.py --write --only antigravity
 `--check` treats a missing manifest for an `enabled:true` target as **drift** (exit 1),
 not as "not built yet" — a target is either fully generated and verified, or disabled
 in `targets.json`. There is no in-between state the gate tolerates.
+
+Both modes confine source manifests and component discovery to the repository or
+plugin root, just as they confine generated output paths. Escaping absolute paths,
+parent paths and symlinks fail with a policy error. Hook interpreters are single
+executable paths; script names are quoted literally while `CLAUDE_PLUGIN_ROOT`
+still expands at runtime. Spaces and shell metacharacters in script filenames do
+not become commands.
 
 ## When to regenerate
 

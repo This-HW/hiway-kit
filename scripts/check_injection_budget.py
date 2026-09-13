@@ -137,9 +137,49 @@ AGENTS_CAP = 8192  # 8 KiB — 에이전트 name + description
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 NAME_RE = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
-DESC_RE = re.compile(
-    r"^description:\s*\|?\s*\n((?:[ \t]+.*\n?)*)|^description:\s*(.*)$", re.MULTILINE
-)
+DESC_RE = re.compile(r"^description:[ \t]*(.*)$", re.MULTILINE)
+BLOCK_STYLE_RE = re.compile(r"[|>][+-]?(?:[ \t]+#.*)?")
+
+
+def _description_body(lines: list[str]) -> str:
+    body: list[str] = []
+    for line in lines:
+        if line and not line.startswith((" ", "\t")):
+            break
+        if line.startswith("\t"):
+            raise ValueError("description block indentation must use spaces")
+        body.append(line)
+    if not any(line.strip() for line in body):
+        raise ValueError("description block is empty")
+    first = next(line for line in body if line.strip())
+    indent = len(first) - len(first.lstrip(" "))
+    if any(
+        line.strip() and len(line) - len(line.lstrip(" ")) < indent for line in body
+    ):
+        raise ValueError("description block indentation is inconsistent")
+    # Raw indentation/newlines conservatively cover folded and literal scalar bytes.
+    return "\n".join(body) + "\n"
+
+
+def _agent_description(frontmatter: str) -> str:
+    matches = list(DESC_RE.finditer(frontmatter))
+    if len(matches) != 1:
+        raise ValueError("exactly one description is required")
+    match = matches[0]
+    value = match.group(1).strip()
+    following = frontmatter[match.end() :].split("\n")[1:]
+    if value.startswith(("|", ">")):
+        if not BLOCK_STYLE_RE.fullmatch(value):
+            raise ValueError("unsupported description block header")
+        return _description_body(following)
+    if not value or value[0] in "&*!{[#%@`" or "\\" in value:
+        raise ValueError("unsupported or empty description scalar")
+    if value[0] in "\"'" and (len(value) < 2 or value[-1] != value[0]):
+        raise ValueError("unterminated description quote")
+    next_line = next((line for line in following if line.strip()), "")
+    if next_line.startswith((" ", "\t")):
+        raise ValueError("multiline description requires a block style")
+    return value
 
 
 TIER_RE = re.compile(r"^tier:\s*(\S+)\s*$", re.MULTILINE)
@@ -242,9 +282,12 @@ def agent_entries() -> tuple[list[tuple[int, str]], SkipTally]:
             skipped.add(rel, "no-frontmatter", "YAML frontmatter 를 찾지 못했다")
             continue
         name = NAME_RE.search(fm.group(1))
-        desc = DESC_RE.search(fm.group(1))
-        text = (desc.group(1) or desc.group(2) or "") if desc else ""
-        entry = f"{name.group(1) if name else path.stem}: {text.strip()}"
+        try:
+            text = _agent_description(fm.group(1))
+        except ValueError as err:
+            skipped.add(rel, "invalid-description", str(err))
+            continue
+        entry = f"{name.group(1) if name else path.stem}: {text}"
         out.append((len(entry.encode()), path.stem))
     return sorted(out, reverse=True), skipped
 
