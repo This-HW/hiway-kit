@@ -539,3 +539,11 @@ PRs welcome. Checklist:
 ## License
 
 MIT
+
+### Collaboration across harnesses
+
+Shared isolation, integration and cleanup responsibilities are separated from runtime-specific
+execution in the [control-loop transport guide](docs/control-loop-transport.md). It covers external
+orchestration, native subagents, large parallel workflows and single-session execution.
+The [repository collaboration choice](docs/conventions/coordination.md) applies to this repository,
+not to projects that install the kit.

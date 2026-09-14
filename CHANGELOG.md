@@ -53,6 +53,13 @@ run 2 가 2배인 이유는 모른다 `[원인 미상]`. 성공 봉투에는 `er
 - Eval scenario and judge subprocesses ignore inherited standard input so launch scripts cannot contaminate argv prompts.
 - Release CI uses an explicit fixture branch and includes each script's directory in the Python 3.9 smoke-test import path, removing dependence on local Git and Python configuration.
 
+### Coordination documentation (unreleased candidate)
+
+- Separate worker artifact return from integration authority; verify artifact preservation and resource disposition before closing delegated work.
+- Preserve external orchestration, native subagent, large parallel and single-session routes; document harness-specific capabilities without fixing personal model choices.
+- Share this repository's collaboration choice across AGENTS, GEMINI and CLAUDE entrypoints; consumers keep their own transport choice. No automatic cleanup or global settings change.
+- Regenerated rules block sha256: `e524e279742963e295847bc757b0990808a8b2f6022564110eb2d514efd3d873`.
+
 ## [3.34.1] — 2026-09-11
 
 ### Fixed — Codex 가 훅 주입을 **가운데에서** 잘라 규범이 사라지고 있었다

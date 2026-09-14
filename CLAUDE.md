@@ -481,3 +481,5 @@ PRs welcome. Checklist:
       (the manifest has **no** agent/skill registry — both are auto-discovered from their
       directories; the only thing a new component must touch there is the version)
 - [ ] CI passes (JSON valid, frontmatter complete, no forbidden fields, pytest green, no secrets)
+
+@docs/conventions/coordination.md
