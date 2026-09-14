@@ -65,6 +65,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -75,6 +76,7 @@ DEFAULT_POLICY = REPO_ROOT / "packaging" / "targets.json"
 #: 같은 계열의 규율이다(`docs/conventions/path-containment.md`) — 설정값을 검증 없이
 #: 명령으로 조립하지 않는다. 인용·치환·구분자를 깰 수 있는 문자를 원천 배제한다.
 _HOOK_ARG_RE = re.compile(r"--[A-Za-z0-9][A-Za-z0-9._-]*(=[A-Za-z0-9._-]+)?")
+_HOOK_INTERPRETER_RE = re.compile(r"[A-Za-z0-9_./ -]+")
 
 
 class PolicyError(Exception):
@@ -98,10 +100,7 @@ def load_ssot(repo_root: Path, policy: dict) -> dict:
     부재는 조용히 넘기지 않는다 — 계산할 입력 자체가 없다는 뜻이므로 즉시,
     raw traceback 없이 명확한 메시지로 실패한다.
     """
-    rel = policy.get("source", {}).get("manifest")
-    if not rel:
-        raise PolicyError("정책의 source.manifest 필드가 없다.")
-    p = repo_root / rel
+    p = _source_path(repo_root, policy, "manifest")
     try:
         raw = p.read_text(encoding="utf-8")
     except OSError as err:
@@ -115,14 +114,17 @@ def load_ssot(repo_root: Path, policy: dict) -> dict:
         raise PolicyError(f"SSOT 매니페스트 JSON 파싱 실패: {p} ({err})") from err
 
 
-def _detect_components(repo_root: Path, policy: dict) -> set[str]:
+def _detect_components(plugin_root: Path, policy: dict) -> set[str]:
     """`source.pluginRoot` 아래 실재하는 컴포넌트 디렉토리 이름 집합.
 
     목록을 손으로 유지하지 않는다 — 존재 여부를 실측한다(정책 파일의 `_meta.detection`).
     """
-    plugin_root = repo_root / policy["source"]["pluginRoot"]
     candidates = policy["source"]["_meta"]["componentDirs"]
-    return {name for name in candidates if (plugin_root / name).is_dir()}
+    return {
+        name
+        for name in candidates
+        if _policy_path(plugin_root, name, "source.componentDirs").is_dir()
+    }
 
 
 def _find_target(policy: dict, target_id: str) -> dict | None:
@@ -200,7 +202,7 @@ def build_marketplace(ssot: dict, target: dict, plugin_root_rel: str) -> dict | 
     return entry
 
 
-def build_hooks(repo_root: Path, policy: dict, target: dict) -> dict | None:
+def build_hooks(plugin_root: Path, target: dict) -> dict | None:
     """타겟의 훅 매니페스트(있는 경우만). 현재는 codex 전용.
 
     **왜 별도 파일인가.** Claude Code 의 `plugins/common/hooks/hooks.json` 은 exec
@@ -220,27 +222,23 @@ def build_hooks(repo_root: Path, policy: dict, target: dict) -> dict | None:
     spec = target.get("hooks")
     if not spec:
         return None
-    plugin_root = repo_root / policy["source"]["pluginRoot"]
-    interpreter = spec.get("interpreter", "")
+    interpreter = _quote_interpreter(spec.get("interpreter", ""))
     events: dict = {}
     for event, entries in spec["events"].items():
         built = []
         for entry in entries:
             rel = entry["script"]
-            resolved, err = _resolve_in_repo(plugin_root, rel)
-            if resolved is None:
-                raise PolicyError(
-                    f"타겟 '{target['id']}': 훅 스크립트 경로가 플러그인 루트 밖이다 — {rel} ({err})"
-                )
+            resolved = _policy_path(plugin_root, rel, "hooks.script")
             if not resolved.is_file():
                 raise PolicyError(
                     f"타겟 '{target['id']}': 선언된 훅 스크립트가 없다 — {rel}\n"
                     f"  (packaging/targets.json 의 hooks.events.{event} 가 가리킨다)"
                 )
-            quoted = '"${CLAUDE_PLUGIN_ROOT}/' + rel + '"'
+            # Ship the confined, normalized path, not an unchecked second resolution.
+            quoted = _quote_hook_path(resolved.relative_to(plugin_root).as_posix())
             command = f"{interpreter} {quoted}" if interpreter else quoted
             for arg in entry.get("args", []):
-                if not _HOOK_ARG_RE.fullmatch(arg):
+                if not isinstance(arg, str) or not _HOOK_ARG_RE.fullmatch(arg):
                     raise PolicyError(
                         f"타겟 '{target['id']}': 훅 인자에 허용되지 않는 문자 — {arg!r}\n"
                         f"  (packaging/targets.json 의 hooks.events.{event}[].args)"
@@ -255,6 +253,23 @@ def build_hooks(repo_root: Path, policy: dict, target: dict) -> dict | None:
             built.append(hook)
         events[event] = [{"hooks": built}]
     return {"hooks": events}
+
+
+def _quote_interpreter(value: object) -> str:
+    """The interpreter is one executable path, never a shell command or flags."""
+    if value == "":
+        return ""
+    if not isinstance(value, str) or not _HOOK_INTERPRETER_RE.fullmatch(value):
+        raise PolicyError(f"hooks.interpreter: 실행 파일 경로가 아니다 — {value!r}")
+    if value != value.strip() or value.startswith("-"):
+        raise PolicyError(f"hooks.interpreter: 잘못된 실행 파일 경로 — {value!r}")
+    return shlex.quote(value)
+
+
+def _quote_hook_path(relative: str) -> str:
+    """Expand only the plugin root; double-quote metacharacters in the literal tail."""
+    escaped = relative.translate(str.maketrans({char: "\\" + char for char in '\\$`"'}))
+    return '"${CLAUDE_PLUGIN_ROOT}/' + escaped + '"'
 
 
 def _context_limit(target_id: str, event: str, entry: dict) -> int | None:
@@ -308,6 +323,26 @@ def _resolve_in_repo(
     return real, None
 
 
+def _policy_path(root: Path, value: object, field: str) -> Path:
+    """Confine policy reads and writes with the same resolver and controlled errors."""
+    if not isinstance(value, str) or not value or "\0" in value:
+        raise PolicyError(f"{field}: 비어 있지 않은 경로 문자열이 필요하다")
+    try:
+        resolved, error = _resolve_in_repo(root, value)
+    except (OSError, RuntimeError) as err:
+        raise PolicyError(f"{field}: 경로를 해석하지 못했다 — {err}") from err
+    if resolved is None:
+        raise PolicyError(f"{field}: 경로 탈출 차단 — {error}")
+    return resolved
+
+
+def _source_path(root: Path, policy: dict, field: str) -> Path:
+    source = policy.get("source")
+    if not isinstance(source, dict):
+        raise PolicyError("source: 경로 설정 객체가 필요하다")
+    return _policy_path(root, source.get(field), f"source.{field}")
+
+
 class Artifact:
     """타겟 하나가 만드는 파일 하나(매니페스트 또는 마켓플레이스)와 그 계산된 내용.
 
@@ -330,7 +365,8 @@ class Artifact:
 def artifacts_for(
     repo_root: Path, policy: dict, ssot: dict, target: dict
 ) -> list[Artifact]:
-    present = _detect_components(repo_root, policy)
+    plugin_root = _source_path(repo_root, policy, "pluginRoot")
+    present = _detect_components(plugin_root, policy)
     out = [
         Artifact(
             target["id"],
@@ -343,14 +379,16 @@ def artifacts_for(
     # 훅 디렉토리가 없으면 스펙 자체를 계산하지 않는다 — 컴포넌트는 실측으로 판정하므로
     # (`_meta.detection`), 없는 컴포넌트의 스크립트 존재를 따지는 것은 의미가 없다.
     if "hooks" in present:
-        hooks = build_hooks(repo_root, policy, target)
+        hooks = build_hooks(plugin_root, target)
         if hooks is not None:
             out.append(
                 Artifact(
                     target["id"], "hooks", target["hooks"]["path"], hooks, repo_root
                 )
             )
-    mk = build_marketplace(ssot, target, policy["source"]["pluginRoot"])
+    mk = build_marketplace(
+        ssot, target, plugin_root.relative_to(repo_root.resolve()).as_posix()
+    )
     if mk is not None:
         out.append(
             Artifact(

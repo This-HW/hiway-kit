@@ -21,6 +21,8 @@ from pathlib import Path
 from typing import ClassVar
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import run as runner
@@ -1589,3 +1591,77 @@ class TestFailExcerpt:
         patterns = runner._secret_patterns()
         assert patterns, "훅에서 시크릿 패턴을 읽지 못했다"
         assert any("AKIA" in p for p, _ in patterns)
+
+
+@pytest.mark.parametrize("spec", [[], None, {"version": 1, "ops": None}])
+def test_validate_scenario_invalid_git_shape_returns_errors(tmp_path, spec):
+    sc_dir = tmp_path / "git-workflow" / "invalid-git-shape"
+    _write_scenario(sc_dir)
+    (sc_dir / "git.json").write_text(json.dumps(spec))
+    errors = runner.validate_scenario(sc_dir)
+    assert any("git.json" in error for error in errors)
+
+
+@pytest.mark.parametrize("expect", [[], None, {"assertions": None}])
+def test_validate_scenario_invalid_expect_shape_with_git(tmp_path, expect):
+    sc_dir = tmp_path / "git-workflow" / "invalid-expect-shape"
+    _write_scenario(sc_dir, {"version": 1, "ops": [{"op": "init"}]})
+    (sc_dir / "expect.json").write_text(json.dumps(expect))
+    errors = runner.validate_scenario(sc_dir)
+    assert any("expect.json" in error for error in errors)
+
+
+def test_validate_all_continues_after_invalid_scenario_shapes(tmp_path):
+    cases = [
+        ("a-invalid", []),
+        ("b-invalid", None),
+        ("d-invalid", {"version": 1, "ops": [{"op": []}]}),
+        ("e-invalid", {"version": 1, "ops": [{"op": {}}]}),
+    ]
+    for name, content in cases:
+        sc_dir = tmp_path / "git-workflow" / name
+        _write_scenario(sc_dir)
+        (sc_dir / "git.json").write_text(json.dumps(content))
+    _write_scenario(tmp_path / "git-workflow" / "c-valid")
+    errors = runner.validate_all(scenarios_root=tmp_path)
+    assert len(errors) == 4
+    assert any("a-invalid" in error for error in errors)
+    assert any("b-invalid" in error for error in errors)
+
+
+@pytest.mark.parametrize("value", [[], {}])
+def test_validate_all_collects_invalid_assertion_types(tmp_path, value):
+    for name in ("a-invalid-type", "b-invalid-type"):
+        sc_dir = tmp_path / "git-workflow" / name
+        _write_scenario(sc_dir)
+        (sc_dir / "expect.json").write_text(
+            json.dumps({"assertions": [{"type": value}]})
+        )
+    _write_scenario(tmp_path / "git-workflow" / "c-valid")
+    errors = runner.validate_all(scenarios_root=tmp_path)
+    assert len(errors) == 2
+    assert all("알 수 없는 type" in error for error in errors)
+
+
+@pytest.mark.parametrize("invocation", ["scenario", "judge"])
+def test_eval_prompts_do_not_inherit_launcher_stdin(tmp_path, monkeypatch, invocation):
+    calls = []
+
+    def isolated_run(cmd, **kwargs):
+        assert kwargs.get("stdin") == subprocess.DEVNULL
+        assert "-p" in cmd
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "SCORE: 8", "")
+
+    monkeypatch.setattr(runner.subprocess, "run", isolated_run)
+    if invocation == "judge":
+        result = runner.run_judge("output to grade", {"rubric": "review output"}, 5)
+        assert result["score"] == 8
+        assert "output to grade" in calls[0][calls[0].index("-p") + 1]
+    else:
+        sc = _scenario(
+            tmp_path, {"assertions": [{"type": "output_regex", "pattern": "SCORE"}]}
+        )
+        assert runner.run_scenario(_agent(tmp_path), sc, 5)["status"] == "pass"
+        assert sc.task in calls[0]
+    assert len(calls) == 1

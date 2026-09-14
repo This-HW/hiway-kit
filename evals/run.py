@@ -396,7 +396,7 @@ def validate_expect_schema(expect: dict, prefix: str) -> list[str]:
             errors.append(f"{prefix}: assertions[{i}]에 'type' 없음")
             continue
         t = a["type"]
-        if t not in KNOWN_ASSERTION_TYPES:
+        if not isinstance(t, str) or t not in KNOWN_ASSERTION_TYPES:
             errors.append(f"{prefix}: assertions[{i}] 알 수 없는 type '{t}'")
             continue
         for req_field in KNOWN_ASSERTION_TYPES[t]:
@@ -450,7 +450,7 @@ def validate_git_spec(spec: dict, prefix: str) -> list[str]:
             errors.append(f"{prefix}: git.json ops[{i}]에 'op' 없음")
             continue
         op = op_entry["op"]
-        if op not in ALLOWED_GIT_OPS:
+        if not isinstance(op, str) or op not in ALLOWED_GIT_OPS:
             errors.append(
                 f"{prefix}: git.json ops[{i}] 알 수 없는 op '{op}' (화이트리스트 밖 — "
                 f"허용: {sorted(ALLOWED_GIT_OPS)})"
@@ -657,6 +657,32 @@ def _is_dangerous(
     return False
 
 
+def _validate_git_expect_overlap(
+    git_spec: dict, expect: dict, prefix: str
+) -> list[str]:
+    errors: list[str] = []
+    # file_unchanged는 실행 후 파일을 **원본 fixture**와 바이트 비교한다.
+    # 그런데 git.json의 write는 실체화 단계에서 같은 파일을 덮어쓰므로,
+    # 둘이 겹치면 에이전트가 아무것도 하지 않아도 영구 fail이고 실패
+    # 메시지는 "변조됨 (게이밍 의심)"이라 원인을 정반대로 오도한다
+    # (W-023 리뷰 W-5). 조합 자체를 스키마 오류로 막는다.
+    written = {
+        str(op.get("path"))
+        for op in git_spec.get("ops", [])
+        if isinstance(op, dict) and op.get("op") == "write"
+    }
+    for assertion in expect["assertions"]:
+        if assertion["type"] != "file_unchanged":
+            continue
+        file = str(assertion["file"])
+        if file in written:
+            errors.append(
+                f"{prefix}: file_unchanged '{file}' 가 git.json write 대상과 "
+                f"겹침 — 실체화가 원본을 덮어써 영구 fail이 된다"
+            )
+    return errors
+
+
 def validate_scenario(sc_dir: Path, agents_root: Path = AGENTS_ROOT) -> list[str]:
     errors: list[str] = []
     agent_name = sc_dir.parent.name
@@ -706,7 +732,8 @@ def validate_scenario(sc_dir: Path, agents_root: Path = AGENTS_ROOT) -> list[str
         errors.append(f"{prefix}: expect.json 파싱 실패 ({e})")
         return errors
 
-    errors += validate_expect_schema(expect, prefix)
+    expect_errors = validate_expect_schema(expect, prefix)
+    errors += expect_errors
 
     git_spec_path = sc_dir / "git.json"
     if git_spec_path.is_file():
@@ -715,25 +742,10 @@ def validate_scenario(sc_dir: Path, agents_root: Path = AGENTS_ROOT) -> list[str
         except json.JSONDecodeError as e:
             errors.append(f"{prefix}: git.json 파싱 실패 ({e})")
         else:
-            errors += validate_git_spec(git_spec, prefix)
-            # file_unchanged는 실행 후 파일을 **원본 fixture**와 바이트 비교한다.
-            # 그런데 git.json의 write는 실체화 단계에서 같은 파일을 덮어쓰므로,
-            # 둘이 겹치면 에이전트가 아무것도 하지 않아도 영구 fail이고 실패
-            # 메시지는 "변조됨 (게이밍 의심)"이라 원인을 정반대로 오도한다
-            # (W-023 리뷰 W-5). 조합 자체를 스키마 오류로 막는다.
-            written = {
-                str(op.get("path"))
-                for op in git_spec.get("ops", [])
-                if isinstance(op, dict) and op.get("op") == "write"
-            }
-            for a in expect.get("assertions", []):
-                if isinstance(a, dict) and a.get("type") == "file_unchanged":
-                    f = str(a.get("file"))
-                    if f in written:
-                        errors.append(
-                            f"{prefix}: file_unchanged '{f}' 가 git.json write 대상과 "
-                            f"겹침 — 실체화가 원본을 덮어써 영구 fail이 된다"
-                        )
+            git_errors = validate_git_spec(git_spec, prefix)
+            errors += git_errors
+            if not git_errors and not expect_errors:
+                errors += _validate_git_expect_overlap(git_spec, expect, prefix)
 
     if not list(agents_root.rglob(f"{agent_name}.md")):
         errors.append(
@@ -1147,6 +1159,7 @@ def run_judge(stdout: str, judge_cfg: dict, timeout: int) -> dict:
     try:
         r = subprocess.run(
             HARNESS.judge_cmd(prompt),
+            stdin=subprocess.DEVNULL,  # Prompt is in argv; inherited pipes are not input.
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -1185,7 +1198,9 @@ FAIL_EXCERPT_CHARS = 3000
 # 발췌를 인쇄하기 전에 가리는 시크릿 형식. 목록을 여기 복사하지 않고 훅에서 읽는다
 # (SSOT — 복사하면 한쪽만 갱신되어 갈린다). 못 읽으면 발췌를 아예 내지 않는다:
 # 걸러낼 수 없는 것을 인쇄하는 것보다 진단 정보를 잃는 편이 낫다(fail-closed).
-_SECRET_PATTERNS_SOURCE = REPO_ROOT / "plugins" / "common" / "hooks" / "protect-sensitive.py"
+_SECRET_PATTERNS_SOURCE = (
+    REPO_ROOT / "plugins" / "common" / "hooks" / "protect-sensitive.py"
+)
 
 
 def _secret_patterns() -> list[tuple[str, str]] | None:
@@ -1268,7 +1283,7 @@ def _fail_excerpt(stdout: str, checks: list[dict]) -> str | None:
         if found is not None:
             half = FAIL_EXCERPT_CHARS // 2
             i = found.start()
-            return _mask_secrets(haystack[max(0, i - half): i + half], patterns)
+            return _mask_secrets(haystack[max(0, i - half) : i + half], patterns)
     return _mask_secrets(haystack[:FAIL_EXCERPT_CHARS], patterns)
 
 
@@ -1359,6 +1374,7 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
             r = subprocess.run(
                 cmd,
                 cwd=str(work_dir),
+                stdin=subprocess.DEVNULL,  # Keep launcher stdin out of the task prompt.
                 capture_output=True,
                 text=True,
                 timeout=timeout,

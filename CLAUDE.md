@@ -286,6 +286,10 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   the test files this session edited (never the full suite — that's CI/`/test`'s
   job); on failure emits native `{"decision":"block","reason":...}` so Claude
   continues and auto-fixes. Timeouts are non-blocking (`CLAUDE_STOP_TEST_TIMEOUT`)
+- Stop state reuses `$TMPDIR/claude-{uid}` only when it is an owned, non-symlink
+  directory with mode `0700`. Unsafe or unavailable stable state uses a private
+  temporary directory for that process; it never trusts counters from the shared
+  temporary root. This fallback loses cross-process marker/retry reuse.
 - `utils.py` — shared utilities
 
 ### git 훅은 배포되지만 자동으로 켜지지 않는다
@@ -477,3 +481,5 @@ PRs welcome. Checklist:
       (the manifest has **no** agent/skill registry — both are auto-discovered from their
       directories; the only thing a new component must touch there is the version)
 - [ ] CI passes (JSON valid, frontmatter complete, no forbidden fields, pytest green, no secrets)
+
+@docs/conventions/coordination.md

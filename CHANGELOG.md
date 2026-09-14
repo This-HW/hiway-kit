@@ -41,6 +41,25 @@ run 2 가 2배인 이유는 모른다 `[원인 미상]`. 성공 봉투에는 `er
 `conversation_id · duration_seconds · num_turns · response · status · usage`) — 판정은
 `status` 로 한다.
 
+## [3.34.2] - 2026-09-13
+
+### Fixed
+
+- Agent description budget accounting includes folded/literal YAML block bodies and chomping styles; unsupported descriptions fail visibly instead of disappearing from the measurement.
+- Packaging confines input manifests, plugin roots and component discovery as well as output paths. Generated hook commands quote script names literally and validate interpreter paths.
+- Eval validation reports malformed git/expect shapes and continues checking other scenarios instead of crashing during cross-field checks.
+- Stop-validator rejects preexisting state symlinks, foreign ownership and permissive modes. Unsafe stable state falls back to a private temporary directory, never the shared temporary root; cross-process retry/marker reuse is unavailable in that fallback.
+- Regression tests cover the reproduced failures, valid paths and commands, and malformed input diagnostics.
+- Eval scenario and judge subprocesses ignore inherited standard input so launch scripts cannot contaminate argv prompts.
+- Release CI uses an explicit fixture branch and includes each script's directory in the Python 3.9 smoke-test import path, removing dependence on local Git and Python configuration.
+
+### Coordination documentation (unreleased candidate)
+
+- Separate worker artifact return from integration authority; verify artifact preservation and resource disposition before closing delegated work.
+- Preserve external orchestration, native subagent, large parallel and single-session routes; document harness-specific capabilities without fixing personal model choices.
+- Share this repository's collaboration choice across AGENTS, GEMINI and CLAUDE entrypoints; consumers keep their own transport choice. No automatic cleanup or global settings change.
+- Regenerated rules block sha256: `e524e279742963e295847bc757b0990808a8b2f6022564110eb2d514efd3d873`.
+
 ## [3.34.1] — 2026-09-11
 
 ### Fixed — Codex 가 훅 주입을 **가운데에서** 잘라 규범이 사라지고 있었다
