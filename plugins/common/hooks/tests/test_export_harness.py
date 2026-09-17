@@ -30,7 +30,7 @@ def _fake_plugin_root(tmp_path: Path, rules: dict, *, complete: bool = True) -> 
     (root / "rules").mkdir(parents=True)
     (root / "rules" / "VERSION").write_text("9.9.9\n", encoding="utf-8")
     # D-45 이후 분류는 규범 frontmatter 에 있다. 픽스처도 그렇게 만든다.
-    _PORT = ["definition-of-done", "planning-protocol", "planning-check",
+    _PORT = ["definition-of-done", "planning-protocol",
              "code-quality", "ssot", "loop-engineering", "feedback-loop"]
     _NOT = ["agent-system", "agent-delegation-chain", "parallel-worktree",
             "mcp-usage", "task-resume"]

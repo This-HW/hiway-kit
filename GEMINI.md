@@ -3,7 +3,7 @@
 > 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:e524e279742963e295847bc757b0990808a8b2f6022564110eb2d514efd3d873 -->
+<!-- kit:begin rules-v1.4.0 sha256:0ac92eb755e3d0e08a8ee1bb55ff17109708d2c43f13a9ff1dbf94c79ac758f6 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -35,7 +35,6 @@ brainstorming  →  plan-task  →  auto-dev
 | `rules/feedback-loop` | 저장은 파일, 읽기는 CLI — 훅이 없는 하네스도 직접 조회하면 성립한다 |
 | `rules/loop-engineering` | 호스트 무관 |
 | `rules/parallel-worktree` | 호스트 무관 |
-| `rules/planning-check` | 호스트 무관 |
 | `rules/planning-protocol` | 호스트 무관 |
 | `rules/ssot` | 호스트 무관 |
 
@@ -270,31 +269,6 @@ portable: true
 
 ---
 
-<!-- source: rules/planning-check.md (원문 그대로) -->
----
-tier: core
-portable: true
----
-
-### Planning Check Rules
-
-NEVER implement based on assumption. ALWAYS stop and verify specs first — 요구사항
-불명확, 엣지 케이스(빈 값·오류·권한 없음), 다중 해석 가능한 표현, 비즈니스 로직
-(할인·권한·상태 전이)은 반드시 기획서/명세 기반으로 확인한다.
-
-#### 확인 절차
-
-불확실성 감지 즉시 멈춤 → 프로젝트의 기획 문서를 찾는다(레포 내 `docs/` 및 프로젝트가
-제공하는 지식 소스 — **특정 도구의 설치를 가정하지 않는다**) → 정보 부재 시 사용자에게
-상황·불명확한 점·옵션 A/B 를 제시하고 답을 받는다(호스트가 제공하는 수단으로) →
-결정과 근거를 코드 주석에 기록.
-
-체크리스트 — 구현 전: 요구사항 문서·상태 정의(성공/실패/로딩/빈 값)·엣지 케이스 명시.
-구현 중: NEVER guess/deviate from spec/add unspecified features. 구현 후: 결과가
-기획과 전 케이스 일치.
-
----
-
 <!-- source: rules/planning-protocol.md (원문 그대로) -->
 ---
 tier: core
@@ -304,25 +278,41 @@ portable: true
 ### Planning Protocol Rules
 
 NEVER implement based on assumption. ALWAYS verify against specs or ask the user.
-NEVER hedge ("~할 것 같다", "아마", "보통은"); say "기획에 따르면"/"확인 결과" instead.
+NEVER hedge; 추측 어휘 대신 "기획에 따르면"/"확인 결과".
 
-#### 모호함 등급 (P0~P3)
+#### 모호함 등급 (P0~P3) — 이 규범이 소유한다
 
 **P0** 데이터 무결성·보안·금융·핵심 비즈니스 → 즉시 중단+질문 / **P1** UX 분기·비즈니스
 디테일 → 기본값 적용 후 확인 / **P2** UI 디테일·엣지케이스 → TODO 기록 / **P3** 기술
-선택(라이브러리·패턴) → 자율 판단.
+선택 → 자율 판단. **"불확실하니 일단 멈춤"도 "사소하니 일단 진행"도 등급 판정을 건너뛴
+것이다** — 먼저 등급을 매긴다.
+
+#### 모호함은 찾는다
+
+물을 자리: **상태 전이가 갈라지는 지점 · 두 규칙이 동시 적용되는 지점 · 부등호의 등호
+포함 여부 · 실패 후 롤백 범위** · 빈 값/오류/권한 없음. **구현 결과를 바꾸는 것만 묻는다**
+— 답을 받아도 코드가 같으면 묻지 않는다. 절차는 `skills/plan-task/references/elicitation.md`.
+
+#### 값에는 출처를
+
+기획 산출물의 모든 값은 `[confirmed]` · `[researched: 출처, n=표본]` · `[unresolved]` 중
+하나다. **추측으로 채우지 않는다.** 상충은 고르지 말고 상충 사실을 기록해 설정값으로 위임한다.
 
 #### Dev ↔ Planning
 
-구현 중 기획 모호함 발견 시 분류하고 Planning으로 돌아간다: `P0_AMBIGUITY`(사용자에게
-선택지를 제시하고 답을 받는다 — 호스트가 제공하는 수단으로, 맥락/질문/옵션 명시) ·
-`MISSING_SPEC`(명세를 여정/규칙에 추가) · `INFEASIBLE`(대안 검토 후 보고).
+구현 중 모호함 발견 시 분류해 Planning으로 돌아간다: `P0_AMBIGUITY`(맥락/질문/옵션 제시 후
+답을 받는다 — 호스트 수단으로) · `MISSING_SPEC`(명세에 추가) · `INFEASIBLE`(대안 검토 후
+보고). 명세는 레포 `docs/`와 프로젝트의 지식 소스에서 찾는다 — **특정 도구의 설치를
+가정하지 않는다.** 결정과 근거를 기록한다.
 
 #### 작업 규모 → Planning 완료 조건
 
-**Small**(1개 모듈·1-3파일) 요구사항만 / **Medium**(2-3개 모듈·4-10파일) +사용자 여정·
-상태 전이·에러 전략 / **Large**(4개+ 모듈·10파일+) +비즈니스 규칙·관계·예외 처리.
-공통: P0 모호함 = 0, 영향 범위·리스크 분석 완료해야 Dev로 넘긴다.
+**Small**(1모듈·1-3파일) 요구사항만 / **Medium**(2-3모듈·4-10파일) +여정·상태 전이·에러
+전략 / **Large**(4모듈+·10파일+) +비즈니스 규칙·관계·예외. 공통: P0 모호함 = 0, 영향·리스크
+분석 완료, **완료 조건이 실행 가능한 명령**이어야 Dev로 넘긴다 — "잘 동작함"은 조건이 아니다.
+
+**전** 요구사항·상태 정의(성공/실패/로딩/빈 값)·엣지 케이스가 적혀 있다 · **중** 명세 이탈과
+**명세에 없는 기능 추가** 금지 · **후** 전 케이스가 기획과 일치하는지 확인.
 
 ---
 

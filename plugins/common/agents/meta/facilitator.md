@@ -192,7 +192,7 @@ def select_perspectives(doc):
 **Level 3 (각 관점 독립)**:
 
 - 각 에이전트가 필요 시 독립적으로 읽음
-- 예: security-scan → ssot.md, plan-implementation → planning-check.md
+- 예: security-scan → ssot.md, plan-implementation → planning-protocol.md
 
 **전달 방식**:
 

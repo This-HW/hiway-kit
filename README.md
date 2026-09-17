@@ -103,7 +103,7 @@ differs by platform capability, verified against the real CLIs (not assumed):
 | Component | Codex | Antigravity |
 | --- | --- | --- |
 | Skills (21) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
-| Rules (15) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
+| Rules (14) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
 | Agents (32) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`backend`/`dev`/`meta`/`planning`); it miscounts the 4 category folders as agent entries and finds none of the real 32. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
 | Hooks | ⚠ shipped (`session-start`, `auto-format`) but **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is deliberately **not** shipped: hooks fired but the command still ran, so the block does not hold | ❌ not shipped this batch — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
@@ -506,7 +506,7 @@ clarify-requirements → analyze-domain → design-user-journey → define-busin
 
 ```
 plugins/
-└── common/      — Core agents (32) + skills (21) + rules (15) + hooks
+└── common/      — Core agents (32) + skills (21) + rules (14) + hooks
 ```
 
 The plugin contains:

@@ -37,7 +37,7 @@ git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 
 ```
 plugins/
-└── common/      — Core agents (32) + skills (21) + rules (15) + hooks
+└── common/      — Core agents (32) + skills (21) + rules (14) + hooks
 ```
 
 `plugins/common/` contains:

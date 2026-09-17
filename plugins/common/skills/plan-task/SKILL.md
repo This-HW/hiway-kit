@@ -115,7 +115,11 @@ Work ID 확보 완료 후에만 Step 1로 진행.
 
 ## Step 2: T1 실행 — 요구사항 명확화
 
-`clarify-requirements` 에이전트에 위임하거나 직접 진행:
+`clarify-requirements` 에이전트에 위임하거나 직접 진행.
+
+> **절차 SSOT: `references/elicitation.md`** — 규모가 Medium 이상이면 **읽고 시작한다.**
+> 등급 체계만으로는 *"딱히 모호한 게 없었다"* 로 끝나고, 못 찾은 모호함은 사라지지 않고
+> 구현 중 추측으로 메워진다.
 
 1. **규모 판단** (planning-protocol.md 기준):
    - Small: 1개 모듈, 1-3파일, ~10h
@@ -123,23 +127,39 @@ Work ID 확보 완료 후에만 Step 1로 진행.
    - Large: 4개+ 모듈, 10파일+, 50h+
    - 판단 후 Work frontmatter `size` 업데이트
 
-2. **P0 모호함 해결**: P0 발견 시 즉시 중단 → 사용자에게 질문
+2. **자격 인벤토리** (Large 필수 · Medium 권장 — `elicitation.md` §0):
+   확보된 권한을 세고 그 경계를 **이번 범위선**으로 삼는다. 미확보 항목은 기다리지 말고
+   mock/adapter 로 처리한다. 이 인벤토리가 그대로 **위임 브리프의 금지사항**이 된다.
+
+3. **모호함 탐색** — 감지되기를 기다리지 않고 네 자리를 훑는다 (`elicitation.md` §2):
+   상태 전이가 갈라지는 지점 · 두 규칙이 동시 적용되는 지점 · 부등호의 등호 포함 여부 ·
+   실패 후 롤백 범위. **하나도 안 나왔다면 훑지 않은 것이다** — 어디를 봤는지 기록한다.
+
+   **구현 결과를 바꾸는 것만 묻는다.** 조사로 채울 수 있는 값은 묻지 말고
+   `[researched: 출처, n]` 으로 채운 뒤 검토만 요청한다. 한 번에 5개 이하로 묶는다.
+
+4. **P0 모호함 해결**: P0 발견 시 즉시 중단 → 사용자에게 질문.
+   P1~P3 는 등급대로 처리하고 멈추지 않는다.
 
    ```
    맥락: [상황]   질문: [구체적 질문]
    옵션: 1. [A]   2. [B]
    ```
 
-3. **요구사항 정리**: 핵심 요구사항, 영향 범위, 리스크
+5. **요구사항 정리**: 핵심 요구사항, 영향 범위, 리스크.
+   **모든 값에 출처 태그**(`[confirmed]` / `[researched: 출처, n]` / `[unresolved]`)를
+   붙인다. 상충은 고르지 말고 상충 사실을 기록해 설정값으로 위임한다.
+   정책값(임계값·상한·기간·비율)은 산문에서 빼내 한 곳에 모은다 — **산문에 숫자가 남아
+   있으면 미완성**이다.
 
-4. **완료 후 의무 업데이트**:
+6. **완료 후 의무 업데이트**:
    - `planning-results.md` → `## 요구사항 명확화` 섹션에 결과 기록
    - `decisions.md` → P0 결정 사항 DEC-XXX로 추가
    - `progress.md` Task Map: T-1 행 상태 ✅로 수정
    - `progress.md` Task 업데이트 로그에 완료 시각 기록
    - Work frontmatter `updated_at` 갱신
 
-5. `TaskUpdate(T1, status="completed")` 마킹
+7. `TaskUpdate(T1, status="completed")` 마킹
 
 ---
 
@@ -153,13 +173,25 @@ Work ID 확보 완료 후에만 Step 1로 진행.
    - Large+: 비즈니스 로직 정의 포함
 3. 구현 순서, 의존성, 예상 범위 명시
 
-4. **완료 후 의무 업데이트**:
+4. **완료 조건을 실행 가능한 명령으로 쓴다** [건너뛰기 금지] (`references/elicitation.md` §5):
+   각 단계의 완료 조건은 **종료코드로 판정되는 명령**이어야 한다.
+
+   ```
+   ✗ 로그인이 정상 동작한다
+   ✓ pytest tests/test_auth.py -q     (exit 0)
+   ```
+
+   판정이 stdout 에 있는 검증(조회 성공만으로 exit 0 이 되는 명령)은 게이트가 아니다.
+   비결정적 산출물이 섞이면 조건을 둘로 나눈다 — 결정적 부분만 통과/실패로, 나머지는
+   고정 평가셋과 임계값으로. **금지 행위 위반은 임계값이 아니라 0이다.**
+
+5. **완료 후 의무 업데이트**:
    - `planning-results.md` → `## 구현 계획` 섹션에 결과 기록
    - `progress.md` Task Map: T-2 행 상태 ✅로 수정
    - `progress.md` Task 업데이트 로그에 완료 시각 기록
    - Work frontmatter `phases_completed: [planning]`, `updated_at` 갱신
 
-5. `TaskUpdate(T2, status="completed")` 마킹
+6. `TaskUpdate(T2, status="completed")` 마킹
 
 ---
 
@@ -198,4 +230,5 @@ Planning이 완료되었습니다. 바로 개발을 시작하겠습니다.
 | 문서              | 경로                                              |
 | ----------------- | ------------------------------------------------- |
 | Work 시스템 상세  | `plugins/common/skills/plan-task/references/work-system.md` |
+| 요구사항 정련 절차 | `plugins/common/skills/plan-task/references/elicitation.md` |
 | Planning 프로토콜 | `plugins/common/rules/planning-protocol.md`       |

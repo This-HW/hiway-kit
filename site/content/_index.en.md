@@ -1,6 +1,6 @@
 ---
 title: "hiway-kit"
-description: "A universal Claude Code toolkit — 32 specialized agents, 21 skills, and 15 governance rules for building a multi-agent development pipeline."
+description: "A universal Claude Code toolkit — 32 specialized agents, 21 skills, and 14 governance rules for building a multi-agent development pipeline."
 keywords: ["claude code plugin", "multi-agent development system", "agent harness engineering", "AI coding agent evals", "claude code skills"]
 ---
 
@@ -15,7 +15,7 @@ state**.
 
 - **32** specialized agents (planning, implementation, review, refactoring)
 - **21** skills (`/plan-task`, `/auto-dev`, `/review`, `/debug`, `/test`, and more)
-- **15** governance rules (worktree isolation, delegation chains, definition of done)
+- **14** governance rules (worktree isolation, delegation chains, definition of done)
 - **220+** unit tests
 - **11** agent behavior eval scenarios (deterministic-first scoring)
 - **8+** machine gates (`verify-done.sh`)
