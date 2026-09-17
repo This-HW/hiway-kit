@@ -121,11 +121,9 @@ Work ID 확보 완료 후에만 Step 1로 진행.
 > 등급 체계만으로는 *"딱히 모호한 게 없었다"* 로 끝나고, 못 찾은 모호함은 사라지지 않고
 > 구현 중 추측으로 메워진다.
 
-1. **규모 판단** (planning-protocol.md 기준):
-   - Small: 1개 모듈, 1-3파일, ~10h
-   - Medium: 2-3개 모듈, 4-10파일, 20-50h
-   - Large: 4개+ 모듈, 10파일+, 50h+
-   - 판단 후 Work frontmatter `size` 업데이트
+1. **규모 판단** (`references/elicitation.md` §6 이 기준을 소유한다):
+   Small 1모듈·1-3파일 / Medium 2-3모듈·4-10파일 / Large 4모듈+·10파일+.
+   판단 후 Work frontmatter `size` 업데이트.
 
 2. **자격 인벤토리** (Large 필수 · Medium 권장 — `elicitation.md` §0):
    확보된 권한을 세고 그 경계를 **이번 범위선**으로 삼는다. 미확보 항목은 기다리지 말고
@@ -168,7 +166,7 @@ Work ID 확보 완료 후에만 Step 1로 진행.
 `plan-implementation` 에이전트에 위임하거나 직접 진행:
 
 1. T1 결과(`planning-results.md`) 기반으로 구현 계획 작성
-2. 규모별 추가 단계 (planning-protocol.md 참고):
+2. 규모별 추가 단계 (`references/elicitation.md` §6):
    - Medium+: 사용자 여정 설계 포함
    - Large+: 비즈니스 로직 정의 포함
 3. 구현 순서, 의존성, 예상 범위 명시

@@ -39,14 +39,14 @@
 **최악만 재면** 평범한 세션에 대해 과대보고해서 경고가 죽는다 — 상시 참인 경고는
 정보가 아니라 소음이고, 소음은 옆의 진짜 경고까지 죽인다(`warning-signal.md`).
 
-최악 상한 22 KiB 는 판정 시점 실측 20,675B 위 약 1.8 KiB 다. 넉넉하지 않은 것이
+최악 상한 20 KiB 는 v3.36.0 실측 19,297B 위 약 1.2 KiB 다(그 전에는 22 KiB / 실측 20,675B). 넉넉하지 않은 것이
 의도다 — 이 레포의 상한은 미학이 아니라 **조용한 증가를 막는 래칫**이다.
 
 ## 왜 넷째 축인가 — 호스트 전달 한도 (2026-09-11, W13)
 
 셋 다 *"우리가 얼마를 내보내는가"* 만 물었다. **"그것이 모델에 닿는가"** 는 아무도 묻지
 않았다. Codex 는 SessionStart 훅 출력이 **2,500 토큰**(`ceil(bytes / 4)`)을 넘으면 머리·
-꼬리만 모델에 주고 가운데를 버린다. 우리 규범 최악 상한 22 KiB 는 그 자체로 5,632 토큰 —
+꼬리만 모델에 주고 가운데를 버린다. 우리 규범 최악 상한 20 KiB 는 그 자체로 5,120 토큰 —
 **기본 한도의 2.25배**다. 예산 게이트는 green 이었는데 실제 세션에서는:
 
 | 세션 | 훅 출력 | 모델에 도착 | 사라진 규범 |
@@ -89,7 +89,13 @@ Claude Code 는 SessionStart 주입을 자르지 않으므로(2.1.268 실측) �
 에이전트 축은 죽은 `facilitator-teams`(제거된 Agent Teams 모드의 Lead, 470B)를 걷어낸
 **뒤** 7,837B 에서 8,192B(8 KiB)로 잡았다. 여유 355B 는 **평균 에이전트 1개분**이라,
 에이전트를 하나 더할 때마다 "매 세션 이 비용을 낼 값어치가 있는가"를 묻게 된다.
-규범 축의 여유율(4.0%)과 같은 압력이다.
+
+규범 축도 같은 절차를 두 번째로 밟았다(v3.36.0). `planning-protocol` 에서 **기획을
+수행할 때만** 필요한 절차(탐색 자리·출처 표기·규모별 조건)를 `plan-task` 의 reference 로
+내리고, WORKFLOW 블록에서 **같은 페이로드 안에 본문이 이미 들어있는 규범**(untrusted-text)
+을 가리키던 중복 포인터를 걷어냈다. 10,206B → 8,917B. **먼저 깎은 뒤** 상한을 10 KiB 에서
+9 KiB 로 내렸다 — 여유 299B 는 짧은 규범 1개분이라, 규범을 더할 때 같은 질문을 하게 된다.
+상한을 그대로 두면 회수한 1.3 KiB 가 조용히 다시 채워진다(래칫이 없는 개선은 되돌아간다).
 """
 
 from __future__ import annotations
@@ -131,8 +137,8 @@ UTF8_MAX_BYTES_PER_CHAR = 4
 DIGEST_TRUNCATION_SUFFIX_BYTES = 4
 SESSION_START_SCRIPT = "hooks/session-start.py"
 
-RULES_CORE_CAP = 10240  # 10 KiB — **항상** 내는 비용 (core 규범 + WORKFLOW)
-RULES_PEAK_CAP = 22528  # 22 KiB — conditional 이 전부 겹칠 때의 **최대** 비용
+RULES_CORE_CAP = 9216  # 9 KiB — **항상** 내는 비용 (core 규범 + WORKFLOW)
+RULES_PEAK_CAP = 20480  # 20 KiB — conditional 이 전부 겹칠 때의 **최대** 비용
 AGENTS_CAP = 8192  # 8 KiB — 에이전트 name + description
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
