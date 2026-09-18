@@ -367,3 +367,50 @@ def test_leading_block_blank_lines_exceed_budget(tmp_path, style):
     entries, skipped = mod.agent_entries()
     assert not len(skipped)
     assert entries[0][0] > mod.AGENTS_CAP
+
+
+# ── 프로젝트 지침 축 (CLAUDE.md + @import) ──────────────────────────────
+#
+# 이 축이 있는 이유: `@docs/x.md` 는 **링크가 아니라 본문 인라인**이다. 한 줄이
+# 그 파일 전체만큼 비싸서 눈으로는 비용이 보이지 않는다 — v3.37.0 이전에
+# CLAUDE.md + import 6종이 62 KiB(≈15.5k 토큰)였고 아무 게이트도 그것을 보지
+# 않았다. 훅 주입(8.9 KiB)을 두 릴리스에 걸쳐 깎는 동안 그 7배가 무측정으로
+# 있었다는 것이 이 축의 존재 근거다.
+
+
+def _fake_project(root: Path, body: str, imports: dict[str, str]) -> None:
+    lines = [body]
+    for rel in imports:
+        lines.append(f"@{rel}")
+    (root / "CLAUDE.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    for rel, content in imports.items():
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+
+
+def test_project_doc_counts_imported_bodies_not_the_line(tmp_path):
+    """@import 는 한 줄이지만 비용은 파일 전체다 — 그 둘을 혼동하면 측정이 무의미하다."""
+    mod = _load(_fake_plugin_root(tmp_path, conditional_names=()))
+    mod.REPO_ROOT = tmp_path
+    _fake_project(tmp_path, "# Kit", {"docs/a.md": "x" * 5000})
+    total, parts = mod.project_doc_bytes()
+    assert total > 5000  # 인라인된 본문이 합산됐다
+    assert any("a.md 5000B" in p for p in parts)  # 어느 파일이 비싼지 보고한다
+
+
+def test_project_doc_missing_import_is_red_not_silent(tmp_path):
+    """깨진 @import 를 0B 로 세면 **줄어든 것처럼 보인다** — 조용히 넘기지 않는다."""
+    mod = _load(_fake_plugin_root(tmp_path, conditional_names=()))
+    mod.REPO_ROOT = tmp_path
+    (tmp_path / "CLAUDE.md").write_text("# Kit\n@docs/missing.md\n", encoding="utf-8")
+    with pytest.raises(OSError):
+        mod.project_doc_bytes()
+
+
+def test_project_doc_over_cap_reports_fail(tmp_path):
+    mod = _load(_fake_plugin_root(tmp_path, conditional_names=()))
+    mod.REPO_ROOT = tmp_path
+    _fake_project(tmp_path, "# Kit", {"docs/a.md": "x" * (mod.PROJECT_DOC_CAP + 1)})
+    total, _ = mod.project_doc_bytes()
+    assert mod._report("proj", total, mod.PROJECT_DOC_CAP, "move evidence out") == 1

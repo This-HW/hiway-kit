@@ -140,6 +140,10 @@ SESSION_START_SCRIPT = "hooks/session-start.py"
 RULES_CORE_CAP = 9216  # 9 KiB — **항상** 내는 비용 (core 규범 + WORKFLOW)
 RULES_PEAK_CAP = 20480  # 20 KiB — conditional 이 전부 겹칠 때의 **최대** 비용
 AGENTS_CAP = 8192  # 8 KiB — 에이전트 name + description
+#: CLAUDE.md 본문 + `@docs/...` 로 인라인되는 문서 전량. 훅이 아니라 **호스트**가 싣지만
+#: 세션마다 무조건 들어간다는 성질은 같다 — 그래서 같은 게이트가 소유한다.
+#: v3.37.0 실측 41,007B 위 약 2 KiB(4.9%). 규범 축과 같은 압력이다.
+PROJECT_DOC_CAP = 43008  # 42 KiB
 
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 NAME_RE = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
@@ -454,6 +458,27 @@ def _report(label: str, used: int, cap: int, hint: str) -> int:
     return 1
 
 
+def project_doc_bytes() -> tuple[int, list[str]]:
+    """CLAUDE.md + 그것이 `@경로` 로 인라인하는 문서의 총 바이트.
+
+    호스트가 `@docs/x.md` 를 **본문에 펼쳐** 싣는다. 그래서 import 한 줄이
+    그 파일 전체만큼 비싸다 — 링크로 착각하기 쉬운 자리라 여기서 실측한다.
+    중첩 import 는 따라가지 않는다(현재 0건이고, 생기면 아래 목록에 안 잡혀
+    **과소측정**이 되므로 그때 이 함수를 확장한다).
+    """
+    doc = REPO_ROOT / "CLAUDE.md"
+    total = len(doc.read_bytes())
+    parts = [f"CLAUDE.md {total}B"]
+    for line in doc.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("@"):
+            continue
+        target = REPO_ROOT / line[1:].strip()
+        size = len(target.read_bytes())  # 없으면 예외 — 깨진 import 를 green 으로 넘기지 않는다
+        total += size
+        parts.append(f"{target.name} {size}B")
+    return total, parts
+
+
 def main() -> int:
     try:
         always, peak, signals = rules_bytes()
@@ -485,6 +510,19 @@ def main() -> int:
         print(f"[injection-budget] ✗ LESSONS 최악 측정 실패: {err}")
         return 1
     rc |= check_host_delivery(TARGETS_POLICY, RULES_PEAK_CAP, lessons_worst)
+
+    try:
+        proj, proj_parts = project_doc_bytes()
+    except OSError as err:  # 깨진 @import 를 green 으로 위장하지 않는다
+        print(f"[injection-budget] ✗ 프로젝트 지침 축 측정 실패: {err}")
+        return 1
+    rc |= _report(
+        "프로젝트 지침(CLAUDE.md + @import)",
+        proj,
+        PROJECT_DOC_CAP,
+        "역사·사례·증거는 `docs/` 로 내리고 한 줄 포인터만 남겨라 — @import 는 링크가"
+        " 아니라 **본문 인라인**이다 (" + " · ".join(proj_parts) + ")",
+    )
 
     entries, skipped = agent_entries()
     # 건너뛴 것이 1건이라도 있으면 red — 그만큼 예산에서 빠져 **더 쉽게 통과**한다.

@@ -127,66 +127,15 @@ governed by `plugins/common/rules/parallel-worktree.md`.
 
 ### Delegation Signal — 폐기됨 (2026-08-27, W-022 R1)
 
-과거 모든 에이전트는 출력 끝에 아래 블록으로 끝나야 했다:
+에이전트 출력 끝에 붙던 `---DELEGATION_SIGNAL---` 블록은 **폐기됐다.** 파싱하는 결정론적
+코드가 어디에도 없었고(유일한 소비 지점이 «신호를 스캔해 다음 에이전트를 호출하라»는
+자연어 지시였다), 오케스트레이션은 이미 스킬 주도 플랫 위임으로 넘어가 있었다.
+**비결정적 보조 경로는 없는 것보다 나쁘다**는 판정이다.
 
-```
----DELEGATION_SIGNAL---
-TYPE: DELEGATE_TO | TASK_COMPLETE | NEED_USER_INPUT | NEED_CLARIFICATION
-TARGET: [agent-name]
-REASON: [reason]
-CONTEXT: [handoff context]
----END_SIGNAL---
-```
-
-**왜 있었나.** 구 순차 체인 오케스트레이션 모델에서, 서브에이전트가 이 신호로 메인
-Claude에게 다음 에이전트를 지목했다.
-
-**왜 없앴나.** 판별 결과(W-021): **hooks·skills·scripts·rules 어디에도 이 블록을
-파싱하는 결정론적 코드가 없었다.** 유일한 소비 지점은 `rules/agent-delegation-chain.md`가
-메인 Claude에게 "신호 블록을 스캔해 TARGET이 있으면 다음 에이전트를 자동 호출하라"고
-준 **자연어 지시**였다 — 파서가 아니라 모델 판단에 의존하는 경로였다는 점이 이 결론의
-무게다. 게다가 오케스트레이션은 이미 §Orchestration Model의 스킬 주도 플랫 위임으로
-넘어가 있었다 — 신호를 스캔해 다음 에이전트를 자동 호출하는 구 순차 체인 모델 자체가
-더 이상 쓰이지 않았다.
-
-이 조사를 시작하게 만든 트리거는 커버리지를 13종으로 넓히던 중(W-018) 드러난 준수율
-관측이었다 — **8종 중 6종(75%)**이 이 마커를 간헐적으로 생략했다(`implement-code`
-6/6·`plan-implementation` 2/2만 안정, `implement-api`는 모델·effort가 낮지 않은데도
-실패해 "좋은 모델이면 안정" 가설을 반증했다). 단, 이 관측은 교란돼 있다 —
-`implement-code` 시나리오의 `task.md`가 형식을 직접 지시했으므로 6/6은 대조군이
-아니다. 무지시 준수 사례는 `plan-implementation` 2/2(n=2)뿐이다. 그럼에도 폐기
-결론(B: 사문화) 자체는 이 통계가 아니라 위 두 근거로 유지된다 — 비결정적 보조 경로는
-없는 것보다 나쁘다는 판단(이번 배치에서 evals `delegation_signal` 어서션을 분리한
-것과 같은 논리)에 따라 폐기를 실행했다. 상세 근거:
-`docs/specs/2026-08-27-delegation-signal-contract-review.md`(W-021).
-
-**어디까지 걷어냈나** (다음 사람이 잔재를 찾을 때 기준):
-
-- 에이전트 정의 33종 — 본문 `---DELEGATION_SIGNAL---` 블록 전부 제거
-- 위 33종 중 32종의 frontmatter `OUTPUT:`/`MUST USE when:` — 신호 토큰만 제거,
-  실제 산출물 서술과 무관한 트리거 문구는 보존. 산문 중 `DELEGATE_TO: git-workflow`
-  같은 **에스컬레이션 의도 서술**은 기계 계약이 아니므로 그대로 유지
-- `verify-done.sh` §12(에이전트 출력 계약 위치 검사) + CI 동등 스텝 — 제거. **번호 12는
-  재사용하지 않고 비워 둔다** (아래 verify-done.sh 섹션 규약 참고 — 스펙·
-  decision-log 47곳 이상이 섹션 번호로 게이트를 참조한다)
-- 스킬 4종(`agent-creator`·`eval-forge`·`harness-export`·`skill-forge`)의 예시
-  블록 — 제거. `agent-creator`는 특히 중요했다: 새 에이전트 템플릿에 블록이 박혀
-  있어 폐기를 무효화할 수 있었다
-- 주입 규칙 2종(`plugins/common/rules/agent-system.md`,
-  `agent-delegation-chain.md`) — **외과적** 삭제. 신호 기계 계약(형식 정의·
-  TYPE→Action 매핑·자동 호출 절차)만 제거하고, 무관한 정책(Standing User
-  Authorization, "서브에이전트는 서브에이전트를 호출하지 않는다")은 보존.
-  `On Receiving Subagent Output` 절은 삭제가 아니라 스킬 주도 모델에 맞게 재작성.
-  해설본(`docs/architecture/rules/`)도 같은 원칙으로 갱신, CHECKSUMS/MIRROR 재생성
-- eval `delegation_signal` 체크 타입 — 계약 폐기 시점에는 **삭제하지 않았다.**
-  `implement-code`·`plan-implementation` 등 안정 통과 시나리오가 있어 체크 자체는
-  유효하다고 판단했으나, 그 판단의 근거였던 시나리오 어서션은 **바로 그 배치에서
-  이미 제거돼 있었다** — 판단 시점에 이미 사실이 아니었다. W-023(2026-08-31)이
-  실사용 조사로 확인: 어서션 117건 중 `delegation_signal` 사용자 **0건**. 검사할
-  대상이 없는 채로 남은 채점 코드는 계약이 아직 살아 있다는 잘못된 신호만 주므로,
-  `KNOWN_ASSERTION_TYPES`·`check_assertion`(`evals/run.py`) 두 지점에서 제거했다
-- 유지: 본문 산문의 `DELEGATE_TO: X` 같은 에스컬레이션 서술(기계 계약 아님),
-  역사 기록(CHANGELOG, decision-log, 과거 spec)
+산문의 `DELEGATE_TO: X` 같은 **에스컬레이션 의도 서술**은 기계 계약이 아니므로 유지한다.
+폐기 경위·근거·걷어낸 범위(에이전트 33종·스킬 4종·주입 규칙 2종·게이트 §12·eval 체크 타입)는
+`docs/architecture/delegation-signal-retirement.md` 가 소유한다 — **§12 번호는 재사용하지
+않고 비워 둔다**(스펙·decision-log 47곳 이상이 섹션 번호로 게이트를 참조한다).
 
 ## Development Conventions
 
@@ -422,45 +371,21 @@ Plugin cache is keyed by `{plugin-name}/{version}` — same version = no update 
 
 ### Distribution & catalog propagation
 
-Two install channels propagate a pushed `main` differently — know which one a user is on:
+두 설치 경로가 pushed `main` 을 다르게 전파한다 — 사용자가 어느 쪽인지 알고 안내해야 한다.
 
-- **Direct marketplace** (`This-HW/hiway-kit` → `@hiway-kit`): reflects `main`
-  HEAD **immediately** on `/plugin marketplace update`. This is the "fastest updates" path.
-- **Anthropic community catalog** (`anthropics/claude-plugins-community` → `@claude-community`):
-  **`hiway-kit` 은 아직 등재돼 있지 않다.** 등재는 웹 폼 일회성 제출이고(직접 PR 은 자동
-  close), 개명은 새 리스팅을 요구한다 — 절차는 `docs/marketplace-submission.md`.
-- **등재되더라도 pin 전진을 신뢰하지 마라.** 카탈로그 README 는 *"synced nightly"* 라고
-  적혀 있지만 **실측은 다르다**(2026-09-08, 전임 킷 항목 기준):
-
-  | 실측 | 값 |
-  | --- | --- |
-  | 전임 킷 항목 마지막 bump | **2026-08-09** (v2.12.3) |
-  | 그 사이 미반영 릴리스 | 2.13.0 → 2.20.0 (164 커밋) |
-  | `marketplace.json` 커밋 300개 중 그 항목 bump | **1건** |
-  | 카탈로그 미러 최종 커밋(경로 무관) | **2026-08-24** — 이후 전체가 조용 |
-
-  **근본 원인을 특정했다(2026-09-08):** 카탈로그의 pin 전진은
-  `anthropics/claude-plugins-community` 의 워크플로 **`Bump Plugin SHAs`** 가 수행하는데,
-  그 워크플로가 **`disabled_manually` 상태**이고 **2026-08-13 이후 한 번도 실행되지
-  않았다**(`gh api repos/anthropics/claude-plugins-community/actions/workflows` 로 확인).
-  우리 항목은 `freeze-shas.txt` 에 **없고**, 막힌 bump PR 도 **없다** — 즉
-  **우리 쪽 결함이 아니라 상류 자동화가 꺼져 있는 것**이고, 카탈로그의 모든 항목이
-  똑같이 멈춰 있다.
-
-  **정지 범위도 실측했다** `[researched: GitHub API, n=60 무작위 표본]`: 업스트림이
-  8/14 이후 움직인 항목 **11건 중 bump 0건**, 신규 등재도 8/21 이 마지막, 레포 전체 커밋이
-  8/24 이후 0건, `Add referodesign` PR 이 8/11부터 열린 채다. 반면
-  `claude-plugins-official`·`knowledge-work-plugins` 는 9/04 에도 bump 를 머지했다 —
-  **community 카탈로그만** 멈췄다. 전수 근거·재현 명령:
+- **직접 마켓플레이스** (`This-HW/hiway-kit` → `@hiway-kit`): `/plugin marketplace update` 시
+  **즉시** main HEAD 를 반영한다. 현재 **유일하게 성립하는** 경로다.
+- **커뮤니티 카탈로그** (`@claude-community`): **미등재**이고, 등재돼도 **pin 전진을 신뢰하면
+  안 된다.** 상류의 `Bump Plugin SHAs` 워크플로가 `disabled_manually` 상태로 2026-08-13 이후
+  한 번도 실행되지 않았다 — **우리 결함이 아니라 상류 자동화가 꺼진 것**이고 카탈로그의 모든
+  항목이 같이 멈춰 있다. 전수 근거·재현 명령:
   `docs/research/2026-09-08-plugin-directory-status.md`.
 
-  이 상태에서 우리가 통제할 수 있는 것은 **재개되는 순간 green 으로 통과하는가** 하나뿐이다.
-  그래서 상류가 bump 시 실행하는 `claude plugin validate` 를 §19 게이트·CI 로 앞당겨 건다 —
-  실패하면 그 항목은 red PR 로 남거나 `freeze-shas.txt` 에 올라 **자동 전진이 영구히 멈춘다.**
-  (공식 문서가 *"리뷰 파이프라인이 제출마다 같은 검사를 돌린다"* 고 명시하므로 이 게이트는
-  추론이 아니라 **문서화된 요구사항**이다.)
-- **Implication**: 릴리스 안내에 **"하루면 전파된다"고 쓰지 마라.** 전파 시점을 약속할
-  근거가 없다. 즉시성이 필요한 사용자는 직접 마켓플레이스 경로로 보낸다.
+우리가 통제할 수 있는 것은 **재개되는 순간 green 으로 통과하는가** 하나뿐이라, 상류가 bump 시
+돌리는 `claude plugin validate` 를 §19 게이트·CI 로 앞당겨 건다.
+
+**함의**: 릴리스 안내에 **"하루면 전파된다"고 쓰지 마라** — 약속할 근거가 없다. 즉시성이
+필요한 사용자는 직접 마켓플레이스 경로로 보낸다.
 
 ## Contributing
 
