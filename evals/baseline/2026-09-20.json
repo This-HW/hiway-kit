@@ -1,0 +1,1368 @@
+{
+  "results": [
+    {
+      "agent": "analyze-dependencies",
+      "model": "haiku",
+      "scenario": "order-utils-impact",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['checkout']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['report']"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '영향'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 22.0,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-plaqr85q/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "analyze-tech-debt",
+      "model": "sonnet",
+      "scenario": "billing-fixme",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['billing.py']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'FIXME|재시도'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 57.76,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-t27t45hs/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "define-metrics",
+      "model": "sonnet",
+      "scenario": "payment-api-metrics",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['결제']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'SLI|SLO'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 44.88,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-5ds82xhy/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "consensus-builder",
+      "model": "opus",
+      "scenario": "hard-constraint-standoff",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['GDPR', '역외 이전', '개인정보보호위원회']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['SLA', '이중화', '위약금']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['6주', '4주', '정합성 검증']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['사용자 결정', '사용자 판단', '결정 필요', '에스컬레이션', 'AskUserQuestion', '❓']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 95.46,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-efwffm__/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "design-services",
+      "model": "opus",
+      "scenario": "point-service-design",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['적립']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['만료']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 131.85,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-xyi1lkk6/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "enforce-structure",
+      "model": "haiku",
+      "scenario": "misplaced-source",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['parser_helper.py']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '위반|Critical'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 14.47,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-ismazw0v/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "design-user-journey",
+      "model": "opus",
+      "scenario": "checkout-edge-cases",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        }
+      ],
+      "judge": null,
+      "duration_s": 137.81,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-3dubvbnx/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "explore-codebase",
+      "model": "haiku",
+      "scenario": "inventory-function-inventory",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['add_widget']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['remove_widget']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['get_stock_level']"
+        }
+      ],
+      "judge": null,
+      "duration_s": 10.56,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-ja92sid2/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "devils-advocate",
+      "model": "opus",
+      "scenario": "single-instance-sync",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['확률']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['완화']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'FAIL-'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 146.65,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-mnryll30/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "scenario": "mutable-default-arg",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 31.24,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-skmdegdq/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "define-business-logic",
+      "model": "opus",
+      "scenario": "point-service-rules",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        }
+      ],
+      "judge": null,
+      "duration_s": 264.33,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-ocsl94m0/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "scenario": "off-by-one",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 21.06,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-isduy6yc/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "facilitator",
+      "model": "opus",
+      "scenario": "review-rating-spec",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['focus_areas']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['perspectives']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['어뷰징']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 68.54,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-k9khkldh/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "scenario": "none-handling",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 31.85,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-ikf0lzmq/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "generate-boilerplate",
+      "model": "sonnet",
+      "scenario": "agent-md-skeleton",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 13.16,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-zjm_77ax/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "scenario": "unstable-sort-key",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 21.2,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-50o5vxdz/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "git-workflow",
+      "model": "haiku",
+      "scenario": "merge-conflict-escalation",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['충돌', 'conflict']"
+        },
+        {
+          "type": "git_log_contains",
+          "ok": true,
+          "detail": "git_log_contains"
+        },
+        {
+          "type": "git_status_clean",
+          "ok": true,
+          "detail": "git_status_clean"
+        }
+      ],
+      "judge": null,
+      "duration_s": 25.64,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-_4ulg_sd/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-api",
+      "model": "sonnet",
+      "scenario": "add-item-handler",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 27.78,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-viglan8y/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-code",
+      "model": "sonnet",
+      "scenario": "add-function-to-module",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        }
+      ],
+      "judge": null,
+      "duration_s": 20.06,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-stk742p3/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-code",
+      "model": "sonnet",
+      "scenario": "lru-cache",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        }
+      ],
+      "judge": null,
+      "duration_s": 18.24,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-aegk8bec/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "git-workflow",
+      "model": "haiku",
+      "scenario": "feature-branch-commit",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "git_status_clean",
+          "ok": true,
+          "detail": "git_status_clean"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "git_branch_exists",
+          "ok": true,
+          "detail": "git_branch_exists"
+        }
+      ],
+      "judge": null,
+      "duration_s": 62.19,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-z8qfk94t/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-code",
+      "model": "sonnet",
+      "scenario": "merge-intervals",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        }
+      ],
+      "judge": null,
+      "duration_s": 24.71,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-_uf86n17/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "manage-api-versions",
+      "model": "haiku",
+      "scenario": "v2-breaking-change",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['v2.0.0']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'Breaking|breaking'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 20.52,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-1qf4uair/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "optimize-logic",
+      "model": "sonnet",
+      "scenario": "on-squared-duplicate-finder",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 16.83,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-c8o9e0ih/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "impact-analyzer",
+      "model": "opus",
+      "scenario": "3ds-payment-change",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['mobile_app']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['checkout_ui']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 98.19,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-x3unoyaj/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "scenario": "off-by-one",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['off-by-one', 'off by one', 'range(len(items) - 1)', 'range(len(items)-1)', 'len(items) - 1', '마지막 항목', '마지막 요소', 'last item', 'last element', '인덱스 범위', '경계 오류', 'boundary']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['total_count', 'inventory.py']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        }
+      ],
+      "judge": null,
+      "duration_s": 59.05,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-759a_vqx/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "plan-implementation",
+      "model": "opus",
+      "scenario": "remove-all-widgets-plan",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['remove_all_widgets']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['_stock']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['테스트', 'test']"
+        }
+      ],
+      "judge": null,
+      "duration_s": 100.9,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-scsmd_sf/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "scenario": "false-green",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['returncode', 'exit code', 'exit status', '결과를 확인하지', '결과 미검증', '검증하지 않', 'false green', 'false-green', '성공을 가정', '확인 없이 성공', '무시하고', '실패해도']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['run_migration', 'deploy.py']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        }
+      ],
+      "judge": null,
+      "duration_s": 109.9,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-r3env2lj/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "plan-refactor",
+      "model": "opus",
+      "scenario": "god-function-decompose",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['process_everything']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 113.6,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-35zsf3u6/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "sync-docs",
+      "model": "haiku",
+      "scenario": "readme-function-count-drift",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 23.69,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-11gz6qsi/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "security-scan",
+      "model": "sonnet",
+      "scenario": "shared-tmp-and-hardcoded-token",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['예측 가능', 'predictable', 'world-writable', '공유 디렉토리', '심링크', 'symlink', 'mkstemp', 'mkdtemp', '경쟁', 'race']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['하드코딩', 'hardcod', '시크릿', 'secret', 'credential', '자격증명', '환경 변수', '환경변수', 'environment variable', '비밀 관리', 'secret manager']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        }
+      ],
+      "judge": null,
+      "duration_s": 68.28,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-vukahcu9/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "synthesizer",
+      "model": "opus",
+      "scenario": "launch-timeline-conflict",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['충돌', '상충', '모순']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['OAuth 재인증', '3주']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['프로모션 배너', '8월 30일', '1주 이내']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['세션 토큰']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['Critical', 'Important', '우선순위', '🔴', '🟡']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 44.78,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-fhn5zpgk/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "verify-code",
+      "model": "haiku",
+      "scenario": "multiply-bug-detected",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['multiply']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['fail', '실패', 'failed']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 29.4,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-k88wjljn/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "scenario": "sql-injection",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['sql injection', 'sql-injection', 'sqli', 'injection', '인젝션', 'parameteriz', '파라미터화', 'prepared statement', '바인드 변수', 'placeholder']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['find_user', 'db.py']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        }
+      ],
+      "judge": null,
+      "duration_s": 114.99,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-23p1o2x5/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "verify-integration",
+      "model": "haiku",
+      "scenario": "signature-mismatch",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['create_user']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 28.25,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-bjww3rvt/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "scenario": "race-condition",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['race condition', 'race-condition', 'toctou', 'check-then-act', 'check then act', '경쟁 상태', '경쟁조건', '원자적', 'atomic', '동시성', 'concurrent', '동시 실행']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['write_if_absent', 'cache.py']"
+        },
+        {
+          "type": "output_not_contains",
+          "ok": true,
+          "detail": "output_not_contains"
+        }
+      ],
+      "judge": null,
+      "duration_s": 126.31,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-nx8pa4fn/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "write-tests",
+      "model": "sonnet",
+      "scenario": "clamp-function",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 22.13,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-opy8n2pi/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "write-api-tests",
+      "model": "sonnet",
+      "scenario": "divide-handler",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 24.35,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-crhq748o/fixture",
+      "output_excerpt": null
+    }
+  ],
+  "summary": {
+    "analyze-dependencies": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "analyze-tech-debt": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "define-metrics": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "consensus-builder": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "design-services": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "enforce-structure": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "design-user-journey": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "explore-codebase": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "devils-advocate": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "fix-bugs": {
+      "pass": 4,
+      "fail": 0,
+      "total": 4,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "define-business-logic": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "facilitator": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "generate-boilerplate": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "git-workflow": {
+      "pass": 2,
+      "fail": 0,
+      "total": 2,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "implement-api": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "implement-code": {
+      "pass": 3,
+      "fail": 0,
+      "total": 3,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "manage-api-versions": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "optimize-logic": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "impact-analyzer": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "review-code": {
+      "pass": 4,
+      "fail": 0,
+      "total": 4,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "plan-implementation": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "plan-refactor": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "sync-docs": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "security-scan": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "synthesizer": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "pass_rate": 1.0
+    },
+    "verify-code": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "verify-integration": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "pass_rate": 1.0
+    },
+    "write-tests": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    },
+    "write-api-tests": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "pass_rate": 1.0
+    }
+  }
+}
