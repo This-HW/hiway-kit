@@ -595,3 +595,30 @@ class TestPortableOnlyFlagWiring:
         manifest = json.loads((HOOKS_DIR / "hooks.json").read_text(encoding="utf-8"))
         blob = json.dumps(manifest)
         assert _mod._PORTABLE_ONLY_FLAG not in blob
+
+
+def test_session_start_reinjects_after_compaction():
+    """컴팩션 후에도 규범이 복원되어야 한다 — 그 배선은 matcher 한 단어에 달려 있다.
+
+    컨텍스트가 컴팩션되면 세션 시작 때 주입한 규범이 사라질 수 있다. Claude Code 는
+    `SessionStart` 를 `source: "compact"` 로 **재발화**시켜 이 구멍을 메울 수 있게
+    해 두었고, 우리는 matcher 에 `compact` 를 넣어 그것을 쓰고 있다.
+
+    **그런데 이 불변식을 지키는 것이 아무것도 없었다**(2026-09-20 실측). matcher 에서
+    `compact` 한 단어가 빠지면 컴팩션 이후 모든 턴이 규범 없이 돌고, **아무 검사도
+    red 가 되지 않는다** — 훅은 여전히 startup 에서 정상 동작하므로 증상이 없다.
+    경쟁 하네스 분석 중에 우리 쪽을 대보다 발견했다.
+    """
+    import json as _json
+
+    manifest = _json.loads(
+        (HOOKS_DIR / "hooks.json").read_text(encoding="utf-8")
+    )
+    entries = manifest["hooks"]["SessionStart"]
+    matchers = [e.get("matcher", "") for e in entries]
+    assert any("compact" in m for m in matchers), (
+        "SessionStart matcher 에 'compact' 가 없다 — 컴팩션 후 규범이 복원되지 않는다. "
+        f"현재 matcher: {matchers}"
+    )
+    # startup 도 함께 지킨다 — 둘 중 하나만 남으면 다른 쪽이 조용히 죽는다.
+    assert any("startup" in m for m in matchers), f"현재 matcher: {matchers}"

@@ -41,6 +41,54 @@ run 2 가 2배인 이유는 모른다 `[원인 미상]`. 성공 봉투에는 `er
 `conversation_id · duration_seconds · num_turns · response · status · usage`) — 판정은
 `status` 로 한다.
 
+## [3.38.0] — 2026-09-20
+
+### Added — eval 이 **측정 축**을 기록하고 비교한다
+
+`beyondworks/Xastra` 분석 중에 우리 쪽 결함을 찾았다. eval 리포트에 **어느 모델로
+돌았는지 기록이 없었다.** `--model` 을 넘기기만 하고 확인도 기록도 하지 않아,
+`baseline` 비교가 *"같은 것을 셌는가"* 를 답할 수 없었다 — 에이전트 frontmatter 의
+`model` 이 바뀌면 **서로 다른 모델의 pass_rate 를 나란히 놓고 "후퇴 없음"이 나온다**
+(`warning-signal.md` §측정 7).
+
+- 결과·summary 에 `model` 을 싣는다(`_result` → `models` 집계).
+- `compare_baseline` 이 **값 비교보다 먼저 축을 본다** — 모델이 다르면 회귀로 잡는다.
+- **축 미지는 회귀가 아니다.** 축 기록 이전 baseline 에서는 이 조건이 매번 참이라
+  회귀로 올리면 상시 red 가 되어 옆의 진짜 회귀까지 죽인다(§검토 1·3). stderr notice
+  로 내리되 침묵하지는 않는다. baseline 을 한 번 재생성하면 다시 발화하지 않는다.
+
+선행 사례는 Xastra `run_model.py` 다 — 세션 JSONL 을 되읽어 **실제 사용된** 모델·effort 가
+요청과 같은지 확인하고 불일치면 집계에서 배제한다. **미흡수 잔여**: 우리는 아직 요청값만
+기록한다. 서버측 폴백은 여전히 보이지 않는다.
+
+회귀 테스트 4종 — 축 불일치 잡힘 · 동일 축 통과 · 미지는 notice · **새 검사가 기존
+pass_rate 검사를 가리지 않음**.
+
+### Fixed — 컴팩션 후 규범 복원이 **무방비**였다
+
+`hooks.json` 의 `SessionStart` matcher 가 `startup|clear|compact` 라 컴팩션 후에도 규범이
+복원된다 — compact 페이로드로 훅을 직접 실행해 startup 과 **바이트 동일한** 출력(sha 일치)을
+확인했다. **동작은 옳았다.**
+
+문제는 **그 불변식을 지키는 것이 아무것도 없었다**는 점이다. matcher 에서 `compact` 한
+단어가 빠지면 컴팩션 이후 모든 턴이 규범 없이 돌지만 **아무 검사도 red 가 되지 않는다** —
+훅은 startup 에서 여전히 정상이라 증상이 없다. 테스트를 추가하고 되돌려-FAIL 로 확인했다.
+
+### Notes — Xastra 분석 결과 (흡수 원장 3행)
+
+| 항목 | 판정 |
+| --- | --- |
+| 컴팩션 후 규범 복원 | `native-adopted` — **이미 하고 있었다.** 만들 뻔한 것을 실측이 막았다 |
+| 서브에이전트 계약 전파 (`SubagentStart`) | `watch` — 이벤트는 **존재**하나 공식 문서의 Decision Control 표에 없어 **반환 규약 미명시**. 지원이 확인되기 전엔 배포물에 넣지 않는다(`disable-model-invocation` 과 같은 판정) |
+| eval 측정 축 | `kit-only` — 이번에 흡수 |
+
+Xastra 자체는 **설치하지 않는다.** Codex 전용이라 훅 슬롯이 정면으로 겹치고, 레포 수명
+6분(생성 05:17 → 릴리스 05:23)에 **CI 가 3개 OS 전부 red**(`mkdir -p "$CLAUDE_CONFIG_DIR"` —
+정의되지 않은 Castra 잔재 변수로 `Run checks` 가 skipped)이며 그 상태로 v0.3.1 이 나갔다.
+`VERSION`·`plugin.json` 은 여전히 `0.3.0` 이다. 다만 **코드는 실재한다** — dryforge 와 달리
+훅 7종이 실제 핸들러로 등록돼 있고 차단도 결정론적으로 판정한다. 그래서 «무시»가 아니라
+«설치는 않고 아이디어는 흡수»다.
+
 ## [3.37.0] — 2026-09-18
 
 ### Changed — 상시 컨텍스트에서 **21 KiB** 를 더 걷어냈다 (프로젝트 지침 축)

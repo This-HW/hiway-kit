@@ -1665,3 +1665,57 @@ def test_eval_prompts_do_not_inherit_launcher_stdin(tmp_path, monkeypatch, invoc
         assert runner.run_scenario(_agent(tmp_path), sc, 5)["status"] == "pass"
         assert sc.task in calls[0]
     assert len(calls) == 1
+
+
+# ── 측정 축(model) 기록·비교 ────────────────────────────────────────────
+#
+# 왜 있는가: baseline 비교는 "같은 것을 셌는가"를 먼저 답해야 한다. 에이전트
+# frontmatter 의 model 이 바뀌면 pass_rate 를 나란히 놓는 순간 **서로 다른 모델을
+# 비교하면서 "후퇴 없음"** 이 나온다(`warning-signal.md` §측정 7). 축 기록 이전에는
+# 리포트에 모델이 아예 없어서 이 질문을 할 수조차 없었다.
+
+
+def _summary(models=None, pass_rate=1.0):
+    s = {"pass": 1, "fail": 0, "total": 1, "pass_rate": pass_rate}
+    if models is not None:
+        s["models"] = models
+    return {"agent-x": s}
+
+
+def _baseline_file(tmp_path, summary):
+    p = tmp_path / "base.json"
+    p.write_text(json.dumps({"summary": summary}), encoding="utf-8")
+    return str(p)
+
+
+def test_axis_mismatch_is_a_regression(tmp_path):
+    """모델이 다르면 값 비교 자체가 성립하지 않는다 — 조용히 통과시키지 않는다."""
+    base = _baseline_file(tmp_path, _summary(models=["sonnet"]))
+    out = runner.compare_baseline(_summary(models=["opus"]), base)
+    assert out, "축이 달라졌는데 후퇴로 잡히지 않았다"
+    assert "측정 축" in out[0]
+
+
+def test_same_axis_passes(tmp_path):
+    base = _baseline_file(tmp_path, _summary(models=["sonnet"]))
+    assert runner.compare_baseline(_summary(models=["sonnet"]), base) == []
+
+
+def test_missing_axis_in_baseline_is_notice_not_regression(tmp_path, capsys):
+    """**미지는 회귀가 아니다.**
+
+    축 기록 이전 baseline 이면 이 조건이 매번 참이라, 회귀로 올리면 상시 red 가
+    되어 옆의 진짜 회귀까지 죽인다(`warning-signal.md` §검토 1·3). 판정에는 넣지
+    않되 **침묵하지도 않는다** — stderr 로 남긴다.
+    """
+    base = _baseline_file(tmp_path, _summary(models=None))
+    out = runner.compare_baseline(_summary(models=["sonnet"]), base)
+    assert out == [], "미지를 회귀로 올리면 상시 red 가 된다"
+    assert "측정 축" in capsys.readouterr().err
+
+
+def test_axis_check_does_not_mask_pass_rate_regression(tmp_path):
+    """축이 같아도 값 후퇴는 그대로 잡혀야 한다 — 새 검사가 옛 검사를 가리지 않는다."""
+    base = _baseline_file(tmp_path, _summary(models=["sonnet"], pass_rate=1.0))
+    out = runner.compare_baseline(_summary(models=["sonnet"], pass_rate=0.5), base)
+    assert any("pass_rate" in r for r in out)
