@@ -3,7 +3,7 @@
 > 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:8e828b2a930ead9d90235bdb46541c57550259a948bc29255cb0918cd4cbfc72 -->
+<!-- kit:begin rules-v1.4.0 sha256:b68cbf1042b56282efb1d8342cbb5a28e3707439f2836a9ad8690a3d3d4287b1 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -97,18 +97,15 @@ portable: true
 
 ### Code Quality Rules
 
-- **Functions**: ALWAYS under 20 lines/3 params/2 nesting, single responsibility,
-  role-expressing names (`calculateTotalPrice`); NEVER 50+ lines, vague names
-  (`calc`, `handle`, `doStuff`).
-- **Errors**: NEVER ignore or log-only; ALWAYS handle each type explicitly, rethrow
-  unknown errors upward with context (code, message, cause) preserved.
-- **Conditionals**: ALWAYS early return over nested conditions; extract complex
-  boolean expressions into named variables.
-- **Type safety**: NEVER bypass the type system (`any`/untyped escape hatches,
-  overused type-assertion casts) — use explicit types and type guards. ALWAYS
-  handle null/absent values explicitly.
-- **Testability**: ALWAYS inject dependencies (constructor/factory param), NEVER
-  hardcode object construction inside a function. Prefer pure functions.
+- **Functions**: one job, a name that says it (`calculateTotalPrice`, not `calc`/`handle`).
+  Growing length, parameter count, or nesting is the signal to split.
+- **Errors**: don't swallow them. Handle the types you can; otherwise rethrow upward with
+  context (code, message, cause) preserved. A deliberate fail-open gets a comment saying why.
+- **Conditionals**: prefer early return over nesting; name complex boolean expressions.
+- **Type safety**: bypassing the type system (`any`, unchecked casts) hides bugs — use
+  explicit types and guards, and handle null/absent values explicitly.
+- **Testability**: construction hardcoded inside a function is hard to test — inject it.
+  Prefer pure functions.
 
 ---
 
@@ -118,10 +115,10 @@ tier: core
 portable: true
 ---
 
-### Definition of Done — 완료 게이트 (Spec 6 / W-010)
+### Definition of Done — 완료 게이트
 
 "완료/끝/통과"는 **판단이 아니라 명령의 출력**이다 — 완료 주장 전: 검증 명령을 fresh
-run(`scripts/verify-done.sh`; 스크립트 없음은 면제 사유가 아니다) → 출력 전부 읽기 →
+run(게이트 스크립트가 있으면 그것, 없으면 테스트·린트·빌드; 스크립트 없음은 면제 사유가 아니다) → 출력 전부 읽기 →
 FAIL 있으면 "완료" 대신 실제 상태를 증거와 함께 보고 → 수동 DoD 항목 명시적 attest.
 **명령을 실행하지 않고 완료를 주장하는 것은 오류다.** 검증 전엔 "완료/done/통과" 대신
 "구현 + self-validation 완료, 미결: [...]"로 말한다.
@@ -141,9 +138,8 @@ rc 는 `tail` 것이다). 둘 다 `&&` 를 통과시킨다 — `pipefail`. 상�
 
 <!-- 앵커: #task-마감-규율 -->
 
-**응답 직전 호스트의 태스크 목록을 조회해 끝난 항목을 completed로 정리한 뒤 보고한다.**
-진행·대기 항목은 남기고 사유를 명시한다. 마지막 보고 태스크도 먼저 마킹한다 — 보고 후
-마킹은 유실된다(반복 실측). ad-hoc에도 동일하며 completed 위장은 금지한다.
+**태스크를 쓰는 작업을 마감 보고할 때는 끝난 태스크를 먼저 completed로 마킹한다** — 보고
+뒤에 한 마킹은 유실된다(반복 실측). 남는 항목은 사유를 적고, 완료로 위장하지 않는다.
 
 ---
 
@@ -155,7 +151,7 @@ portable: true
 portable_reason: 저장은 파일, 읽기는 CLI — 훅이 없는 하네스도 직접 조회하면 성립한다
 ---
 
-### Feedback Loop Rule (Spec 3 / W-007)
+### Feedback Loop Rule
 
 validation·review에서 반복 발견된 결함을 학습해 같은 실수를 반복하지 않는다.
 
@@ -185,13 +181,13 @@ tier: core
 portable: true
 ---
 
-### Loop Engineering Rule (Spec 5 / W-009)
+### Loop Engineering Rule
 
 **얼마나 오래·끈질기게** 행동하는가. 게이트(설계 — 사람 승인, **의도적 멈춤**:
 brainstorming/plan-task HARD-GATE) ≠ 루프(실행 — 승인된 계획을 P0·완료·가드 도달
 전까지 자율 완주, 매 단계 확인 없이). 루프는 게이트를 우회하지 않는다.
 
-#### 드라이버 (검증된 Task 시스템 + 스킬 루프, 자체 데몬 없음 — 대화형 전용 네이티브 트리거는 스킬에서 못 쓴다)
+#### 드라이버 (Task 시스템 + 스킬 루프)
 
 `while(미완료 Work/Task):` 재앵커(요약이 아닌 `planning-results.md` 원본 재확인 — 요약은
 drift한다) → unblocked Task 선택 → 실행 → 완료 시 checklist pass → `progress.md` 래칫 →
@@ -220,7 +216,7 @@ portable: true
 ### Parallel Worktree Rules
 
 파일 수정 작업자는 격리된 작업 트리에서 검증한 산출물을 반환하고, 지정된 통합 담당자가
-병합한다. 격리는 필요조건일 뿐이다 — 병합 규범이 없으면 충돌이 통합 시점으로 이연된다. (W-011)
+병합한다. 격리는 필요조건일 뿐이다 — 병합 규범이 없으면 충돌이 통합 시점으로 이연된다.
 
 #### 격리 수단은 호스트가 정한다 — 규범이 지정하지 않는다
 
@@ -277,8 +273,8 @@ portable: true
 
 ### Planning Protocol Rules
 
-NEVER implement based on assumption. ALWAYS verify against specs or ask the user.
-NEVER hedge; 추측 어휘 대신 "기획에 따르면"/"확인 결과".
+명세로 확인되지 않은 전제는 아래 등급으로 판정해 처리한다 — P0만 멈추고 묻는다.
+확인한 것과 추측을 구분한다: 근거가 있으면 출처("기획에 따르면"/"확인 결과")를 붙이고, 없으면 미확인이라고 적는다.
 
 #### 모호함 등급 (P0~P3) — 이 규범이 소유한다
 
@@ -313,12 +309,10 @@ portable: true
 
 ### SSOT (Single Source of Truth) Rules
 
-- ALWAYS define error types, API endpoints, and env vars in exactly one place;
-  NEVER copy values — reference the single definition (import/include/require, …)
-- ALWAYS structure code so one change propagates everywhere — editing 10 files
-  for one change is an SSOT violation signal, as is the same bug in multiple places
-- ALWAYS route all errors through a single central handler with structured fields
-  (`code`, `message`, `timestamp`, `severity`) — NEVER scatter error logic across modules
+- Define error types, API endpoints, and env vars in one place and reference that
+  definition — copied values get fixed on one side only and drift.
+- One change that needs edits in many files, or the same bug in several places, is an
+  SSOT violation signal. If the project has a central error handler, route errors through it.
 <!-- kit:end -->
 
 <!-- kit2:begin conventions-v1.0.0 sha256:fd5e5cca5a1c7b0ae08ee51c0950403b1663518f34ce16f0f0315216c8a0a49e -->
