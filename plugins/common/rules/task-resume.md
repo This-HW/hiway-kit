@@ -60,7 +60,7 @@ for task in incomplete:
 
 ```
 blockedBy 없는 Task부터 실행
-2개 이상 → Agent 동시 dispatch
+2개 이상 → 수정 파일이 겹치지 않을 때만 병렬 위임, 겹치면 순차 (parallel-worktree)
 ```
 
 ## Task 생성 규칙

@@ -15,7 +15,6 @@ never assume a server is present:
 - **Exa** — semantic code/tech search; prefer over WebSearch for precise technical queries (fall back to WebSearch)
 - **Tavily** — comprehensive research, fact-checking, tech comparison
 - **Playwright** — dynamic page scraping, E2E tests; prefer over WebFetch for JS-rendered pages
-- **Sequential Thinking** — complex multi-step design and problem decomposition
 - **PostgreSQL** — DB queries, schema exploration, query optimization
 - **Magic** (21st.dev) — natural language → UI components
 
@@ -63,7 +62,3 @@ Instead)" (github.com/anthropics/claude-code/issues/13898). Therefore:
 - For library-API verification during coding, reach Context7 via the main session / a
   skill — do NOT wire MCP into the agent frontmatter.
 
-> Regression guard: no `agents/**/*.md` **frontmatter `tools:` block** contains an `mcp__`
-> entry, **and no agent description/body directs use of Context7/Exa/Tavily as its own
-> capability** (route such research to the `web-research` skill instead). Both are checked
-> by `scripts/verify-done.sh`.

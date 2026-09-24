@@ -5,7 +5,7 @@ portable: true
 portable_reason: 저장은 파일, 읽기는 CLI — 훅이 없는 하네스도 직접 조회하면 성립한다
 ---
 
-# Feedback Loop Rule (Spec 3 / W-007)
+# Feedback Loop Rule
 
 validation·review에서 반복 발견된 결함을 학습해 같은 실수를 반복하지 않는다.
 
