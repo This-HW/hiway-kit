@@ -127,51 +127,6 @@ describe("UserService", () => {
 });
 ```
 
-### AAA 패턴
-
-```typescript
-it("should calculate total price with discount", () => {
-  // Arrange (준비)
-  const items = [{ price: 100 }, { price: 200 }];
-  const discount = 0.1;
-
-  // Act (실행)
-  const result = calculateTotal(items, discount);
-
-  // Assert (검증)
-  expect(result).toBe(270);
-});
-```
-
-### 목(Mock) 사용
-
-```typescript
-// 외부 의존성 목킹
-jest.mock("../api/userApi");
-const mockFetchUser = fetchUser as jest.MockedFunction<typeof fetchUser>;
-
-beforeEach(() => {
-  mockFetchUser.mockResolvedValue({ id: 1, name: "Test" });
-});
-```
-
-### 테스트 헬퍼 활용
-
-```typescript
-// tests/__helpers__/factories/user.ts
-export const createMockUser = (overrides = {}) => ({
-  id: 1,
-  name: "Test User",
-  email: "test@example.com",
-  ...overrides,
-});
-
-// 테스트에서 사용
-const user = createMockUser({ name: "Custom Name" });
-```
-
----
-
 ## 출력 형식
 
 ### 작성 완료 보고
@@ -258,10 +213,7 @@ verify-code에서 테스트 실패 감지
 
 ### 중요
 
-```
-⚠️ 테스트 작성만 하고 끝내지 마세요!
-반드시 verify-code로 테스트가 올바르게 동작하는지 확인하세요.
-```
+보고 마지막에 `다음 권장: verify-code` 한 줄을 적는다. 이 에이전트는 직접 위임하지 않는다 — 호출한 스킬/세션이 dispatch한다.
 
 ---
 

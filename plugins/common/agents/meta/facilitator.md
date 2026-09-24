@@ -130,79 +130,13 @@ Security 관점:
 
 ---
 
-## 관점 선택 로직
+## 관점 선택
 
-### 자동 선택 규칙
-
-```python
-# 의사 코드
-def select_perspectives(doc):
-    perspectives = ["requirements", "technical"]  # 항상 포함
-
-    # 키워드 기반 자동 선택
-    if "인증" in doc or "권한" in doc or "보안" in doc:
-        perspectives.append("security")
-
-    if "사용자" in doc or "UX" in doc or "플로우" in doc:
-        perspectives.append("ux_flow")
-
-    if "비즈니스" in doc or "규칙" in doc or "정책" in doc:
-        perspectives.append("business_logic")
-
-    if "API" in doc or "외부" in doc or "연동" in doc:
-        perspectives.append("dependencies")
-
-    if "성능" in doc or "모니터링" in doc or "메트릭" in doc:
-        perspectives.append("metrics")
-
-    if "DB" in doc or "스키마" in doc or "테이블" in doc:
-        perspectives.append("data_schema")
-
-    return perspectives
-```
-
-### 수동 조정
-
-자동 선택 후, 문서 내용을 보고 불필요한 관점은 제거합니다.
-
-```
-예: "로그인 UI 텍스트 변경"
-  자동 선택: requirements, technical, ux_flow, security
-  → security 제거 (텍스트만 바꾸므로)
-  최종: requirements, technical, ux_flow
-```
+관점은 위 표의 선택 조건으로 판단하고, 선택하지 않은 관점은 이유를 한 줄 적는다.
 
 ---
 
 ## 출력 형식
-
-### Common Context 계층화 (토큰 최적화)
-
-**목적**: 중복 Context 제거로 토큰 46% 절감 (73K → 39K with caching)
-
-**Level 1 (모든 에이전트)**:
-
-- `CLAUDE.md`: 프로젝트 전체 구조, 핵심 원칙
-- `.claude/rules/planning-protocol.md`: Planning/Dev 협업 규칙
-
-**Level 2 (Meta 에이전트만)**:
-
-- `.claude/rules/agent-system.md`: 에이전트 시스템, 위임 체인
-
-**Level 3 (각 관점 독립)**:
-
-- 각 에이전트가 필요 시 독립적으로 읽음
-- 예: security-scan → ssot.md, plan-implementation → planning-protocol.md
-
-**전달 방식**:
-
-1. facilitator가 `common_context_files` 출력
-2. 메인 Claude가 Level 1 파일 읽음
-3. Task 호출 시 prompt에 Level 1 Context 포함
-4. Meta 에이전트 호출 시 Level 2 추가 포함
-5. 일반 에이전트는 Level 3 필요 시 독립 읽기
-
----
 
 ### 관점 목록 출력
 
@@ -213,10 +147,6 @@ def select_perspectives(doc):
     "type": "feature_spec",
     "complexity": "large",
     "domains": ["payments", "business_logic", "security"]
-  },
-  "common_context_files": {
-    "level1": ["CLAUDE.md", ".claude/rules/planning-protocol.md"],
-    "level2": [".claude/rules/agent-system.md"]
   },
   "perspectives": [
     {
@@ -327,3 +257,10 @@ impact-analyzer.md → 영향도 분석 (별도 Task)
 
 ---
 
+---
+
+## 출력 계약 — 마지막 확인
+
+1. 마지막 메시지 본문이 곧 반환값이다 — 위 출력 형식 그대로, 서두 없이.
+2. 턴 한도(maxTurns)가 있다. 다 못 보면 본 것까지로 내고 `## 미검토` 에 남은 영역을 적는다.
+3. 마지막 줄: `## 완료: 전체 — N건 검토` 또는 `## 완료: 부분 — N건 중 M건, 남은 것: <목록>`.

@@ -29,72 +29,7 @@ disallowedTools:
 - CQRS, Event Sourcing
 - DDD (Domain-Driven Design)
 
-## 아키텍처 패턴
-
-### 1. 레이어드 아키텍처
-
-```
-┌─────────────────────────────────┐
-│        Presentation Layer       │  Controllers, DTOs
-├─────────────────────────────────┤
-│        Application Layer        │  Use Cases, Services
-├─────────────────────────────────┤
-│          Domain Layer           │  Entities, Value Objects
-├─────────────────────────────────┤
-│       Infrastructure Layer      │  Repositories, External APIs
-└─────────────────────────────────┘
-```
-
-### 2. 클린 아키텍처
-
-```
-src/
-├── domain/           # 핵심 비즈니스 규칙
-│   ├── entities/
-│   └── value-objects/
-├── application/      # 유스케이스
-│   ├── use-cases/
-│   └── interfaces/
-├── infrastructure/   # 외부 연동
-│   ├── database/
-│   ├── http/
-│   └── messaging/
-└── presentation/     # UI/API
-    ├── controllers/
-    └── dtos/
-```
-
-### 3. 마이크로서비스 패턴
-
-```
-┌─────────┐     ┌─────────┐     ┌─────────┐
-│  User   │     │  Order  │     │ Payment │
-│ Service │────▶│ Service │────▶│ Service │
-└────┬────┘     └────┬────┘     └────┬────┘
-     │               │               │
-     └───────────────┴───────────────┘
-              Message Queue
-```
-
-## 설계 원칙
-
-### SOLID
-
-- **S**ingle Responsibility: 하나의 책임
-- **O**pen/Closed: 확장에 열림, 수정에 닫힘
-- **L**iskov Substitution: 대체 가능성
-- **I**nterface Segregation: 인터페이스 분리
-- **D**ependency Inversion: 의존성 역전
-
-### DDD 전술적 패턴
-
-| 패턴           | 설명                      | 예시               |
-| -------------- | ------------------------- | ------------------ |
-| Entity         | 고유 식별자, 생명주기     | User, Order        |
-| Value Object   | 불변, 속성으로 비교       | Money, Address     |
-| Aggregate      | 일관성 경계               | Order + OrderItems |
-| Repository     | 저장소 추상화             | UserRepository     |
-| Domain Service | 엔티티에 속하지 않는 로직 | PaymentService     |
+먼저 현재 코드베이스의 구조를 읽고, 제안하는 패턴마다 이 코드베이스에서 왜 맞는지 근거를 단다.
 
 ## 분석 체크리스트
 
@@ -122,3 +57,11 @@ src/
 ### 구현 우선순위
 [단계별 구현 계획]
 ```
+
+---
+
+## 출력 계약 — 마지막 확인
+
+1. 마지막 메시지 본문이 곧 반환값이다 — 위 출력 형식 그대로, 서두 없이.
+2. 턴 한도(maxTurns)가 있다. 다 못 보면 본 것까지로 내고 `## 미검토` 에 남은 영역을 적는다.
+3. 마지막 줄: `## 완료: 전체 — N건 검토` 또는 `## 완료: 부분 — N건 중 M건, 남은 것: <목록>`.
