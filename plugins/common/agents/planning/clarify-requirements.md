@@ -6,7 +6,7 @@ description: |
   MUST USE when: 구체적 스펙 없이 기능 추가/버그 수정/개선 요청.
   OUTPUT: P0 질문 목록
 model: opus
-effort: max
+effort: high
 maxTurns: 10
 tools:
   - Read

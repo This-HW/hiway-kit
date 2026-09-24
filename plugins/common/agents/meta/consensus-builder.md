@@ -5,7 +5,7 @@ description: |
   MUST USE when: Round 1 종합 후 충돌 발견 시, 관점 간 의견 불일치.
   OUTPUT: 충돌 분석 + 트레이드오프 + 합의안 + 사용자 질문 (필요시)
 model: opus
-effort: max
+effort: high
 maxTurns: 10
 tools:
   - Read

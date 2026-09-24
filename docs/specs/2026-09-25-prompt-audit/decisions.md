@@ -20,6 +20,15 @@ W-032·W-036·W-040·W-042·W-043 이 이미 스펙·CHANGELOG-archive 에서 �
 트랙에 줄 수 없다 → 컨트롤이 병합 후 `export-harness.sh` 로 한 번 재생성. 워커의
 `verify-done.sh` 에서 §11 red 는 **예상된 것**이고 보고 대상이지 수정 대상이 아니다.
 
+### D-4 opus 에이전트 5종 effort max → high (2026-09-25, 실측)
+
+`--compare 2026-09-20` 에서 opus/max 3종이 600s 타임아웃, review-code(max) 3~5배 지연.
+devils-advocate 단독 직렬 재실행도 570s 초과 `[confirmed n=2]` → 원인은 `--effort max`
+전달(이번에 처음), 병렬 경합 아님. 기준선은 세션 기본 `effortLevel: high` 로 잰 것이므로
+검증된 값은 `high` 다. `max` 지정(2.0.0 시절)에는 근거 기록이 없다. 다섯 에이전트를 `high`
+로 맞추고, T4 가 effort 를 측정 축에 넣은 뒤 기준선을 재생성한다. 등급: P1(정책값) —
+컨트롤이 결정하고 기록, 사용자에게 보고.
+
 ### D-3 eval 회귀 측정은 컨트롤이 병합 후 1회
 
 `run-evals.sh`(인자 없음)는 API 비용이 든다. 워커는 `--validate`/`--dry-run` 만 돌리고,

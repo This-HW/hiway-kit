@@ -5,7 +5,7 @@ description: |
   MUST USE when: "리뷰", "코드 검토", "봐줘", "확인해줘" 요청.
   OUTPUT: 침투 테스트 형식 리뷰 결과
 model: opus
-effort: max
+effort: high
 maxTurns: 10
 tools:
   - Read

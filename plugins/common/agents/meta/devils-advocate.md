@@ -5,7 +5,7 @@ description: |
   MUST USE when: 아키텍처 설계 리뷰, 기획서 검토, multi-perspective-review 10번째 관점.
   OUTPUT: 실패 시나리오 + 확률 + 완화 방안
 model: opus
-effort: max
+effort: high
 maxTurns: 10
 tools:
   - Read

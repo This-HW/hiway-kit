@@ -6,7 +6,7 @@ description: |
   MUST USE when: 새 서비스/기능에 비즈니스 규칙 정의가 필요할 때.
   OUTPUT: CALC/VAL/STATE/POL 규칙
 model: opus
-effort: max
+effort: high
 maxTurns: 10
 isolation: worktree
 tools:

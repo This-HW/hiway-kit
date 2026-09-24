@@ -70,6 +70,18 @@ Golden Signals·AAA 정의, Jest/Prisma 스위트 등 모델이 이미 아는 �
   에이전트 frontmatter `effort` 를 `--effort` 로 전달(전에는 배포 깊이와 다른 기본값으로
   측정했다). 두 동작을 고정하는 테스트 추가(되돌려-FAIL 확인).
 
+### Changed — opus 에이전트 5종 `effort: max → high` (실측으로 결정)
+
+eval 러너가 처음으로 frontmatter `effort` 를 `--effort` 로 전달하자 `opus + effort: max` 인
+`devils-advocate`·`consensus-builder`·`define-business-logic` 이 **600s 타임아웃**으로 끝났고
+`review-code`(max) 4건은 195~589s 로 기준선(59~126s)의 3~5배가 됐다. 단독 직렬 재실행에서도
+devils-advocate 는 570s 를 넘겼다 `[confirmed n=2 — 병렬 경합 아님]`. 기준선(2026-09-20)은
+`--effort` 없이 잰 것이라 세션 기본값(`~/.claude/settings.json effortLevel: high`)으로 돌았고,
+그 조건에서 전부 통과했다. 즉 지금까지 "검증된" 동작은 `high` 였고 `max` 는 한 번도 게이트를
+통과한 적이 없는 값이다(2.0.0 시절 지정, 근거 기록 없음). 다섯 에이전트(`clarify-requirements`
+포함)를 실측된 값 `high` 로 맞췄다. maxTurns 10 짜리 리뷰·기획 에이전트가 호출당 10분을
+넘기는 것은 배포 품질 문제이기도 하다. sonnet `security-scan` 의 `max` 는 243s 로 통과해 유지.
+
 ### 운영 기록
 
 - 세 워커(T1 opus · T2 sonnet · T3 opus)를 Orca 로 디스패치했고 컨트롤이 각 트리에서 게이트를
