@@ -10,7 +10,7 @@ effort: high
 > 4-Phase Debugging (Superpowers 패턴)
 > Reproduce → Isolate → Fix → Verify
 
-**즉시 실행하세요. 설명하지 말고 바로 실행합니다.**
+호출되면 바로 파이프라인을 시작한다. 단계가 바뀔 때 한 줄로 진행을 알린다.
 
 에러 정보: $ARGUMENTS
 
@@ -74,9 +74,10 @@ effort: high
 
 ```
 Task tool 사용:
-subagent_type: diagnose
+subagent_type: fix-bugs
 model: opus
 prompt: |
+  (진단 전용 — 이 단계에서는 수정하지 말고 원인·재현 명령·근거만 보고)
   다음 에러를 진단해주세요:
   $ARGUMENTS
 

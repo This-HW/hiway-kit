@@ -67,8 +67,7 @@ ls ~/.claude/plugins/*/*/skills/ 2>/dev/null    # 설치된 다른 플러그인 
 
 - frontmatter: `name`(kebab-case, 파일 경로와 일치) · `description`(**영문**, 트리거
   조건 포함) · `model` · `effort`
-- 본문: 사용 시점 표 → 절차(각 단계에 `[건너뛰기 금지]` 여부 명시) → 실패 모드 →
-  delegation signal
+- 본문: 사용 시점 표 → 절차(순서가 안전에 중요한 단계만 고정) → 실패 모드
 - **정직한 한계 절을 반드시 넣는다** — 이 스킬이 보장하지 *않는* 것.
 
 ### 4. 사용자 승인 대기 [건너뛰기 금지]
@@ -82,7 +81,7 @@ ls ~/.claude/plugins/*/*/skills/ 2>/dev/null    # 설치된 다른 플러그인 
 
 ```bash
 # 1) 스킬 파일 생성
-# 2) 세 표면 동기화 (F-025): CLAUDE.md Key Skills 표 · README · using-hiway-kit 트리거 맵
+# 2) 세 표면 동기화 (F-025): CLAUDE.md Key Skills 표 · README
 # 3) 카운트 검사
 python3 scripts/check_doc_counts.py
 # 4) 버전 범프 + CHANGELOG (플러그인 캐시는 버전으로 키잉된다)

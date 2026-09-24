@@ -30,7 +30,7 @@ evals 실행 불가(exit 2 SKIPPED)면 제안까지만 — SKIPPED를 통과로 
 > 위치 근거: 학습 루프(ledger→LESSONS)는 "같은 실수를 세션이 회피"하게 하지만,
 > 결함의 근원이 정의 파일에 있으면 매 세션 회피 비용을 낸다. 이 스킬은 그 근원을
 > 고치는 마지막 단계다. 안전망의 실체는 대상별로 다르다 — eval 커버리지가 있는
-> 대상(현재 review-code·fix-bugs·implement-code)은 이중 게이트, 그 외에는
+> 대상(`evals/scenarios/<agent>/` 존재로 판정)은 이중 게이트, 그 외에는
 > **사용자 승인 단일 게이트**임을 숨기지 않는다.
 
 ## 절차
@@ -68,8 +68,8 @@ evals 실행 불가(exit 2 SKIPPED)면 제안까지만 — SKIPPED를 통과로 
 - 결함 pattern → 그 결함을 만들었거나 막지 못한 정의를 식별
   (구현 결함→implement-code/implement-api 등, 리뷰 누락→review-code,
   절차 위반→skills/rules)
-- eval 리포트의 실패/flake 이력도 역추적 (예: delegation signal flake →
-  implement-code 계약 강화, 실사례)
+- eval 리포트의 실패/flake 이력도 역추적 (예: 빈 반환/절단 flake →
+  `## 완료:` 선언 계약 강화, 실사례)
 - **대상별 커버리지 태깅**: 각 제안 대상에 `[eval-covered]` 또는 `[no-eval-coverage]`
   를 붙인다 — 이후 게이트 경로가 갈린다.
 - 근원이 정의가 아니라 코드(hooks/scripts)면 범위 밖 — `fix-bugs` 위임 신호.

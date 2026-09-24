@@ -142,19 +142,6 @@ effort: max
 /multi-perspective-review W-042
 ```
 
-### 옵션 (향후 확장)
-
-```bash
-# 특정 관점만 선택
-/multi-perspective-review docs/api-spec.md --perspectives security,technical
-
-# Round 1만 실행 (빠른 피드백)
-/multi-perspective-review docs/feature.md --quick
-
-# 자동 수정 제안 활성화
-/multi-perspective-review docs/design.md --auto-fix
-```
-
 ---
 
 ## 실행 예시
@@ -280,30 +267,26 @@ effort: max
 
 ## 내부 구조 (메타 에이전트)
 
-이 스킬은 4개의 메타 에이전트를 조율합니다:
+이 스킬은 메타 에이전트를 조율한다(모델은 각 에이전트 frontmatter 가 소유한다). 반론 관점은 devils-advocate 가 맡는다:
 
 ### 1. Facilitator (조율자)
 
 - **역할**: 문서 분석, 필요 관점 식별
-- **모델**: opus
 - **출력**: 관점 목록 + 초점 영역
 
 ### 2. Synthesizer (종합자)
 
 - **역할**: 의견 통합, 충돌/중복 식별
-- **모델**: opus
 - **출력**: Round 1 종합, Round 2 최종 리포트
 
 ### 3. Consensus-Builder (합의 도출자)
 
 - **역할**: 충돌 분석, 트레이드오프 제시
-- **모델**: opus
 - **출력**: 충돌 해결안, 합의 수준
 
 ### 4. Impact-Analyzer (영향도 분석자)
 
 - **역할**: 시스템 영향 분석, 리스크/비용 평가
-- **모델**: sonnet
 - **출력**: 영향받는 시스템, 개발 기간, 리스크 분류
 
 **위치:** `plugins/common/agents/meta/`
@@ -312,14 +295,7 @@ effort: max
 
 ## 토큰 한도 (POL-002)
 
-```
-한도: 150,000 토큰
-
-3계층 방어:
-  80% → 분석 범위 축소 (Level 3 참고 문서 스킵)
-  90% → Round 3 강제 진입 (즉시 합의 도출)
-  100% → 현재 결과로 정리 후 종료
-```
+관점 수를 문서 복잡도에 맞게 줄이고, Round 2 에서 새 이슈가 없으면 바로 Round 3 으로 간다.
 
 ---
 

@@ -5,7 +5,7 @@ description: Session-start meta-skill. Kit workflow chain and Work system rules.
 
 # Using hiway-kit
 
-**행동 전, 적용 가능한 스킬이 1%라도 있으면 먼저 invoke한다.** 같은 규율을 제공하는
+**작업이 스킬의 사용 시점에 해당하면 구현 전에 그 스킬을 먼저 invoke한다.** 같은 규율을 제공하는
 플러그인(superpowers 등)이 함께 설치돼 있으면 그쪽을 따라도 된다 — 킷은 그 존재를
 가정하지도, 충돌하지도 않는다.
 
