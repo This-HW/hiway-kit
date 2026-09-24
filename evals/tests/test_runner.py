@@ -1677,10 +1677,12 @@ def test_eval_prompts_do_not_inherit_launcher_stdin(tmp_path, monkeypatch, invoc
 # 리포트에 모델이 아예 없어서 이 질문을 할 수조차 없었다.
 
 
-def _summary(models=None, pass_rate=1.0):
+def _summary(models=None, pass_rate=1.0, efforts=None):
     s = {"pass": 1, "fail": 0, "total": 1, "pass_rate": pass_rate}
     if models is not None:
         s["models"] = models
+    if efforts is not None:
+        s["efforts"] = efforts
     return {"agent-x": s}
 
 
@@ -1721,6 +1723,73 @@ def test_axis_check_does_not_mask_pass_rate_regression(tmp_path):
     base = _baseline_file(tmp_path, _summary(models=["sonnet"], pass_rate=1.0))
     out = runner.compare_baseline(_summary(models=["sonnet"], pass_rate=0.5), base)
     assert any("pass_rate" in r for r in out)
+
+
+# ── 측정 축(effort) 기록·비교 (W-044 T4) ─────────────────────────────────
+#
+# 왜 있는가: effort 는 --effort 로 전달되지만(T3) 결과에 남지 않았다. 2026-09-24
+# --compare 에서 effort:max 에이전트 3종이 600s 타임아웃으로 "후퇴"로 나왔는데,
+# 기준선은 --effort 없이 잰 것이었다 — 축이 바뀐 비교였고 compare 는 그 사실을
+# 말하지 못했다. model 축 테스트의 거울이다.
+
+
+def _effort_agent(tmp_path, effort):
+    agent = _agent(tmp_path)
+    agent.effort = effort
+    return agent
+
+
+@pytest.mark.parametrize("effort", ["max", None])
+def test_run_scenario_records_effort_axis(tmp_path, monkeypatch, effort):
+    """결과 레코드에 effort 가 model 과 나란히 실린다(없으면 None).
+
+    되돌려-FAIL: run_scenario 의 `kw.setdefault("effort", agent.effort)` 를 지우면
+    "max" 케이스가 None 을 받아 red 가 된다.
+    """
+
+    class R:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
+    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    res = runner.run_scenario(_effort_agent(tmp_path, effort), sc, timeout=5)
+    assert res["model"] == "sonnet"
+    assert res["effort"] == effort
+
+
+def test_summarize_collects_efforts_with_default_label():
+    """summary 는 정렬된 고유 effort 를 모으고, None 은 "default" 로 표기한다."""
+    results = [
+        {"agent": "a", "status": "pass", "model": "opus", "effort": "max"},
+        {"agent": "a", "status": "pass", "model": "opus", "effort": None},
+        {"agent": "a", "status": "fail", "model": "opus", "effort": "max"},
+    ]
+    s = runner.summarize(results)["a"]
+    assert s["efforts"] == ["default", "max"]
+    assert s["models"] == ["opus"]
+
+
+def test_effort_axis_mismatch_is_a_regression(tmp_path):
+    """model 이 같아도 effort 가 다르면 값 비교가 성립하지 않는다."""
+    base = _baseline_file(tmp_path, _summary(models=["opus"], efforts=["default"]))
+    out = runner.compare_baseline(_summary(models=["opus"], efforts=["max"]), base)
+    assert out, "effort 축이 달라졌는데 후퇴로 잡히지 않았다"
+    assert "측정 축이 다르다 — effort" in out[0]
+
+
+def test_same_effort_axis_passes(tmp_path):
+    base = _baseline_file(tmp_path, _summary(models=["opus"], efforts=["max"]))
+    assert runner.compare_baseline(_summary(models=["opus"], efforts=["max"]), base) == []
+
+
+def test_missing_effort_axis_in_baseline_is_notice_not_regression(tmp_path, capsys):
+    """effort 축 기록 이전 baseline(2026-09-20 등)은 회귀가 아니라 stderr 알림이다."""
+    base = _baseline_file(tmp_path, _summary(models=["opus"]))
+    out = runner.compare_baseline(_summary(models=["opus"], efforts=["max"]), base)
+    assert out == [], "미지를 회귀로 올리면 상시 red 가 된다"
+    assert "측정 축(effort)" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------

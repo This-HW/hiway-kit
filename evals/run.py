@@ -1321,6 +1321,7 @@ def _result_impl(
     work_dir: str | None = None,
     stdout: str = "",
     model: str = "",
+    effort: str | None = None,
 ) -> dict:
     excerpt = _fail_excerpt(stdout, checks) if status != "pass" else None
     return {
@@ -1330,6 +1331,11 @@ def _result_impl(
         # 순간 서로 다른 모델을 비교하면서 "후퇴 없음"이 나온다
         # (`docs/conventions/warning-signal.md` §측정 7).
         "model": model,
+        # effort 도 같은 축이다 — 같은 model 이라도 --effort 유무로 깊이·소요시간이
+        # 달라진다(2026-09-24: --effort 없이 잰 기준선과 effort:max 실행을 비교해
+        # 600s 타임아웃이 "후퇴"로 나왔고 compare 는 축이 바뀐 사실을 말하지 못했다).
+        # None = frontmatter 에 effort 가 없어 --effort 를 싣지 않은 실행.
+        "effort": effort,
         "scenario": scenario.scenario_id,
         "status": status,
         "checks": checks,
@@ -1345,8 +1351,9 @@ def _result_impl(
 
 
 def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
-    def _result(*a, **kw):  # 이 함수 안의 모든 결과에 측정 축(model)을 싣는다
+    def _result(*a, **kw):  # 이 함수 안의 모든 결과에 측정 축(model·effort)을 싣는다
         kw.setdefault("model", agent.model)
+        kw.setdefault("effort", agent.effort)
         return _result_impl(*a, **kw)
 
     # fail-closed 가드: assertions 0개 = 채점 불가 = fail (적대적 리뷰 B / ATK-001).
@@ -1481,19 +1488,27 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
         )
 
 
+# effort 가 없는 실행(--effort 미전달)을 summary 에 표기하는 값. None 을 그대로
+# 두면 정렬·JSON 비교에서 "기록 없음"과 구별되지 않는다.
+EFFORT_DEFAULT = "default"
+
+
 def summarize(results: list[dict]) -> dict:
     summary: dict[str, dict] = {}
     for r in results:
-        s = summary.setdefault(r["agent"], {"pass": 0, "fail": 0, "total": 0})
+        s = summary.setdefault(
+            r["agent"],
+            {"pass": 0, "fail": 0, "total": 0, "models": set(), "efforts": set()},
+        )
         s["total"] += 1
         s["pass" if r["status"] == "pass" else "fail"] += 1
-        for m in ({r.get("model")} - {None, ""}):
-            s.setdefault("models", []).append(m) if m not in s.setdefault(
-                "models", []
-            ) else None
+        if r.get("model"):
+            s["models"].add(r["model"])
+        s["efforts"].add(r.get("effort") or EFFORT_DEFAULT)
     for s in summary.values():
         s["pass_rate"] = s["pass"] / s["total"] if s["total"] else 0.0
-        s["models"] = sorted(s.get("models", []))
+        s["models"] = sorted(s["models"])
+        s["efforts"] = sorted(s["efforts"])
     return summary
 
 
@@ -1595,6 +1610,33 @@ def run_all(
     return {"results": results, "summary": summary}, exit_code
 
 
+# summary 키 → 사람이 읽는 축 이름. 축을 더하면 여기 한 줄이다.
+MEASUREMENT_AXES = (("models", "model"), ("efforts", "effort"))
+
+
+def _axis_mismatch(agent: str, key: str, label: str, cur: dict, base: dict) -> str | None:
+    """한 측정 축을 대조한다. 다르면 회귀 문구, 같거나 판정 불가면 None."""
+    cur_axis, base_axis = cur.get(key), base.get(key)
+    if cur_axis and base_axis is None:
+        # **미지는 회귀가 아니다 — 층이 다르다**(`warning-signal.md` §검토 3).
+        # 축 기록 이전에 만들어진 baseline 이면 이 조건이 **매번 참**이라,
+        # 회귀로 올리면 상시 red 가 되어 그 옆의 진짜 회귀까지 죽인다(§검토 1).
+        # 그래서 stderr 로 알리되 판정에는 넣지 않는다. baseline 을 한 번
+        # 재생성하면 이 줄은 다시 발화하지 않는다.
+        print(
+            f"[compare] {agent}: baseline 에 측정 축({label}) 기록이 없다 — "
+            f"현재 {cur_axis} 와 같은 축인지 확인 불가. baseline 재생성 권장",
+            file=sys.stderr,
+        )
+        return None
+    if cur_axis and base_axis and cur_axis != base_axis:
+        return (
+            f"{agent}: 측정 축이 다르다 — {label} {base_axis} → {cur_axis}. "
+            f"pass_rate 비교가 성립하지 않는다(같은 것을 세지 않았다)"
+        )
+    return None
+
+
 def compare_baseline(
     current_summary: dict, baseline_path: str, agent_filter: str | None = None
 ) -> list[str]:
@@ -1614,28 +1656,14 @@ def compare_baseline(
                 f"{agent}: baseline 항목에 pass_rate 없음 (손상된 baseline)"
             )
             continue
-        # **축 검사가 값 비교보다 먼저다.** 모델이 바뀌면 pass_rate 를 나란히 놓는
-        # 것 자체가 성립하지 않는다 — 그런데 값만 보면 "후퇴 없음"으로 조용히
-        # 통과한다(`warning-signal.md` §측정 7: 두 관측을 나란히 놓기 전에 같은
-        # 것을 셌는지 확인한다). baseline 에 축 기록이 없으면(구 형식) 비교를
-        # 건너뛰되 **침묵하지 않는다** — 축을 모르는 비교라는 사실을 남긴다.
-        cur_models, base_models = cur.get("models"), base.get("models")
-        if cur_models and base_models is None:
-            # **미지는 회귀가 아니다 — 층이 다르다**(`warning-signal.md` §검토 3).
-            # 축 기록 이전에 만들어진 baseline 이면 이 조건이 **매번 참**이라,
-            # 회귀로 올리면 상시 red 가 되어 그 옆의 진짜 회귀까지 죽인다(§검토 1).
-            # 그래서 stderr 로 알리되 판정에는 넣지 않는다. baseline 을 한 번
-            # 재생성하면 이 줄은 다시 발화하지 않는다.
-            print(
-                f"[compare] {agent}: baseline 에 측정 축(model) 기록이 없다 — "
-                f"현재 {cur_models} 와 같은 축인지 확인 불가. baseline 재생성 권장",
-                file=sys.stderr,
-            )
-        elif cur_models and base_models and cur_models != base_models:
-            regressions.append(
-                f"{agent}: 측정 축이 다르다 — model {base_models} → {cur_models}. "
-                f"pass_rate 비교가 성립하지 않는다(같은 것을 세지 않았다)"
-            )
+        # **축 검사가 값 비교보다 먼저다.** 모델·effort 가 바뀌면 pass_rate 를
+        # 나란히 놓는 것 자체가 성립하지 않는다 — 그런데 값만 보면 "후퇴 없음"으로
+        # 조용히 통과한다(`warning-signal.md` §측정 7: 두 관측을 나란히 놓기 전에
+        # 같은 것을 셌는지 확인한다).
+        for key, label in MEASUREMENT_AXES:
+            mismatch = _axis_mismatch(agent, key, label, cur, base)
+            if mismatch:
+                regressions.append(mismatch)
         if cur["pass_rate"] < base["pass_rate"]:
             regressions.append(
                 f"{agent}: pass_rate {cur['pass_rate']:.2f} < baseline {base['pass_rate']:.2f}"
