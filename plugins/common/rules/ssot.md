@@ -5,9 +5,7 @@ portable: true
 
 # SSOT (Single Source of Truth) Rules
 
-- ALWAYS define error types, API endpoints, and env vars in exactly one place;
-  NEVER copy values — reference the single definition (import/include/require, …)
-- ALWAYS structure code so one change propagates everywhere — editing 10 files
-  for one change is an SSOT violation signal, as is the same bug in multiple places
-- ALWAYS route all errors through a single central handler with structured fields
-  (`code`, `message`, `timestamp`, `severity`) — NEVER scatter error logic across modules
+- Define error types, API endpoints, and env vars in one place and reference that
+  definition — copied values get fixed on one side only and drift.
+- One change that needs edits in many files, or the same bug in several places, is an
+  SSOT violation signal. If the project has a central error handler, route errors through it.

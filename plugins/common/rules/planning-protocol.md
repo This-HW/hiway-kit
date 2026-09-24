@@ -5,8 +5,8 @@ portable: true
 
 # Planning Protocol Rules
 
-NEVER implement based on assumption. ALWAYS verify against specs or ask the user.
-NEVER hedge; 추측 어휘 대신 "기획에 따르면"/"확인 결과".
+명세로 확인되지 않은 전제는 아래 등급으로 판정해 처리한다 — P0만 멈추고 묻는다.
+확인한 것과 추측을 구분한다: 근거가 있으면 출처("기획에 따르면"/"확인 결과")를 붙이고, 없으면 미확인이라고 적는다.
 
 ## 모호함 등급 (P0~P3) — 이 규범이 소유한다
 

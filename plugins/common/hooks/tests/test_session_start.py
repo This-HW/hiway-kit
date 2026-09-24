@@ -213,7 +213,8 @@ class TestLoadRules:
         )
         result = load_rules(tmp_path, include_task_resume=False)
         assert "Full agent body" not in result
-        assert "read rules/agent-system.md when selecting an agent" in result
+        # 소비자 cwd 에는 rules/ 가 없으므로 플러그인 쪽 절대 경로로 렌더된다
+        assert f"read {rules_dir}/agent-system.md when selecting an agent" in result
 
     def test_invalid_tier_skipped(self, tmp_path):
         rules_dir = tmp_path / "rules"
@@ -566,7 +567,7 @@ class TestPortableOnlyFilter:
         assert "rules/agent-system.md" not in filtered
         assert "rules/agent-delegation-chain.md" not in filtered
         # portable 규범은 그대로 남는다.
-        assert "verify-done.sh" in filtered
+        assert "# Definition of Done" in filtered
         assert "ExitWorktree" in filtered
 
 

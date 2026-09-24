@@ -294,7 +294,8 @@ def load_rules(
         elif tier == "reference":
             index_line = fm.get("indexLine", "").strip()
             if index_line:
-                index_lines.append(f"- {index_line}")
+                # 소비자 cwd에는 rules/가 없다 — 플러그인 캐시의 절대 경로로 렌더한다.
+                index_lines.append(f"- {index_line.replace('rules/', f'{rules_dir}/', 1)}")
 
     if index_lines:
         bodies.append("참고(필요할 때 읽어라):\n" + "\n".join(index_lines))
