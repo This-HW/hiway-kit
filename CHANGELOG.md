@@ -69,6 +69,11 @@ Golden Signals·AAA 정의, Jest/Prisma 스위트 등 모델이 이미 아는 �
 - `evals/run.py`: LLM judge 를 `SCORE:` 정규식에서 `--json-schema`(`structured_output`) 로,
   에이전트 frontmatter `effort` 를 `--effort` 로 전달(전에는 배포 깊이와 다른 기본값으로
   측정했다). 두 동작을 고정하는 테스트 추가(되돌려-FAIL 확인).
+- 그리고 **effort 를 측정 축으로 기록·비교한다** — model 과 같은 규칙(결과 레코드 `effort`,
+  summary `efforts`, `compare` 는 축이 다르면 회귀·baseline 에 축이 없으면 알림).
+  `--effort` 를 전달하기 시작한 순간 기준선과 다른 것을 재고 있었는데 러너가 그 사실을
+  말하지 못했다(`warning-signal.md` §측정 7) — 그 구멍을 닫는다. 기준선을 effort 축 포함으로
+  재생성했다.
 
 ### Changed — opus 에이전트 5종 `effort: max → high` (실측으로 결정)
 
