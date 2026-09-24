@@ -166,7 +166,7 @@ python3 "$EH" --target /path/to/project
 
 ## 이식되지 않는 것 (정직한 한계)
 
-훅(`protect-sensitive`·`stop-validator`·`auto-format`), 서브에이전트 정의 33종,
+훅(`protect-sensitive`·`stop-validator`·`auto-format`), 서브에이전트 정의 전부,
 그리고 Claude Code 프리미티브에 종속된 룰 5개(`agent-system`·`agent-delegation-chain`·
 `parallel-worktree`·`mcp-usage`·`task-resume`)는 이식되지 않는다. 생성물이 그 목록과
 사유를 표로 남긴다.

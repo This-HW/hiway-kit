@@ -1651,7 +1651,9 @@ def test_eval_prompts_do_not_inherit_launcher_stdin(tmp_path, monkeypatch, invoc
         assert kwargs.get("stdin") == subprocess.DEVNULL
         assert "-p" in cmd
         calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, "SCORE: 8", "")
+        # judge 는 --json-schema 결과(structured_output)를 읽는다; 시나리오 쪽은 텍스트 정규식.
+        out = '{"structured_output": {"score": 8}, "result": "SCORE: 8"}'
+        return subprocess.CompletedProcess(cmd, 0, out, "")
 
     monkeypatch.setattr(runner.subprocess, "run", isolated_run)
     if invocation == "judge":
@@ -1719,3 +1721,44 @@ def test_axis_check_does_not_mask_pass_rate_regression(tmp_path):
     base = _baseline_file(tmp_path, _summary(models=["sonnet"], pass_rate=1.0))
     out = runner.compare_baseline(_summary(models=["sonnet"], pass_rate=0.5), base)
     assert any("pass_rate" in r for r in out)
+
+
+# ---------------------------------------------------------------------------
+# judge 구조화 출력 · effort 전달 (W-044 T3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("stdout", "expected"),
+    [
+        ('{"structured_output": {"score": 8}}', 8),
+        # 구 형식 텍스트 — 정규식 파싱으로 되돌아가면 9 가 나와 red 가 된다
+        ("SCORE: 9", None),
+        ('{"result": "SCORE: 9"}', None),
+        ('{"structured_output": {"score": "8"}}', None),
+    ],
+)
+def test_judge_score_reads_only_structured_output(stdout, expected):
+    """judge 점수는 --json-schema 결과의 structured_output.score 에서만 나온다."""
+    r = subprocess.CompletedProcess(["claude"], 0, stdout, "")
+    assert runner._judge_score(r) == expected
+
+
+@pytest.mark.parametrize(("effort", "expected_tail"), [("high", ["--effort", "high"]), (None, None)])
+def test_run_scenario_cmd_carries_agent_effort(tmp_path, effort, expected_tail):
+    """배포되는 effort 그대로 측정한다 — 있으면 --effort 를 싣고, 없으면 싣지 않는다."""
+    agent = runner.AgentDef(
+        name="fix-bugs",
+        path=tmp_path / "fix-bugs.md",
+        model="sonnet",
+        tools=["Read"],
+        disallowed_tools=["Task"],
+        system_prompt="테스트용",
+        effort=effort,
+    )
+    cmd = runner.ClaudeCodeHarness().run_scenario_cmd(agent, "과제")
+    if expected_tail is None:
+        assert "--effort" not in cmd
+        return
+    i = cmd.index("--effort")
+    assert cmd[i : i + 2] == expected_tail

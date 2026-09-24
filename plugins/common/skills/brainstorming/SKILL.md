@@ -8,16 +8,15 @@ description: Design and spec before any planning or code. MUST USE before new fe
 설계 승인 없이 plan-task를 invoke하거나 코드를 작성하면 안 됩니다.
 
 <HARD-GATE>
-plan-task 호출, 코드 작성, 파일 생성 — 어떤 구현 행동도 사용자가 설계를 승인하기 전까지 금지입니다. 작업이 단순해 보여도 예외 없음.
+이 스킬이 invoke된 작업은 사용자가 설계를 승인하기 전까지 plan-task 호출·코드 작성·파일 생성을 하지 않는다 — 승인 없는 구현은 되돌리는 비용이 크다.
 </HARD-GATE>
 
 ## 체크리스트
 
 진입 즉시 ToolSearch("select:TaskCreate,TaskUpdate,TaskList")로 Task 도구를 로드한 후,
 
-> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `ToolSearch`가 Task 계열을
-> 반환하지 않는 호스트/세션이 있다(F-038). 그때는 `./scripts/checklist.sh` 기반
-> durable checklist로 추적한다. 규율 SSOT: `skills/plan-task/references/task-tools-fallback.md`.
+> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `plan-task/references/task-tools-fallback.md`
+> 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
 아래 항목 각각에 대해 TaskCreate를 실행하세요.
 
 **Task 네이밍 규약:** `[Brainstorm] {항목명}` (plan-task의 `[Planning]` Task와 구분)

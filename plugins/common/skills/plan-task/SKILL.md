@@ -37,9 +37,8 @@ Step 0 진입 즉시, Work ID 확보 전에 스킬 자체 진행을 추적할 Ta
 
 1. `ToolSearch("select:TaskCreate,TaskUpdate,TaskList")` 실행
 
-> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `ToolSearch`가 Task 계열을
-> 반환하지 않는 호스트/세션이 있다(F-038). 그때는 `./scripts/checklist.sh` 기반
-> durable checklist로 추적한다. 규율 SSOT: `skills/plan-task/references/task-tools-fallback.md`.
+> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `plan-task/references/task-tools-fallback.md`
+> 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
 2. 다음 Tasks 생성 (이미 `[Planning]` Task 있으면 스킵):
 
 ```

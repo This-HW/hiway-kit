@@ -68,9 +68,8 @@ Work ID 확보 후 반드시 실행:
 
 1. `ToolSearch("select:TaskCreate,TaskUpdate,TaskList")` — 스키마 fetch
 
-> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `ToolSearch`가 Task 계열을
-> 반환하지 않는 호스트/세션이 있다(F-038). 그때는 `./scripts/checklist.sh` 기반
-> durable checklist로 추적한다. 규율 SSOT: `skills/plan-task/references/task-tools-fallback.md`.
+> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `plan-task/references/task-tools-fallback.md`
+> 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
 2. `TaskList` 실행 → subject가 `[W-XXX]`로 시작하는 Task 있으면 상태 확인 후 재개 (재생성 스킵, W-XXX는 현재 Work ID)
 3. Task 없으면 → Step 1: Development Tasks 생성으로 이동
 
@@ -170,8 +169,9 @@ Agent(task_C) ─┘
 - **미완 1항목/iteration**: 한 iteration은 checklist 미완 항목 **하나**만 목표로 한다
   (한 번에 다수 항목을 "완료"로 몰아 찍지 않는다 — 검증 없는 일괄 통과 방지).
 - **verify 통과 전 passes 금지**: `checklist.json`의 `passes:true`는 오직
-  `./scripts/checklist.sh pass <id>`가 항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만
-  전환된다. 모델 판단으로 completed를 self-mark하지 않는다.
+  checklist `pass <id>`(경로는 `plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
+  항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만 전환된다.
+  모델 판단으로 completed를 self-mark하지 않는다.
 - **상태 쓰기는 메인 세션 소유**: `checklist.json`·`progress.md` 쓰기는 **메인 세션**만
   수행한다. worktree subagent는 코드만 변경하고 상태 파일은 건드리지 않는다
   (`rules/parallel-worktree.md` 병합 충돌 해소 — 상태는 단일 writer).
@@ -255,8 +255,8 @@ review-code/security-scan 결과에 **발견된 결함이 있으면(pass·fail �
 ```bash
 # category ∈ {lint, security, architecture, test, convention}
 # severity ∈ {critical, high, medium, low}
-# (work.sh와 동일한 ./scripts 관례 — CLAUDE_PLUGIN_ROOT 의존 없음)
-./scripts/feedback.sh upsert <category> <severity> "<결함 요지>"
+# 경로는 plan-task/references/task-tools-fallback.md 의 플러그인 루트 해석을 따른다
+python3 "<plugin root>/hooks/feedback_ledger.py" upsert <category> <severity> "<결함 요지>"
 ```
 
 - 발견된 결함만 기록 (통과 시 회피 패턴은 노이즈라 기록 안 함)
@@ -280,8 +280,8 @@ review-code/security-scan 결과에 **발견된 결함이 있으면(pass·fail �
 
 <!-- Pattern from: superpowers/verification-before-completion -->
 T-review, T-security 결과를 구조적으로 검증:
-- review-code `decision` 필드 == `ACCEPT` 인가?
-- review-code `critical_count` == 0, `high_count` == 0 인가?
+- review-code 리포트의 `## 판정:` 이 `[ACCEPT]` 인가 (CRITICAL·HIGH 0건)?
+- 리포트가 `## 완료:` 줄로 끝나는가?
 - security-scan 결과에 CRITICAL/HIGH == 0 인가?
 
 → 모두 충족 시에만 `T-merge` 실행 ("이슈 없음" 판정)

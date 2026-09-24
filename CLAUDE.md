@@ -194,6 +194,8 @@ cache), but `scripts/` and `evals/` are repo-local and take effect immediately.
 Task를 갖지 않는 이유는 "main만 조율" 도그마가 아니라, 우리 스케일에서 에이전트 중첩이
 성능 이득 없이 예측불가능성·디버깅 부채만 더하기 때문이다.
 
+킷이 **소비자에게** 제공하는 모델이다(이 레포 자체의 협업 수단은 `coordination.md`).
+
 | 작업 규모 | 오케스트레이션 |
 | --------- | -------------- |
 | Small / Medium | 스킬 주도 플랫 위임 (main이 Agent 병렬 dispatch → 결과 수집). 예측가능·검증된 경로 |
