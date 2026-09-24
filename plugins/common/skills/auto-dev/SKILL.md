@@ -169,8 +169,9 @@ Agent(task_C) ─┘
 - **미완 1항목/iteration**: 한 iteration은 checklist 미완 항목 **하나**만 목표로 한다
   (한 번에 다수 항목을 "완료"로 몰아 찍지 않는다 — 검증 없는 일괄 통과 방지).
 - **verify 통과 전 passes 금지**: `checklist.json`의 `passes:true`는 오직
-  `./scripts/checklist.sh pass <id>`가 항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만
-  전환된다. 모델 판단으로 completed를 self-mark하지 않는다.
+  checklist `pass <id>`(경로는 `plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
+  항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만 전환된다.
+  모델 판단으로 completed를 self-mark하지 않는다.
 - **상태 쓰기는 메인 세션 소유**: `checklist.json`·`progress.md` 쓰기는 **메인 세션**만
   수행한다. worktree subagent는 코드만 변경하고 상태 파일은 건드리지 않는다
   (`rules/parallel-worktree.md` 병합 충돌 해소 — 상태는 단일 writer).
