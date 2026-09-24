@@ -6,7 +6,77 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased]
+## [3.39.0] — 2026-09-25
+
+W-044 배치 — `/claude-api prompt-audit`(타깃: Claude Code 별칭이 가리키는 현 세대,
+Opus 5.5 / Sonnet 5 / Haiku 4.5) 결과 적용. 감사 리포트·제안 패치·트랙 브리프는
+`docs/specs/2026-09-25-prompt-audit/`. 발견의 핵심은 문체가 아니라 **기능 결함**이었다.
+49 파일, 프롬프트 텍스트 순삭제 약 1,900줄.
+
+### Fixed — 리뷰 게이트가 구조적으로 성립하지 않았다
+
+- `review` 스킬이 A~F 형식을 요구해 `review-code` 자체 출력 계약(`## 판정` / `## 완료:`)을
+  덮어썼고, 그러면 스킬 스스로 그 리포트를 "잘린 출력"으로 판정했다. `auto-dev` 는 어느
+  형식에도 없는 `decision`/`critical_count` 필드로 게이트했다. 셋을 `review-code` 계약 하나로
+  맞췄다.
+- `debug` 스킬이 존재하지 않는 `diagnose` 에이전트에 위임했다 → `fix-bugs`(진단 전용 지시).
+
+### Fixed — 소비자 환경에 없는 것을 가리켰다 (consumer-first)
+
+- SessionStart 가 매 세션 주입하는 참고 줄(indexLine)이 cwd 상대 경로 `rules/…` 였다 —
+  소비자 프로젝트에는 그 디렉토리가 없다. 플러그인 캐시의 절대 경로로 렌더한다(테스트 갱신).
+- `implement-code`·`review-code`·`plan-implementation` 이 한 번도 존재한 적 없는
+  `references/*.md` 를 "로드하라"고 지시했다(maxTurns 10 안에서 없는 파일을 찾다 리포트를
+  잃는 경로). `facilitator` 의 `.claude/rules/*`, DoD 룰의 `scripts/verify-done.sh`, 스킬 3곳의
+  `./scripts/checklist.sh`·`feedback.sh`, `web-research`·`research-external` 의 사라진 SSOT 절
+  포인터도 같은 부류 — 전부 실재하는 위치로 바꾸거나 제거했다.
+- `enforce-structure` 가 `project-structure.yaml` 이 없을 때 Feature-Sliced 레이아웃을 기본
+  규칙으로 강제해 소비자에게 거짓 Critical 을 냈다 → 레포의 지배적 관례를 기준으로 삼는다.
+
+### Changed — Task 없는 leaf 에이전트에게 위임을 외치지 않는다
+
+`disallowedTools: [Task]` 인 `implement-code`·`fix-bugs`·`verify-code`·`verify-integration`·
+`write-tests` 에 "⚠️ 반드시 verify-code로 위임하세요!" 가 있었다. 할 수 없는 명령은
+"위임합니다" 서술로 끝나는 반환값을 만든다. `다음 권장: X` 한 줄로 바꿨다 — dispatch 는
+호출한 스킬/세션의 몫이다.
+
+### Changed — 주입 룰에서 근거 없는 ALWAYS/NEVER 와 레포 내부 표식을 걷어냈다
+
+- `code-quality`: "20줄/3개/2단계" 같은 근거 없는 수치 clamp 9개를 근거 있는 산문으로.
+  킷 자체 훅의 의도된 fail-open 과 모순되던 "NEVER log-only" 도 함께. `ssot`: 모든 소비자에
+  중앙 에러 핸들러를 강제하던 줄 제거. `planning-protocol`: 첫 줄 "NEVER … ALWAYS ask" 가
+  바로 아래 P1/P3 등급(기본값 진행·자율)과 충돌해 과잉 질문을 유도했다 → 등급 판정으로.
+- `Spec N / W-0NN` 태그 4곳(소비자 `W-XXX` 네임스페이스와 충돌), `mcp-usage` 의 Sequential
+  Thinking 유도(항상-사고 모델에 외부 think 도구 = 과잉 계획)와 레포 전용 regression guard
+  문단, `task-resume` 의 파일 겹침 전제 없는 "동시 dispatch". 상시 주입 core 룰 합계 −351 B.
+- `using-hiway-kit`: "스킬이 1%라도 있으면 invoke" → 사용 시점에 해당하면 invoke.
+- 미러 해설본 5종·CHECKSUMS·MIRROR·AGENTS.md/GEMINI.md 를 새 문구로 재생성.
+
+### Removed — 에이전트 정의의 일반 튜토리얼과 골드 예시
+
+React/TypeScript 구현 패턴(implement-code 의 65%), git 명령 튜토리얼(에이전트에서 실행
+불가한 `rebase -i`, 공유 stash 에 위험한 `stash pop` 포함), OWASP 취약점 패턴, SOLID·Four
+Golden Signals·AAA 정의, Jest/Prisma 스위트 등 모델이 이미 아는 약 1,700줄. 채워진 "포인트
+시스템" 골드 예시에는 "형식 예시 — 값 복사 금지" 라벨을, 지어낸 "성공률 60%" 류는 삭제.
+`consensus-builder`·`facilitator` 의 결정론적 관점 선택 스크립트, MPR 의 미구현 옵션(`--auto-fix`)
+과 모델이 셀 수 없는 토큰 % 예산도 제거.
+
+### Added — 전 에이전트 출력 계약 + eval 러너 정합
+
+- maxTurns ≤ 10 인데 `## 출력 계약` 절이 없던 에이전트 21종에 3줄 계약(반환값 = 마지막
+  메시지 · 턴 한도 안 부분 보고 · `## 완료:` 선언)을 붙였다 — `security-scan` 이 이미 재현한
+  빈 반환 실패의 예방.
+- `evals/run.py`: LLM judge 를 `SCORE:` 정규식에서 `--json-schema`(`structured_output`) 로,
+  에이전트 frontmatter `effort` 를 `--effort` 로 전달(전에는 배포 깊이와 다른 기본값으로
+  측정했다). 두 동작을 고정하는 테스트 추가(되돌려-FAIL 확인).
+
+### 운영 기록
+
+- 세 워커(T1 opus · T2 sonnet · T3 opus)를 Orca 로 디스패치했고 컨트롤이 각 트리에서 게이트를
+  직접 돌린 뒤 순차 병합했다. 두 워커의 첫 기동은 새 터미널의 oh-my-zsh 업데이트 프롬프트가
+  `claude` 실행 명령을 삼켜 실패했다 — release 후 같은 워크트리에 `--retry-of` 로 재기동.
+- `work.sh new` 가 발급한 W-025 는 v2.18.0 배치 ID 와 충돌했다(발급기가 gitignore 된
+  `docs/works/` 만 센다) → W-044 로 재발급. 발급기 수정은 후속.
 
 ### Changed — agy 원인 판정 갱신: 쿼터는 **강한 정황**, 그리고 반대 결론이 남아 있던 자리 정정
 
