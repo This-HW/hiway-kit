@@ -32,107 +32,11 @@ disallowedTools:
 - 충돌 해결 및 히스토리 정리
 - Cherry-pick 및 선택적 병합
 
-## 브랜치 전략
+## 원칙
 
-### Git Flow
+브랜치·커밋 메시지 규칙은 프로젝트 관례(CLAUDE.md, `git log`)를 따른다.
 
-```
-main ─────────────────────────────────────────►
-       │                              ▲
-       └── develop ──────────────────►│
-              │           ▲           │
-              └── feature/xxx ───────►│
-```
-
-### GitHub Flow (권장)
-
-```
-main ─────────────────────────────────────────►
-       │              ▲
-       └── feature ───┘ (PR + Squash Merge)
-```
-
-## 커밋 메시지 컨벤션
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-### Type
-
-| 타입     | 설명                    |
-| -------- | ----------------------- |
-| feat     | 새 기능                 |
-| fix      | 버그 수정               |
-| docs     | 문서 변경               |
-| style    | 포맷팅 (코드 변경 없음) |
-| refactor | 리팩토링                |
-| test     | 테스트 추가/수정        |
-| chore    | 빌드, 설정 변경         |
-
-### 예시
-
-```
-feat(auth): add JWT refresh token support
-
-- Implement token refresh endpoint
-- Add refresh token storage
-- Update auth middleware
-
-Closes #123
-```
-
-## 자주 사용하는 명령어
-
-### 브랜치 관리
-
-```bash
-# 브랜치 생성 및 전환
-git checkout -b feature/new-feature
-
-# 원격 브랜치 추적
-git checkout -b feature/xxx origin/feature/xxx
-
-# 브랜치 삭제
-git branch -d feature/merged
-git push origin --delete feature/merged
-```
-
-### 히스토리 정리
-
-```bash
-# 최근 N개 커밋 수정
-git rebase -i HEAD~N
-
-# 커밋 메시지 수정
-git commit --amend
-
-# 스테이징 취소
-git reset HEAD <file>
-
-# 마지막 커밋 취소 (변경사항 유지)
-git reset --soft HEAD~1
-```
-
-### 머지 전략
-
-```bash
-# 일반 머지 (머지 커밋 생성)
-git merge feature/xxx
-
-# 리베이스 후 머지 (선형 히스토리)
-git rebase main
-git checkout main
-git merge feature/xxx
-
-# Squash 머지 (하나의 커밋으로)
-git merge --squash feature/xxx
-git commit -m "feat: implement feature xxx"
-```
+## 충돌 처리
 
 ### 충돌 해결
 
@@ -175,99 +79,6 @@ git add <resolved-files>
 git commit             # 또는 git rebase --continue
 ```
 
-### Cherry-pick
-
-```bash
-# 특정 커밋 가져오기
-git cherry-pick <commit-hash>
-
-# 여러 커밋 가져오기
-git cherry-pick <hash1> <hash2>
-
-# 범위로 가져오기
-git cherry-pick <start>..<end>
-```
-
-### Stash
-
-```bash
-# 임시 저장
-git stash
-
-# 메시지와 함께 저장
-git stash push -m "WIP: feature description"
-
-# 목록 확인
-git stash list
-
-# 복원
-git stash pop
-
-# 특정 stash 복원
-git stash apply stash@{2}
-```
-
-### Git Worktree (병렬 작업)
-
-**사용 케이스:**
-
-- 여러 브랜치 동시 작업 (feature + hotfix)
-- PR 리뷰하면서 다른 작업
-- 빌드 테스트하면서 개발 계속
-- 긴급 hotfix + 진행 중인 feature
-
-```bash
-# Worktree 추가 (새 디렉토리 생성)
-git worktree add ../myproject-hotfix hotfix/urgent-fix
-
-# 기존 브랜치로 Worktree 생성
-git worktree add ../myproject-feature2 feature/feature2
-
-# 새 브랜치로 Worktree 생성
-git worktree add -b feature/new-feature ../myproject-new-feature
-
-# Worktree 목록 확인
-git worktree list
-
-# Worktree 제거 (디렉토리 먼저 삭제)
-rm -rf ../myproject-hotfix
-git worktree prune
-```
-
-**워크플로우 예시:**
-
-```bash
-# 1. Feature 개발 중 hotfix 필요
-cd /project/myproject  # main worktree
-git worktree add ../myproject-hotfix -b hotfix/critical-bug main
-
-# 2. Hotfix 작업
-cd ../myproject-hotfix
-# ... 수정 및 커밋 ...
-git push origin hotfix/critical-bug
-
-# 3. Feature로 돌아가기
-cd ../myproject
-# Feature 작업 계속
-
-# 4. Hotfix 완료 후 정리
-rm -rf ../myproject-hotfix
-git worktree prune
-```
-
-**장점:**
-
-- stash 없이 브랜치 전환
-- 컴파일/빌드 상태 유지
-- IDE 설정 유지
-- 동시 작업 가능
-
-**주의사항:**
-
-- 같은 브랜치를 여러 worktree에서 체크아웃 불가
-- 디스크 공간 사용 (각 worktree는 별도 작업 디렉토리)
-- 제거 시 디렉토리 삭제 + worktree prune 필수
-
 ## 위험한 명령어 (주의)
 
 ```bash
@@ -299,7 +110,7 @@ git branch -a
 | 요청             | 작업             |
 | ---------------- | ---------------- |
 | 브랜치 생성/삭제 | branch 명령어    |
-| 커밋 정리        | rebase -i        |
+| 커밋 정리        | `reset --soft` 후 재커밋 (대화형 rebase는 실행 불가) |
 | 병합             | merge/rebase     |
 | 충돌 해결        | 보고 + 사용자 결정 대기 (임의 해결 금지) |
 | 히스토리 조회    | log              |
