@@ -137,15 +137,19 @@ ready_tasks = [
     if not 실제_blockedBy_of(t)
 ]
 
-# 2개 이상이면 병렬 실행
-if len(ready_tasks) >= 2:
-    # Agent 동시 dispatch
+# 2개 이상이고 수정 파일이 서로 겹치지 않을 때만 병렬 위임
+if len(ready_tasks) >= 2 and files_disjoint(ready_tasks):
     for task_id in ready_tasks:
         dispatch_agent(task_id)
 else:
-    # 단일 실행
-    execute(ready_tasks[0])
+    # 겹치거나 하나뿐이면 순차 실행
+    for task_id in ready_tasks:
+        execute(task_id)
 ```
+
+**이유:** 준비된 Task 가 둘이라는 사실만으로는 병렬이 안전하지 않다. 같은 파일을 동시에
+수정하면 통합 시점에 충돌이 남는다 — 판정 기준은 `parallel-worktree` 규범의 파일 소유권
+절이 소유한다.
 
 ---
 
@@ -186,10 +190,10 @@ T-6: blockedBy [T-4, T-5] → 둘 다 incomplete → [id_map[T-4], id_map[T-5]] 
 
 ```
 Task #51 (사용자 서비스 구현) — in_progress, blockedBy: 없음  ← 즉시 실행
-Task #52 (인증 서비스 구현)   — pending,     blockedBy: 없음  ← 동시 실행
+Task #52 (인증 서비스 구현)   — pending,     blockedBy: 없음  ← 파일이 안 겹치면 동시 실행
 Task #53 (API 통합 테스트)     — pending,     blockedBy: [51, 52] ← 51, 52 완료 후
 
-실행: #51, #52 Agent 동시 dispatch
+실행: #51, #52 수정 파일이 disjoint 면 병렬 위임, 겹치면 순차
 ```
 
 ---
