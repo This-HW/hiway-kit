@@ -1651,7 +1651,9 @@ def test_eval_prompts_do_not_inherit_launcher_stdin(tmp_path, monkeypatch, invoc
         assert kwargs.get("stdin") == subprocess.DEVNULL
         assert "-p" in cmd
         calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, "SCORE: 8", "")
+        # judge 는 --json-schema 결과(structured_output)를 읽는다; 시나리오 쪽은 텍스트 정규식.
+        out = '{"structured_output": {"score": 8}, "result": "SCORE: 8"}'
+        return subprocess.CompletedProcess(cmd, 0, out, "")
 
     monkeypatch.setattr(runner.subprocess, "run", isolated_run)
     if invocation == "judge":
