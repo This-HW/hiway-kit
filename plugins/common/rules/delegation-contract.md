@@ -2,6 +2,7 @@
 tier: reference
 portable: true
 portable_reason: 브리프·보고 계약은 호스트 무관 — control-loop·child-session 이 공유하는 계약(D-35)
+indexLine: 위임 브리프·보고 계약은 rules/delegation-contract.md 를 읽어라
 ---
 
 # Delegation Contract
