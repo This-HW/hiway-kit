@@ -1527,3 +1527,21 @@ def test_empty_rules_version_refuses(tmp_path):
     (root / "rules" / "VERSION").write_text("\n", encoding="utf-8")
     assert _mod.main(["--plugin-root", str(root), "--target", str(tmp_path)]) == 1
     assert not (tmp_path / "AGENTS.md").exists()
+
+
+def test_reference_rules_carry_deterministic_repo_fallback():
+    """참조 티어 안내가 설치 경로를 모르는 하네스에서도 해석된다 (C-ATK-004).
+
+    `AGENTS.md` 의 1차 독자(Gemini CLI·OpenCode 등)는 세션 시작 훅이 없어 절대 경로
+    안내를 받지 못한다. "플러그인 설치 경로" 만으로는 그 독자가 원문을 찾을 수 없으므로
+    저장소 URL + 저장소 안 경로를 결정적 폴백으로 싣는다 — **실물 규범**으로 확인한다.
+    """
+    block, _ = _mod.build_block(HOOKS_DIR.parent)
+    assert _mod.KIT_HOMEPAGE, "매니페스트 homepage/repository 를 못 읽었다 — 폴백 URL 이 빈다"
+    assert f"({_mod.KIT_HOMEPAGE})" in block
+    assert f"`{_mod.KIT_RULES_REPO_PATH}/<이름>.md`" in block
+    # 폴백 경로가 이 레포의 실제 규범 위치와 같아야 한다(배치가 바뀌면 여기서 red).
+    repo_root = HOOKS_DIR.parents[2]
+    assert (repo_root / _mod.KIT_RULES_REPO_PATH).resolve() == (
+        HOOKS_DIR.parent / "rules"
+    ).resolve()
