@@ -457,11 +457,23 @@ def test_resolve_pytest_python_caches_and_probes(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def _claude_json(result, models=("claude-sonnet-5",)):
+def _claude_json(result, models=("claude-sonnet-5",), tokens=None, **extra):
     """`claude -p --output-format json` 결과 형태 — 최종 텍스트는 `result`,
-    실제로 돈 모델 ID 는 `modelUsage` 의 키다. 모델 호출 없이 쓰는 픽스처."""
-    usage = {m: {"inputTokens": 1, "outputTokens": 1, "costUSD": 0.0} for m in models}
-    return json.dumps({"type": "result", "is_error": False, "result": result, "modelUsage": usage})
+    실제로 돈 모델 ID 는 `modelUsage` 의 키다. 모델 호출 없이 쓰는 픽스처.
+    `tokens` 는 모델별 outputTokens(기본 1), `extra` 는 최상위 필드 덮어쓰기."""
+    tokens = tokens or {}
+    usage = {
+        m: {"inputTokens": 1, "outputTokens": tokens.get(m, 1), "costUSD": 0.0} for m in models
+    }
+    data = {
+        "type": "result",
+        "subtype": "success",
+        "is_error": False,
+        "result": result,
+        "modelUsage": usage,
+    }
+    data.update(extra)
+    return json.dumps(data)
 
 
 def _agent(tmp_path):
@@ -679,7 +691,17 @@ def test_main_refuses_baseline_with_filter(tmp_path, monkeypatch):
                 "duration_s": 0.1,
             }
         ],
-        "summary": {"fix-bugs": {"pass": 1, "fail": 0, "total": 1, "pass_rate": 1.0}},
+        "summary": {
+            "fix-bugs": {
+                "pass": 1,
+                "fail": 0,
+                "total": 1,
+                "pass_rate": 1.0,
+                "models": ["sonnet"],
+                "efforts": ["default"],
+                "primary_models": ["claude-sonnet-5"],
+            }
+        },
     }
     monkeypatch.setattr(runner, "run_all", lambda *a, **k: (report, runner.EXIT_PASS))
     monkeypatch.setattr(runner, "BASELINE_DIR", tmp_path / "baseline")
@@ -1667,7 +1689,7 @@ def test_eval_prompts_do_not_inherit_launcher_stdin(tmp_path, monkeypatch, invoc
         assert "-p" in cmd
         calls.append(cmd)
         # judge 는 --json-schema 결과(structured_output)를 읽는다; 시나리오 쪽은 텍스트 정규식.
-        out = '{"structured_output": {"score": 8}, "result": "SCORE: 8"}'
+        out = '{"subtype": "success", "structured_output": {"score": 8}, "result": "SCORE: 8"}'
         return subprocess.CompletedProcess(cmd, 0, out, "")
 
     monkeypatch.setattr(runner.subprocess, "run", isolated_run)
@@ -1919,7 +1941,7 @@ def test_run_scenario_without_model_usage_records_empty_and_says_so(
 
     class R:
         returncode = 0
-        stdout = json.dumps({"result": "ok"})
+        stdout = json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "ok"})
         stderr = ""
 
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
@@ -1930,10 +1952,60 @@ def test_run_scenario_without_model_usage_records_empty_and_says_so(
     assert "resolved_models" in capsys.readouterr().err
 
 
-def test_error_results_carry_empty_resolved_models(tmp_path):
-    """실행 출력을 못 읽은 결과에도 필드가 있다(스키마 고정) — 값은 []."""
-    res = runner.run_scenario(_agent(tmp_path), _scenario(tmp_path, {}), timeout=5)
+def _fake_completed(stdout, returncode=0):
+    class R:
+        stderr = ""
+
+    R.returncode = returncode
+    R.stdout = stdout
+    return R()
+
+
+def _run_with_stdout(tmp_path, monkeypatch, stdout, returncode=0, pattern="ok"):
+    monkeypatch.setattr(
+        runner.subprocess, "run", lambda *a, **k: _fake_completed(stdout, returncode)
+    )
+    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": pattern}]})
+    return runner.run_scenario(_agent(tmp_path), sc, timeout=5)
+
+
+def _raise_timeout(*a, **k):
+    raise subprocess.TimeoutExpired(cmd="claude", timeout=5)
+
+
+@pytest.mark.parametrize("path", ["no_assertions", "timeout", "exit_1", "unparseable"])
+def test_error_results_carry_empty_resolved_models(tmp_path, monkeypatch, path):
+    """실행 출력을 못 읽은 **모든** 결과 경로에 축 필드가 있고 값은 [] (C-ATK-008).
+
+    exit≠0·해석 실패 경로의 stdout 에는 일부러 modelUsage 를 싣는다 — 그 경로가 출력을
+    읽어 축을 채우면 "못 읽은 실행"이 측정값처럼 보인다.
+    """
+    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    if path == "no_assertions":
+        sc = _scenario(tmp_path, {})
+    elif path == "timeout":
+        monkeypatch.setattr(runner.subprocess, "run", _raise_timeout)
+    elif path == "exit_1":
+        out = _claude_json("ok")
+        monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: _fake_completed(out, 1))
+    else:
+        out = _claude_json("ok", is_error=True)
+        monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: _fake_completed(out))
+    res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
+    assert res["status"] != "pass"
     assert res["resolved_models"] == []
+    assert res["primary_models"] == []
+
+
+def test_normal_run_does_not_emit_missing_usage_notice(tmp_path, monkeypatch, capsys):
+    """정상 경로에서는 "사용량 없음" 알림이 **뜨지 않는다** — 상시 발화하는 알림은 죽는다
+    (`warning-signal.md` §검토 1)."""
+    res = _run_with_stdout(tmp_path, monkeypatch, _claude_json("ok"))
+    assert res["status"] == "pass"
+    assert res["primary_models"] == ["claude-sonnet-5"]
+    err = capsys.readouterr().err
+    assert "모델 사용량이 없다" not in err
+    assert "축 기록 불가" not in err
 
 
 def test_summarize_collects_resolved_models_unique_sorted():
@@ -1944,46 +2016,155 @@ def test_summarize_collects_resolved_models_unique_sorted():
             "status": "fail",
             "model": "opus",
             "resolved_models": ["claude-opus-5-5", "claude-haiku-4-5"],
+            "primary_models": ["claude-opus-5-5"],
         },
         {"agent": "a", "status": "fail", "model": "opus", "resolved_models": []},
         {"agent": "a", "status": "fail", "model": "opus"},  # 축 도입 이전 레코드
     ]
     s = runner.summarize(results)["a"]
     assert s["resolved_models"] == ["claude-haiku-4-5", "claude-opus-5-5"]
+    assert s["primary_models"] == ["claude-opus-5-5"]
 
 
-def test_resolved_model_axis_mismatch_is_a_regression(tmp_path):
-    """(c) 별칭이 같아도 실제 모델이 바뀌면 값 비교가 성립하지 않는다.
+# ---------------------------------------------------------------------------
+# 주 모델(primary_models) — 기록과 비교의 분리 (W-045 리뷰 C-ATK-001·002)
+# ---------------------------------------------------------------------------
+#
+# 왜 있는가: 전체 목록(resolved_models)은 보조 모델이 회차마다 나타났다 사라진다.
+# 그것을 `!=` 로 비교하면 에이전트 품질과 무관하게 게이트가 red 가 된다. 기록은 전부
+# 남기고, 비교 축은 주 모델 하나로 좁힌다.
 
-    되돌려-FAIL: MEASUREMENT_AXES 에서 resolved_models 줄을 지우면 [] 가 나와 red.
+
+@pytest.mark.parametrize(
+    "requested,tokens,expected",
+    [
+        # 별칭 패밀리 매치 — 보조 모델이 토큰을 더 많이 써도 요청한 쪽이 주 모델
+        ("opus", {"claude-opus-5-5": 10, "claude-haiku-4-5-20251001": 999}, ["claude-opus-5-5"]),
+        ("haiku", {"claude-haiku-4-5-20251001": 0}, ["claude-haiku-4-5-20251001"]),
+        # frontmatter 가 전체 ID 를 쓰는 경우
+        ("claude-sonnet-5", {"claude-sonnet-5": 3, "claude-haiku-4-5": 9}, ["claude-sonnet-5"]),
+        # 패밀리 안에서도 1개 — 두 세대가 섞이면 토큰이 큰 쪽
+        ("opus", {"claude-opus-5-5": 50, "claude-opus-4-1": 5}, ["claude-opus-5-5"]),
+        # 매치 없음 → outputTokens 최대 1개
+        ("opus", {"claude-sonnet-5": 7, "claude-haiku-4-5": 3}, ["claude-sonnet-5"]),
+        # 부분 문자열은 패밀리가 아니다(세그먼트 단위)
+        ("son", {"claude-sonnet-5": 1, "claude-haiku-4-5": 2}, ["claude-haiku-4-5"]),
+        # 근거 없음 → 모름
+        ("opus", {"claude-sonnet-5": 0}, []),
+        ("opus", {}, []),
+    ],
+)
+def test_select_primary_models(requested, tokens, expected):
+    assert runner.select_primary_models(requested, tokens) == expected
+
+
+def test_run_scenario_records_primary_models_by_alias_family(tmp_path, monkeypatch):
+    """전체 목록은 기록으로 남고, 주 모델은 별칭 패밀리로 골라진다.
+
+    되돌려-FAIL: `primary_models=primary` 인자를 지우면 [] 가 되어 red.
     """
-    cur = _summary(models=["opus"])
-    cur["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
-    base_s = _summary(models=["opus"])
-    base_s["agent-x"]["resolved_models"] = ["claude-opus-5-1"]
-    out = runner.compare_baseline(cur, _baseline_file(tmp_path, base_s))
+    agent = _agent(tmp_path)
+    out = _claude_json(
+        "ok",
+        models=("claude-sonnet-5", "claude-haiku-4-5"),
+        tokens={"claude-sonnet-5": 5, "claude-haiku-4-5": 50},
+    )
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: _fake_completed(out))
+    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    res = runner.run_scenario(agent, sc, timeout=5)
+    assert res["resolved_models"] == ["claude-haiku-4-5", "claude-sonnet-5"]
+    assert res["primary_models"] == ["claude-sonnet-5"]
+
+
+def _axes(primary, resolved):
+    s = _summary(models=["opus"], efforts=["max"])
+    s["agent-x"]["primary_models"] = primary
+    s["agent-x"]["resolved_models"] = resolved
+    return s
+
+
+def test_auxiliary_model_drift_is_notice_not_regression(tmp_path, capsys):
+    """(C-ATK-001) 주 모델이 같고 보조 모델만 나타났다면 회귀가 아니다 — 알림만.
+
+    되돌려-FAIL: MEASUREMENT_AXES 의 비교 대상을 resolved_models 로 되돌리면
+    "측정 축이 다르다" 가 나와 red.
+    """
+    base = _baseline_file(tmp_path, _axes(["claude-opus-5-5"], ["claude-opus-5-5"]))
+    cur = _axes(["claude-opus-5-5"], ["claude-haiku-4-5", "claude-opus-5-5"])
+    assert runner.compare_baseline(cur, base) == []
+    assert "전체 모델 목록이 다르다(비회귀)" in capsys.readouterr().err
+
+
+def test_primary_model_axis_mismatch_is_a_regression(tmp_path):
+    """(c) 별칭이 같아도 주 모델(실제 ID)이 바뀌면 값 비교가 성립하지 않는다.
+
+    되돌려-FAIL: MEASUREMENT_AXES 에서 primary_models 줄을 지우면 [] 가 나와 red.
+    """
+    base = _baseline_file(tmp_path, _axes(["claude-opus-5-1"], ["claude-opus-5-1"]))
+    out = runner.compare_baseline(_axes(["claude-opus-5-5"], ["claude-opus-5-5"]), base)
     assert out, "실제 모델이 바뀌었는데 후퇴로 잡히지 않았다"
-    assert "측정 축이 다르다 — resolved_model" in out[0]
+    assert "측정 축이 다르다 — primary_model" in out[0]
 
 
-def test_same_resolved_model_axis_passes(tmp_path):
-    cur = _summary(models=["opus"])
-    cur["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
-    base_s = _summary(models=["opus"])
-    base_s["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
-    assert runner.compare_baseline(cur, _baseline_file(tmp_path, base_s)) == []
+def test_same_primary_model_axis_passes(tmp_path, capsys):
+    base = _baseline_file(tmp_path, _axes(["claude-opus-5-5"], ["claude-opus-5-5"]))
+    assert runner.compare_baseline(_axes(["claude-opus-5-5"], ["claude-opus-5-5"]), base) == []
+    assert capsys.readouterr().err == ""
 
 
-def test_missing_resolved_model_axis_in_baseline_is_notice_not_regression(tmp_path, capsys):
-    """(d) 축 도입 이전 기준선(2026-09-24 등)은 회귀가 아니라 stderr 알림이다.
+def test_missing_primary_model_axis_in_baseline_is_notice_not_regression(tmp_path, capsys):
+    """(d) 축 도입 이전 기준선(2026-09-26 등)은 회귀가 아니라 stderr 알림이다.
 
-    되돌려-FAIL: MEASUREMENT_AXES 에서 resolved_models 줄을 지우면 알림이 사라져 red.
+    되돌려-FAIL: MEASUREMENT_AXES 에서 primary_models 줄을 지우면 알림이 사라져 red.
     """
-    cur = _summary(models=["opus"])
-    cur["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
+    cur = _axes(["claude-opus-5-5"], ["claude-opus-5-5"])
     out = runner.compare_baseline(cur, _baseline_file(tmp_path, _summary(models=["opus"])))
     assert out == [], "미지를 회귀로 올리면 상시 red 가 된다"
-    assert "측정 축(resolved_model)" in capsys.readouterr().err
+    assert "측정 축(primary_model)" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("side", ["current", "baseline"])
+def test_empty_axis_is_unknown_like_missing(tmp_path, capsys, side):
+    """(C-ATK-002) `[]` 는 `None` 과 같은 "모름" — 회귀도 아니지만 **침묵도 아니다**.
+
+    되돌려-FAIL: `_axis_mismatch` 의 `if not cur_axis or not base_axis` 를 원래의
+    `if cur_axis and base_axis is None` 로 되돌리면 `[]` 쪽 알림이 사라져 red.
+    """
+    full, empty = _axes(["claude-opus-5-5"], ["claude-opus-5-5"]), _axes([], [])
+    cur, base = (empty, full) if side == "current" else (full, empty)
+    assert runner.compare_baseline(cur, _baseline_file(tmp_path, base)) == []
+    assert "측정 축(primary_model) 기록이 없다" in capsys.readouterr().err
+
+
+def test_main_refuses_baseline_with_empty_compare_axis(tmp_path, monkeypatch, capsys):
+    """(C-ATK-002) 비교 축이 빈 에이전트가 있으면 기준선 저장을 거부하고 exit 1.
+
+    빈 축 기준선은 이후 모든 compare 에서 그 축을 "모름"으로 만들어 회귀를 영구히 못 본다.
+    되돌려-FAIL: main 의 `empty_axis_agents` 분기를 지우면 저장되고 rc 0 이라 red.
+    """
+    summary = {
+        "fix-bugs": {
+            "pass": 1,
+            "fail": 0,
+            "total": 1,
+            "pass_rate": 1.0,
+            "models": ["sonnet"],
+            "efforts": ["default"],
+            "primary_models": [],
+        }
+    }
+    report = {"results": [], "summary": summary}
+    monkeypatch.setattr(runner, "run_all", lambda *a, **k: (report, runner.EXIT_PASS))
+    monkeypatch.setattr(runner, "BASELINE_DIR", tmp_path / "baseline")
+    monkeypatch.setattr(runner, "REPORTS_DIR", tmp_path / "reports")
+    assert runner.main(["--baseline"]) == runner.EXIT_FAIL
+    assert not (tmp_path / "baseline").exists()
+    assert "fix-bugs: primary_model" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# 출력 해석 — 실행 실패·형태 관용·fail-closed (C-ATK-003·005·006)
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -1991,31 +2172,77 @@ def test_missing_resolved_model_axis_in_baseline_is_notice_not_regression(tmp_pa
     [
         "수정 완료 injection",  # text 모드 출력 — 키워드가 우연히 있어도
         '{"result": "수정 완료 injection"',  # 잘린 JSON
-        '["수정 완료 injection"]',  # 최상위가 객체가 아님
-        '{"type": "result", "note": "수정 완료 injection"}',  # result 부재
-        '{"result": null, "note": "injection"}',  # result 가 문자열이 아님
+        '["수정 완료 injection"]',  # 최상위가 리스트인데 result 원소 없음
+        '{"type": "result", "subtype": "success", "note": "수정 완료 injection"}',  # result 부재
+        '{"subtype": "success", "result": null, "note": "injection"}',  # result 가 문자열 아님
+        "잡음\n수정 완료 injection",  # 마지막 줄도 json 아님
     ],
 )
 def test_unparseable_scenario_output_fails_closed(tmp_path, monkeypatch, stdout):
-    """(e) JSON 파싱 실패·result 부재는 채점하지 않고 fail — 사유를 남긴다.
+    """(e) JSON 파싱 실패·result 부재는 채점하지 않는다 — 인프라 분류(error)로 사유를 남긴다.
 
     raw stdout 에 키워드가 있어도 pass 가 나오면 안 된다.
     되돌려-FAIL: run_scenario 의 해석 실패 분기를 `parsed = ScenarioOutput(text=stdout)`
     폴백으로 바꾸면 모든 케이스가 pass 로 red.
     """
-
-    class R:
-        returncode = 0
-        stderr = ""
-
-    R.stdout = stdout
-    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
-    sc = _scenario(
-        tmp_path,
-        {"assertions": [{"type": "output_contains_any", "values": ["injection"]}]},
-    )
-    res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
-    assert res["status"] == "fail"
+    res = _run_with_stdout(tmp_path, monkeypatch, stdout, pattern="injection")
+    assert res["status"] == "error"
     assert res["checks"][0]["type"] == "scenario_output"
     assert "fail-closed" in res["checks"][0]["detail"]
     assert res["resolved_models"] == []
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"is_error": True},
+        {"subtype": "error_max_turns"},
+        {"subtype": "error_during_execution", "is_error": True},
+        {"subtype": None},  # subtype 부재도 "성공"의 증거가 아니다
+    ],
+)
+def test_failed_execution_result_is_error_not_graded(tmp_path, monkeypatch, extra):
+    """(C-ATK-003·005) CLI 가 실행 실패를 보고한 결과는 `result` 에 키워드가 있어도
+    채점하지 않는다 — error 로, detail 에 subtype·is_error 를 싣는다.
+
+    되돌려-FAIL: parse_scenario_output 의 `is_error is True or subtype != "success"`
+    검사를 지우면 result 텍스트가 채점돼 pass 로 red.
+    """
+    stdout = _claude_json("ok", **extra)
+    if extra.get("subtype", "x") is None:
+        data = json.loads(stdout)
+        del data["subtype"]
+        stdout = json.dumps(data)
+    res = _run_with_stdout(tmp_path, monkeypatch, stdout)
+    assert res["status"] == "error"
+    detail = res["checks"][0]["detail"]
+    assert "subtype=" in detail and "is_error=" in detail
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        # 최상위 배열(스트림 전체) — 마지막 type=="result" 원소
+        json.dumps(
+            [
+                {"type": "system", "subtype": "init"},
+                {"type": "result", "subtype": "success", "is_error": False, "result": "옛 답"},
+                {"type": "assistant", "message": "…"},
+                json.loads(_claude_json("ok")),
+            ]
+        ),
+        # 앞에 잡음 줄 — 마지막 비지 않은 줄
+        "Warning: something\n" + _claude_json("ok") + "\n\n",
+        # 앞에 잡음 줄 + 마지막 줄이 배열
+        "noise\n" + json.dumps([json.loads(_claude_json("ok"))]),
+    ],
+)
+def test_scenario_output_shape_tolerance(tmp_path, monkeypatch, stdout):
+    """(C-ATK-006) JSON 객체 하나가 아닌 출력도 결과 객체를 찾아 읽는다.
+
+    되돌려-FAIL: parse_scenario_output 을 `json.loads(stdout)` + dict 강제로 되돌리면
+    세 케이스 모두 error 로 red.
+    """
+    res = _run_with_stdout(tmp_path, monkeypatch, stdout, pattern="^ok$")
+    assert res["status"] == "pass", res["checks"]
+    assert res["primary_models"] == ["claude-sonnet-5"]
