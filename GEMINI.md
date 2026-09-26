@@ -3,7 +3,7 @@
 > 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:b68cbf1042b56282efb1d8342cbb5a28e3707439f2836a9ad8690a3d3d4287b1 -->
+<!-- kit:begin rules-v1.4.0 sha256:e0e9516bfe4557fabcf91080c4a5ac8a4d6cacb25bc8e530fb6384d15e9c823c -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -40,14 +40,14 @@ brainstorming  →  plan-task  →  auto-dev
 
 ### 이름만 알리는 룰 (참조 티어 — 본문 미인라인)
 
-- `rules/child-marker` — 본문은 킷 레포에서 읽어라(참조 티어라 인라인하지 않는다)
-- `rules/delegation-contract` — 본문은 킷 레포에서 읽어라(참조 티어라 인라인하지 않는다)
+- `rules/child-marker` — 본문은 플러그인 설치 경로의 `rules/child-marker.md` 에 있다(참조 티어라 인라인하지 않는다 — 세션 시작 훅이 도는 하네스는 절대 경로로 안내된다)
+- `rules/delegation-contract` — 본문은 플러그인 설치 경로의 `rules/delegation-contract.md` 에 있다(참조 티어라 인라인하지 않는다 — 세션 시작 훅이 도는 하네스는 절대 경로로 안내된다)
 
 ### 이 파일이 이식하지 **못하는** 것 (정직한 한계)
 
 | 영역 | 이유 |
 | --- | --- |
-| 훅 (protect-sensitive · stop-validator · auto-format) | Claude Code 훅 런타임 전용 — 다른 하네스에는 실행 지점이 없다 |
+| 차단·검증 훅 (protect-sensitive · stop-validator) | Claude Code 전용 — Codex 에는 싣지 않는다(PreToolUse 차단이 유지되지 않는다). 세션 시작 주입(session-start)·자동 포맷(auto-format)은 Codex 에서도 돈다(훅 신뢰 승인 필요) — 그 밖의 하네스에는 실행 지점이 없다 |
 | 서브에이전트 정의 (32종) | Claude Code 서브에이전트 규격 전용 |
 | 룰 본문의 kit-레포 전용 명령 (`scripts/verify-done.sh` 등) | "요약 금지 / 원문 그대로" 정책의 대가 — 각 룰이 "이 레포에선"으로 한정하고 있으니, 당신 프로젝트의 해당 명령으로 읽어라 |
 | `rules/agent-delegation-chain` | Claude Code 고유 프리미티브에 종속 |
