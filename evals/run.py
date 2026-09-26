@@ -181,6 +181,19 @@ class Harness(Protocol):
     def is_available(self) -> bool:
         """이 하네스의 CLI가 PATH에서 실행 가능한지."""
 
+    def parse_scenario_output(self, stdout: str) -> ScenarioOutput:
+        """시나리오 실행 stdout → 어서션이 볼 텍스트 + 실제로 돈 모델 ID.
+        출력 형식은 `run_scenario_cmd` 가 고르므로 해석도 같은 구현체가 소유한다.
+        해석할 수 없으면 ValueError(사유) — 호출부가 fail-closed 로 기록한다."""
+
+
+@dataclass
+class ScenarioOutput:
+    text: str  # 어서션·judge·실패 발췌가 보는 최종 텍스트 (text 모드 stdout 과 같은 것)
+    # 실제로 돈 모델 ID(별칭 아님), 정렬. 서브에이전트·보조 모델이 섞이면 여럿이다 —
+    # 주 모델을 고르지 않고 전부 싣는다. CLI 가 사용량을 주지 않으면 [].
+    resolved_models: list[str] = field(default_factory=list)
+
 
 JUDGE_SCHEMA = json.dumps({
     "type": "object",
@@ -203,8 +216,11 @@ class ClaudeCodeHarness:
             agent.system_prompt,
             "--permission-mode",
             "bypassPermissions",
+            # json 이어야 실제로 돈 모델 ID(modelUsage)를 받는다 — text 는 최종 텍스트뿐이라
+            # 측정 축이 `--model` 별칭(opus/sonnet)에서 멈췄다. 어서션이 보는 텍스트는
+            # `result` 필드로 같다(parse_scenario_output).
             "--output-format",
-            "text",
+            "json",
         ]
         if agent.tools:
             cmd += ["--allowedTools", *agent.tools]
@@ -222,6 +238,20 @@ class ClaudeCodeHarness:
 
     def is_available(self) -> bool:
         return shutil.which("claude") is not None
+
+    def parse_scenario_output(self, stdout: str) -> ScenarioOutput:
+        try:
+            data = json.loads(stdout)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"json 파싱 실패: {e}") from e
+        if not isinstance(data, dict):
+            raise ValueError(f"json 최상위가 객체가 아니다: {type(data).__name__}")
+        text = data.get("result")
+        if not isinstance(text, str):
+            raise ValueError(f"'result' 문자열 없음: {type(text).__name__}")
+        usage = data.get("modelUsage")
+        models = sorted(usage) if isinstance(usage, dict) else []
+        return ScenarioOutput(text=text, resolved_models=models)
 
 
 HARNESS: Harness = ClaudeCodeHarness()
@@ -1322,6 +1352,7 @@ def _result_impl(
     stdout: str = "",
     model: str = "",
     effort: str | None = None,
+    resolved_models: list[str] | None = None,
 ) -> dict:
     excerpt = _fail_excerpt(stdout, checks) if status != "pass" else None
     return {
@@ -1336,6 +1367,10 @@ def _result_impl(
         # 600s 타임아웃이 "후퇴"로 나왔고 compare 는 축이 바뀐 사실을 말하지 못했다).
         # None = frontmatter 에 effort 가 없어 --effort 를 싣지 않은 실행.
         "effort": effort,
+        # model 은 요청한 **별칭**(frontmatter)이라 별칭이 다음 세대로 넘어가도 같은 값이다.
+        # 이것은 CLI 가 보고한 **실제 모델 ID** 다 — 실행 출력을 못 읽은 결과(timeout·
+        # error·파싱 실패)는 [].
+        "resolved_models": resolved_models or [],
         "scenario": scenario.scenario_id,
         "status": status,
         "checks": checks,
@@ -1450,6 +1485,30 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
                 work_dir=str(work_dir),
             )
 
+        # 해석 불가 = fail-closed. 어서션을 raw stdout 에 돌리면 JSON 문자열 안의
+        # 우연한 키워드로 통과가 나올 수 있다 — 채점하지 않고 사유를 남긴다.
+        try:
+            parsed = HARNESS.parse_scenario_output(stdout)
+        except ValueError as e:
+            return _result(
+                agent.name,
+                scenario,
+                "fail",
+                [{"type": "scenario_output", "ok": False, "detail": f"출력 해석 불가 (fail-closed): {e}"}],
+                time.time() - start,
+                work_dir=str(work_dir),
+                stdout=stdout,
+            )
+        stdout = parsed.text
+        if not parsed.resolved_models:
+            # 축이 비면 compare 는 알림도 회귀도 내지 않는다 — 여기서 말하지 않으면
+            # CLI 가 사용량 필드를 바꿨을 때 축이 조용히 사라진다(`warning-signal.md` §측정 8).
+            print(
+                f"[eval] {agent.name}/{scenario.scenario_id}: 출력에 모델 사용량이 없다 — "
+                "resolved_models 축 기록 불가",
+                file=sys.stderr,
+            )
+
         checks = []
         all_ok = True
         for a in assertions:
@@ -1485,6 +1544,7 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
             judge=judge_result,
             work_dir=str(work_dir),
             stdout=stdout,
+            resolved_models=parsed.resolved_models,
         )
 
 
@@ -1498,17 +1558,26 @@ def summarize(results: list[dict]) -> dict:
     for r in results:
         s = summary.setdefault(
             r["agent"],
-            {"pass": 0, "fail": 0, "total": 0, "models": set(), "efforts": set()},
+            {
+                "pass": 0,
+                "fail": 0,
+                "total": 0,
+                "models": set(),
+                "efforts": set(),
+                "resolved_models": set(),
+            },
         )
         s["total"] += 1
         s["pass" if r["status"] == "pass" else "fail"] += 1
         if r.get("model"):
             s["models"].add(r["model"])
         s["efforts"].add(r.get("effort") or EFFORT_DEFAULT)
+        s["resolved_models"].update(r.get("resolved_models") or [])
     for s in summary.values():
         s["pass_rate"] = s["pass"] / s["total"] if s["total"] else 0.0
         s["models"] = sorted(s["models"])
         s["efforts"] = sorted(s["efforts"])
+        s["resolved_models"] = sorted(s["resolved_models"])
     return summary
 
 
@@ -1611,7 +1680,11 @@ def run_all(
 
 
 # summary 키 → 사람이 읽는 축 이름. 축을 더하면 여기 한 줄이다.
-MEASUREMENT_AXES = (("models", "model"), ("efforts", "effort"))
+MEASUREMENT_AXES = (
+    ("models", "model"),
+    ("efforts", "effort"),
+    ("resolved_models", "resolved_model"),
+)
 
 
 def _axis_mismatch(agent: str, key: str, label: str, cur: dict, base: dict) -> str | None:
