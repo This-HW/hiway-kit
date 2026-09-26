@@ -231,7 +231,8 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   templates (`.env.example`/`.sample`/`.template`/`.dist`) are exempt; writes to
   them get a best-effort high-confidence secret-format content scan (W-016). It
   does **not** otherwise scan file *content* or intercept `Bash`/`git commit` —
-  commit-time secret scanning is gitleaks + `setup/pre-commit`.
+  secret scanning is gitleaks at push time — CI, and `verify-done.sh` §24 locally over
+  unpushed commits. `setup/pre-commit` does **not** run gitleaks.
 - `auto-format.py` — auto-formats code after edits (uses ruff for Python) (`PostToolUse`)
 - `stop-validator.py` — on `Stop`, lints edited `.py` (ruff) and runs pytest on
   the test files this session edited (never the full suite — that's CI/`/test`'s
@@ -246,7 +247,7 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
 ### git 훅은 배포되지만 자동으로 켜지지 않는다
 
 `plugins/common/setup/` 에는 세션 훅이 아닌 **git 훅** 정본도 있다 — `pre-commit`
-(시크릿 스캔 등)과 `git-hooks/reference-transaction`(레퍼런스 변경 가드). `setup.sh`
+(ruff·JSON·frontmatter·비공개 이름 검사 — gitleaks 는 없다)과 `git-hooks/reference-transaction`(레퍼런스 변경 가드). `setup.sh`
 가 `pre-commit` 을 설치하고, `reference-transaction` 은 **opt-in** 이라 켜지 않은 것이
 결함이 아니다.
 
@@ -276,7 +277,9 @@ actually loads every hook under 3.9). Four hooks were silently dead on 3.9 until
 
 ## Security
 
-- `gitleaks` scans all pushes/PRs (config: `.gitleaks.toml`)
+- `gitleaks` scans **every commit** in each push/PR range, merge side branches included
+  (config `.gitleaks.toml`, per-finding ignores `.gitleaksignore`, pin `.gitleaks-version`);
+  `verify-done.sh` §24 runs the same scan on unpushed commits before you push
 - Never hardcode secrets, API keys, internal IPs, or project names
 - `protect-sensitive.py` runs as a `PreToolUse` hook on Edit/Write/MultiEdit/NotebookEdit/Read — path-based (plus a best-effort content scan only for env-template writes), not commit-based (see Hooks section)
 
@@ -289,7 +292,7 @@ actually loads every hook under 3.9). Four hooks were silently dead on 3.9 until
 3. Lints with `ruff check .` and runs pytest
 4. Lints shell via `scripts/lint-shell.sh` (same script as the local gate §3b)
 5. Verifies doc counts via `scripts/check_doc_counts.py` (same script as the local gate)
-6. Runs gitleaks security scan
+6. Runs gitleaks over every commit in the range (not `--first-parent` — side branches count)
 7. `python39-compat` job: loads every hook under Python 3.9 (consumer floor)
 
 ### 드리프트 게이트는 통합하지 않는다 (2026-08-27 판정 · 2026-09-10 재검토)

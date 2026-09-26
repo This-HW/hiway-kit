@@ -6,6 +6,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased]
+
+레포 도구만 바뀐다(배포물 무변경 — 플러그인 버전 유지).
+
+### Fixed — 시크릿 스캔이 있다고 적힌 곳에 없었고, 있는 곳은 커밋 대부분을 보지 않았다
+
+v3.39.0 이 로컬 `verify-done.sh` 30/30 green 인 채로 push 되고 **CI gitleaks 에서야 red** 가 났다.
+W-044 감사 패치(`docs/specs/2026-09-25-prompt-audit/prompt-audit.patch`)가 `security-scan.md` 의
+교육용 가짜 키 예시(원본 파일은 경로 허용 대상)를 삭제 hunk 로 복제해
+허용 목록 밖 경로에 실은 **오탐**이다. 진짜 시크릿 유출은 아니다 — main 전체 이력을 옆가지까지
+재스캔해 발견은 이 1건뿐임을 확인했다 `[confirmed]`. 추적하다 두 구멍이 드러났다.
+
+- **로컬에는 gitleaks 가 도는 곳이 없었다.** CLAUDE.md 는 *"commit-time secret scanning is
+  gitleaks + `setup/pre-commit`"* 이라 적었지만 pre-commit 은 gitleaks 를 부르지 않는다.
+  `verify-done.sh` §5 는 소문자 `api_key = "…"` 류만 보는 휴리스틱이다. → **§24 신설**: 기준
+  ref(기본 `origin/main`)에 없는 커밋 전부를 CI 와 같은 설정으로 스캔한다. 미설치는 노란 줄
+  (§3b 와 같은 비대칭). 되돌려-FAIL 확인(무시 항목 제거 시 파일·줄·fingerprint 와 함께 red).
+- **CI 는 `--no-merges --first-parent` 로 스캔했다** (gitleaks-action 의 push 기본값). `--no-ff`
+  로 병합한 옆가지 커밋은 한 번도 스캔되지 않았다 — main 의 **49커밋**, v3.39.0 push 는 18커밋
+  중 **6커밋**만. → action 을 **핀(`.gitleaks-version` 8.30.1) + sha256 검증 바이너리 직접
+  실행**으로 바꾸고 범위를 직접 준다(push: `before..sha`, 새 브랜치·force-push: 전체 이력,
+  PR: `origin/<base>..HEAD` — 이벤트 값은 env 로만 전달).
+- 오탐 1건은 **`.gitleaksignore` 에 fingerprint 로만** 등재했다. 패치 파일 경로 전체를 허용하면
+  그 3,000줄 diff 에 붙는 진짜 시크릿까지 통과시킨다.
+- CLAUDE.md 의 스캔 서술 3곳을 실제와 맞췄다.
+
 ## [3.39.0] — 2026-09-25
 
 W-044 배치 — `/claude-api prompt-audit`(타깃: Claude Code 별칭이 가리키는 현 세대,

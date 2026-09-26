@@ -212,10 +212,36 @@ jobs:
         # 기능 결함이었다(캐시 glob 2건 + setup.sh 가 전임 플러그인을 설치).
         run: python3 scripts/check_old_names.py
 
-      - name: Security scan (gitleaks)
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
+      - name: Security scan (gitleaks — 범위 안의 모든 커밋)
+        # gitleaks-action 은 push 에서 `--no-merges --first-parent` 로 스캔했다 — `--no-ff` 로
+        # 병합한 옆가지 커밋은 **한 번도 스캔되지 않았다**(2026-09-27 실측: main 의 49커밋,
+        # v3.39.0 push 는 18커밋 중 6커밋만). 그래서 범위를 직접 준다. 로컬 verify-done.sh §24
+        # 와 같은 설정(.gitleaks.toml · .gitleaksignore)·같은 방식(옆가지 포함)이다.
+        # 핀 + sha256 은 shellcheck 스텝과 같은 이유 — 핀을 올릴 때 GL_SHA256 도 함께 바꾼다.
+        # 이벤트 값은 env 로만 넘긴다(base_ref 는 PR 작성자가 정하는 값 — run: 에 직접 보간 금지).
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          GL_VER="$(cat .gitleaks-version)"
+          GL_SHA256="551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+          TARBALL="gitleaks_${GL_VER}_linux_x64.tar.gz"
+          curl -fsSL --retry 3 -o "$TARBALL" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GL_VER}/${TARBALL}"
+          echo "${GL_SHA256}  ${TARBALL}" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks" && tar -xzf "$TARBALL" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          if [ "$EVENT" = "pull_request" ]; then
+            RANGE="origin/${BASE_REF}..HEAD"
+          elif [ -n "$BEFORE" ] && ! printf '%s' "$BEFORE" | grep -qE '^0+$' \
+              && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            RANGE="${BEFORE}..${GITHUB_SHA}"
+          else
+            # 새 브랜치 첫 push·force-push 로 before 를 쓸 수 없으면 도달 가능한 전체 이력.
+            RANGE="${GITHUB_SHA}"
+          fi
+          echo "gitleaks range: ${RANGE} ($(git rev-list --count "$RANGE") commits)"
+          "$RUNNER_TEMP/gitleaks/gitleaks" git --redact --no-banner --log-opts="$RANGE" .
 
   # 소비자 환경 최저 파이썬(=macOS 기본 python3 3.9)에서 훅이 실제로 뜨는지 검증한다.
   # 훅은 소비자 머신의 `python3`로 실행되므로, 3.10 전용 문법이 들어가면 그 사용자에겐

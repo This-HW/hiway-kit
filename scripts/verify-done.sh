@@ -762,6 +762,39 @@ else
   red "강등 경로 없는 위임 스킬 — 상세는 위 출력"
 fi
 
+hdr "24. gitleaks — push 되지 않은 커밋 전부 (병합 옆가지 포함)"
+# §5 는 소문자 `api_key = "…"` 류만 보는 가벼운 휴리스틱이고, 실제 시크릿 스캐너(gitleaks)는
+# CI 에만 있었다. 그래서 v3.39.0 이 로컬 30/30 green 인 채로 push 되고 CI 에서야 red 가
+# 났다(2026-09-27 — 감사 패치가 security-scan.md 의 가짜 키 예시를 허용 목록 밖 경로에 복제).
+# **이 섹션이 도는 조건**: 기준 ref(기본 origin/main)에 없는 커밋이 있을 때. 그 범위를 CI 와
+# 같은 설정(.gitleaks.toml · .gitleaksignore)으로 본다. `--first-parent` 는 쓰지 않는다 —
+# `--no-ff` 로 병합한 옆가지 커밋까지 본다(CI 의 구 방식이 main 에서 49커밋을 놓친 이유).
+# 기준 ref 는 VERIFY_GITLEAKS_BASE 로 바꿀 수 있다(되돌려-FAIL 검증·과거 범위 재스캔용).
+GL_BASE="${VERIFY_GITLEAKS_BASE:-origin/main}"
+if ! command -v gitleaks >/dev/null 2>&1; then
+  # §3b 와 같은 비대칭: 미설치를 green 으로 위장하지 않는다. 판정은 CI 가 한다.
+  printf '  \033[33m! gitleaks 미설치 — push 전 시크릿 스캔 건너뜀 (CI 가 판정)\033[0m\n'
+elif ! git rev-parse -q --verify "${GL_BASE}^{commit}" >/dev/null; then
+  printf '  \033[33m! 기준 ref %s 없음 — 스캔 범위를 정할 수 없어 건너뜀\033[0m\n' "$GL_BASE"
+else
+  GL_PINNED="$(cat .gitleaks-version 2>/dev/null || echo "")"
+  GL_LOCAL_V="$(gitleaks version 2>/dev/null | sed 's/^v//')"
+  if [ -n "$GL_PINNED" ] && [ -n "$GL_LOCAL_V" ] && [ "$GL_LOCAL_V" != "$GL_PINNED" ]; then
+    printf '  \033[33m! 로컬 gitleaks %s ≠ 핀 %s — CI와 판정이 갈릴 수 있다\033[0m\n' \
+      "$GL_LOCAL_V" "$GL_PINNED"
+  fi
+  GL_COUNT="$(git rev-list --count "${GL_BASE}..HEAD")"
+  if [ "$GL_COUNT" -eq 0 ]; then
+    green "gitleaks: ${GL_BASE} 에 없는 커밋 0 — 스캔 대상 없음"
+  elif gitleaks git --redact --no-banner --verbose --log-level warn \
+      --log-opts="${GL_BASE}..HEAD" . >"$TMPD/gitleaks.out" 2>&1; then
+    green "gitleaks: ${GL_BASE} 에 없는 커밋 ${GL_COUNT}개 — 발견 0"
+  else
+    grep -E 'RuleID|File:|Line:|Fingerprint' "$TMPD/gitleaks.out" | sed 's/^/    /'
+    red "gitleaks 발견 (${GL_BASE}..HEAD) — 오탐이면 .gitleaksignore 에 fingerprint 로만 등재"
+  fi
+fi
+
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'

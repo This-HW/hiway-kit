@@ -1,0 +1,11 @@
+# gitleaks 오탐 — **한 건씩 fingerprint 로만** 등재한다. 경로 전체를 허용 목록에 넣지 않는다.
+#
+# 경로 허용은 그 파일에 앞으로 붙는 진짜 시크릿까지 통과시킨다. fingerprint 는 커밋·파일·
+# 룰·줄이 모두 맞는 그 한 건만 통과시킨다. 새 오탐이 나오면 등재 전에 **진짜 시크릿이
+# 아닌지**를 먼저 확인하고, 아래처럼 근거를 한 줄 남긴다.
+
+# 2026-09-27 · W-044 감사 패치가 plugins/common/agents/dev/security-scan.md 의 교육용 가짜 키
+# 예시(가짜 API 키 리터럴 — 원본 파일은 .gitleaks.toml 경로 허용 대상)를
+# 삭제 hunk 로 복제했다. 진짜 시크릿 아님. git 스캔용 / dir 스캔용 fingerprint 둘.
+11d27bd39b9ed8bf65bfd0a1ca2c678f43d9058d:docs/specs/2026-09-25-prompt-audit/prompt-audit.patch:generic-api-key:1917
+docs/specs/2026-09-25-prompt-audit/prompt-audit.patch:generic-api-key:1917
