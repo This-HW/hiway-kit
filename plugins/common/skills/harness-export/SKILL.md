@@ -1,8 +1,6 @@
 ---
 name: harness-export
 description: Export the kit's host-neutral rules to every harness entrypoint file (AGENTS.md, GEMINI.md) so non-Claude-Code harnesses (Codex, OpenCode, Copilot, Gemini CLI, Pi, Hermes) follow the same discipline. Use when a repo is worked by more than one agent harness, or after changing rules/. Trigger with /harness-export.
-model: sonnet
-effort: medium
 ---
 
 # Harness Export — 규범을 하네스 중립으로 내보내기

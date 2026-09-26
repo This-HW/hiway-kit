@@ -1,8 +1,6 @@
 ---
 name: child-session
 description: Discipline a worker session loads at dispatch time — verify the brief's premises before implementing, work only on its own branch, and report in the fixed completion format. Use when a session has been dispatched as a worker (child) with a brief from a parent control session.
-model: sonnet
-effort: medium
 ---
 
 # Child Session 스킬

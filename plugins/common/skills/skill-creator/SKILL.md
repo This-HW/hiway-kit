@@ -1,8 +1,6 @@
 ---
 name: skill-creator
 description: Create new Claude Code skills. Applies standard templates and best practices to scaffold a skill file automatically.
-model: sonnet
-effort: medium
 ---
 
 # Skill Creator
@@ -35,7 +33,7 @@ effort: medium
 - 스킬 설명
 - 사용 시점 (when to use)
 - 필요한 도구
-- 모델 (opus/sonnet/haiku)
+- 위임할 에이전트(있다면 — 깊이·모델은 그 에이전트가 갖는다)
 
 ### 2. Frontmatter 생성
 
@@ -43,10 +41,15 @@ effort: medium
 ---
 name: skill-name
 description: What it does + when to use
-model: sonnet | opus | haiku
-effort: low | medium | high | max
 ---
 ```
+
+**`model`·`effort` 는 스킬 frontmatter 에 쓰지 않는다.** 스킬은 에이전트와 달리 별도
+컨텍스트에서 돌지 않는다 — 스킬 frontmatter 의 `effort` 는 **그 스킬을 로드한 세션의
+effort 를 세션 끝까지 덮어쓴다**(양성 대조로 확인). `medium` 스킬은 사용자가 고른
+`high` 세션을 조용히 낮추고, `max` 스킬은 끝까지 올린다. 모델·effort 는 사용자/호스트
+설정의 몫이다. 깊이가 필요한 단계는 `effort` 를 가진 **에이전트에 위임**한다.
+(킷 레포 자신은 `scripts/check_skill_frontmatter.py` 게이트로 이것을 red 로 잡는다.)
 
 ### 3. 본문 작성
 
@@ -76,8 +79,6 @@ effort: low | medium | high | max
 ---
 name: skill-name
 description: Brief description. Use when [scenario].
-model: sonnet
-effort: medium
 ---
 
 # Skill Title
@@ -169,8 +170,6 @@ Description...
 ---
 name: skill-name
 description: Orchestrates agents for [purpose].
-model: sonnet
-effort: high
 ---
 
 # Skill Title
@@ -194,24 +193,17 @@ prompt: |
 
 ---
 
-## 모델 선택 가이드
+## 위임 에이전트 모델 선택 가이드
+
+위 Task 호출 템플릿의 `model:` — **위임받는 에이전트**의 모델이다. 스킬 자신의
+frontmatter 에는 쓰지 않는다(위 §2). 에이전트의 `effort` 는 에이전트 정의가 갖는다
+(`agent-creator`).
 
 | 작업 유형           | 권장 모델 | 이유             |
 | ------------------- | --------- | ---------------- |
 | 전략/분석/리뷰      | `opus`    | 복잡한 추론 필요 |
 | 코드 구현/수정      | `sonnet`  | 균형잡힌 성능    |
 | 탐색/검증/빠른 작업 | `haiku`   | 빠른 실행        |
-
----
-
-## effort 선택 가이드
-
-| effort   | 사용 시점                |
-| -------- | ------------------------ |
-| `low`    | Bash/MCP 단순 실행       |
-| `medium` | 단일 에이전트 호출       |
-| `high`   | 복수 에이전트 파이프라인 |
-| `max`    | 전체 라운드 협업 (30분+) |
 
 ---
 
@@ -228,7 +220,7 @@ prompt: |
 
 스킬 생성 후 확인:
 
-- [ ] Frontmatter 완전함 (name, description, model, effort)
+- [ ] Frontmatter 완전함 (name, description) — `model`·`effort` 없음
 - [ ] 설명이 명확함 (what + when to use)
 - [ ] 사용법 예시 포함
 - [ ] 워크플로우 단계별 설명

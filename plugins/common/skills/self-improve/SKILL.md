@@ -1,8 +1,6 @@
 ---
 name: self-improve
 description: Propose improvements to agent/skill/rule definitions from accumulated feedback-ledger defects and eval reports. Proposal-only - applies changes exclusively after evals show no regression AND the user approves. Trigger with /self-improve.
-model: opus
-effort: high
 ---
 
 # Self-Improve

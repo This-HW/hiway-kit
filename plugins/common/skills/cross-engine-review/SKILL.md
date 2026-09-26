@@ -1,8 +1,6 @@
 ---
 name: cross-engine-review
 description: Reach an evidence-backed decision between sessions running on different agent engines. Use when a call is high-stakes enough that one engine's blind spots are a real risk, and a second session with different tool access can bring evidence the first cannot.
-model: opus
-effort: high
 ---
 
 # cross-engine-review: 다른 엔진의 세션과 증거로 합의한다

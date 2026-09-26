@@ -1,8 +1,6 @@
 ---
 name: control-loop
 description: Multi-session control discipline for delegating work to worker sessions — investigate, decide, dispatch, verify, and merge. Use when a session is coordinating separate worker sessions or worktrees and needs to know when to delegate versus decide, and how to verify before merging.
-model: opus
-effort: high
 ---
 
 # Control Loop 스킬

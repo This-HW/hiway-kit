@@ -1,8 +1,6 @@
 ---
 name: debug
 description: Analyze errors and apply fixes. Use when you have an error message, traceback, or failing log to diagnose.
-model: sonnet
-effort: high
 ---
 
 # 디버깅 실행
