@@ -200,6 +200,10 @@ def _own_manifest() -> dict:
 _MANIFEST = _own_manifest()
 KIT_NAME = _MANIFEST.get("name") or "kit"
 KIT_HOMEPAGE = _MANIFEST.get("homepage") or _MANIFEST.get("repository") or ""
+# 킷 저장소 안에서 규범 원문이 사는 경로. 설치 경로를 모르는 하네스(세션 시작 훅이
+# 없어 절대 경로 안내를 받지 못한다)를 위한 **결정적 폴백**이다 — 저장소 URL 과 함께
+# 쓴다. 이 레포 배치가 바뀌면 test_export_harness 가 red 로 알린다.
+KIT_RULES_REPO_PATH = "plugins/common/rules"
 
 CONVENTIONS_VERSION = "1.0.0"
 
@@ -443,8 +447,13 @@ def _rule_portability(path: Path) -> tuple[bool | None, str]:
 # 하나이고, 파일만 여러 개다. 한 파일에만 내보내면 나머지 하네스는 규율 밖에서 돈다.
 #
 # `CLAUDE.md` 는 **의도적으로 뺐다.** Claude Code 는 이 킷의 SessionStart 훅이 규범을
-# 직접 주입하므로 파일로 또 실으면 같은 규범이 두 번 들어간다. 훅이 없는 하네스만
-# 파일이 필요하다.
+# 직접 주입하므로 파일로 또 실으면 같은 규범이 두 번 들어간다. 세션 시작 주입 훅이
+# **돌지 않는** 하네스만 파일이 필요하다.
+#
+# **Codex 는 예외적으로 이중 도달한다.** Codex 는 `AGENTS.md` 를 읽고, 훅 신뢰를
+# 승인하면 세션 시작 주입 훅(`--portable-only`)도 돈다 — 같은 portable 규범이 두 번
+# 들어간다. 신뢰 승인 **전에는** 훅이 조용히 건너뛰어지므로 `AGENTS.md` 가 유일한
+# 경로다. 그 폴백을 잃지 않으려고 `AGENTS.md` 를 유지하고 이중 도달을 감수한다.
 #
 # 소비자의 플러그인 캐시에는 `packaging/` 이 없으므로 이 목록은 **정책 파일이 아니라
 # 이 모듈의 상수**다 — 훅은 자기가 설치된 곳에서 자족해야 한다(consumer-first).
@@ -488,6 +497,10 @@ brainstorming  →  plan-task  →  auto-dev
 ### 이름만 알리는 룰 (참조 티어 — 본문 미인라인)
 
 {index_only_rows}
+
+참조 티어라 본문을 인라인하지 않는다. 세션 시작 훅이 도는 하네스(Claude Code, 훅 신뢰를
+승인한 Codex)는 세션 시작 때 절대 경로로 안내된다. 설치 경로를 모르면 원문은
+[{kit_name}]({kit_homepage}) 저장소의 `{kit_rules_repo_path}/<이름>.md` 에 있다.
 
 ### 이 파일이 이식하지 **못하는** 것 (정직한 한계)
 
@@ -816,7 +829,6 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     index_only_rows = (
         "\n".join(
             f"- `rules/{p.stem}` — 본문은 플러그인 설치 경로의 `rules/{p.stem}.md` 에 있다"
-            "(참조 티어라 인라인하지 않는다 — 세션 시작 훅이 도는 하네스는 절대 경로로 안내된다)"
             for p in sorted(index_only, key=lambda x: x.stem)
         )
         or "- (없음)"
@@ -824,6 +836,7 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     header = BLOCK_HEADER.format(
         kit_name=KIT_NAME,
         kit_homepage=KIT_HOMEPAGE,
+        kit_rules_repo_path=KIT_RULES_REPO_PATH,
         agent_count=_agent_count(plugin_root),
         portable_rows=portable_rows, not_portable_rows=not_portable_rows,
         index_only_rows=index_only_rows,

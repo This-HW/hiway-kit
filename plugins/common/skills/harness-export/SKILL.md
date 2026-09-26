@@ -14,16 +14,22 @@ description: Export the kit's host-neutral rules to every harness entrypoint fil
 | 전달 형태 | 대상 | 경로 |
 | --- | --- | --- |
 | 세션형 + 훅 | Claude Code | SessionStart 훅이 **자동 주입** — 이 스킬 불필요 |
-| 세션형, 훅 없음 | Codex · OpenCode · Copilot CLI · Cursor | **`AGENTS.md`** |
-| 세션형, 훅 없음 | Gemini CLI 계열 | **`GEMINI.md`** |
+| 세션형, 주입·포맷 훅 있음(신뢰 승인 후), 차단 훅 없음 | Codex | **`AGENTS.md`** — 훅 신뢰 전엔 이것이 유일한 경로(폴백). 승인 후엔 훅 주입과 **이중 도달**(아래) |
+| 세션형, 세션 시작 훅 없음 | OpenCode · Copilot CLI · Cursor | **`AGENTS.md`** |
+| 세션형, 세션 시작 훅 없음 | Gemini CLI 계열 | **`GEMINI.md`** |
 | **API 성 호출**(세션 아님) | 래퍼가 모델을 함수처럼 부르는 레인 | **`--stdout` 으로 뽑아 프롬프트에 싣는다** |
 
 **내용은 같다** — 규범이 하네스 중립이므로 블록도 sha 도 하나이고 파일만 여럿이다.
 한 파일에만 내보내면 나머지 하네스는 규율 밖에서 돈다.
 
 > **`CLAUDE.md` 는 의도적으로 뺐다.** Claude Code 는 이 킷의 SessionStart 훅이 규범을
-> 직접 주입한다 — 파일로 또 실으면 같은 규범이 두 번 들어간다. 훅이 없는 하네스만
-> 파일이 필요하다.
+> 직접 주입한다 — 파일로 또 실으면 같은 규범이 두 번 들어간다. 세션 시작 주입 훅이
+> **돌지 않는** 하네스만 파일이 필요하다.
+>
+> **예외 — Codex 는 이중 도달을 감수한다.** Codex 는 훅 신뢰를 승인하면 세션 시작 주입
+> 훅(portable 규범만)도 돌아 `AGENTS.md` 와 같은 규범이 두 번 들어간다. 그래도
+> `AGENTS.md` 를 유지하는 것은, 신뢰 승인 **전에는** 훅이 조용히 건너뛰어져 `AGENTS.md`
+> 가 유일한 경로이기 때문이다 — 폴백을 잃는 것이 중복보다 나쁘다.
 
 진입점 목록을 바꾸려면 `--entrypoints AGENTS.md,GEMINI.md,OTHER.md` 로 덮어쓴다.
 
