@@ -1,8 +1,6 @@
 ---
 name: web-research
 description: Research external information using MCP servers. Use when users need to find documentation, compare technologies, or research best practices.
-model: sonnet
-effort: medium
 ---
 
 # Web Research

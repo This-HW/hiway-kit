@@ -1,8 +1,6 @@
 ---
 name: auto-dev
 description: Automated development pipeline. Runs a completed Planning Work through Development and Validation phases end-to-end.
-model: sonnet
-effort: high
 ---
 
 # Auto-Dev 스킬

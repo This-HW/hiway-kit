@@ -1,8 +1,6 @@
 ---
 name: test
 description: Run tests and auto-fix failures. Detects the test framework, executes tests, and iterates on fixes until all pass.
-model: sonnet
-effort: medium
 ---
 
 # 테스트 실행

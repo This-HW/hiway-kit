@@ -1,8 +1,6 @@
 ---
 name: mcp-builder
 description: Build and configure MCP servers. Use when scaffolding a new Model Context Protocol server or adding tools to an existing one.
-model: sonnet
-effort: medium
 ---
 
 # MCP Server Builder

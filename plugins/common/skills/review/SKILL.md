@@ -1,8 +1,6 @@
 ---
 name: review
 description: Run a full code review on current changes or specified files. Runs ruff lint, review-code agent, and security scan in sequence.
-model: opus
-effort: high
 ---
 
 # 코드 리뷰 실행

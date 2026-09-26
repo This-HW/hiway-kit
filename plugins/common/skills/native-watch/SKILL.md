@@ -1,8 +1,6 @@
 ---
 name: native-watch
 description: Audit Claude Code native feature absorption. Use to compare the kit's components against the latest Claude Code releases and propose absorption-ledger updates. Trigger with /native-watch or on a schedule.
-model: sonnet
-effort: medium
 ---
 
 # Native Watch

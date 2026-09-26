@@ -1,8 +1,6 @@
 ---
 name: plan-task
 description: Structured task planning using Work files. Use for any new feature, bug fix, or project that needs a task breakdown before implementation.
-model: opus
-effort: max
 ---
 
 # Plan-Task 스킬

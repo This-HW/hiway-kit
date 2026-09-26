@@ -205,6 +205,12 @@ jobs:
         # 명명 관례라 면제 범위가 위험 지대와 겹친다(실측).
         run: python3 scripts/check_shadowed_defs.py
 
+      - name: Skill frontmatter declares no model/effort (§25)
+        # scripts/check_skill_frontmatter.py 가 단일 소스 — 로컬 verify-done.sh §25와 동일.
+        # 스킬 frontmatter 의 effort 는 로드한 세션의 effort 를 세션 끝까지 덮어쓴다(양성
+        # 대조로 확인). 로컬 게이트만 있으면 누가 verify-done.sh 를 돌릴 때만 발화한다.
+        run: python3 scripts/check_skill_frontmatter.py
+
       - name: Old project name on live surfaces (§20)
         # scripts/check_old_names.py 가 단일 소스 — 로컬 verify-done.sh §20과 동일 스크립트.
         # §18(이름 파생)은 산문 문서만 보므로 plugins/·site/·setup.sh 는 대상이 아니었다.

@@ -2,10 +2,13 @@
 
 import importlib.util
 import json
+import re
 import sys
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+
+import pytest
 
 # session-start.py has a hyphen — use importlib to load it
 HOOKS_DIR = Path(__file__).resolve().parent.parent
@@ -20,6 +23,25 @@ load_rules = _mod.load_rules
 parse_frontmatter = _mod.parse_frontmatter
 parse_task_map = _mod.parse_task_map
 summarize_work = _mod.summarize_work
+
+
+_INDEX_HEADER = "참고(필요할 때 읽어라):\n"
+
+
+def _index_section(injected: str) -> str:
+    """주입 문자열에서 참조 색인 구간(`참고(필요할 때 읽어라):` 이후)만 돌려준다."""
+    assert _INDEX_HEADER in injected, "참조 색인 구간이 주입되지 않았다"
+    return injected.split(_INDEX_HEADER, 1)[1].split("=== END RULES ===", 1)[0]
+
+
+def _real_reference_rules() -> list[Path]:
+    """실물 규범 중 `tier: reference` 전부 — 나열하지 않고 파생한다."""
+    rules_dir = HOOKS_DIR.parent / "rules"
+    return [
+        p
+        for p in sorted(rules_dir.glob("*.md"))
+        if parse_frontmatter(p).get("tier") == "reference"
+    ]
 
 
 class TestParseFrontmatter:
@@ -581,17 +603,67 @@ class TestPortableOnlyFilter:
         """
         plugin_root = HOOKS_DIR.parent
         rules_dir = plugin_root / "rules"
-        filtered = load_rules(
-            plugin_root, include_task_resume=False, portable_only=True
+        # 단언은 색인 구간으로 한정한다 — 주입 전문에 걸면 규범 본문이 그 파일 이름을
+        # 산문으로 언급하는 순간(무관한 변경) 깨지거나 거짓 green 이 된다 (C-ATK-009).
+        index = _index_section(
+            load_rules(plugin_root, include_task_resume=False, portable_only=True)
         )
         for name in ("delegation-contract", "child-marker"):
-            assert f"{rules_dir}/{name}.md" in filtered, (
-                f"{name} 색인이 절대 경로로 없다"
-            )
-            assert f" rules/{name}.md" not in filtered, f"{name} 색인이 상대 경로다"
+            assert f"{rules_dir}/{name}.md" in index, f"{name} 색인이 절대 경로로 없다"
+            assert f" rules/{name}.md" not in index, f"{name} 색인이 상대 경로다"
         # non-portable 참조 규범은 여전히 빠진다.
-        assert "agent-system.md" not in filtered
-        assert "agent-delegation-chain.md" not in filtered
+        assert "agent-system.md" not in index
+        assert "agent-delegation-chain.md" not in index
+
+
+class TestReferenceIndexPathsResolve:
+    """모든 참조 규범의 색인이 **실재하는 파일**의 절대 경로로 렌더되는가 (C-ATK-009).
+
+    색인 줄은 `indexLine` 의 첫 `rules/` 를 플러그인 루트 절대 경로로 치환해 만든다.
+    그 치환이 엇나가거나(`indexLine` 에 다른 `rules/` 가 먼저 나온다) 파일이 개명되면
+    세션은 **없는 파일을 읽으라**는 안내를 받는다 — 전에는 아무도 그 경로가 실재하는지
+    보지 않았다. 대상은 나열하지 않고 실물 규범 디렉토리에서 파생한다.
+    """
+
+    def test_reference_rules_exist(self):
+        assert _real_reference_rules(), (
+            "참조 규범을 하나도 찾지 못했다 — 파생 경로가 깨졌다"
+        )
+
+    @staticmethod
+    def _index(portable_only: bool) -> str:
+        return _index_section(
+            load_rules(
+                HOOKS_DIR.parent, include_task_resume=False, portable_only=portable_only
+            )
+        )
+
+    @pytest.mark.parametrize("rule", _real_reference_rules(), ids=lambda p: p.stem)
+    @pytest.mark.parametrize("portable_only", [False, True])
+    def test_each_reference_rule_is_indexed_by_its_own_path(self, rule, portable_only):
+        fm = parse_frontmatter(rule)
+        assert fm.get("indexLine", "").strip(), (
+            f"{rule.name}: reference 티어인데 indexLine 이 없다 — 어디에도 안내되지 않는다"
+        )
+        if portable_only and fm.get("portable") != "true":
+            pytest.skip(
+                "non-portable 참조 규범은 --portable-only 에서 빠지는 것이 계약이다"
+            )
+        own = HOOKS_DIR.parent / "rules" / rule.name
+        lines = [ln for ln in self._index(portable_only).splitlines() if str(own) in ln]
+        assert len(lines) == 1, (
+            f"{rule.name} 을 자기 절대 경로로 가리키는 색인 줄이 1개가 아니다: {lines}"
+        )
+
+    @pytest.mark.parametrize("portable_only", [False, True])
+    def test_every_rendered_path_is_a_real_file(self, portable_only):
+        rules_dir = HOOKS_DIR.parent / "rules"
+        rendered = re.findall(
+            rf"{re.escape(str(rules_dir))}/[^\s`]+", self._index(portable_only)
+        )
+        assert rendered, "색인에 절대 경로가 하나도 없다"
+        missing = [p for p in rendered if not Path(p).is_file()]
+        assert not missing, f"색인이 없는 파일을 가리킨다: {missing}"
 
 
 class TestPortableOnlyFlagWiring:

@@ -1,8 +1,6 @@
 ---
 name: skill-forge
 description: Distill a hard problem you just solved into a reusable skill draft - proposal-only, behind a three-condition threshold. Use after finishing a non-trivial task whose procedure would otherwise die with the session. Trigger with /skill-forge.
-model: opus
-effort: high
 ---
 
 # Skill Forge — 성공 경험을 재사용 자산으로
@@ -66,7 +64,8 @@ ls ~/.claude/plugins/*/*/skills/ 2>/dev/null    # 설치된 다른 플러그인 
 `/skill-creator`의 템플릿 규약을 따른다:
 
 - frontmatter: `name`(kebab-case, 파일 경로와 일치) · `description`(**영문**, 트리거
-  조건 포함) · `model` · `effort`
+  조건 포함). **`model`·`effort` 는 넣지 않는다** — 스킬의 `effort` 는 로드한 세션의
+  effort 를 세션 끝까지 덮어쓴다(`/skill-creator` §2)
 - 본문: 사용 시점 표 → 절차(순서가 안전에 중요한 단계만 고정) → 실패 모드
 - **정직한 한계 절을 반드시 넣는다** — 이 스킬이 보장하지 *않는* 것.
 

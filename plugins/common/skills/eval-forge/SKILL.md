@@ -1,8 +1,6 @@
 ---
 name: eval-forge
 description: Turn an observed agent defect into a machine-checkable eval scenario, generated and self-validated in one step. Use after a defect lands in the feedback ledger, or before changing an agent definition that has no eval coverage. Trigger with /eval-forge.
-model: sonnet
-effort: medium
 ---
 
 # Eval Forge — 결함을 회귀 게이트로 굳히기

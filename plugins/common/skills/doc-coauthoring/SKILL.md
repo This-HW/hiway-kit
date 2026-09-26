@@ -1,8 +1,6 @@
 ---
 name: doc-coauthoring
 description: AI-assisted documentation authoring. Use when writing, reviewing, or updating technical documents and READMEs.
-model: opus
-effort: medium
 ---
 
 # Document Co-authoring

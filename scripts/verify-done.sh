@@ -795,6 +795,19 @@ else
   fi
 fi
 
+hdr "25. 스킬 frontmatter 는 model·effort 를 선언하지 않는다 (세션 effort 덮어쓰기)"
+# 스킬은 에이전트와 달리 별도 컨텍스트에서 돌지 않는다 — 스킬 frontmatter 의 effort 는
+# **로드한 세션의 effort 를 세션 끝까지 덮어쓴다**. 양성 대조 [confirmed 2026-09-27]:
+# --effort high 세션이 effort:medium 스킬을 로드한 뒤 끝까지 medium 으로 돌았다(W-045 워커
+# 전원이 child-session 로드 직후부터 그랬다). 19종에서 걷어낸 것은 인스턴스 수정이고, 새
+# 스킬이나 skill-creator 템플릿 한 줄로 조용히 재발한다 — 그래서 게이트로 고정한다.
+# 판정은 scripts/check_skill_frontmatter.py 가 단일 소스 — CI(validate.yml)와 동일 스크립트.
+if python3 scripts/check_skill_frontmatter.py; then
+  green "스킬 전부 model/effort 미선언 (check_skill_frontmatter.py — CI와 단일 소스)"
+else
+  red "model/effort 를 선언한 스킬 — 세션 설정을 덮어쓴다 (상세는 위 출력)"
+fi
+
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'
