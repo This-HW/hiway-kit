@@ -64,8 +64,23 @@ ORCA orchestration worker-start --help
 
 새 worker의 `--model`은 사용자가 지정한 모델에만 사용한다. `--effort`는 모델이 지원할 때만
 추가하며 `--model`이 필요하다. 둘 다 `--terminal` 재사용과 결합하지 않는다.
-`launch.requested`와 `launch.effective`를 대조하고 effective가 없으면 미확인으로 남긴다.
+특정 버전이 필요한 작업만 `--model`에 별칭이 아닌 **전체 모델 ID**(예: `claude-opus-5-5`)를 준다.
 특정 모델 역할표는 개인 설정의 몫이며 이 문서는 모델명이나 능력 서열을 고정하지 않는다.
+
+**실제로 돈 모델·effort의 판정 근거는 worker 세션 로그다.** `launch.requested`↔`launch.effective`
+대조는 보조일 뿐이다 — 별칭(`opus`/`sonnet`)으로 띄우면 effective는 요청값을 되울려 둘이 **항상
+일치**하므로 버전 증거가 되지 못한다. 정산 시 worker의 로그에서 아래 필드를 읽는다.
+
+| 하네스 | 로그 위치 | 세션 찾기 | 모델 | effort | CLI 버전 |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | `~/.claude/projects/<cwd 파생 키>/*.jsonl` (예: `/a/b` → `-a-b`) | 디렉토리가 worker cwd에 대응 | `type=="assistant"` 레코드의 `message.model` | 같은 레코드의 `effort` | 같은 레코드의 `version` |
+| Codex | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` | `type=="session_meta"`의 `payload.cwd`가 worker 워크트리 | `type=="turn_context"`의 `payload.model` | `payload.effort` (또는 `payload.collaboration_mode.settings.reasoning_effort`) | `session_meta`의 `payload.cli_version` |
+
+필드명은 2026-09-27 이 머신의 실제 로그(Claude Code 2.1.283, Codex 0.157.x)로 확인한 것이며
+하네스 버전에 따라 바뀔 수 있다. 모델·effort는 턴마다 기록되므로 **한 세션 안에서 바뀔 수 있다** —
+첫 레코드 하나가 아니라 고유값 전부를 적는다. 읽은 결과(모델 ID·effort·CLI 버전)는 컨트롤의 원장
+(Work progress/decisions 또는 병합 커밋 메시지)에 남긴다. 로그를 찾지 못하거나 필드가 없으면
+`[미확인]`으로 적고 별칭·요청값으로 추측해 채우지 않는다. 로그의 프롬프트 본문은 원장에 옮기지 않는다.
 
 접수된 성공/실패 보고 뒤에는 즉시 후속 작업으로 재사용하거나, 사용자 요청으로 retain하거나,
 release한다. `worker-release`는 소유 터미널의 해제이며 **워크트리 삭제가 아니다**.
