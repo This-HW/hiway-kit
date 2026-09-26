@@ -117,8 +117,8 @@ How they arrive differs, and the difference is measured, not assumed:
 | Ledger digest (memory) | hook injection | **hook injection** (measured); rules also tell the agent to fetch it itself | self-fetch per the rule |
 | Skills | native | **all 21 recognized** (measured) | recognized |
 | Subagents | 32 agents | **not exposed** — skills degrade to in-session execution | not supported (nested layout) |
-| Agent `model` / `effort` frontmatter | ✅ applied per agent | ❌ **not applied** — agents are not shipped (`packaging/targets.json` omits them), so everything runs on the model/effort in the user's Codex config | ❌ not applied — agents are not recognized (see above) |
-| Automatic blocking | `PreToolUse` veto | **no** — the hook runs but cannot veto | no |
+| Agent `model` / `effort` frontmatter | ✅ applied per agent | ❌ **not applied** — agents are shipped in the package but not exposed as subagents (measured: the files land in the installed plugin cache, but the Codex manifest has no agent field — `packaging/targets.json` `omit.agents`), so everything runs on the model/effort in the user's Codex config | ❌ not applied — agents are not recognized (see above) |
+| Automatic blocking | `PreToolUse` veto | **no** — no blocking hook is shipped: in measurement a `PreToolUse` block did not stop the command, so `protect-sensitive` is left out (see *Hooks* above) | no |
 
 **Codex hook output limit (fixed in 3.34.1).** Codex trims any hook's `additionalContext`
 above 2,500 tokens (≈ bytes / 4) down to a head + tail preview, and the kit's output was
