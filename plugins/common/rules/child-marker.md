@@ -2,6 +2,7 @@
 tier: reference
 portable: true
 portable_reason: 마커는 git 만 쓰므로 하네스 무관 — 자식 스킬과 훅이 공유하는 데이터 계약
+indexLine: 자식 마커 스키마는 rules/child-marker.md 를 읽어라
 ---
 
 # 자식 세션 마커 — 데이터 계약

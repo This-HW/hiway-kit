@@ -493,7 +493,7 @@ brainstorming  →  plan-task  →  auto-dev
 
 | 영역 | 이유 |
 | --- | --- |
-| 훅 (protect-sensitive · stop-validator · auto-format) | Claude Code 훅 런타임 전용 — 다른 하네스에는 실행 지점이 없다 |
+| 차단·검증 훅 (protect-sensitive · stop-validator) | Claude Code 전용 — Codex 에는 싣지 않는다(PreToolUse 차단이 유지되지 않는다). 세션 시작 주입(session-start)·자동 포맷(auto-format)은 Codex 에서도 돈다(훅 신뢰 승인 필요) — 그 밖의 하네스에는 실행 지점이 없다 |
 | 서브에이전트 정의{agent_count} | Claude Code 서브에이전트 규격 전용 |
 | 룰 본문의 kit-레포 전용 명령 (`scripts/verify-done.sh` 등) | "요약 금지 / 원문 그대로" 정책의 대가 — 각 룰이 "이 레포에선"으로 한정하고 있으니, 당신 프로젝트의 해당 명령으로 읽어라 |
 {not_portable_rows}
@@ -815,7 +815,8 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     # **존재는 알린다** — 예전에는 이 줄이 없어 그 규범들이 생성물에서 통째로 사라졌다.
     index_only_rows = (
         "\n".join(
-            f"- `rules/{p.stem}` — 본문은 킷 레포에서 읽어라(참조 티어라 인라인하지 않는다)"
+            f"- `rules/{p.stem}` — 본문은 플러그인 설치 경로의 `rules/{p.stem}.md` 에 있다"
+            "(참조 티어라 인라인하지 않는다 — 세션 시작 훅이 도는 하네스는 절대 경로로 안내된다)"
             for p in sorted(index_only, key=lambda x: x.stem)
         )
         or "- (없음)"

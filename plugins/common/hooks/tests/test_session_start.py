@@ -570,6 +570,29 @@ class TestPortableOnlyFilter:
         assert "# Definition of Done" in filtered
         assert "ExitWorktree" in filtered
 
+    def test_real_portable_reference_rules_reach_codex_as_absolute_paths(
+        self, tmp_path
+    ):
+        """스킬이 SSOT 로 가리키는 두 참조 규범이 `--portable-only` 에서도 **안내된다**.
+
+        `indexLine` 이 없던 동안 두 규범은 Claude Code·Codex 어디에도 주입·안내되지
+        않았다 — 스킬 10곳이 가리키는 대상이 세션에서 보이지 않았다(W-045 C).
+        소비자 cwd 에는 `rules/` 가 없으므로 플러그인 루트의 절대 경로여야 한다.
+        """
+        plugin_root = HOOKS_DIR.parent
+        rules_dir = plugin_root / "rules"
+        filtered = load_rules(
+            plugin_root, include_task_resume=False, portable_only=True
+        )
+        for name in ("delegation-contract", "child-marker"):
+            assert f"{rules_dir}/{name}.md" in filtered, (
+                f"{name} 색인이 절대 경로로 없다"
+            )
+            assert f" rules/{name}.md" not in filtered, f"{name} 색인이 상대 경로다"
+        # non-portable 참조 규범은 여전히 빠진다.
+        assert "agent-system.md" not in filtered
+        assert "agent-delegation-chain.md" not in filtered
+
 
 class TestPortableOnlyFlagWiring:
     """플래그 문자열이 정책과 모듈 사이에서 갈리지 않는지 (드리프트 게이트).
