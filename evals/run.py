@@ -191,15 +191,19 @@ class Harness(Protocol):
 class ScenarioOutput:
     text: str  # 어서션·judge·실패 발췌가 보는 최종 텍스트 (text 모드 stdout 과 같은 것)
     # 실제로 돈 모델 ID(별칭 아님), 정렬. 서브에이전트·보조 모델이 섞이면 여럿이다 —
-    # 주 모델을 고르지 않고 전부 싣는다. CLI 가 사용량을 주지 않으면 [].
+    # 여기서는 고르지 않고 전부 싣는다(기록). CLI 가 사용량을 주지 않으면 [].
     resolved_models: list[str] = field(default_factory=list)
+    # 모델 ID → outputTokens. 주 모델을 고르는 근거(`select_primary_models`)다.
+    output_tokens: dict[str, int] = field(default_factory=dict)
 
 
-JUDGE_SCHEMA = json.dumps({
-    "type": "object",
-    "properties": {"score": {"type": "integer", "minimum": 0, "maximum": 10}},
-    "required": ["score"],
-})
+JUDGE_SCHEMA = json.dumps(
+    {
+        "type": "object",
+        "properties": {"score": {"type": "integer", "minimum": 0, "maximum": 10}},
+        "required": ["score"],
+    }
+)
 
 
 class ClaudeCodeHarness:
@@ -232,26 +236,95 @@ class ClaudeCodeHarness:
 
     def judge_cmd(self, prompt: str) -> list[str]:
         return [
-            "claude", "-p", prompt, "--model", "sonnet",
-            "--output-format", "json", "--json-schema", JUDGE_SCHEMA,
+            "claude",
+            "-p",
+            prompt,
+            "--model",
+            "sonnet",
+            "--output-format",
+            "json",
+            "--json-schema",
+            JUDGE_SCHEMA,
         ]
 
     def is_available(self) -> bool:
         return shutil.which("claude") is not None
 
     def parse_scenario_output(self, stdout: str) -> ScenarioOutput:
-        try:
-            data = json.loads(stdout)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"json 파싱 실패: {e}") from e
-        if not isinstance(data, dict):
-            raise ValueError(f"json 최상위가 객체가 아니다: {type(data).__name__}")
+        data = _result_object(stdout)
+        # 실행 자체가 실패한 결과(is_error·max_turns 등)는 채점 대상이 아니다 — `result`
+        # 문자열이 있어도 그것은 에이전트의 답이 아니라 오류 문구일 수 있다.
+        subtype, is_error = data.get("subtype"), data.get("is_error")
+        if is_error is True or subtype != "success":
+            raise ValueError(
+                f"실행 실패 결과 — subtype={subtype!r}, is_error={is_error!r}"
+            )
         text = data.get("result")
         if not isinstance(text, str):
             raise ValueError(f"'result' 문자열 없음: {type(text).__name__}")
         usage = data.get("modelUsage")
-        models = sorted(usage) if isinstance(usage, dict) else []
-        return ScenarioOutput(text=text, resolved_models=models)
+        if not isinstance(usage, dict):
+            return ScenarioOutput(text=text)
+        # outputTokens 를 못 읽은 모델도 키로 남긴다(0) — 별칭 매치는 토큰 없이도 성립한다.
+        tokens = {
+            m: u["outputTokens"]
+            if isinstance(u, dict) and isinstance(u.get("outputTokens"), int)
+            else 0
+            for m, u in usage.items()
+        }
+        return ScenarioOutput(
+            text=text, resolved_models=sorted(usage), output_tokens=tokens
+        )
+
+
+def _pick_result_object(data: Any) -> dict | None:
+    """json 값 → 결과 객체. 최상위가 리스트(스트림 전체를 배열로 준 형태)면 마지막
+    `type == "result"` 원소를 고른다. 어느 쪽도 아니면 None."""
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, list):
+        for item in reversed(data):
+            if isinstance(item, dict) and item.get("type") == "result":
+                return item
+    return None
+
+
+def _result_object(stdout: str) -> dict:
+    """stdout 전체를 한 json 으로 먼저 읽고, 안 되면 **마지막 비지 않은 줄** 을 다시 읽는다
+    (앞에 경고·잡음 줄이 섞인 출력). 둘 다 결과 객체가 아니면 ValueError — fail-closed."""
+    reasons = []
+    lines = [ln for ln in stdout.splitlines() if ln.strip()]
+    candidates = [("전체", stdout)]
+    if len(lines) > 1:
+        candidates.append(("마지막 줄", lines[-1]))
+    for where, raw in candidates:
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError as e:
+            reasons.append(f"{where}: json 파싱 실패: {e}")
+            continue
+        obj = _pick_result_object(data)
+        if obj is not None:
+            return obj
+        reasons.append(f"{where}: 결과 객체 아님({type(data).__name__})")
+    raise ValueError("; ".join(reasons))
+
+
+def select_primary_models(requested: str, output_tokens: dict[str, int]) -> list[str]:
+    """주 모델 — 비교 축이 보는 값. 실행에는 보조 모델(서브에이전트·요약 등)이 회차마다
+    섞일 수 있어 전체 목록을 비교하면 회귀 없이 red 가 난다(C-ATK-001).
+
+    요청한 별칭의 패밀리(`opus` → `claude-opus-5-5`)나 같은 ID 가 있으면 그 중에서,
+    없으면 전체에서 outputTokens 가 가장 큰 1개(동률은 이름순). 패밀리 매치가 없고
+    토큰도 0 뿐이면 근거가 없다 — [] 는 축 "모름"이다."""
+    family = [m for m in output_tokens if m == requested or requested in m.split("-")]
+    pool = sorted(family or output_tokens)
+    if not pool:
+        return []
+    best = max(pool, key=lambda m: output_tokens[m])
+    if not family and output_tokens[best] <= 0:
+        return []
+    return [best]
 
 
 HARNESS: Harness = ClaudeCodeHarness()
@@ -1353,6 +1426,7 @@ def _result_impl(
     model: str = "",
     effort: str | None = None,
     resolved_models: list[str] | None = None,
+    primary_models: list[str] | None = None,
 ) -> dict:
     excerpt = _fail_excerpt(stdout, checks) if status != "pass" else None
     return {
@@ -1371,6 +1445,9 @@ def _result_impl(
         # 이것은 CLI 가 보고한 **실제 모델 ID** 다 — 실행 출력을 못 읽은 결과(timeout·
         # error·파싱 실패)는 [].
         "resolved_models": resolved_models or [],
+        # 그 중 **주 모델** — compare 가 보는 축(`select_primary_models`). 전체 목록은
+        # 보조 모델이 회차마다 섞여 비교 축이 될 수 없다(C-ATK-001).
+        "primary_models": primary_models or [],
         "scenario": scenario.scenario_id,
         "status": status,
         "checks": checks,
@@ -1487,25 +1564,40 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
 
         # 해석 불가 = fail-closed. 어서션을 raw stdout 에 돌리면 JSON 문자열 안의
         # 우연한 키워드로 통과가 나올 수 있다 — 채점하지 않고 사유를 남긴다.
+        # 품질 fail 이 아니라 error 다 — 출력 형태가 바뀌었거나 실행 자체가 실패한
+        # 것(is_error·subtype)이라 에이전트의 답을 채점한 결과가 아니다(ATK-004 분류).
         try:
             parsed = HARNESS.parse_scenario_output(stdout)
         except ValueError as e:
             return _result(
                 agent.name,
                 scenario,
-                "fail",
-                [{"type": "scenario_output", "ok": False, "detail": f"출력 해석 불가 (fail-closed): {e}"}],
+                "error",
+                [
+                    {
+                        "type": "scenario_output",
+                        "ok": False,
+                        "detail": f"출력 해석 불가 (fail-closed): {e}",
+                    }
+                ],
                 time.time() - start,
                 work_dir=str(work_dir),
                 stdout=stdout,
             )
         stdout = parsed.text
+        primary = select_primary_models(agent.model, parsed.output_tokens)
         if not parsed.resolved_models:
-            # 축이 비면 compare 는 알림도 회귀도 내지 않는다 — 여기서 말하지 않으면
+            # 축이 비면 compare 는 회귀를 내지 않는다(모름) — 여기서 말하지 않으면
             # CLI 가 사용량 필드를 바꿨을 때 축이 조용히 사라진다(`warning-signal.md` §측정 8).
             print(
                 f"[eval] {agent.name}/{scenario.scenario_id}: 출력에 모델 사용량이 없다 — "
                 "resolved_models 축 기록 불가",
+                file=sys.stderr,
+            )
+        elif not primary:
+            print(
+                f"[eval] {agent.name}/{scenario.scenario_id}: 주 모델을 고를 근거가 없다 "
+                f"(별칭 {agent.model!r} 매치 없음, outputTokens 0) — primary_models 축 기록 불가",
                 file=sys.stderr,
             )
 
@@ -1545,6 +1637,7 @@ def run_scenario(agent: AgentDef, scenario: Scenario, timeout: int) -> dict:
             work_dir=str(work_dir),
             stdout=stdout,
             resolved_models=parsed.resolved_models,
+            primary_models=primary,
         )
 
 
@@ -1565,6 +1658,7 @@ def summarize(results: list[dict]) -> dict:
                 "models": set(),
                 "efforts": set(),
                 "resolved_models": set(),
+                "primary_models": set(),
             },
         )
         s["total"] += 1
@@ -1573,11 +1667,13 @@ def summarize(results: list[dict]) -> dict:
             s["models"].add(r["model"])
         s["efforts"].add(r.get("effort") or EFFORT_DEFAULT)
         s["resolved_models"].update(r.get("resolved_models") or [])
+        s["primary_models"].update(r.get("primary_models") or [])
     for s in summary.values():
         s["pass_rate"] = s["pass"] / s["total"] if s["total"] else 0.0
         s["models"] = sorted(s["models"])
         s["efforts"] = sorted(s["efforts"])
         s["resolved_models"] = sorted(s["resolved_models"])
+        s["primary_models"] = sorted(s["primary_models"])
     return summary
 
 
@@ -1683,31 +1779,64 @@ def run_all(
 MEASUREMENT_AXES = (
     ("models", "model"),
     ("efforts", "effort"),
-    ("resolved_models", "resolved_model"),
+    # 실제 모델 ID 는 **주 모델**만 비교한다. 전체 목록(resolved_models)은 보조 모델이
+    # 회차마다 섞여 회귀 없이 red 가 난다(C-ATK-001) — 기록으로 남기고 차이는 알림만.
+    ("primary_models", "primary_model"),
 )
 
 
-def _axis_mismatch(agent: str, key: str, label: str, cur: dict, base: dict) -> str | None:
+def _axis_mismatch(
+    agent: str, key: str, label: str, cur: dict, base: dict
+) -> str | None:
     """한 측정 축을 대조한다. 다르면 회귀 문구, 같거나 판정 불가면 None."""
     cur_axis, base_axis = cur.get(key), base.get(key)
-    if cur_axis and base_axis is None:
+    # 키 없음(None)과 빈 목록([])은 같은 "모름"이다 — 빈 목록만 조용히 통과시키면
+    # 사용량을 못 읽은 실행이 알림도 회귀도 없이 축을 지운다(C-ATK-002).
+    if not cur_axis or not base_axis:
         # **미지는 회귀가 아니다 — 층이 다르다**(`warning-signal.md` §검토 3).
         # 축 기록 이전에 만들어진 baseline 이면 이 조건이 **매번 참**이라,
         # 회귀로 올리면 상시 red 가 되어 그 옆의 진짜 회귀까지 죽인다(§검토 1).
         # 그래서 stderr 로 알리되 판정에는 넣지 않는다. baseline 을 한 번
-        # 재생성하면 이 줄은 다시 발화하지 않는다.
+        # 재생성하면(빈 축 기준선은 저장이 거부된다) 이 줄은 다시 발화하지 않는다.
+        side = "baseline" if not base_axis else "현재 결과"
+        if not cur_axis and not base_axis:
+            side = "baseline·현재 결과 모두"
         print(
-            f"[compare] {agent}: baseline 에 측정 축({label}) 기록이 없다 — "
-            f"현재 {cur_axis} 와 같은 축인지 확인 불가. baseline 재생성 권장",
+            f"[compare] {agent}: {side}에 측정 축({label}) 기록이 없다 — "
+            f"baseline {base_axis!r} / 현재 {cur_axis!r} 가 같은 축인지 확인 불가. "
+            "baseline 재생성 권장",
             file=sys.stderr,
         )
         return None
-    if cur_axis and base_axis and cur_axis != base_axis:
+    if cur_axis != base_axis:
         return (
             f"{agent}: 측정 축이 다르다 — {label} {base_axis} → {cur_axis}. "
             f"pass_rate 비교가 성립하지 않는다(같은 것을 세지 않았다)"
         )
     return None
+
+
+def _notice_resolved_models_drift(agent: str, cur: dict, base: dict) -> None:
+    """전체 모델 목록 차이는 **기록의 차이**지 회귀가 아니다 — 보조 모델은 회차마다
+    나타났다 사라진다. 판정에 넣지 않되 침묵하지도 않는다(stderr)."""
+    cur_all, base_all = cur.get("resolved_models"), base.get("resolved_models")
+    if cur_all and base_all and cur_all != base_all:
+        print(
+            f"[compare] {agent}: 실행에 쓰인 전체 모델 목록이 다르다(비회귀) — "
+            f"{base_all} → {cur_all}",
+            file=sys.stderr,
+        )
+
+
+def empty_axis_agents(summary: dict) -> list[str]:
+    """비교 축이 빈 에이전트 목록(`에이전트: 축`). 이런 런을 기준선으로 저장하면 이후
+    compare 가 그 축을 영구히 "모름"으로 보고 회귀를 잡지 못한다."""
+    return [
+        f"{agent}: {label}"
+        for agent, s in sorted(summary.items())
+        for key, label in MEASUREMENT_AXES
+        if not s.get(key)
+    ]
 
 
 def compare_baseline(
@@ -1737,6 +1866,7 @@ def compare_baseline(
             mismatch = _axis_mismatch(agent, key, label, cur, base)
             if mismatch:
                 regressions.append(mismatch)
+        _notice_resolved_models_drift(agent, cur, base)
         if cur["pass_rate"] < base["pass_rate"]:
             regressions.append(
                 f"{agent}: pass_rate {cur['pass_rate']:.2f} < baseline {base['pass_rate']:.2f}"
@@ -1903,6 +2033,14 @@ def main(argv: list[str] | None = None) -> int:
         elif exit_code != EXIT_PASS:
             # 실패 런을 기준선으로 저장하면 이후 compare가 오염된다 (ATK-010).
             print("[eval] baseline 저장 거부 — 실패한 런은 기준선이 될 수 없음")
+        elif empty := empty_axis_agents(report["summary"]):
+            # 빈 축 기준선은 이후 모든 compare 에서 그 축을 "모름"으로 만든다(C-ATK-002).
+            print(
+                "[eval] baseline 저장 거부 — 비교 축이 빈 에이전트가 있다: "
+                + ", ".join(empty),
+                file=sys.stderr,
+            )
+            exit_code = EXIT_FAIL
         else:
             BASELINE_DIR.mkdir(parents=True, exist_ok=True)
             date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
