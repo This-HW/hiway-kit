@@ -457,6 +457,13 @@ def test_resolve_pytest_python_caches_and_probes(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+def _claude_json(result, models=("claude-sonnet-5",)):
+    """`claude -p --output-format json` 결과 형태 — 최종 텍스트는 `result`,
+    실제로 돈 모델 ID 는 `modelUsage` 의 키다. 모델 호출 없이 쓰는 픽스처."""
+    usage = {m: {"inputTokens": 1, "outputTokens": 1, "costUSD": 0.0} for m in models}
+    return json.dumps({"type": "result", "is_error": False, "result": result, "modelUsage": usage})
+
+
 def _agent(tmp_path):
     return runner.AgentDef(
         name="fix-bugs",
@@ -541,7 +548,7 @@ def test_run_scenario_assertion_exception_degrades_to_fail(tmp_path, monkeypatch
 
     class R:
         returncode = 0
-        stdout = "ok"
+        stdout = _claude_json("ok")
         stderr = ""
 
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
@@ -695,7 +702,7 @@ def test_run_scenario_pass_path_judge_advisory(tmp_path, monkeypatch):
 
     class R:
         returncode = 0
-        stdout = "수정 완료 injection 지적"
+        stdout = _claude_json("수정 완료 injection 지적")
         stderr = ""
 
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
@@ -1068,7 +1075,7 @@ def test_run_scenario_without_git_spec_skips_materialize(tmp_path, monkeypatch):
 
     class R:
         returncode = 0
-        stdout = "x"
+        stdout = _claude_json("x")
         stderr = ""
 
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
@@ -1468,7 +1475,12 @@ def test_claude_code_harness_calls_are_subprocess_run_or_shutil_which_first_arg(
         if isinstance(n, ast.ClassDef) and n.name == "ClaudeCodeHarness"
     )
     methods = {n.name: n for n in harness.body if isinstance(n, ast.FunctionDef)}
-    assert set(methods) == {"run_scenario_cmd", "judge_cmd", "is_available"}
+    assert set(methods) == {
+        "run_scenario_cmd",
+        "judge_cmd",
+        "is_available",
+        "parse_scenario_output",
+    }
 
     def _returns_or_builds_claude_list(fn: ast.FunctionDef) -> bool:
         for node in ast.walk(fn):
@@ -1510,6 +1522,9 @@ def test_run_scenario_and_run_judge_use_harness_indirection(monkeypatch, tmp_pat
 
         def is_available(self):
             return True
+
+        def parse_scenario_output(self, stdout):
+            return runner.ScenarioOutput(text=stdout)
 
     captured_cmds = []
 
@@ -1831,3 +1846,176 @@ def test_run_scenario_cmd_carries_agent_effort(tmp_path, effort, expected_tail):
         return
     i = cmd.index("--effort")
     assert cmd[i : i + 2] == expected_tail
+
+
+# ---------------------------------------------------------------------------
+# 측정 축(resolved_models) — 실제로 돈 모델 ID (W-045 M2)
+# ---------------------------------------------------------------------------
+#
+# 왜 있는가: model 축은 frontmatter 의 **별칭**(opus/sonnet/haiku)이다. 별칭이 다음
+# 세대로 넘어가도 값이 같아 --compare 는 같은 축으로 본다. 시나리오를 text 로 돌려
+# 실제 ID 를 받을 길이 없었다 — json 으로 돌려 `modelUsage` 키를 싣는다.
+
+
+def test_run_scenario_cmd_requests_json_output(tmp_path):
+    """실제 모델 ID 는 json 출력에만 있다.
+
+    되돌려-FAIL: run_scenario_cmd 의 "json" 을 "text" 로 되돌리면 red.
+    """
+    cmd = runner.ClaudeCodeHarness().run_scenario_cmd(_agent(tmp_path), "과제")
+    i = cmd.index("--output-format")
+    assert cmd[i + 1] == "json"
+
+
+def test_run_scenario_asserts_on_result_text_not_raw_json(tmp_path, monkeypatch):
+    """(a) 어서션은 text 모드 stdout 과 같은 것 — `result` 텍스트 — 을 본다.
+
+    JSON 키 이름(`modelUsage`)은 result 에 없으므로 raw stdout 을 채점하면
+    output_not_contains 가 fail 하고, output_regex 앵커(^…$)도 어긋난다.
+    되돌려-FAIL: run_scenario 의 `stdout = parsed.text` 를 지우면 red.
+    """
+
+    class R:
+        returncode = 0
+        stdout = _claude_json("수정 완료")
+        stderr = ""
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
+    sc = _scenario(
+        tmp_path,
+        {
+            "assertions": [
+                {"type": "output_regex", "pattern": "^수정 완료$"},
+                {"type": "output_not_contains", "values": ["modelUsage"]},
+            ]
+        },
+    )
+    res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
+    assert res["status"] == "pass", res["checks"]
+
+
+def test_run_scenario_records_resolved_models_sorted(tmp_path, monkeypatch):
+    """(b) 결과 레코드에 modelUsage 키가 정렬돼 전부 실린다 — 주 모델을 고르지 않는다.
+
+    되돌려-FAIL: `resolved_models=parsed.resolved_models` 인자를 지우면 [] 가 되어 red.
+    """
+
+    class R:
+        returncode = 0
+        stdout = _claude_json("ok", models=("claude-sonnet-5", "claude-haiku-4-5"))
+        stderr = ""
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
+    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
+    assert res["model"] == "sonnet"  # 별칭 축은 그대로 유지
+    assert res["resolved_models"] == ["claude-haiku-4-5", "claude-sonnet-5"]
+
+
+def test_run_scenario_without_model_usage_records_empty_and_says_so(
+    tmp_path, monkeypatch, capsys
+):
+    """modelUsage 가 없으면 [] 로 기록하되 침묵하지 않는다 — 판정은 그대로."""
+
+    class R:
+        returncode = 0
+        stdout = json.dumps({"result": "ok"})
+        stderr = ""
+
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
+    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
+    assert res["status"] == "pass"
+    assert res["resolved_models"] == []
+    assert "resolved_models" in capsys.readouterr().err
+
+
+def test_error_results_carry_empty_resolved_models(tmp_path):
+    """실행 출력을 못 읽은 결과에도 필드가 있다(스키마 고정) — 값은 []."""
+    res = runner.run_scenario(_agent(tmp_path), _scenario(tmp_path, {}), timeout=5)
+    assert res["resolved_models"] == []
+
+
+def test_summarize_collects_resolved_models_unique_sorted():
+    results = [
+        {"agent": "a", "status": "pass", "model": "opus", "resolved_models": ["claude-opus-5-5"]},
+        {
+            "agent": "a",
+            "status": "fail",
+            "model": "opus",
+            "resolved_models": ["claude-opus-5-5", "claude-haiku-4-5"],
+        },
+        {"agent": "a", "status": "fail", "model": "opus", "resolved_models": []},
+        {"agent": "a", "status": "fail", "model": "opus"},  # 축 도입 이전 레코드
+    ]
+    s = runner.summarize(results)["a"]
+    assert s["resolved_models"] == ["claude-haiku-4-5", "claude-opus-5-5"]
+
+
+def test_resolved_model_axis_mismatch_is_a_regression(tmp_path):
+    """(c) 별칭이 같아도 실제 모델이 바뀌면 값 비교가 성립하지 않는다.
+
+    되돌려-FAIL: MEASUREMENT_AXES 에서 resolved_models 줄을 지우면 [] 가 나와 red.
+    """
+    cur = _summary(models=["opus"])
+    cur["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
+    base_s = _summary(models=["opus"])
+    base_s["agent-x"]["resolved_models"] = ["claude-opus-5-1"]
+    out = runner.compare_baseline(cur, _baseline_file(tmp_path, base_s))
+    assert out, "실제 모델이 바뀌었는데 후퇴로 잡히지 않았다"
+    assert "측정 축이 다르다 — resolved_model" in out[0]
+
+
+def test_same_resolved_model_axis_passes(tmp_path):
+    cur = _summary(models=["opus"])
+    cur["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
+    base_s = _summary(models=["opus"])
+    base_s["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
+    assert runner.compare_baseline(cur, _baseline_file(tmp_path, base_s)) == []
+
+
+def test_missing_resolved_model_axis_in_baseline_is_notice_not_regression(tmp_path, capsys):
+    """(d) 축 도입 이전 기준선(2026-09-24 등)은 회귀가 아니라 stderr 알림이다.
+
+    되돌려-FAIL: MEASUREMENT_AXES 에서 resolved_models 줄을 지우면 알림이 사라져 red.
+    """
+    cur = _summary(models=["opus"])
+    cur["agent-x"]["resolved_models"] = ["claude-opus-5-5"]
+    out = runner.compare_baseline(cur, _baseline_file(tmp_path, _summary(models=["opus"])))
+    assert out == [], "미지를 회귀로 올리면 상시 red 가 된다"
+    assert "측정 축(resolved_model)" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        "수정 완료 injection",  # text 모드 출력 — 키워드가 우연히 있어도
+        '{"result": "수정 완료 injection"',  # 잘린 JSON
+        '["수정 완료 injection"]',  # 최상위가 객체가 아님
+        '{"type": "result", "note": "수정 완료 injection"}',  # result 부재
+        '{"result": null, "note": "injection"}',  # result 가 문자열이 아님
+    ],
+)
+def test_unparseable_scenario_output_fails_closed(tmp_path, monkeypatch, stdout):
+    """(e) JSON 파싱 실패·result 부재는 채점하지 않고 fail — 사유를 남긴다.
+
+    raw stdout 에 키워드가 있어도 pass 가 나오면 안 된다.
+    되돌려-FAIL: run_scenario 의 해석 실패 분기를 `parsed = ScenarioOutput(text=stdout)`
+    폴백으로 바꾸면 모든 케이스가 pass 로 red.
+    """
+
+    class R:
+        returncode = 0
+        stderr = ""
+
+    R.stdout = stdout
+    monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
+    sc = _scenario(
+        tmp_path,
+        {"assertions": [{"type": "output_contains_any", "values": ["injection"]}]},
+    )
+    res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
+    assert res["status"] == "fail"
+    assert res["checks"][0]["type"] == "scenario_output"
+    assert "fail-closed" in res["checks"][0]["detail"]
+    assert res["resolved_models"] == []
