@@ -7,7 +7,39 @@ Submit at: https://platform.claude.com/plugins/submit
 > `anthropics/claude-plugins-official`은 Anthropic 자체 큐레이션 전용으로 외부
 > PR/신청 경로가 없다 — 이 문서의 "제출"은 전부 community 등재를 향한다.
 
-## Status
+## 2026-09-28 — `hiway-kit` 을 Claude 디렉토리 포털에 제출 (현재 상태)
+
+2026-09-25 Anthropic 이 디렉토리 제출 포털을 공개했다
+([공지](https://claude.com/blog/build-plugins-for-claude) · [문서](https://claude.com/docs/plugins/submit)).
+아래 "커뮤니티 카탈로그" 절들은 그 이전 경로의 기록이다.
+
+| 항목 | 값 |
+| --- | --- |
+| 제출 경로 | claude.ai → Directory → **Submissions** → 새 제출 → 플러그인 번들 (Max 플랜 개인 계정 `thisyj.work@gmail.com`) |
+| 소스 | `This-HW/hiway-kit` · 경로 `plugins/common` · 브랜치 `main`(추적) · 제출 시점 `393e124` |
+| 포털 검증 | **통과** — 7 checks, 경고 3, 정책 보류 3 |
+| 게재 대상 | **Claude Code 만** (Cowork·채팅 앱 해제 — 훅·에이전트·Python 스크립트가 그 표면에서 검증된 적 없음) |
+| 데이터 처리 답 | 개인정보 읽기/저장 No · 선언 외 전송 No · 보존 없음 · 18세 미만 대상 No (근거: README "Data handling") |
+| 업데이트 | **GitHub push webhook 연결**(hook id `686731192`, ping 200) · 자동 게시 on(첫 버전은 심사자 승인 필요) |
+| 상태 | 보안 스캔 → 사람 심사 대기. 결과는 플러그인 페이지·연락 메일로 온다 |
+
+**정책 보류 3건과 판단** (포털 원문 요지):
+
+1. *사용자 머신의 자격증명 사용* — `skills/mcp-builder/SKILL.md` 가 MCP 서버 예시 코드에서 `API_KEY`
+   환경변수와 `modelcontextprotocol.io` 링크를 함께 담는다. 스캐폴딩 **설명 예시**다. 문구를 정리하면
+   보류가 사라진다(후속 후보).
+2. *같은 항목의 교차 판정* — `auto-dev` 의 `checklist pass <id>` 를 비밀번호 도구 `pass` 로, `review` 의
+   `$ARGUMENTS` 를 외부 전송으로 읽었다. **오탐.**
+3. *검증기가 따라가지 못한 스크립트* — Python 훅 5개. 훅 플러그인의 필연이다. 포털 안내대로 심사자가 읽는다.
+
+경고 "내려받아 바로 실행" 2건(`eval-forge`, `hooks/examples/README.md`)은 `*verify*.sh` 같은 **파일명 패턴
+표기**를 오인한 것 — 실제 다운로드·실행 명령은 없다. 경고 "아이콘 없음"은 GitHub 아바타로 대체된다.
+
+**필수 동의 4개 중 "선언된 구성 밖에서 자격증명 유출·코드 실행 없음"** 은 포털이 스스로 요약에
+"Runs code locally: 5 hooks" 로 훅을 선언된 로컬 실행으로 표시하므로, 선언되지 않은 실행·유출에 관한
+진술로 판단하고 확인했다(배포 훅 네트워크 호출 0 — grep 확인).
+
+## Status (구 커뮤니티 카탈로그 — 전임 킷 기록)
 
 - **v2.7.0** tagged and ready — 2026-06-14 (core-only consolidation + native foundation + git-subdir distribution)
 - Recovery point before consolidation: tag `v2.6.0-with-domains`

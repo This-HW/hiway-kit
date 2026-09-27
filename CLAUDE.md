@@ -28,10 +28,9 @@ otherwise). Guidance lives in skills, never in agent `tools:` allowlists.
 git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 ```
 
-> **커뮤니티 카탈로그 경로는 아직 없다.** `hiway-kit` 은 미등재이고 재제출은 웹 폼이라
-> 자동화할 수 없다(`docs/marketplace-submission.md`). 등재되기 전까지 카탈로그 설치
-> 명령을 문서에 적지 않는다 — 없는 경로를 적는 것이 이 킷의 게이트들이 존재하는 이유인
-> "약속 ≠ 실물" 결함이다.
+> **디렉토리 경로는 아직 없다 — 심사 중이다.** 2026-09-28 Claude 디렉토리 포털에 제출했다
+> (`docs/marketplace-submission.md`). **승인·공개되기 전까지 디렉토리 설치 명령을 문서에 적지
+> 않는다** — 없는 경로를 적는 것이 이 킷의 게이트들이 존재하는 이유인 "약속 ≠ 실물" 결함이다.
 
 ## Structure
 
@@ -380,17 +379,18 @@ Plugin cache is keyed by `{plugin-name}/{version}` — same version = no update 
 
 - **직접 마켓플레이스** (`This-HW/hiway-kit` → `@hiway-kit`): `/plugin marketplace update` 시
   **즉시** main HEAD 를 반영한다. 현재 **유일하게 성립하는** 경로다.
-- **커뮤니티 카탈로그** (`@claude-community`): **미등재**이고, 등재돼도 **pin 전진을 신뢰하면
-  안 된다.** 상류의 `Bump Plugin SHAs` 워크플로가 `disabled_manually` 상태로 2026-08-13 이후
-  한 번도 실행되지 않았다 — **우리 결함이 아니라 상류 자동화가 꺼진 것**이고 카탈로그의 모든
-  항목이 같이 멈춰 있다. 전수 근거·재현 명령:
-  `docs/research/2026-09-08-plugin-directory-status.md`.
+- **Claude 디렉토리** (2026-09-25 공개된 제출 포털, Claude Code 에선 공식 마켓플레이스로 노출):
+  **제출됨·심사 중**(2026-09-28). 게재 대상은 **Claude Code 만** 골랐다 — 훅·에이전트·Python
+  스크립트가 Cowork·채팅 앱에서 검증된 적이 없다. 포털 검증은 통과했고 정책 보류 3건(훅 스크립트,
+  자격증명 휴리스틱 오탐 2)은 사람 심사로 간다. **GitHub push webhook 이 연결돼** 공개 후에는
+  `main` push 가 몇 분 안에 새 버전으로 스캔된다(재제출 불필요). 첫 버전은 심사자 승인이 있어야 공개된다.
+- (구) **커뮤니티 카탈로그** (`@claude-community`): 상류 pin 전진 워크플로가 2026-08-13 이후 꺼져 있다
+  (`docs/research/2026-09-08-plugin-directory-status.md`). 더는 우리 배포 경로로 보지 않는다.
 
-우리가 통제할 수 있는 것은 **재개되는 순간 green 으로 통과하는가** 하나뿐이라, 상류가 bump 시
-돌리는 `claude plugin validate` 를 §19 게이트·CI 로 앞당겨 건다.
+`claude plugin validate` 는 §19 게이트·CI 로 계속 앞당겨 건다 — 포털 검증도 같은 검사로 시작한다.
 
-**함의**: 릴리스 안내에 **"하루면 전파된다"고 쓰지 마라** — 약속할 근거가 없다. 즉시성이
-필요한 사용자는 직접 마켓플레이스 경로로 보낸다.
+**함의**: 승인 전까지 릴리스 안내는 직접 마켓플레이스 경로만 적는다. 공개 후에도 전파 시간을
+약속하지 말고 "push 후 스캔을 통과하면 반영"이라고만 쓴다.
 
 ## Contributing
 
