@@ -23,7 +23,6 @@ description: Design and spec before any planning or code. MUST USE before new fe
 **완료 마킹 규약 [건너뛰기 금지]:** 각 항목을 마치면 **즉시** `TaskUpdate(status="completed")`,
 마지막 항목(plan-task invoke)은 **invoke 직전에** 마킹 (규율 SSOT:
 `rules/definition-of-done.md#task-마감-규율`).
-**work_id metadata:** brainstorming 단계에서는 Work ID가 없으므로 `{"phase": "brainstorming"}`만 사용
 
 1. 프로젝트 컨텍스트 파악 (파일, 최근 커밋, docs)
 2. 명확화 질문 (한 번에 하나씩)
@@ -61,7 +60,7 @@ description: Design and spec before any planning or code. MUST USE before new fe
 ### 5단계: 스펙 문서 작성
 
 **저장 경로:** `docs/specs/YYYY-MM-DD-{topic}.md`
-(`docs/works/` 있으면 해당 Work와 연결)
+(계획 파일은 plan-task 가 만든다 — 그 `## 요구사항` 에서 이 스펙 경로를 가리킨다)
 
 스펙 문서 구조:
 ```markdown
