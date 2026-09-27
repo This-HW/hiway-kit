@@ -6,6 +6,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [4.0.0] — 2026-09-28
+
+W-046 — **Work 시스템을 걷어내고 계획 파일 한 장으로 바꾼다** + **웹 작업에 Aside 를 쓸 수 있으면 쓴다**.
+결정·계약·트랙 브리프: `docs/specs/2026-09-28-plans-replace-works/`. 메이저 버전인 이유: 소비자가
+보던 동작(Work ID·`docs/works/` 단계 폴더·`progress.md`)이 없어진다.
+
+### Removed — Work 시스템 (ID·단계 폴더·phase 상태기계·work.sh·progress/decisions 분리)
+
+실측한 이유(스펙 §1):
+
+- **소비자 환경에서 처음부터 동작하지 않았다.** `plan-task`·`auto-dev` 가 `./scripts/work.sh new/start/
+  next-phase` 를 실행하라고 했는데 `work.sh` 는 **이 레포에만** 있고 플러그인에 실리지 않았다(`setup.sh` 도
+  설치하지 않는다). 대체로 안내된 수동 채번(`ls docs/works/idea | tail -1`)은 idea 폴더만 봐서 ID 가 충돌했다.
+- **거의 아무도 켜지 않았다.** `docs/works/` 가 있을 때만 켜지는 opt-in 인데 킷이 그 디렉토리를 만들지 않았다.
+- **이 레포에서도 쓰이지 않았다.** 원장이 gitignore 라 워커 워크트리에 보이지 않아 실제 기준은 `docs/specs/`
+  였다. 발급기는 이미 쓴 ID(W-025)를 다시 발급했다.
+
+### Added — 계획 파일 규약 `docs/plans/<YYYY-MM-DD>-<slug>/plan.md`
+
+- `plan-task` 가 **Medium/Large** 작업에서 `plan.md` 하나를 만든다(frontmatter `title`·`status`
+  (`planning|in-progress|done`)·`created`·`size`, 절: 요구사항·결정·구현 계획·완료 조건·검증 결과).
+  Small 은 파일 없이 끝낸다. **식별자 = 디렉토리 이름** — 발급기가 없어 충돌하지 않는다.
+  규약 SSOT: `skills/plan-task/references/plan-format.md`.
+- 실행 추적은 기존 **verify-gated checklist**(`checklist.json` — verify 명령이 exit 0 일 때만 통과)를 그대로
+  쓴다. 호스트 태스크 도구(Claude Code Tasks 등)는 있으면 보조로만 — 영속 상태는 파일이라 Codex 등
+  영속 태스크가 없는 하네스에서도 같게 동작한다.
+- session-start 가 활성 계획(`status≠done`)을 `=== ACTIVE PLANS ===` 로 알린다(비신뢰 프레이밍·제목 정제,
+  상한 10). `task-resume` 룰은 "plan.md 원문 재독 → checklist 미완 항목부터" 로 재작성(2,532B → 1,244B).
+- `verify-done.sh` §8 은 활성 계획의 checklist 만 검사한다(done 계획의 것은 기록).
+
+### Changed — 웹 작업: Aside CLI 가 있으면 쓴다
+
+`web-research` 에 "로그인된 브라우저가 필요한 웹 작업"(로그인 사이트·폼 제출·JS 렌더) 경로를 추가했다.
+**`command -v aside` 가 성공할 때만** `aside guide` 를 먼저 읽고 `aside exec` 로 위임한다(모델·권한 플래그는
+사용자가 정하지 않았으면 붙이지 않고, 로그인·MFA·결제·승인에서 멈추면 보고). 없으면 브라우저 MCP·WebFetch 로
+폴백한다 — 킷은 그 존재를 가정하지 않는다.
+
+### Changed — 소비자에게 실리는 프롬프트에서 레포 내부 표식 정리
+
+스킬·에이전트·참조 룰의 `W-0NN`/`Spec N` 표식 14곳과 폐기 고고학 문단을 걷어냈다(소비자가 해석할 수 없다).
+주입 룰 `loop-engineering`·`definition-of-done` 의 "Work" 참조도 계획 파일로. 상시 주입 9,012B ≤ 9,216B.
+
+### 이전 방법 (구버전 `docs/works/` 사용자)
+
+session-start 가 `docs/works/active/` 를 발견하면 한 줄로 알린다(내용은 읽지 않는다). 진행 중인 Work 는:
+
+```bash
+# 예: docs/works/active/W-012-login → docs/plans/2026-09-28-login/
+mkdir -p docs/plans/2026-09-28-login
+mv docs/works/active/W-012-login/planning-results.md docs/plans/2026-09-28-login/plan.md
+mv docs/works/active/W-012-login/checklist.json docs/plans/2026-09-28-login/ 2>/dev/null || true
+```
+
+그 다음 `plan.md` 맨 위에 `plan-format.md` 의 frontmatter(`status: in-progress`)를 붙인다. 끝난 Work 는 옮길 필요가 없다.
+
 ## [3.39.1] — 2026-09-27
 
 W-045 — **스킬이 사용자 세션의 effort 를 덮어쓰지 않는다** + **실제로 돈 모델을 기록한다** +
