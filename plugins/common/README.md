@@ -26,7 +26,7 @@ A selection below — 21 skills total, auto-discovered from `skills/` (not hand-
 
 | Command                     | Description                                     |
 | --------------------------- | ----------------------------------------------- |
-| `/plan-task`                | Structured task planning with Work system       |
+| `/plan-task`                | Structured task planning with a plan file       |
 | `/auto-dev`                 | Automated development pipeline                  |
 | `/review`                   | Code review: ruff + adversarial review + security scan |
 | `/debug`                    | 4-Phase debug pipeline                          |

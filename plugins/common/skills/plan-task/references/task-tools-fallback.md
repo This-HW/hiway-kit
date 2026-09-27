@@ -33,31 +33,34 @@ ToolSearch("select:TaskCreate,TaskUpdate,TaskList")
 > ```bash
 > CL="${CLAUDE_PLUGIN_ROOT:-}/hooks/checklist.py"
 > [ -f "$CL" ] || CL=$(ls -1 ~/.claude/plugins/cache/*/*/*/hooks/checklist.py 2>/dev/null | sort -V | tail -1)
-> [ -f "$CL" ] && python3 "$CL" show <work_dir>
+> [ -f "$CL" ] && python3 "$CL" show <plan_dir>
 > ```
 >
-> 둘 다 못 찾으면 아래 "Work 시스템도 없는 경우"의 대화창 추적으로 내려간다.
+> 둘 다 못 찾으면 아래 "계획 파일도 없는 경우"의 대화창 추적으로 내려간다.
 
 
 kit에는 이미 같은 목적의 **기계 검증형** 추적 장치가 있다. Task 도구가 없을 때는
 이쪽을 쓴다 (오히려 verify 명령으로 증명되므로 더 강하다):
 
+`<plan_dir>` 는 계획 디렉토리(`docs/plans/<YYYY-MM-DD>-<slug>/` — `plan-format.md`)이고,
+`checklist.json` 이 그 안에 생긴다. `$CL` 은 위에서 해석한 경로다.
+
 ```bash
 # 항목 정의 — id/description/acceptance/verify 필수
-./scripts/checklist.sh init <work_dir> '[{"id":"C1","description":"...","acceptance":"...","verify":"<셸 명령>"}]'
+python3 "$CL" init <plan_dir> '[{"id":"C1","description":"...","acceptance":"...","verify":"<셸 명령>"}]'
 
-./scripts/checklist.sh show   <work_dir>   # 현황
-./scripts/checklist.sh pass   <work_dir> C1  # verify 실행 → exit 0일 때만 완료 전환
-./scripts/checklist.sh status <work_dir>   # 0=전부완료 1=미완 3=원장없음
-./scripts/checklist.sh verify <work_dir>   # 전 항목 재증명
+python3 "$CL" show   <plan_dir>      # 현황
+python3 "$CL" pass   <plan_dir> C1   # verify 실행 → exit 0일 때만 완료 전환
+python3 "$CL" status <plan_dir>      # 0=전부완료 1=미완 3=원장없음
+python3 "$CL" verify <plan_dir>      # 전 항목 재증명
 ```
 
 `verify`는 **셸 명령**이어야 한다. "확인했다"는 완료 전환의 근거가 아니다
 (definition-of-done: 완료는 판단이 아니라 명령의 출력).
 
-### Work 시스템도 없는 경우 (fallback 모드)
+### 계획 파일도 없는 경우 (Small)
 
-`docs/works/` 자체가 없으면 checklist도 걸 곳이 없다. 그때는 **대화창에 진행 표를
+Small 작업은 계획 디렉토리가 없어 checklist도 걸 곳이 없다. 그때는 **대화창에 진행 표를
 유지**하고, 각 항목의 완료 근거로 실행한 명령과 그 출력을 남긴다. 추적 수단이 없다는
 이유로 게이트를 면제하지 않는다.
 
@@ -66,7 +69,7 @@ kit에는 이미 같은 목적의 **기계 검증형** 추적 장치가 있다. 
 - Task 도구 부재를 이유로 파이프라인을 중단하는 것
 - 부재를 조용히 무시하고 **아무 추적 없이** 진행하는 것 (둘 다 결함이다)
 - checklist 항목의 `verify`에 `true` 같은 무조건 통과 명령을 넣는 것 — 게이트 착시(F-018)
-- **완료 게이트 자체를 항목으로 넣는 것** — `verify-done.sh §8`이 "active Work의 checklist
-  전항목 완료"를 요구하므로, `verify: scripts/verify-done.sh` 항목은 자기참조 데드락이 된다
+- **완료 게이트 자체를 항목으로 넣는 것** — 킷 레포의 `verify-done.sh §8`이 "활성 계획의
+  checklist 전항목 완료"를 요구하므로, `verify: scripts/verify-done.sh` 항목은 자기참조 데드락이 된다
   (게이트가 그 항목을 기다리고, 그 항목이 게이트를 기다린다). 게이트는 checklist **밖**의
   마지막 단계다.

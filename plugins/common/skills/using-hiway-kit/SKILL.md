@@ -1,6 +1,6 @@
 ---
 name: using-hiway-kit
-description: Session-start meta-skill. Kit workflow chain and Work system rules.
+description: Session-start meta-skill. Kit workflow chain and plan file rules.
 ---
 
 # Using hiway-kit
@@ -19,6 +19,6 @@ brainstorming → plan-task → auto-dev
 **auto-dev** 는 구현 + 검증 파이프라인이다. 게이트·루프·완료 규율은 `rules/` 가 이미
 주입했다 — 여기서 다시 쓰지 않는다.
 
-## Work System Detection
+## 계획 파일
 
-`docs/works/` 가 있으면 Work ID 기반 추적, 없으면 파일 없이 파이프라인만 실행(fallback).
+Medium/Large 만 `docs/plans/<날짜>-<slug>/plan.md` 에 둔다 — 규약 `plan-task/references/plan-format.md`.
