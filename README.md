@@ -496,10 +496,26 @@ clarify-requirements → analyze-domain → design-user-journey → define-busin
 
 ## Security
 
-- **Hooks:** `protect-sensitive.py` runs on Edit/Write/MultiEdit/NotebookEdit/Read — blocks access to sensitive file paths (`.env`, keys). Commit-time secret scanning is gitleaks + `setup/pre-commit`, not this hook.
+- **Hooks:** `protect-sensitive.py` runs on Edit/Write/MultiEdit/NotebookEdit/Read — blocks access to sensitive file paths (`.env`, keys). It does not scan commits; secret scanning of this repository is gitleaks in CI (every commit in each push/PR range) and `scripts/verify-done.sh` §24 locally.
 - **Auto-format:** `auto-format.py` runs after edits (uses ruff for Python)
-- **CI:** gitleaks scans all pushes to `main`
 - **Policy:** Never hardcode API keys, secrets, or internal IPs
+
+## Data handling
+
+The plugin collects nothing and sends nothing anywhere.
+
+- **No network calls.** The shipped hooks (`plugins/common/hooks/`) make no HTTP or socket
+  connections. They only run local commands: `git`, the formatter/linter for the edited file
+  (e.g. `ruff`), `pytest` on test files you edited, and verification commands you define in a
+  plan checklist.
+- **No telemetry, no accounts, no personal data.** The plugin does not read, store, or transmit
+  personal data.
+- **What it writes stays on your machine.** The feedback ledger (recurring review findings) is
+  kept under your repository's `.git/kit/` (untracked; outside a git repo it falls back to a
+  file in the project); hook state and locks live in a per-user `0700` directory under your
+  system temp dir. Delete them at any time.
+- **Web access is your agent's, not the plugin's.** Skills such as `web-research` tell the agent
+  to use search/browser tools *you* have installed; the plugin itself ships no connector.
 
 ---
 
