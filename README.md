@@ -237,7 +237,7 @@ hiway-kit이 무엇을 어떻게 융합하는지 — 한눈에 보는 설계 원
 | **Claude Code 네이티브** | agents, skills, hooks, dynamic workflow, OTEL, memory | 토대 프리미티브 — 매니페스트 의존성, exec-form 훅, `decision:block` 자동수정, 네이티브 관측 |
 | **superpowers 규율** | brainstorming→plan→execute, phase gate, TDD, verification-before-completion | `brainstorming → plan-task → auto-dev` HARD-GATE 체인, Iron Law 검증 |
 | **Hermes 피드백 루프** | "메모리·피드백 루프가 코어" | validation 결함 → feedback ledger → 다음 구현 컨텍스트 주입 (학습 루프) |
-| **자체 Work 시스템** | 파일 기반 감사 가능 추적 | `docs/works/` Work ID·progress.md·decisions.md |
+| **계획 파일 규약** | 파일 기반 진행 추적 | `docs/plans/<slug>/plan.md`·checklist.json — 포맷은 [`plan-format.md`](plugins/common/skills/plan-task/references/plan-format.md) |
 
 ### Harness × Loop Engineering
 
@@ -298,7 +298,7 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 [obra/superpowers](https://github.com/obra/superpowers) 플러그인과 **상호보완**하도록 설계됐습니다 — 둘을 같이 켜도 충돌·중복이 없습니다.
 
 - **각자 자동 적용**: 둘 다 세션 시작에 자기 메타스킬을 자동 주입 (`using-hiway-kit` / `using-superpowers`). 수동 호출 불필요.
-- **중복 제거**: `using-hiway-kit`은 범용 스킬 규율(1% 룰·red flags)을 superpowers에 양보하고, **kit 고유 델타**(에이전트맵·Work 시스템·native/loop/DoD)만 제공 → 병행 시 중복 0.
+- **중복 제거**: `using-hiway-kit`은 범용 스킬 규율(1% 룰·red flags)을 superpowers에 양보하고, **kit 고유 델타**(에이전트맵·계획 파일 규약·native/loop/DoD)만 제공 → 병행 시 중복 0.
 - **역할 분담**: superpowers = 방법론 지휘자, hiway-kit = 실행 레이어(전문 에이전트·auto-dev 파이프라인·hooks·Work 추적).
 - **시너지**: kit의 Definition-of-Done(기계 게이트) + superpowers의 verification-before-completion(원칙)이 상호보강.
 - **단독 동작**: superpowers 없이 hiway-kit만으로도 자급자족.
