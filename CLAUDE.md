@@ -224,7 +224,7 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   (`.venv`/`venv` console-script shebangs still pointing at the project's old
   path after a directory move/copy — `bin/python` keeps working while every
   script dies with `bad interpreter`, or silently runs the old site-packages)
-- `session-start.py` — injects rules + active Work status at `SessionStart`
+- `session-start.py` — injects rules + active plan status (`docs/plans/*/plan.md`, status≠done) at `SessionStart`
 - `protect-sensitive.py` — `PreToolUse` on Edit/Write/MultiEdit/NotebookEdit/Read:
   blocks access to **sensitive file paths** (`.env`, keys, `.pem`) by path. env
   templates (`.env.example`/`.sample`/`.template`/`.dist`) are exempt; writes to

@@ -837,7 +837,7 @@ hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'
   [ ] 스펙·계획의 모든 항목 구현 (spec ↔ 코드 대조, 누락 없음)
   [ ] 적대적 리뷰 1회 (버그·엣지케이스·문서 sync 능동 탐색)
-  [ ] Work 라이프사이클 상태 정확히 보고 (active/validation vs completed)
+  [ ] 계획 상태 정확히 보고 (plan.md status: in-progress vs done)
   [ ] CHANGELOG·README·CLAUDE.md 영향 반영
 EOF
 

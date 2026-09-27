@@ -3,7 +3,7 @@
 > 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:56208c1bcc8dd3e1e1b770e5ffdd314b79c2498e2c1ddd47f9888e55102df519 -->
+<!-- kit:begin rules-v1.4.0 sha256:710a96f7a54ec0909f2c89b95c5abe575174418b442882770d5e11862efc8fbc -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -135,8 +135,8 @@ rc 는 `tail` 것이다). 둘 다 `&&` 를 통과시킨다 — `pipefail`. 상�
 #### DoD 체크리스트
 
 **기계 검사 목록은 게이트가 소유한다** — 열거하면 검사를 더할 때마다 낡는다(실제로 그랬다).
-수동 attest: 스펙 전항목 · 적대적 리뷰 · Work 상태 · CHANGELOG/README/CLAUDE 반영.
-위임했다면 산출물 보존·자원 처리도 확인한다(`control-loop`). 완료 = 게이트 green + attest + Work 해소.
+수동 attest: 스펙 전항목 · 적대적 리뷰 · 계획 상태 · CHANGELOG/README/CLAUDE 반영.
+위임했다면 산출물 보존·자원 처리도 확인한다(`control-loop`). 완료 = 게이트 green + attest + 계획 `status: done`.
 
 #### Task 마감 규율
 
@@ -193,19 +193,19 @@ brainstorming/plan-task HARD-GATE) ≠ 루프(실행 — 승인된 계획을 P0�
 
 #### 드라이버 (Task 시스템 + 스킬 루프)
 
-`while(미완료 Work/Task):` 재앵커(요약이 아닌 `planning-results.md` 원본 재확인 — 요약은
-drift한다) → unblocked Task 선택 → 실행 → 완료 시 checklist pass → `progress.md` 래칫 →
+`while(미완료 항목):` 재앵커(요약이 아닌 계획 `plan.md` 원본 재확인 — 요약은
+drift한다) → unblocked 항목 선택 → 실행 → 완료 시 checklist pass(verify 통과로만) →
 태스크 완료 마킹(호스트 수단) → 종료 가드 점검(아래) → 확인 없이 다음 unblocked로 → 완료 보고.
 
 #### 종료 가드 (안티-런어웨이 = 필수)
 
 **P0**(데이터/보안/결제/핵심로직 모호 → 선택지 제시, 호스트 수단으로) · **완료**(검증
-게이트 green + 수동 DoD attest + 배치 전체 Work/Task 해소, `definition-of-done.md` —
+게이트 green + 수동 DoD attest + 배치 전체 계획·항목 해소, `definition-of-done.md` —
 "마지막 스텝 도달"≠완료) · **max_iterations/루프 감지**(동일 Task 무진전 반복 상한/2회+
 → 에스컬레이션·중단 보고) · **idle**(N iteration 새 커밋 0건 → 종료, git 커밋 기준) ·
 **검증 실패 잔존**(가드 재시도 후에도 실패 → 보고) 에서 반드시 멈춘다.
 
-배치 실행(킷의 `auto-dev` 등)은 Work 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
+배치 실행(킷의 `auto-dev` 등)은 계획 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
 본 작업을 막지 않는다.
 
 ---
@@ -264,8 +264,9 @@ portable: true
 
 #### 공유 상태 파일
 
-- NEVER: 격리 트리 안에서 진행 상태·원장(`docs/works/**`, feedback ledger 등) 갱신 —
-  병합 전까지 반영되지 않아 상태가 유실/분기된다. 상태 갱신은 오케스트레이터의 몫.
+- NEVER: 격리 트리 안에서 진행 상태·원장(`docs/plans/**`의 `status`·checklist, feedback
+  ledger 등) 갱신 — 병합 전까지 반영되지 않아 상태가 유실/분기된다. 상태 갱신은
+  오케스트레이터의 몫.
 
 ---
 

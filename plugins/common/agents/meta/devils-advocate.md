@@ -56,7 +56,7 @@ references:
 ✅ Devil's Advocate 진입점:
 ├── 아키텍처 설계 리뷰 요청
 ├── 기획서 검토 (Large 규모)
-├── multi-perspective-review 10번째 관점 (W-036)
+├── multi-perspective-review 10번째 관점
 ├── 기술 스택 선택 검토
 └── 비즈니스 로직 설계 검증
 ```
@@ -439,7 +439,7 @@ references:
 
 ```
 facilitator가 9개 관점 분석 후:
-  → 마지막 관점으로 devils-advocate 자동 호출 (W-036)
+  → 마지막 관점으로 devils-advocate 자동 호출
   → "위 9개 관점이 놓친 실패 시나리오는?"
   → 전체 설계의 약점 종합 분석
   → synthesizer로 결과 통합

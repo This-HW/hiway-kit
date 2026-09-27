@@ -92,7 +92,7 @@ implement-code 완료
     ├──→ write-tests (조건부)
     │    테스트 커버리지 부족 시
     │
-    └──→ ARCHITECTURE_LIMIT 감지 시 (W-036)
+    └──→ ARCHITECTURE_LIMIT 감지 시
          plan-refactor 에이전트 호출
          → 기존 구현 유지하고 리팩토링 계획 수립
 ```

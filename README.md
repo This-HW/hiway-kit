@@ -244,7 +244,7 @@ hiway-kit이 무엇을 어떻게 융합하는지 — 한눈에 보는 설계 원
 두 상보 개념이 kit의 자율성을 만든다:
 
 - **Harness Engineering** — *어디서·무엇으로* 행동하는가. 컨텍스트 주입(session-start),
-  도구 큐레이션(per-agent tools), 가드레일(protect-sensitive·stop-validator), Work 메모리.
+  도구 큐레이션(per-agent tools), 가드레일(protect-sensitive·stop-validator), 계획 파일(plan.md·checklist).
 - **Loop Engineering** — *얼마나 오래·끈질기게* 행동하는가. 승인된 배치를 P0·완료·가드
   전까지 자율 완주. 게이트(설계·사람 멈춤)와 루프(실행·자율)를 분리한다.
 
@@ -287,7 +287,7 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 | **Multi-perspective deliberation** | 10 관점 × 3 라운드 합의(`/multi-perspective-review`) + devil's advocate | 설계 사각지대 제거 |
 | **Agent specialization** | 32 전문 에이전트 × 모델 티어(Opus 전략 / Sonnet 구현 / Haiku 탐색) | 작업별 최적 모델·비용 |
 | **Worktree isolation** | 파일 수정 에이전트를 격리 git worktree에서 실행 | 병렬 작업 충돌 방지 |
-| **Harness engineering** | 컨텍스트 주입(session-start)·도구 큐레이션·가드레일 훅·Work 메모리 | 환경이 모델을 올바른 궤도로 유지 |
+| **Harness engineering** | 컨텍스트 주입(session-start)·도구 큐레이션·가드레일 훅·계획 파일 | 환경이 모델을 올바른 궤도로 유지 |
 | **SSOT governance** | `rules/` + decisions 추적 + 거버넌스/시크릿 보호 훅 | 일관성·감사 가능성 |
 
 > 심화 리서치 노트: [하네스 엔지니어링 & 루프 엔지니어링 — 2026 중반 지형도](docs/research/2026-07-harness-loop-engineering.md)
@@ -299,7 +299,7 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 
 - **각자 자동 적용**: 둘 다 세션 시작에 자기 메타스킬을 자동 주입 (`using-hiway-kit` / `using-superpowers`). 수동 호출 불필요.
 - **중복 제거**: `using-hiway-kit`은 범용 스킬 규율(1% 룰·red flags)을 superpowers에 양보하고, **kit 고유 델타**(에이전트맵·계획 파일 규약·native/loop/DoD)만 제공 → 병행 시 중복 0.
-- **역할 분담**: superpowers = 방법론 지휘자, hiway-kit = 실행 레이어(전문 에이전트·auto-dev 파이프라인·hooks·Work 추적).
+- **역할 분담**: superpowers = 방법론 지휘자, hiway-kit = 실행 레이어(전문 에이전트·auto-dev 파이프라인·hooks·계획 파일 추적).
 - **시너지**: kit의 Definition-of-Done(기계 게이트) + superpowers의 verification-before-completion(원칙)이 상호보강.
 - **단독 동작**: superpowers 없이 hiway-kit만으로도 자급자족.
 

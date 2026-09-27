@@ -136,8 +136,8 @@ description: Multi-perspective collaborative review of plans or documents. Ten e
 # 문서 파일 직접 지정
 /multi-perspective-review docs/planning/point-system.md
 
-# Work 시스템 사용
-/multi-perspective-review W-042
+# 계획 파일 지정
+/multi-perspective-review docs/plans/2026-09-28-point-system/plan.md
 ```
 
 ---

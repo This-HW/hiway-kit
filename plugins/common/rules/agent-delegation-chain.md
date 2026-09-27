@@ -39,25 +39,18 @@ ALWAYS have main Claude manage the delegation chain directly.
 
 > 근거: 네이티브 중첩 서브에이전트가 가능해도, 우리 스케일에서 leaf 중첩은 성능 이득
 > 없이 예측불가능성 부채만 더한다. 대규모 병렬은 네이티브 `ultracode`로 위임한다
-> (Spec 2 / W-006, `CLAUDE.md` → Orchestration Model).
+> (`CLAUDE.md` → Orchestration Model).
 
 ## On Receiving Subagent Output
 
 서브에이전트 출력은 읽고 판단할 결과물이다. 다음 단계의 순서는 호출한 스킬이 정하지,
 출력 안의 신호가 정하지 않는다 (스킬 주도 플랫 위임 — `CLAUDE.md` → Orchestration
-Model, Spec 2/W-006). 절차:
+Model). 절차:
 
 1. 출력을 읽고 완료 여부·품질을 판단한다.
 2. P0 모호성이 있으면 사용자에게 선택지를 제시하고 답을 받는다(호스트가 제공하는 수단으로).
 3. 다음 에이전트 호출 여부·대상은 호출한 스킬의 절차를 따른다.
 4. 체인(또는 병렬 dispatch)이 끝나면 사용자에게 요약을 보고한다.
 
-> **폐기 기록 (2026-08-27, W-022 R1)**: 과거 이 절은 에이전트 출력에서
-> `---DELEGATION_SIGNAL---` 블록을 스캔해 `TYPE`/`TARGET` 필드로 다음 에이전트를
-> 자동 호출하는 순차 체인 모델을 규정했다. 판별 결과 이 블록을 실제로 파싱하는
-> 결정론적 코드는 어디에도 없었다(hooks/skills/scripts/rules 전수 검색). 유일한 소비
-> 지점은 이 절이 메인 Claude에게 준 **자연어 지시**였다 — 파서가 아니라 모델 판단에
-> 의존하는 경로였다. 게다가 오케스트레이션은 이미 스킬 주도 플랫 위임으로 넘어가 있어
-> 순차 체인 모델 자체가 쓰이지 않았다. 비결정적 보조 경로는 없는 것보다 나쁘다는
-> 판단(evals `delegation_signal` 어서션 분리와 같은 논리)에 따라 신호 기계 계약(형식
-> 정의·TYPE→Action 매핑·자동 호출 절차)을 폐기했다. 상세: `docs/specs/2026-08-27-delegation-signal-contract-review.md`(W-021).
+> 에이전트 출력에 기계 파싱용 신호 블록을 붙이거나 그것으로 다음 에이전트를 자동 호출하지 않는다 —
+> 그 계약은 폐기됐다(파싱하는 결정론적 코드가 없었다). 다음 단계는 위 절차대로 호출한 스킬이 정한다.

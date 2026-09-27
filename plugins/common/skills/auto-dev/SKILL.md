@@ -83,7 +83,7 @@ T-dev-4: [Dev] 테스트 작성            ← blockedBy: T-dev-2, T-dev-3
 활성 작업 권한 때문에 대체할 수 없으면 차단 사유를 보고한다. 상세: `control-loop`의 운송 절.
 아래 네이티브 호출 예시는 그 기능이 제공되는 환경에서만 사용한다.
 
-**병렬 실행 원칙 (스케일별 — Spec 2 / W-006):**
+**병렬 실행 원칙 (스케일별):**
 
 blockedBy 없는 Task가 2개 이상이면 동일 응답에서 동시 dispatch:
 
@@ -125,7 +125,7 @@ Agent(task_C) ─┘
 2. 완료 마킹(호스트 태스크 도구가 있으면 `TaskUpdate(id, status="completed")`)
 3. unblocked Task 확인 → 즉시 실행
 
-**Durable executor 규율 (W-013 — 장기·다세션 실행):**
+**Durable executor 규율 (장기·다세션 실행):**
 
 - **미완 1항목/iteration**: 한 iteration은 checklist 미완 항목 **하나**만 목표로 한다
   (한 번에 다수 항목을 "완료"로 몰아 찍지 않는다 — 검증 없는 일괄 통과 방지).
@@ -192,7 +192,7 @@ T-security: [Validation/B] 보안 스캔   — blockedBy: T-spec
 T-merge: [Validation] 결과 통합   — blockedBy: T-review, T-security
 ```
 
-### Feedback ledger 캡처 (Spec 3 / W-007) [건너뛰기 금지]
+### Feedback ledger 캡처 [건너뛰기 금지]
 
 review-code/security-scan 결과에 **발견된 결함이 있으면(pass·fail 무관)** 각 결함을 정규화해 ledger에 upsert합니다. 같은 실수를 다음 작업에서 사전 차단하는 학습 루프입니다.
 
@@ -299,7 +299,7 @@ plan-task 가 Small 로 판정해 계획 파일이 없는 경우, 상태 파일 
 
 ---
 
-## Step 5: 배치 모드 — 자율 완주 (Spec 5 / W-009) [opt-in]
+## Step 5: 배치 모드 — 자율 완주 [opt-in]
 
 여러 계획이 배치로 실행 요청된 경우(예: `/auto-dev docs/plans/A docs/plans/B`,
 또는 "활성 계획 전부 진행"), **설계 게이트 통과 후에는 P0·완료·가드 전까지 멈추지
