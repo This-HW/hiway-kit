@@ -8,42 +8,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [3.39.1] — 2026-09-27
 
-W-045 — **실제로 돈 모델을 기록한다** + **위임 규범이 어느 하네스에서든 도달한다**.
-배경·결정·트랙 브리프: `docs/specs/2026-09-27-model-provenance/`.
+W-045 — **스킬이 사용자 세션의 effort 를 덮어쓰지 않는다** + **실제로 돈 모델을 기록한다** +
+**위임 규범에 도달할 경로가 생긴다**. 배경·결정·트랙 브리프·리뷰 반영: `docs/specs/2026-09-27-model-provenance/`.
 
-### Fixed — 위임 규범의 SSOT 가 어느 하네스에서도 도달 불가였다
+### Fixed — 스킬을 부르면 그 세션의 effort 가 스킬 frontmatter 값으로 바뀌어 끝까지 유지됐다
+
+스킬 21종 중 19종이 frontmatter 에 `model`·`effort` 를 선언했다. Claude Code 는 스킬을 로드하면 그
+`effort` 를 **세션의 이후 모든 턴**에 적용한다 — `/test`(medium)는 사용자 세션을 조용히 낮추고,
+`/plan-task`(max)는 세션 끝까지 max 로 올렸다. "모델·effort 는 사용자/호스트 설정의 몫"이라는
+킷 원칙과 정면 충돌이다.
+- 발견: 새 기록 절차를 첫 적용하자 `--effort high` 워커 전원이 `child-session` 로드 직후부터 medium
+  (high×3 → medium×47 등, 이전 워커 14명도 같은 패턴). **양성 대조로 인과 확정** — 같은 opus/high
+  호출에서 스킬 로드 없음 = 끝까지 high, 로드 = 이후 전부 medium `[confirmed]`. frontmatter `model` 은
+  메인 스레드에 적용되지 않았다 `[관측 n=1]`.
+- 조치: 모든 스킬 frontmatter 에서 `model`·`effort` 제거(스킬 템플릿 포함, 에이전트 frontmatter 는 유지 —
+  별도 컨텍스트에서 돈다). `verify-done.sh` §25 + CI 가 `scripts/check_skill_frontmatter.py` 로 재발을 막는다.
+
+### Fixed — 위임 규범의 SSOT 에 도달할 경로가 어느 하네스에도 없었다
 
 `control-loop`·`child-session` 이 브리프 4블록·보고 형식·전달 수단의 SSOT 로 10곳에서 가리키는
 `rules/delegation-contract.md`·`rules/child-marker.md` 는 `tier: reference` 인데 `indexLine` 이 없어
 **Claude Code·Codex 어디에도 주입도 경로 안내도 없었다.** AGENTS.md 는 "본문은 킷 레포에서
 읽어라"라고 적었다 — 소비자에겐 킷 레포가 없다. 두 규범에 `indexLine` 을 넣어 세션 시작 시
-플러그인 **절대 경로**로 안내한다(`--portable-only` = Codex 경로 포함, 실물 규범 테스트로 고정).
-AGENTS.md 안내는 "플러그인 설치 경로"로.
+플러그인 **절대 경로**로 안내한다 — 세션 시작 훅이 도는 하네스(Claude Code, 훅 신뢰가 승인된 Codex).
+훅이 없는 하네스가 읽는 AGENTS.md·GEMINI.md 는 "플러그인 설치 경로의 `rules/…`" + 킷 저장소의 결정적
+폴백 경로를 함께 적는다. 모든 참조 규범의 렌더된 경로가 실재하는지 테스트로 고정.
 
 ### Fixed — Codex 훅 지원에 관한 서술이 README 와 모순됐다
 
 Codex 는 `session-start`(주입)·`auto-format` 훅을 실제로 돌린다. 그런데 AGENTS.md 한계표·
 `child-session` 파리티 절·`docs/codex-submission-checklist.md` 는 "Codex 엔 훅이 없다"고 적었다.
-사실대로: 주입·포맷 훅은 Codex 에서도 돌고, **차단 훅(PreToolUse)만 Claude Code 전용**이다 —
-Codex 에서 워커 금지사항은 자동 차단 없이 지침으로 작동한다.
+사실대로: 주입·포맷 훅은 Codex 에서도 돌고(훅 신뢰 승인 후), **차단 훅(PreToolUse)만 Claude Code
+전용**이다 — Codex 에서 워커 금지사항은 자동 차단 없이 지침으로 작동한다(opt-in git 훅은 하네스 무관).
+리뷰가 같은 서술을 세 곳 더 찾았다(harness-export 스킬·untrusted-text 규범·export_harness 주석) — 함께 정정.
 
 ### Changed — 실제로 돈 모델·effort 는 세션 로그에서 읽어 기록한다
 
 워커를 `--model opus|sonnet` 별칭으로 띄우면 오케스트레이터의 `launch.effective` 는 요청값을
 되울릴 뿐이라 버전 증거가 아니다(요청↔effective 대조는 **항상 일치**하는 검사였다).
-- 운송 문서 §2: 판정 근거를 워커 세션 로그로 — Claude(`message.model`·`effort`·`version`)·
-  Codex(`turn_context.model`·`effort`, `session_meta.cli_version`) 필드 표, 원장 기록 의무,
-  못 찾으면 `[미확인]`. `control-loop` 은 호스트 중립 한 줄.
-- `cross-engine-review` 답신에 **실행 주체**(엔진·모델 ID·effort·CLI) 줄 필수 — 같은 엔진이라도
-  모델이 바뀌면 다른 증거원이다.
-- README: Codex 에서는 에이전트 `model`/`effort` frontmatter 가 **적용되지 않는다**(에이전트를
-  싣지 않는다 — 사용자 Codex 설정 모델로 돈다).
-- eval 측정 축에 `resolved_models`(CLI 가 보고한 **실제 모델 ID**) 추가 — 시나리오 실행을 json
-  출력으로, 어서션은 `result` 텍스트(판정 의미 무변경), 해석 실패는 fail-closed. 별칭 축은 유지.
-  기준선을 이 축 포함으로 재생성했다.
-
-첫 적용에서 바로 드러난 사실: `--effort high` 로 띄운 워커 세 명 모두 세션 로그에
-`effort high,medium` — 턴에 따라 medium 이 섞인다. 요청값만 봤다면 보이지 않았다.
+- 운송 문서 §2: 판정 근거를 워커 세션 로그로. 레코드의 `cwd` **값**으로 찾고(`CLAUDE_CONFIG_DIR`·
+  `CODEX_HOME`, Codex `archived_sessions` 포함), 세션 id·Dispatch 시각으로 자르고, `<synthetic>` 제외,
+  서브에이전트 별도 열, **순서 보존 run-length**로 기록한다. 로그는 비신뢰 데이터라 필드만 뽑는 jq 명령이
+  정본(원문 열람 금지). 필수 기록처는 병합 커밋 메시지. `control-loop` 은 호스트 중립 한 줄.
+- `cross-engine-review` 답신에 **실행 주체**(엔진·모델 ID·effort·CLI) 줄과 그 출처 필수 — 재현을 위해
+  기록한다(같은 하네스의 다른 모델을 다른 엔진으로 치지는 않는다). 종료 체크리스트에 포함.
+- README: Codex 에서는 에이전트 `model`/`effort` frontmatter 가 **적용되지 않는다**(패키지에 실리지만
+  서브에이전트로 노출되지 않는다 — 사용자 Codex 설정 모델로 돈다).
+- eval: 시나리오 실행을 json 출력으로(어서션은 `result` 텍스트 — 판정 의미 무변경). CLI 가 보고한 실제
+  모델 ID 는 `resolved_models` 로 **기록**하고, **비교 축은 주 모델**(`primary_models`, 별칭 패밀리 매치) —
+  보조 모델이 회차마다 섞여도 게이트가 흔들리지 않는다. 축의 `None`·`[]` 는 같은 "모름"(알림), 비교 축이 빈
+  런은 기준선 저장 거부. `is_error`/`subtype≠success` 는 해석 실패 = `error`. 기준선을 새 축으로 재생성했다.
 
 ### Fixed — 시크릿 스캔이 있다고 적힌 곳에 없었고, 있는 곳은 커밋 대부분을 보지 않았다
 
