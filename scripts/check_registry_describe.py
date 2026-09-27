@@ -419,7 +419,7 @@ def main(argv: list[str]) -> int:
         print(f"[FAIL] {error}", file=sys.stderr)
         print(
             "[FAIL] 깨진 응답 — 전면 폴백 판정(부분 신뢰 없음). "
-            "킷은 이 레지스트리를 신뢰하지 않고 docs/works/ 폴백으로 간다.",
+            "킷은 이 레지스트리를 신뢰하지 않고 로컬 폴백으로 간다.",
             file=sys.stderr,
         )
         return 1

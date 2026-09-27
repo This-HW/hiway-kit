@@ -4,7 +4,7 @@ Durable Executor Checklist — 완료 상태의 단일 authority (W-013).
 
 장기·다세션 실행에서 "무엇이 검증되어 완료인가"를 git 파일 하나에 durable하게 둔다.
 네이티브 Task는 ~/.claude/tasks/<session-UUID>/ 로 세션 스코프라 세션 경계를 못 넘는다 —
-이 파일(`docs/works/<stage>/<W>/checklist.json`, stage=active|idea|completed)이 그 갭을
+이 파일(`docs/plans/<날짜>-<slug>/checklist.json`, 같은 디렉토리의 plan.md 옆)이 그 갭을
 메우는 cross-session source of truth다.
 
 핵심 설계(적대적 리뷰 반영):
@@ -25,11 +25,11 @@ gate-time staleness에 대한 정직한 입장(적대적 리뷰 F1):
 스키마: [{ "id", "description", "acceptance", "verify", "passes": bool, "evidence"?: str }]
 
 CLI (scripts/checklist.sh 래퍼로 호출):
-  checklist.py init   <work_dir>            # stdin의 JSON 배열로 checklist 생성(passes=false 강제)
-  checklist.py show   <work_dir>            # 사람용 목록
-  checklist.py status <work_dir>            # 빠른 원장 조회: 0=전부 pass 1=미완/손상 3=부재
-  checklist.py verify <work_dir>            # 전 항목 verify 재실행(opt-in 재증명): 0/1/3
-  checklist.py pass   <work_dir> <id>       # 아이템 verify 실행 → exit 0이면 passes=true
+  checklist.py init   <plan_dir>            # stdin의 JSON 배열로 checklist 생성(passes=false 강제)
+  checklist.py show   <plan_dir>            # 사람용 목록
+  checklist.py status <plan_dir>            # 빠른 원장 조회: 0=전부 pass 1=미완/손상 3=부재
+  checklist.py verify <plan_dir>            # 전 항목 verify 재실행(opt-in 재증명): 0/1/3
+  checklist.py pass   <plan_dir> <id>       # 아이템 verify 실행 → exit 0이면 passes=true
 """
 from __future__ import annotations
 
@@ -50,20 +50,20 @@ _VERIFY_TIMEOUT_SECONDS = 600
 _REQUIRED_FIELDS = ("id", "description", "acceptance", "verify")
 
 
-def checklist_path(work_dir: Path) -> Path:
-    return Path(work_dir) / "checklist.json"
+def checklist_path(plan_dir: Path) -> Path:
+    return Path(plan_dir) / "checklist.json"
 
 
-def _repo_root(work_dir: Path) -> str | None:
+def _repo_root(plan_dir: Path) -> str | None:
     """verify 실행 기준 디렉토리 = git 저장소 루트.
 
-    work_dir 깊이가 레이아웃마다 다르므로(docs/works/<W> vs docs/works/active/<W>)
-    고정 parent 깊이는 틀린다(적대적 리뷰 P1). git으로 실제 루트를 구한다.
+    plan_dir 은 어느 깊이로도 넘어올 수 있으므로(docs/plans/<날짜>-<slug>, 상대·절대경로,
+    소비자의 다른 레이아웃) 고정 parent 깊이는 틀린다(적대적 리뷰 P1). git으로 실제 루트를 구한다.
     """
     try:
         r = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            cwd=str(Path(work_dir).resolve()),
+            cwd=str(Path(plan_dir).resolve()),
             capture_output=True,
             text=True,
             timeout=10,
@@ -153,7 +153,7 @@ def _write(path: Path, items: list[dict]) -> None:
         tmp.unlink(missing_ok=True)
 
 
-def cmd_init(work_dir: Path, raw: str) -> int:
+def cmd_init(plan_dir: Path, raw: str) -> int:
     """stdin/arg의 JSON 배열로 checklist 생성. passes는 항상 false로 강제(default-FAIL 계약)."""
     try:
         incoming = json.loads(raw)
@@ -196,15 +196,15 @@ def cmd_init(work_dir: Path, raw: str) -> int:
                 "passes": False,
             }
         )
-    path = checklist_path(work_dir)
+    path = checklist_path(plan_dir)
     with _lock(path):
         _write(path, items)
     print(f"[checklist] {len(items)}개 항목 생성: {path}")
     return 0
 
 
-def cmd_show(work_dir: Path) -> int:
-    items = _read(checklist_path(work_dir))
+def cmd_show(plan_dir: Path) -> int:
+    items = _read(checklist_path(plan_dir))
     if not items:
         print("(checklist 없음 또는 비어있음)")
         return 3
@@ -218,7 +218,7 @@ def cmd_show(work_dir: Path) -> int:
     return 0
 
 
-def cmd_status(work_dir: Path) -> int:
+def cmd_status(plan_dir: Path) -> int:
     """exit 0=전부 pass, 1=미완/손상, 3=checklist 진짜 부재(스킵).
 
     적대적 리뷰(false-green): _read는 파싱 실패/부재를 모두 []로 뭉갠다. 그러면
@@ -226,7 +226,7 @@ def cmd_status(work_dir: Path) -> int:
     통과한다. 파일이 '존재하면' 반드시 비어있지 않은 리스트여야 하며, 아니면 FAIL(1).
     진짜로 파일이 없을 때만 3(스킵)이다.
     """
-    path = checklist_path(work_dir)
+    path = checklist_path(plan_dir)
     if not path.exists():
         return 3
     try:
@@ -250,7 +250,7 @@ def cmd_status(work_dir: Path) -> int:
     return 0
 
 
-def _run_verify(verify: str, work_dir: Path) -> tuple[int, str]:
+def _run_verify(verify: str, plan_dir: Path) -> tuple[int, str]:
     """verify 명령 실행 → (exit_code, 출력 tail). 타임아웃 시 프로세스 '그룹'을
     killpg로 종료해 shell(shell=True)이 fork한 자손을 정리한다(적대적 리뷰 F6).
     best-effort임에 유의: verify의 자손이 스스로 setsid/이중fork(데몬화)하면 그룹을
@@ -260,11 +260,11 @@ def _run_verify(verify: str, work_dir: Path) -> tuple[int, str]:
     lock을 잡지 않은 채 호출되어야 한다(장시간 락 점유 방지)."""
     try:
         proc = subprocess.Popen(  # noqa: S602
-            # shell=True는 이 기능의 본질 — verify는 사용자가 Work 체크리스트에 적은
+            # shell=True는 이 기능의 본질 — verify는 사용자가 계획 체크리스트에 적은
             # 셸 명령(`pytest && ruff check` 등)이며, 셸 해석이 계약이다.
             verify,
             shell=True,
-            cwd=_repo_root(work_dir),  # None이면 현재 cwd 상속(폴백)
+            cwd=_repo_root(plan_dir),  # None이면 현재 cwd 상속(폴백)
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -286,7 +286,7 @@ def _run_verify(verify: str, work_dir: Path) -> tuple[int, str]:
         return 124, f"타임아웃 {_VERIFY_TIMEOUT_SECONDS}s 초과 → 프로세스 그룹 종료"
 
 
-def cmd_pass(work_dir: Path, item_id: str) -> int:
+def cmd_pass(plan_dir: Path, item_id: str) -> int:
     """아이템의 verify 명령을 실행해 exit 0일 때만 passes=true로 전환(기계 게이트).
 
     모델이 자기 작업을 completed로 찍는 self-mark를 원천 차단한다 — 통과 여부는
@@ -294,7 +294,7 @@ def cmd_pass(work_dir: Path, item_id: str) -> int:
     verify는 lock 밖에서 실행하고(F6: 600s 동안 락 점유 방지), flip만 lock 안에서
     재읽기→수정→쓰기 한다(verify 중 다른 프로세스 변경 반영).
     """
-    path = checklist_path(work_dir)
+    path = checklist_path(plan_dir)
     items = _read(path)
     target = next((it for it in items if str(it["id"]) == str(item_id)), None)
     if target is None:
@@ -306,7 +306,7 @@ def cmd_pass(work_dir: Path, item_id: str) -> int:
             f"[checklist] '{item_id}'에 verify 명령이 없어 pass 거부", file=sys.stderr
         )
         return 2
-    rc, tail = _run_verify(verify, work_dir)  # 락 밖 실행
+    rc, tail = _run_verify(verify, plan_dir)  # 락 밖 실행
     if rc != 0:
         print(
             f"[checklist] verify 실패(exit {rc}) → pass 거부:\n{tail}", file=sys.stderr
@@ -333,7 +333,7 @@ def cmd_pass(work_dir: Path, item_id: str) -> int:
     return 0
 
 
-def cmd_verify(work_dir: Path) -> int:
+def cmd_verify(plan_dir: Path) -> int:
     """모든 항목의 verify를 지금 재실행해 passes를 현재 상태로 재판정(opt-in 재증명).
 
     flip 후 회귀한 stale-true 항목을 false로 되돌린다. exit 0=전부 현재도 통과,
@@ -341,7 +341,7 @@ def cmd_verify(work_dir: Path) -> int:
     verify-done 기본 경로가 아니라 명시적 opt-in 명령이다 — 자동 게이트(§8)는 status를
     쓴다(F1은 '해소'가 아니라, 재증명이 필요할 때 이 명령으로 하도록 제공).
     """
-    path = checklist_path(work_dir)
+    path = checklist_path(plan_dir)
     if not path.exists():
         return 3
     items = _read(path)
@@ -358,7 +358,7 @@ def cmd_verify(work_dir: Path) -> int:
         if not verify:
             failed.append(iid)
             continue
-        rc, _ = _run_verify(verify, work_dir)  # 락 밖 실행
+        rc, _ = _run_verify(verify, plan_dir)  # 락 밖 실행
         now_pass = rc == 0
         results[iid] = (now_pass, rc, verify)
         if not now_pass:
@@ -388,21 +388,21 @@ def main(argv: list[str]) -> int:
     if len(argv) < 2:
         print(__doc__)
         return 2
-    cmd, work_dir = argv[0], Path(argv[1])
+    cmd, plan_dir = argv[0], Path(argv[1])
     if cmd == "init":
         raw = argv[2] if len(argv) > 2 else sys.stdin.read()
-        return cmd_init(work_dir, raw)
+        return cmd_init(plan_dir, raw)
     if cmd == "show":
-        return cmd_show(work_dir)
+        return cmd_show(plan_dir)
     if cmd == "status":
-        return cmd_status(work_dir)
+        return cmd_status(plan_dir)
     if cmd == "verify":
-        return cmd_verify(work_dir)
+        return cmd_verify(plan_dir)
     if cmd == "pass":
         if len(argv) < 3:
-            print("usage: checklist.py pass <work_dir> <id>", file=sys.stderr)
+            print("usage: checklist.py pass <plan_dir> <id>", file=sys.stderr)
             return 2
-        return cmd_pass(work_dir, argv[2])
+        return cmd_pass(plan_dir, argv[2])
     print(f"[checklist] unknown command: {cmd}", file=sys.stderr)
     return 2
 

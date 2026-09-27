@@ -2,7 +2,7 @@
 #
 # feedback.sh — feedback ledger 진입점 (Spec 3 / W-007).
 #
-# kit의 ./scripts 관례(work.sh와 동일)에 맞춘 래퍼. 플러그인의
+# kit의 ./scripts 관례(checklist.sh와 동일)에 맞춘 래퍼. 플러그인의
 # feedback_ledger.py를 repo-상대 경로로 호출하여 ${CLAUDE_PLUGIN_ROOT}
 # (스킬 Bash 컨텍스트에서 set 보장 없음) 의존을 제거한다.
 #
