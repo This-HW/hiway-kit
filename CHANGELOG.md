@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [4.0.1] — 2026-09-28
+
+### Fixed — `mcp-builder` 스킬의 틀린 안내 3건 (디렉토리 심사 보류에서 발견)
+
+디렉토리 포털 스캔이 이 스킬을 "사용자 머신의 자격증명을 원격으로 보낼 수 있다"로 보류했다 — 예시
+코드가 `API_KEY` 환경변수와 원격 URL 을 한 파일에 담고 있었다. 들여다보니 문구만의 문제가 아니었다:
+
+- MCP 서버를 `~/.claude/settings.json` 에 적으라고 안내했다 — 실제로 `claude mcp add` 는 `~/.claude.json`
+  (사용자 범위)·`.mcp.json`(프로젝트)에 쓴다. `claude mcp add` 안내로 교체.
+- "Python/TypeScript MCP SDK" 링크가 **존재하지 않는 저장소**(`anthropics/python-mcp`·`typescript-mcp`, 둘 다
+  404)였다 — 공식 `modelcontextprotocol/python-sdk`·`typescript-sdk` 로.
+- 비밀값은 사용자가 넣게 하고 플러그인이 대신 읽어 넘기지 않는다는 원칙을 명시(`user_config` `sensitive: true`).
+
 ## [4.0.0] — 2026-09-28
 
 W-046 — **Work 시스템을 걷어내고 계획 파일 한 장으로 바꾼다** + **웹 작업에 Aside 를 쓸 수 있으면 쓴다**.

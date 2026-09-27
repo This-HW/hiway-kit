@@ -107,23 +107,17 @@ if __name__ == "__main__":
 
 ## Claude Code 통합
 
-### 1. MCP 설정 파일 수정
+### 1. 서버 등록
 
-`~/.claude/settings.json`:
+`claude mcp add` 로 등록한다 — 사용자 범위는 `~/.claude.json`, 프로젝트 범위는 `.mcp.json` 에 기록된다
+(플래그는 버전마다 다르니 `claude mcp add --help` 로 확인).
 
-```json
-{
-  "mcpServers": {
-    "myproject": {
-      "command": "python",
-      "args": ["-m", "mcp_server_myproject"],
-      "env": {
-        "API_KEY": "your-key"
-      }
-    }
-  }
-}
+```bash
+claude mcp add myproject -- python -m mcp_server_myproject
 ```
+
+서버가 비밀값을 필요로 하면 사용자가 직접 넣게 한다 — 플러그인·스킬이 사용자 머신의 자격증명을 읽어
+대신 넘기지 않는다. 플러그인으로 배포할 때는 `user_config` 의 `sensitive: true` 옵션으로 받는다.
 
 ### 2. 서버 시작
 
@@ -200,15 +194,10 @@ async def safe_tool(param: str) -> dict:
         return {"result": None, "error": str(e)}
 ```
 
-### 환경 변수
+### 설정값
 
-```python
-import os
-
-API_KEY = os.getenv("API_KEY")
-if not API_KEY:
-    raise ValueError("API_KEY environment variable required")
-```
+서버 설정은 시작 시 한 번 읽고, 필수 값이 없으면 **바로 실패**시킨다(도구 호출 도중에 발견하지 않도록).
+값의 이름은 서비스에 맞춰 짓고, 비밀값은 위 "서버 등록" 절처럼 사용자가 넣게 한다.
 
 ---
 
@@ -228,6 +217,5 @@ echo '{"jsonrpc":"2.0","method":"tools/list","id":1}' | python -m mcp_server_myp
 
 ## 관련 리소스
 
-- MCP 공식 문서: https://modelcontextprotocol.io
-- Python MCP SDK: https://github.com/anthropics/python-mcp
-- TypeScript MCP SDK: https://github.com/anthropics/typescript-mcp
+- MCP 명세·SDK 는 버전이 빠르게 바뀐다 — 최신 문서는 설치된 문서 MCP(Context7 등)나 웹 검색으로 확인한다
+  (공식 SDK 저장소: `modelcontextprotocol/python-sdk`, `modelcontextprotocol/typescript-sdk`)
