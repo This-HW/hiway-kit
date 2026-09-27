@@ -51,5 +51,6 @@ portable: true
 
 ## 공유 상태 파일
 
-- NEVER: 격리 트리 안에서 진행 상태·원장(`docs/works/**`, feedback ledger 등) 갱신 —
-  병합 전까지 반영되지 않아 상태가 유실/분기된다. 상태 갱신은 오케스트레이터의 몫.
+- NEVER: 격리 트리 안에서 진행 상태·원장(`docs/plans/**`의 `status`·checklist, feedback
+  ledger 등) 갱신 — 병합 전까지 반영되지 않아 상태가 유실/분기된다. 상태 갱신은
+  오케스트레이터의 몫.

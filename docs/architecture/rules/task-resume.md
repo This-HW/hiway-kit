@@ -1,256 +1,79 @@
-# Task 재생성 규칙
+# Task Resume — 계획 파일 기반 재개
 
-> 이 문서는 중단된 작업을 재개할 때 Task 목록을 재생성하는 알고리즘과 그 이유를 설명합니다.
+> 규범 본문(정의)은 `plugins/common/rules/task-resume.md` 가 SSOT다. 이 문서는 그 규칙이
+> 왜 이런 모양인지, 어떻게 적용되는지를 표·예시로 풀어 설명한다 — 여기서 새로 정의하지
+> 않는다.
 
 ---
 
-## 1. Task 재생성이 필요한 이유
+## 1. 왜 checklist가 authority이고 Task는 파생물인가
 
-Claude Code의 Task는 세션이 종료되면 사라집니다. 작업이 도중에 중단되었다가 재개될 때, 이전에 만들었던 Task ID가 더 이상 유효하지 않기 때문에 `progress.md`의 완료/미완료 상태를 기반으로 Task를 새로 생성해야 합니다.
+호스트 태스크 도구(Claude Code 네이티브 Task 등)는 **세션 스코프**다 — 세션이 끊기면
+사라진다. Codex 처럼 영속 태스크가 아예 없는 하네스도 있다. 반대로
+`docs/plans/<slug>/plan.md`와 `checklist.json`은 git 파일이라 세션 경계를 넘어 남는다.
 
 ```
 세션 종료 전:
-  Task #45 (implement-auth) — in_progress
-  Task #46 (write-tests)    — pending
-  Task #47 (review-code)    — pending, blockedBy: [45, 46]
+  checklist.json: [C-1 passes✅] [C-2 passes✅] [C-3 passes:false]
 
 세션 재시작 후:
-  Task #45, #46, #47 모두 사라짐
-  → progress.md의 ⏳/⬜ 상태를 보고 재생성 필요
+  호스트 태스크는 전부 사라짐
+  → checklist.json 을 다시 읽고 C-3 부터 재개
 ```
 
----
+그래서 "무엇이 끝났는가"의 **단일 authority**는 `checklist.json`(없으면 `plan.md`의
+`## 완료 조건`)이고, 호스트 태스크는 재개할 때마다 거기서 다시 파생시키는 **캐시**일
+뿐이다. 이 authority/파생물 구분이 규칙의 핵심이다.
 
 ## 2. 트리거 조건
 
-| 상황                                                  | 행동                                                   |
-| ----------------------------------------------------- | ------------------------------------------------------ |
-| 사용자가 작업 재개를 명시 ("계속해줘", "이어서 해줘") | Task 재생성 알고리즘 즉시 실행                         |
-| 단순 질문/조회                                        | "W-XXX 작업이 진행 중입니다. 재개할까요?" 안내 후 대기 |
-| 자동 감지 (progress.md 존재)                          | 자동으로 Task 생성하거나 코드 수정 절대 금지           |
+| 상황 | 판정 |
+| --- | --- |
+| `docs/plans/*/plan.md` 중 `status`가 `done`이 아닌 것이 하나 이상 있음 | 이 룰이 주입된다 |
+| 활성 계획이 하나도 없음 | 주입되지 않는다 |
 
-**중요:** `NEVER 자동으로 Task를 생성하거나 코드를 수정한다`
+정상 운영(진행 중인 계획이 없는 세션)에서는 두 번째 행이 참이므로, 이 트리거는
+`warning-signal.md` §검토1이 요구하는 "상시 참이 아닌 조건"을 만족한다 — 항상 뜨는
+안내는 소음이 되어 옆의 진짜 안내까지 죽이기 때문이다.
 
-사용자 명시 없이 자동 재개하면 사용자가 의도하지 않은 작업이 진행될 수 있습니다.
+## 3. 재개 절차 예시
 
----
+### 입력: `docs/plans/2026-09-20-auth-refactor/checklist.json`
 
-## 3. Task 재생성 알고리즘 (5단계)
-
-### Step 1: 준비 — 도구 로드 및 중복 생성 방지
-
-```python
-# 필요한 Task 도구 확인
-ToolSearch("select:TaskCreate,TaskUpdate,TaskList")
-
-# 이미 Task가 있으면 재생성 불필요 (중복 방지)
-existing = TaskList()
-if existing:
-    print("Task가 이미 존재합니다. 재생성을 건너뜁니다.")
-    # 바로 Step 5(실행 재개)로 이동
-```
-
-**이유:** 세션이 끊겼다가 재연결된 경우 Task가 살아있을 수 있습니다. 중복 생성을 방지합니다.
-
----
-
-### Step 2: progress.md 읽기 — 완료/미완료 분류
-
-```
-progress.md 예시:
-  ✅ T-1: 요구사항 분석
-  ✅ T-2: 데이터 모델 설계
-  ✅ T-3: 인증 API 구현
-  ⏳ T-4: 테스트 코드 작성 (blockedBy: T-3)
-  ⬜ T-5: 코드 리뷰 (blockedBy: T-3)
-  ⬜ T-6: 배포 준비 (blockedBy: T-4, T-5)
-
-분류 결과:
-  complete   = {T-1, T-2, T-3}         # ✅ Task ID 집합
-  incomplete = [T-4, T-5, T-6]         # ⬜·⏳ Task 목록 (순서 유지)
-```
-
-**이유:** 완료된 Task는 재생성하지 않습니다. 이미 완료된 작업을 다시 실행하면 시간 낭비이고 충돌 위험이 있습니다.
-
----
-
-### Step 3: 미완료 Task를 순서대로 생성 — id_map 추적
-
-```python
-id_map = {}  # 구 Task ID → 새 Task ID 매핑
-
-for task in incomplete:  # 순서 유지가 중요
-    # blockedBy 의존성 재계산
-    # 완료된 Task에 대한 의존성은 이미 충족됨 → 제거
-    실제_blockedBy = [
-        id_map[dep]                    # 새 Task ID로 변환
-        for dep in task.blocked_by
-        if dep not in complete         # 완료된 것은 제외
-        and dep in id_map              # 재생성된 것만 포함
-    ]
-
-    # Task 생성 (표준 형식)
-    new_id = TaskCreate(
-        subject=f"[W-XXX][Phase] {task.title}",
-        metadata={"work_id": "W-XXX", "phase": "planning|development|validation"}
-    )
-
-    # 매핑 기록
-    id_map[task.id] = new_id
-
-    # blockedBy 설정
-    if 실제_blockedBy:
-        TaskUpdate(new_id, addBlockedBy=실제_blockedBy)
-```
-
-**id_map이 필요한 이유:**
-
-```
-T-4의 새 ID = #51
-T-5의 새 ID = #52
-T-6은 T-4, T-5에 의존 → blockedBy: [51, 52]
-id_map 없이는 새 ID를 알 수 없음
-```
-
----
-
-### Step 4: in_progress 상태 복원
-
-```python
-# ⏳이었던 Task는 in_progress로 복원
-for task in incomplete:
-    if task.status == "in_progress":  # ⏳
-        TaskUpdate(id_map[task.id], status="in_progress")
-```
-
-**이유:** 세션 중단 시점에 진행 중이던 작업이 있으면, 재개 후 해당 Task부터 이어서 시작해야 합니다.
-
----
-
-### Step 5: 실행 재개 — 의존성 없는 Task부터
-
-```python
-# blockedBy가 없는 Task = 지금 바로 실행 가능
-ready_tasks = [
-    id_map[t.id]
-    for t in incomplete
-    if not 실제_blockedBy_of(t)
+```json
+[
+  { "id": "C-1", "description": "요구사항 분석", "passes": true },
+  { "id": "C-2", "description": "인증 API 구현", "passes": true },
+  { "id": "C-3", "description": "테스트 작성", "passes": false },
+  { "id": "C-4", "description": "리뷰", "passes": false }
 ]
-
-# 2개 이상이고 수정 파일이 서로 겹치지 않을 때만 병렬 위임
-if len(ready_tasks) >= 2 and files_disjoint(ready_tasks):
-    for task_id in ready_tasks:
-        dispatch_agent(task_id)
-else:
-    # 겹치거나 하나뿐이면 순차 실행
-    for task_id in ready_tasks:
-        execute(task_id)
 ```
 
-**이유:** 준비된 Task 가 둘이라는 사실만으로는 병렬이 안전하지 않다. 같은 파일을 동시에
-수정하면 통합 시점에 충돌이 남는다 — 판정 기준은 `parallel-worktree` 규범의 파일 소유권
-절이 소유한다.
-
----
-
-## 4. 전체 예시
-
-### 입력: progress.md 상태
+### 재개 시 진행
 
 ```
-✅ T-1: 요구사항 분석
-✅ T-2: API 설계
-✅ T-3: DB 스키마 구현
-⏳ T-4: 사용자 서비스 구현 (blockedBy: T-3)
-⬜ T-5: 인증 서비스 구현 (blockedBy: T-3)
-⬜ T-6: API 통합 테스트 (blockedBy: T-4, T-5)
+1. plan.md 원문을 다시 읽는다 — 요약 금지(loop-engineering 재앵커와 동일 원칙).
+2. passes:false 부터 순서대로: C-3, C-4.
+3. 호스트에 태스크 도구가 있으면 C-3·C-4 로 태스크를 만들 수 있다.
+   이 태스크는 파생물 — 다음 재개 때는 checklist.json 을 다시 읽어 재생성한다.
+4. C-3·C-4 가 수정하는 파일이 겹치면 순차, 겹치지 않으면 병렬 위임
+   (판정 기준은 parallel-worktree 규범의 파일 소유권 절).
 ```
 
-### 처리 과정
+### `checklist.json`이 없는 경우
 
-```
-complete   = {T-1, T-2, T-3}
-incomplete = [T-4, T-5, T-6]
+`plan.md`의 `## 완료 조건` 절 각 항목을 같은 방식으로 취급한다 — 실행 가능한 명령으로
+적혀 있어야 하므로(`planning-protocol` 규범), 그 명령의 성공 여부가 사실상 `passes`
+역할을 한다.
 
-T-4: blockedBy [T-3] → T-3은 complete → 실제_blockedBy=[]
-     TaskCreate("[W-007][development] 사용자 서비스 구현") → id=#51
-     id_map = {T-4: 51}
-     T-4가 ⏳이므로 → TaskUpdate(51, status="in_progress")
+## 4. 단순 질문일 때
 
-T-5: blockedBy [T-3] → T-3은 complete → 실제_blockedBy=[]
-     TaskCreate("[W-007][development] 인증 서비스 구현") → id=#52
-     id_map = {T-4: 51, T-5: 52}
+사용자가 재개를 명시하지 않고 단순히 묻기만 했다면, 재개 절차를 실행하지 않고
+"<계획>이 진행 중입니다. 재개할까요?" 안내 후 대기한다. 모호함을 스스로 해소하지
+않는다는 `planning-protocol` 원칙과 같은 방향이다.
 
-T-6: blockedBy [T-4, T-5] → 둘 다 incomplete → [id_map[T-4], id_map[T-5]] = [51, 52]
-     TaskCreate("[W-007][development] API 통합 테스트") → id=#53
-     TaskUpdate(53, addBlockedBy=[51, 52])
-```
+## 5. 구버전(Work 시스템) 소비자
 
-### 실행 결과
-
-```
-Task #51 (사용자 서비스 구현) — in_progress, blockedBy: 없음  ← 즉시 실행
-Task #52 (인증 서비스 구현)   — pending,     blockedBy: 없음  ← 파일이 안 겹치면 동시 실행
-Task #53 (API 통합 테스트)     — pending,     blockedBy: [51, 52] ← 51, 52 완료 후
-
-실행: #51, #52 수정 파일이 disjoint 면 병렬 위임, 겹치면 순차
-```
-
----
-
-## 5. Task 생성 형식 규칙
-
-```
-subject 형식: "[W-XXX][Phase] 제목"
-  예시:
-    "[W-007][planning] 요구사항 분석"
-    "[W-007][development] 인증 API 구현"
-    "[W-007][validation] 코드 리뷰"
-
-metadata 형식:
-  {
-    "work_id": "W-007",
-    "phase": "planning" | "development" | "validation"
-  }
-
-설계 게이트 대기 태스크 (Work ID 없음):
-  {
-    "phase": "brainstorming"     ← work_id 없음. ACTIVE WORK 스캔에 안 잡힌다
-  }
-```
-
-### brainstorming 고아 방지
-
-`{"phase": "brainstorming"}` 태스크는 Work ID가 없어 ACTIVE WORK 스캔에 걸리지 않는다.
-STALE TASKS 알림에서 이런 태스크를 보면 **바로 정리 대상으로 단정하지 않는다**:
-
-| 상황                                     | 판단                                        |
-| ---------------------------------------- | ------------------------------------------- |
-| `docs/specs/`에 대응 최신 스펙이 있음    | 정당한 대기 — "검토 재개 vs 폐기"를 사용자에게 확인 |
-| 스펙 없음 / 이미 구현됨                  | 오래된 고아 — 정리 대상으로 보고             |
-
-| 규칙                                  | 설명                            |
-| ------------------------------------- | ------------------------------- |
-| ALWAYS subject 형식 준수              | 작업 ID와 단계 추적을 위해      |
-| ALWAYS metadata 포함                  | 필터링 및 대시보드 표시를 위해  |
-| NEVER 완료 Task(✅) 재생성            | 이미 완료된 작업 중복 실행 방지 |
-| ALWAYS 완료 Task는 blockedBy에서 제거 | 이미 충족된 의존성 제거         |
-
----
-
-## 6. CLAUDE_CODE_TASK_LIST_ID 고급 활용
-
-특정 Task 목록 ID를 환경변수로 지정하면 여러 세션에서 같은 Task 목록을 공유할 수 있습니다.
-
-```bash
-# 특정 프로젝트 Task 목록 고정
-export CLAUDE_CODE_TASK_LIST_ID="list_abc123"
-
-# 이후 TaskCreate, TaskList 모두 이 목록에서 동작
-```
-
-**활용 케이스:**
-
-- 팀원 간 Task 공유 (같은 LIST_ID 설정)
-- CI/CD에서 자동화된 Task 관리
-- 여러 Claude 세션이 동일 작업 목록 참조
+`docs/works/active/`에 디렉토리가 남아 있으면 session-start가 한 줄 안내만 낸다 —
+과거처럼 progress.md를 읽어 Task ID를 매핑하는 재생성 알고리즘은 더 이상 없다.
+이전 Work 시스템에서 계획 파일로 옮기는 방법은 CHANGELOG의 4.0.0 항목이 설명한다.
