@@ -345,16 +345,40 @@ while IFS= read -r -d '' f; do
 done < <(find plugins/common/agents -name "*.md" -print0 2>/dev/null)
 [ "$MCP_VIOL" -eq 0 ] && green "MCP: 배포 에이전트 frontmatter·산문 모두 MCP 미배선(스킬 위임)"
 
-hdr "8. Durable checklist 완료 게이트 (active Work, W-013)"
-# checklist.json이 완료 상태의 단일 authority. active Work에 passes:false 잔존 시 FAIL.
+hdr "8. Durable checklist 완료 게이트 (활성 계획)"
+# checklist.json이 완료 상태의 단일 authority. 활성 계획에 passes:false 잔존 시 FAIL.
+# 활성 = 같은 디렉토리 plan.md 의 status 가 done 이 아님 — done 계획의 checklist 는 과거
+# 기록이라 검사하지 않는다. status 판정은 session-start 의 frontmatter 파서를 그대로 쓴다
+# (주석째 복사된 `status: done  # ...` 도 done). plan.md 부재·손상·파서 로드 실패처럼
+# done 이라고 **확정할 수 없으면 활성으로 보고 검사한다**(조용한 skip 금지 — fail-closed).
 # status exit: 0=전항목pass 1=미완/손상 3=진짜 부재(skip). helper가 없는데 checklist는
 # 있으면 fail-closed(적대적 리뷰: helper 삭제 시 미완이 green 되던 false-green 차단).
 CL_HELPER="plugins/common/hooks/checklist.py"
 CL_FOUND=0
-for cl in docs/works/active/*/checklist.json; do
+CL_DONE=0
+plan_is_done() {
+  python3 - "$1" <<'PY' 2>/dev/null
+import importlib.util
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location(
+    "session_start", "plugins/common/hooks/session-start.py"
+)
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+status = mod.parse_frontmatter(Path(sys.argv[1])).get("status")
+sys.exit(0 if status == mod._PLAN_DONE_STATUS else 1)
+PY
+}
+for cl in docs/plans/*/checklist.json; do
   [ -f "$cl" ] || continue
-  CL_FOUND=1
   wd="$(dirname "$cl")"
+  if plan_is_done "$wd/plan.md"; then
+    CL_DONE=$((CL_DONE + 1))
+    continue
+  fi
+  CL_FOUND=1
   if [ ! -f "$CL_HELPER" ]; then
     red "checklist 존재하나 helper($CL_HELPER) 없음 → 검증 불가(fail-closed): $(basename "$wd")"
     continue
@@ -369,7 +393,7 @@ for cl in docs/works/active/*/checklist.json; do
     red "checklist 미완/손상: $(basename "$wd") — $(tr '\n' ' ' <"$TMPD/checklist")"
   fi
 done
-[ "$CL_FOUND" -eq 0 ] && green "active checklist 없음 (skip)"
+[ "$CL_FOUND" -eq 0 ] && green "활성 계획 checklist 없음 (skip, done 계획 ${CL_DONE}개는 과거 기록)"
 
 hdr "9. test-ratchet (테스트/assert 삭제 방지, W-013)"
 # diff에서 test/assert가 allow-marker 없이 순감소하면 FAIL. 산문 규율이 아닌 기계 체크.
