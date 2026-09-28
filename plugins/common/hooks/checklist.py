@@ -8,7 +8,7 @@ Durable Executor Checklist — 완료 상태의 단일 authority (W-013).
 메우는 cross-session source of truth다.
 
 핵심 설계(적대적 리뷰 반영):
-  - `pass`는 모델 주장으로 flip하지 않는다. 아이템의 `verify` 명령을 **실제 실행**해
+  - `complete`는 모델 주장으로 flip하지 않는다. 아이템의 `verify` 명령을 **실제 실행**해
     exit 0일 때만 passes=true로 전환한다. 단, `verify` 문자열은 plan-task가
     planning-results에서 파생하는 것이 전제다 — executor가 self-author한 trivial verify
     (`true`/`echo ok`)는 이 계층이 막지 못하므로 계획 리뷰에서 걸러야 한다(정직한 한계).
@@ -29,7 +29,7 @@ CLI (scripts/checklist.sh 래퍼로 호출):
   checklist.py show   <plan_dir>            # 사람용 목록
   checklist.py status <plan_dir>            # 빠른 원장 조회: 0=전부 pass 1=미완/손상 3=부재
   checklist.py verify <plan_dir>            # 전 항목 verify 재실행(opt-in 재증명): 0/1/3
-  checklist.py pass   <plan_dir> <id>       # 아이템 verify 실행 → exit 0이면 passes=true
+  checklist.py complete <plan_dir> <id>    # 아이템 verify 실행 → exit 0이면 passes=true
 """
 from __future__ import annotations
 
@@ -179,7 +179,7 @@ def cmd_init(plan_dir: Path, raw: str) -> int:
             print(f"[checklist] init: 중복 id '{iid}'", file=sys.stderr)
             return 2
         if not str(it["verify"]).strip():
-            # 빈 verify는 cmd_pass가 거부 → 영구 미완이 되므로 init에서 차단.
+            # 빈 verify는 cmd_complete가 거부 → 영구 미완이 되므로 init에서 차단.
             print(
                 f"[checklist] init: 항목 {i}('{iid}') verify가 비어있음 "
                 "(검증 명령 필수)",
@@ -286,7 +286,7 @@ def _run_verify(verify: str, plan_dir: Path) -> tuple[int, str]:
         return 124, f"타임아웃 {_VERIFY_TIMEOUT_SECONDS}s 초과 → 프로세스 그룹 종료"
 
 
-def cmd_pass(plan_dir: Path, item_id: str) -> int:
+def cmd_complete(plan_dir: Path, item_id: str) -> int:
     """아이템의 verify 명령을 실행해 exit 0일 때만 passes=true로 전환(기계 게이트).
 
     모델이 자기 작업을 completed로 찍는 self-mark를 원천 차단한다 — 통과 여부는
@@ -398,11 +398,14 @@ def main(argv: list[str]) -> int:
         return cmd_status(plan_dir)
     if cmd == "verify":
         return cmd_verify(plan_dir)
-    if cmd == "pass":
+    # `pass` 는 v5.0.1 전 이름이다 — 유닉스 비밀번호 관리자 `pass` 와 같은 모양이라 디렉토리
+    # 스캐너가 "사용자 머신의 자격증명을 읽는다"로 오인했다. 이미 계획 파일에 옛 이름을 적어 둔
+    # 소비자를 깨지 않도록 6.0.0 까지 별칭으로 받는다.
+    if cmd in ("complete", "pass"):
         if len(argv) < 3:
-            print("usage: checklist.py pass <plan_dir> <id>", file=sys.stderr)
+            print("usage: checklist.py complete <plan_dir> <id>", file=sys.stderr)
             return 2
-        return cmd_pass(plan_dir, argv[2])
+        return cmd_complete(plan_dir, argv[2])
     print(f"[checklist] unknown command: {cmd}", file=sys.stderr)
     return 2
 

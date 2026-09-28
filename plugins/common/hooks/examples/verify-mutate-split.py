@@ -223,7 +223,7 @@ def classify(tokens: list[str]) -> str | None:
     # 앞에 붙이면 안 잡힌다 — 외부 도입 세션이 실측으로 짚은 함정이다.
     if toks and toks[0] in _INTERPRETERS:
         rest = toks[1:]
-        # `uv run x.py`·`poetry run x.py` 는 스크립트가 한 칸 더 뒤다.
+        # 패키지 매니저의 `run` 하위명령을 거치면(예: poetry) 스크립트가 한 칸 더 뒤다.
         if rest and rest[0] == "run" and toks[0] in _RUN_WRAPPERS:
             rest = rest[1:]
         if rest and EXIT_CODE_VERIFIER_RE.search(rest[0].rsplit("/", 1)[-1]):

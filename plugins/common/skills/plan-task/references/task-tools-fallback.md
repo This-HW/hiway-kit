@@ -50,7 +50,7 @@ kit에는 이미 같은 목적의 **기계 검증형** 추적 장치가 있다. 
 python3 "$CL" init <plan_dir> '[{"id":"C1","description":"...","acceptance":"...","verify":"<셸 명령>"}]'
 
 python3 "$CL" show   <plan_dir>      # 현황
-python3 "$CL" pass   <plan_dir> C1   # verify 실행 → exit 0일 때만 완료 전환
+python3 "$CL" complete <plan_dir> C1   # verify 실행 → exit 0일 때만 완료 전환
 python3 "$CL" status <plan_dir>      # 0=전부완료 1=미완 3=원장없음
 python3 "$CL" verify <plan_dir>      # 전 항목 재증명
 ```

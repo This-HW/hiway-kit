@@ -9,7 +9,7 @@
 #   ./scripts/checklist.sh show   <plan_dir>
 #   ./scripts/checklist.sh status <plan_dir>                   # 원장 조회: 0=완료 1=미완 3=없음
 #   ./scripts/checklist.sh verify <plan_dir>                   # 전 항목 verify 재실행(재증명)
-#   ./scripts/checklist.sh pass   <plan_dir> <id>              # verify 실행 후 통과 시 flip
+#   ./scripts/checklist.sh complete <plan_dir> <id>              # verify 실행 후 통과 시 flip
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CL="$HERE/../plugins/common/hooks/checklist.py"

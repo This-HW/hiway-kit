@@ -4,7 +4,7 @@
 > 재생성: `./scripts/export-harness.sh` (플러그인 사용자는 `/harness-export` 스킬 참조)
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:26591321ab7ef30dbc94fceccfff233743e7c31b746d2ee0487676f66468d6ff -->
+<!-- kit:begin rules-v1.4.0 sha256:2cd169d2bbff0d88571fb0e04f38be6b89d3a933424b83b1749a021cf1dec836 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -164,7 +164,7 @@ brainstorming/plan-task HARD-GATE) ≠ 루프(실행 — 승인된 계획을 P0�
 #### 드라이버 (Task 시스템 + 스킬 루프)
 
 `while(미완료 항목):` 재앵커(요약이 아닌 계획 `plan.md` 원본 재확인 — 요약은
-drift한다) → unblocked 항목 선택 → 실행 → 완료 시 checklist pass(verify 통과로만) →
+drift한다) → unblocked 항목 선택 → 실행 → 완료 시 checklist complete(verify 통과로만) →
 태스크 완료 마킹(호스트 수단) → 종료 가드 점검(아래) → 확인 없이 다음 unblocked로 → 완료 보고.
 
 #### 종료 가드 (안티-런어웨이 = 필수)

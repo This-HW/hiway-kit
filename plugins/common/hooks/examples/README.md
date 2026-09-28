@@ -260,7 +260,7 @@ pre-push 가 거부하면 push 만 중단된다 — 로컬 커밋·작업트리�
 | 후보만 출력하고 항상 exit 0 | **출력이 판정** | `OUTPUT_VERIFIERS` |
 
 인터프리터 경유(`python scripts/audit_x.py`)까지 잡으려면 **2토큰 패턴**으로 넣어라 —
-`toks[0]` 이 `python` 이라 1토큰 패턴에는 걸리지 않는다(`uv run`·`poetry run` 은 3토큰).
+`toks[0]` 이 `python` 이라 1토큰 패턴에는 걸리지 않는다(패키지 매니저의 `run` 하위명령을 거치면 3토큰).
 
 ## 이 훅이 판정하지 않는 것
 

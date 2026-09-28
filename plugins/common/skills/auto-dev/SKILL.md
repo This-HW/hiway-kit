@@ -107,7 +107,7 @@ ours/theirs/manual 선택지를 호스트 수단으로 묻는다)은 규범 `par
 
 **Task 완료 시 매번 의무:**
 
-1. 대응 checklist 항목이 있으면 `pass <id>` — verify exit 0 일 때만 통과
+1. 대응 checklist 항목이 있으면 `complete <id>` — verify exit 0 일 때만 통과
 2. 완료 마킹(호스트 태스크 도구가 있으면 `TaskUpdate(id, status="completed")`)
 3. unblocked Task 확인 → 즉시 실행
 
@@ -116,7 +116,7 @@ ours/theirs/manual 선택지를 호스트 수단으로 묻는다)은 규범 `par
 - **미완 1항목/iteration**: 한 iteration은 checklist 미완 항목 **하나**만 목표로 한다
   (한 번에 다수 항목을 "완료"로 몰아 찍지 않는다 — 검증 없는 일괄 통과 방지).
 - **verify 통과 전 passes 금지**: `checklist.json`의 `passes:true`는 오직
-  checklist `pass <id>`(경로는 `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
+  checklist `complete <id>`(경로는 `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
   항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만 전환된다.
   모델 판단으로 completed를 self-mark하지 않는다.
 - **상태 쓰기는 메인 세션 소유**: `checklist.json`·`plan.md` 쓰기는 **메인 세션**만

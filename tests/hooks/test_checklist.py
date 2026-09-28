@@ -66,7 +66,7 @@ def test_status_pending_returns_1(tmp_path):
 
 def test_status_all_pass_returns_0(tmp_path):
     _mod.cmd_init(tmp_path, json.dumps([_item("a", verify="true")]))
-    assert _mod.cmd_pass(tmp_path, "a") == 0
+    assert _mod.cmd_complete(tmp_path, "a") == 0
     assert _mod.cmd_status(tmp_path) == 0
 
 
@@ -85,7 +85,7 @@ def test_status_empty_list_file_fails_not_skips(tmp_path):
 # ── pass: verify 실행형 기계 게이트 (self-mark 차단) ─────────────
 def test_pass_flips_only_when_verify_exits_zero(tmp_path):
     _mod.cmd_init(tmp_path, json.dumps([_item("ok", verify="true")]))
-    assert _mod.cmd_pass(tmp_path, "ok") == 0
+    assert _mod.cmd_complete(tmp_path, "ok") == 0
     items = json.loads((tmp_path / "checklist.json").read_text())
     assert items[0]["passes"] is True
     assert "verify exit 0" in items[0]["evidence"]
@@ -93,14 +93,14 @@ def test_pass_flips_only_when_verify_exits_zero(tmp_path):
 
 def test_pass_refused_when_verify_fails(tmp_path):
     _mod.cmd_init(tmp_path, json.dumps([_item("no", verify="false")]))
-    assert _mod.cmd_pass(tmp_path, "no") == 1
+    assert _mod.cmd_complete(tmp_path, "no") == 1
     items = json.loads((tmp_path / "checklist.json").read_text())
     assert items[0]["passes"] is False  # 실패한 verify는 절대 flip 안 함
 
 
 def test_pass_unknown_id_returns_2(tmp_path):
     _mod.cmd_init(tmp_path, json.dumps([_item("a")]))
-    assert _mod.cmd_pass(tmp_path, "zzz") == 2
+    assert _mod.cmd_complete(tmp_path, "zzz") == 2
 
 
 # ── verify: opt-in 재증명, stale-true 되돌림 (F1) ─────────────────
@@ -114,7 +114,7 @@ def test_verify_all_pass_returns_0(tmp_path):
 def test_verify_demotes_stale_true(tmp_path):
     # flip 후 회귀 시나리오: pass로 true가 됐지만 이제 verify가 실패 → reverify가 false로 되돌림
     _mod.cmd_init(tmp_path, json.dumps([_item("a", "true")]))
-    assert _mod.cmd_pass(tmp_path, "a") == 0  # true
+    assert _mod.cmd_complete(tmp_path, "a") == 0  # true
     # 파일을 직접 조작해 verify를 실패(false)로 바꿔 '회귀'를 모사
     items = json.loads((tmp_path / "checklist.json").read_text())
     items[0]["verify"] = "false"
@@ -165,7 +165,7 @@ def test_pass_toctou_rejects_changed_verify(tmp_path, monkeypatch):
         return (0, "")  # 옛 verify는 통과했다고 반환
 
     monkeypatch.setattr(_mod, "_run_verify", fake_run)
-    assert _mod.cmd_pass(tmp_path, "a") == 1  # stale verify → flip 거부
+    assert _mod.cmd_complete(tmp_path, "a") == 1  # stale verify → flip 거부
     items = json.loads((tmp_path / "checklist.json").read_text())
     assert items[0]["passes"] is False
 
@@ -190,7 +190,7 @@ def test_pass_refuses_empty_verify_written_directly(tmp_path):
             }
         ],
     )
-    assert _mod.cmd_pass(tmp_path, "a") == 2
+    assert _mod.cmd_complete(tmp_path, "a") == 2
 
 
 # ── 원자 쓰기: 손상 없이 상태 보존 ───────────────────────────────
@@ -203,8 +203,28 @@ def test_write_read_roundtrip_preserves_order(tmp_path):
 
 def test_pass_persists_across_reads(tmp_path):
     _mod.cmd_init(tmp_path, json.dumps([_item("a", "true"), _item("b", "true")]))
-    _mod.cmd_pass(tmp_path, "a")
+    _mod.cmd_complete(tmp_path, "a")
     # 재읽기 시 a만 pass, b는 pending
     items = json.loads((tmp_path / "checklist.json").read_text())
     by_id = {it["id"]: it["passes"] for it in items}
     assert by_id == {"a": True, "b": False}
+
+
+# ── CLI 이름: complete (v5.0.1) + 옛 이름 pass 별칭 ─────────────────
+# `pass` 는 유닉스 비밀번호 관리자와 같은 모양이라 디렉토리 스캐너가 자격증명 읽기로 오인했다.
+# 새 이름이 문서의 정본이고, 옛 이름은 이미 계획 파일에 적어 둔 소비자를 위해 6.0.0 까지 받는다.
+def test_cli_complete_flips_item(tmp_path):
+    _mod.cmd_init(tmp_path, json.dumps([_item("a", verify="true")]))
+    assert _mod.main(["complete", str(tmp_path), "a"]) == 0
+    assert _mod.cmd_status(tmp_path) == 0
+
+
+def test_cli_pass_alias_still_works(tmp_path):
+    _mod.cmd_init(tmp_path, json.dumps([_item("a", verify="true")]))
+    assert _mod.main(["pass", str(tmp_path), "a"]) == 0
+    assert _mod.cmd_status(tmp_path) == 0
+
+
+def test_cli_complete_without_id_is_usage_error(tmp_path, capsys):
+    assert _mod.main(["complete", str(tmp_path)]) == 2
+    assert "checklist.py complete" in capsys.readouterr().err

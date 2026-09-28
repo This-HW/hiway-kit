@@ -13,7 +13,7 @@ brainstorming/plan-task HARD-GATE) ≠ 루프(실행 — 승인된 계획을 P0�
 ## 드라이버 (Task 시스템 + 스킬 루프)
 
 `while(미완료 항목):` 재앵커(요약이 아닌 계획 `plan.md` 원본 재확인 — 요약은
-drift한다) → unblocked 항목 선택 → 실행 → 완료 시 checklist pass(verify 통과로만) →
+drift한다) → unblocked 항목 선택 → 실행 → 완료 시 checklist complete(verify 통과로만) →
 태스크 완료 마킹(호스트 수단) → 종료 가드 점검(아래) → 확인 없이 다음 unblocked로 → 완료 보고.
 
 ## 종료 가드 (안티-런어웨이 = 필수)
