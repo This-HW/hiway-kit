@@ -1,60 +1,52 @@
 # hiway-kit
 
-> Turn any task into production-ready code. Specialized agents automatically handle planning, implementation, code review, and security scanning for any stack.
+> Turn any task into production-ready code. Specialized agents handle planning, implementation, code review, and security scanning for any stack.
 
 ## Install
 
 ```bash
-# Anthropic community catalog (marketplace name: claude-community)
-/plugin marketplace add anthropics/claude-plugins-community
-/plugin install hiway-kit@claude-community
-```
-
-```bash
-# Direct marketplace (fastest updates; marketplace name: hiway-kit)
+# Direct marketplace (marketplace name: hiway-kit)
 /plugin marketplace add This-HW/hiway-kit
 /plugin install hiway-kit@hiway-kit
 ```
 
-> The published plugin is **`hiway-kit`** (the `common` set — 32 agents + 21 skills).
+> The published plugin is **`hiway-kit`** (15 agents + 15 skills + 12 rules + hooks).
 > Project-specific extensions live in a user's own `project-local/` tier, not as separate
 > published plugins.
 
 ## Key Skills
 
-A selection below — 21 skills total, auto-discovered from `skills/` (not hand-listed here).
+A selection below — 15 skills total, auto-discovered from `skills/` (not hand-listed here).
 
-| Command                     | Description                                     |
-| --------------------------- | ----------------------------------------------- |
-| `/plan-task`                | Structured task planning with a plan file       |
-| `/auto-dev`                 | Automated development pipeline                  |
-| `/review`                   | Code review: ruff + adversarial review + security scan |
-| `/debug`                    | 4-Phase debug pipeline                          |
-| `/test`                     | Run tests and auto-fix failures                 |
-| `/multi-perspective-review` | 10-perspective deliberation, consensus-driven   |
-| `/web-research`             | MCP-powered research (Context7 + Exa + Tavily)  |
-| `/doc-coauthoring`          | AI-assisted documentation authoring             |
-| `/agent-creator`            | Generate plugin agents with correct frontmatter |
-| `/skill-creator`            | Generate plugin skills                          |
-| `/mcp-builder`              | Scaffold MCP servers                            |
+| Command                     | Description                                              |
+| --------------------------- | -------------------------------------------------------- |
+| `/plan-task`                | Structured task planning into a plan file                |
+| `/auto-dev`                 | Run a completed plan through development and validation  |
+| `/review`                   | Lint + adversarial review + security scan                |
+| `/debug`                    | Diagnose an error, fix it, confirm the fix               |
+| `/test`                     | Run tests and fix failures                               |
+| `/multi-perspective-review` | Multi-perspective deliberation, consensus-driven         |
+| `/web-research`             | Research with the search/docs/browser tools you have     |
+| `/agent-creator`            | Create a project agent with valid frontmatter            |
 
 ## Agents
 
-32 agents across planning, development, review, backend, and meta categories.
+15 agents across planning, development, review, and meta categories.
 
-| Category   | Count | Examples                                                    |
-| ---------- | ----- | ----------------------------------------------------------- |
-| Planning   | 5     | `clarify-requirements`, `analyze-domain`, `define-business-logic` |
-| Dev        | 18    | `implement-code`, `fix-bugs`, `review-code`, `security-scan` |
-| Backend    | 4     | `design-services`, `implement-api`, `write-api-tests`       |
-| Meta       | 6     | `facilitator`, `devils-advocate`, `consensus-builder`       |
+| Category   | Count | Examples                                                          |
+| ---------- | ----- | ----------------------------------------------------------------- |
+| Planning   | 3     | `clarify-requirements`, `define-business-logic`, `design-user-journey` |
+| Dev        | 11    | `implement-code`, `fix-bugs`, `review-code`, `security-scan`      |
+| Meta       | 1     | `devils-advocate`                                                 |
 
 ## Hooks (auto-registered)
 
-- **SessionStart** — Injects governance rules + active work context
-- **PreToolUse** — Blocks edits containing secrets (`protect-sensitive.py`)
-- **PostToolUse** — Auto-formats code after edits (`auto-format.py`, ruff)
-- **Stop** — Phase-gate check before session ends
+- **SessionStart** — Injects governance rules, recurring review lessons, and open plan files
+- **PreToolUse** — Blocks reads and edits of sensitive file paths such as `.env` and keys (`protect-sensitive.py`)
+- **PostToolUse** — Auto-formats the edited file (`auto-format.py`: ruff for Python; prettier/eslint only when the project has them installed)
+- **Stop** — Lints edited Python files and runs the tests you edited; on failure, the turn continues so the agent fixes it
+
+The hooks make no network calls and write nothing outside your machine.
 
 ## License
 
