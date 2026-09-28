@@ -213,7 +213,7 @@ def _rule_is_portable(fm: dict) -> bool | None:
 
 
 #: 규범 본문의 킷 상대경로(`skills/…`·`rules/…`·`hooks/…`). 앞 글자가 경로 문자면
-#: 잡지 않는다 — `plugins/common/rules/x.md` 같은 레포 경로의 꼬리를 다시 치환하지 않게.
+#: 잡지 않는다 — `plugins/common/…` 같은 레포 경로의 꼬리를 다시 치환하지 않게.
 _PLUGIN_REL_PATH_RE = re.compile(r"(?<![\w./-])((?:skills|rules|hooks)/[\w.-]+(?:/[\w.-]+)*)")
 
 
