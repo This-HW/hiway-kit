@@ -62,6 +62,19 @@ Expected warnings only: `agents/` and hooks are not part of a skills-only listin
 3. Watch the skill safety scan (up to 2 h), then publish after approval. Each later version is a new
    ZIP upload with a higher `version` (`plugin_version_unchanged` otherwise).
 
+## Tracking to publication (who owns it, how to resume)
+
+Both listings are driven **to confirmed publication**, not to "submitted": the maintainer asked for it
+on 2026-09-28. An agent session holds an hourly tracker that reads the Claude directory and OpenAI portal
+states (read-only probe), submits to OpenAI the moment Skills only appears, rescans a failed skill scan
+every 3 h, fixes and resubmits on rejection, clicks Publish after approval, confirms the listing by
+searching the directory, then updates this file, `docs/marketplace-submission.md`, CLAUDE.md and README.
+Every 3 h it also checks for an OpenAI support reply and new posts in the two community threads above.
+
+The tracker is **session-scoped and expires after 7 days.** A session (any harness) that takes this over
+reads the state from this file and `docs/marketplace-submission.md` and re-arms it. **Only one session
+holds the tracker** — a forked or duplicated session carrying a second copy risks a double submission.
+
 ## What this repo already has ready
 
 Run these before submitting — both should already be green on `main`:
