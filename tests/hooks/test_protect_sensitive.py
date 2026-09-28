@@ -165,10 +165,6 @@ class TestCheckContentSensitive:
         clean, _ = check_content_sensitive({"note": "hello world"})
         assert not clean
 
-    def test_password_literal_blocked(self):
-        sensitive, _ = check_content_sensitive("password=supersecret123")
-        assert sensitive
-
     def test_jwt_blocked(self):
         # Minimal valid-looking JWT
         header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
@@ -207,20 +203,28 @@ class TestMainIntegration:
         code = run_main({"tool_name": "Bash", "tool_input": {"command": "ls"}})
         assert code == 0
 
-    def test_message_with_secret_blocked(self):
-        code = run_main(
-            {
-                "tool_name": "message",
-                "tool_input": {"content": "my key sk-abcdefghij1234567890xyz"},
-            }
-        )
-        assert code == 2
+    def test_read_env_message_does_not_claim_edit(self, capsys):
+        """Read 차단 메시지가 "수정할 수 없다"로 읽기 차단을 잘못 설명하지 않는다."""
+        assert run_main({"tool_name": "Read", "tool_input": {"file_path": ".env"}}) == 2
+        err = capsys.readouterr().err
+        assert "수정할 수 없" not in err
+        assert "읽기" in err
 
-    def test_message_without_secret_allowed(self):
+    def test_removed_agent_teams_tools_are_not_scanned(self):
+        """Agent Teams(message/broadcast)는 제거됐다 — 그 분기와 matcher 가 남지 않는다."""
         code = run_main(
-            {"tool_name": "message", "tool_input": {"content": "Hello agent, proceed."}}
+            {"tool_name": "message", "tool_input": {"content": "sk-" + "a" * 30}}
         )
         assert code == 0
+        manifest = json.loads((HOOKS_DIR / "hooks.json").read_text(encoding="utf-8"))
+        matchers = [
+            e.get("matcher", "")
+            for e in manifest["hooks"]["PreToolUse"]
+            if "protect-sensitive.py" in json.dumps(e)
+        ]
+        assert matchers
+        for m in matchers:
+            assert not {"message", "broadcast"} & set(m.split("|")), m
 
     def test_malformed_json_allows(self):
         with patch("sys.stdin", StringIO("not valid json")):
@@ -503,33 +507,6 @@ class TestEnvTemplateContentScanNonStrPayload:
                     "file_path": ".env.example",
                     "edits": "KEY=" + "sk-" + "abcdefghij1234567890xyz",
                 },
-            }
-        )
-        assert code == 2
-
-
-class TestSensitivePatternsUnion:
-    """ATK-006: message/broadcast 스캔 패턴 = high-confidence + 휴리스틱 합집합 고정."""
-
-    def test_union_composition(self):
-        assert list(_mod.SENSITIVE_CONTENT_PATTERNS) == (
-            _mod.HIGH_CONFIDENCE_CONTENT_PATTERNS + _mod.HEURISTIC_CONTENT_PATTERNS
-        )
-        # 휴리스틱 3종이 message 스캔에서 빠지면 회귀
-        assert len(_mod.HEURISTIC_CONTENT_PATTERNS) == 3
-        descriptions = [d for _, d in _mod.SENSITIVE_CONTENT_PATTERNS]
-        assert "비밀번호 리터럴" in descriptions
-        assert "API 키 (sk-...)" in descriptions
-
-
-class TestMessageBroadcastScanUnchanged:
-    """message/broadcast 콘텐츠 스캔은 기존 휴리스틱 패턴을 그대로 유지한다."""
-
-    def test_message_password_heuristic_still_blocked(self):
-        code = run_main(
-            {
-                "tool_name": "message",
-                "tool_input": {"content": "password=supersecret123"},
             }
         )
         assert code == 2

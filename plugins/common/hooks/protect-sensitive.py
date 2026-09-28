@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-PreToolUse Hook: 민감한 파일 보호 + 메시지 콘텐츠 스캔
+PreToolUse Hook: 민감한 파일 보호
 
-Edit/Write/Read 도구가 민감한 파일에 접근하려 할 때 차단합니다.
-Agent Teams 모드에서 message/broadcast 콘텐츠에 민감 정보가 포함되면 차단합니다.
+Edit/MultiEdit/Write/NotebookEdit/Read 도구가 민감한 파일에 접근하려 할 때 차단합니다.
+env 템플릿(.env.example 등) 쓰기는 허용하되, 실제 형식의 시크릿을 기록하면 차단합니다.
 
 차단되는 파일:
 - .env* (환경 변수)
@@ -13,9 +13,8 @@ Agent Teams 모드에서 message/broadcast 콘텐츠에 민감 정보가 포함�
 - ~/.ssh/** (SSH 키)
 - ~/.aws/** (AWS 인증)
 
-메시지 콘텐츠 스캔 (Agent Teams, S-C-08):
+env 템플릿 쓰기 콘텐츠 스캔 (형식-확정 패턴만):
 - API 키 패턴 (sk-, pk_, AKIA 등)
-- 비밀번호/토큰 리터럴
 - SSH 개인키 블록
 - 데이터베이스 연결 문자열
 
@@ -102,10 +101,11 @@ PROTECTED_PATTERNS = [
     r"\.htpasswd$",  # Apache htpasswd
 ]
 
-# 메시지 콘텐츠 내 민감 정보 패턴 (Agent Teams S-C-08)
+# 콘텐츠 내 민감 정보 패턴 — env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔용.
 # 형식-확정 패턴만: 실제 시크릿 형식(sk-, AKIA, PEM 블록 등)에만 매치되어
 # placeholder(API_KEY=your_key_here)와 충돌할 확률이 사실상 0이다 (2.10.5).
-# env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔은 이 서브셋만 사용한다.
+# (휴리스틱 할당 패턴 `password=…` 류는 제거된 Agent Teams 의 message/broadcast
+#  스캔 전용이었다 — 그 분기와 함께 v5.0.0 에서 삭제했다. 호출 경로가 0 이었다.)
 HIGH_CONFIDENCE_CONTENT_PATTERNS = [
     # API 키 패턴
     (r"sk-[a-zA-Z0-9]{20,}", "API 키 (sk-...)"),
@@ -128,22 +128,10 @@ HIGH_CONFIDENCE_CONTENT_PATTERNS = [
     (r"eyJ[a-zA-Z0-9_-]{20,}\.eyJ[a-zA-Z0-9_-]{20,}\.[a-zA-Z0-9_-]{20,}", "JWT 토큰"),
 ]
 
-# 휴리스틱 할당 패턴 — 형식이 확정적이지 않아 placeholder와 충돌 가능(password=your_pw_here 등).
-# env 템플릿 콘텐츠 스캔에서는 제외하고, 기존 message/broadcast 스캔에서는 계속 사용한다.
-HEURISTIC_CONTENT_PATTERNS = [
-    (r'(?:password|passwd|pwd)\s*[=:]\s*["\']?[^\s"\']{8,}', "비밀번호 리터럴"),
-    (r'(?:api_key|apikey|api-key)\s*[=:]\s*["\']?[^\s"\']{8,}', "API 키 리터럴"),
-    (r'(?:secret|token)\s*[=:]\s*["\']?[^\s"\']{16,}', "시크릿/토큰 리터럴"),
-]
-
-# 기존 message/broadcast 스캔 동작과 동일하게 유지하기 위한 합집합
-SENSITIVE_CONTENT_PATTERNS = (
-    HIGH_CONFIDENCE_CONTENT_PATTERNS + HEURISTIC_CONTENT_PATTERNS
-)
-
 # 차단 메시지
 BLOCK_MESSAGES = {
-    "env": "환경 변수 파일은 직접 수정할 수 없습니다. 수동으로 설정하세요.",
+    # Read 도 이 메시지를 받는다 — "수정할 수 없다"로 쓰면 읽기 차단을 잘못 설명한다.
+    "env": "환경 변수 파일(.env)은 보호됩니다 — 읽기·쓰기 모두 차단. 값이 필요하면 사용자에게 요청하세요.",
     "secrets": "시크릿 파일/디렉토리는 보호됩니다.",
     "credential": "인증 정보 파일은 보호됩니다.",
     "ssh": "SSH 키는 보호됩니다.",
@@ -155,7 +143,7 @@ BLOCK_MESSAGES = {
 
 
 def check_content_sensitive(
-    content, patterns=SENSITIVE_CONTENT_PATTERNS
+    content, patterns=HIGH_CONFIDENCE_CONTENT_PATTERNS
 ) -> tuple[bool, str]:
     """콘텐츠에 민감 정보가 포함되어 있는지 확인 (S-C-08).
 
@@ -163,9 +151,8 @@ def check_content_sensitive(
     구조화 payload에 re.search가 TypeError를 던져 blanket except로 fail-open(스캔 우회)
     되던 문제(적대적 리뷰 P1)를 막는다.
 
-    patterns: 기본은 message/broadcast 스캔용 전체 패턴(SENSITIVE_CONTENT_PATTERNS).
-    env 템플릿 쓰기 콘텐츠 스캔(FR-4)은 HIGH_CONFIDENCE_CONTENT_PATTERNS만 넘겨
-    placeholder false-positive를 피한다(2.10.5).
+    patterns: 형식-확정 패턴(HIGH_CONFIDENCE_CONTENT_PATTERNS) — placeholder
+    false-positive를 피한다(2.10.5).
     """
     if not content:
         return False, ""
@@ -186,7 +173,7 @@ def check_content_sensitive(
             matched_text = match.group(0)
             masked = f"{matched_text[:1]}…({len(matched_text)}자)"
             debug_log(f"Sensitive content detected: {description} ({masked})")
-            msg = f"메시지에 민감 정보가 포함되어 있습니다: {description}. 민감 정보를 제거한 후 다시 시도하세요."
+            msg = f"쓰려는 내용에 민감 정보가 포함되어 있습니다: {description}. 민감 정보를 제거한 후 다시 시도하세요."
             return True, msg
 
     return False, ""
@@ -250,28 +237,6 @@ def main():
 
         tool_name = input_data.get("tool_name", "")
         tool_input = input_data.get("tool_input", {})
-
-        # Agent Teams 메시지 콘텐츠 스캔 (S-C-08)
-        if tool_name in ("message", "broadcast"):
-            content = (
-                tool_input.get("content", "")
-                or tool_input.get("message", "")
-                or tool_input.get("prompt", "")
-            )
-            if not content and isinstance(tool_input, dict):
-                # 다양한 필드명에서 콘텐츠 추출 시도
-                for key in ("text", "body", "data"):
-                    content = tool_input.get(key, "")
-                    if content:
-                        break
-
-            is_sensitive, msg = check_content_sensitive(content)
-            if is_sensitive:
-                print(f"🔒 메시지 차단됨: {tool_name}", file=sys.stderr)
-                print(f"   {msg}", file=sys.stderr)
-                sys.exit(2)
-
-            sys.exit(0)
 
         # 파일 경로 기반 도구만 검사. MultiEdit/NotebookEdit도 편집 도구이므로 포함해야
         # 시크릿 파일 우회를 막는다(MultiEdit로 .env 편집 우회 방지, 적대적 리뷰 P1).
