@@ -2,8 +2,8 @@
 # 각 줄 = 그 해설본이 마지막으로 반영한 **주입 룰**(plugins/common/rules/)의 sha256.
 # 주입 룰을 고쳤는데 이 값이 그대로면 verify-done §7이 FAIL — 해설본 확인 후 재생성:
 #   scripts/sync-rule-mirror.sh --regenerate
-76e176ec71729cc66a9c70dcf83f540519ff8688cc874a7fdf4cd406bd9ec527  agent-delegation-chain.md
-cc143582bcb8b0aab0cd5d925c4e1a0cb98602d6e80579c843a0d6dbca56c76c  agent-system.md
+99a1d9fb4870c9d6e692663756aeb0138216b3e35cd9f128706c7f69d7384822  agent-delegation-chain.md
+c6a8f41d1c4ab2a6315d8e04e0c89f8d2eb2709723b470c6313c74a4e993a3fa  agent-system.md
 15c84eba445afc5f87aa74f9ade252ac14f12218b81bc982cfb54988f6fa3bc8  mcp-usage.md
 84c29c321f90a07dc6dace5f7e7e4a1db66fd255f33655ef14cf3551d6962ae9  planning-protocol.md
 ed1d35201148a3ed228f90cd392e97f90bd3a8c0852465728466b46bb44c6a4c  task-resume.md

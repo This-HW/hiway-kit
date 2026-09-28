@@ -22,7 +22,7 @@ exit 1 = 시나리오⊄기준선 / 기준선⊄시나리오 / baseline.file 부
 
 W-024(티어2 커버리지 갭 봉쇄): `evals/policy.json`의 `_tier2Rationale`이 "티어2는
 경고 수준으로 다룬다"고 주장했으나 이 스크립트에 문자열 'tier2'가 한 번도 나오지
-않아 경고조차 구현돼 있지 않았다 — `consensus-builder`가 tiers.tier2(A등급)에
+않아 경고조차 구현돼 있지 않았다 — 메타 에이전트 1종(v5.0.0 에서 삭제)이 tiers.tier2(A등급)에
 등재된 채 시나리오 없이 조용히 통과한 원인. check_tier2/check_classification_complete
 두 검사로 메운다. 상세: docs/specs/2026-09-04-eval-tier2-coverage-gate.md (D-3).
 """
@@ -257,14 +257,14 @@ def check_tier2(root: Path, policy: dict) -> tuple[bool, list[str]]:
     """티어2(A등급) 각 에이전트가 최소 시나리오를 보유하는지 검사.
 
     tier1과 달리 미달을 처음부터 fail로 승격해 둘 수 있다(policy 플래그
-    `gate.tier2CoverageEnforceFail`) — W-024에서 유일한 갭(consensus-builder)을
+    `gate.tier2CoverageEnforceFail`) — W-024에서 유일한 갭(메타 에이전트 1종의 시나리오 부재)을
     같은 배치에서 메우므로 tier1처럼 경고 단계를 거칠 이유가 없다(decision D-3,
     docs/specs/2026-09-04-eval-tier2-coverage-gate.md). 플래그 부재 시 기본값은
     안전한 쪽(False = 경고만)이며, 이는 check_tier1과 동일한 관례다.
 
     `tiers.tier2`가 없거나 빈 배열이면 gate 플래그와 무관하게 즉시 fail이다 —
     "검사 대상 0개"를 통과로 오인하는 거짓 green이 이 배치가 잡은 결함 그 자체이므로
-    (consensus-builder가 등재됐으나 시나리오 없이 통과한 경로), validate_policy_schema가
+    (메타 에이전트 1종이 등재됐으나 시나리오 없이 통과한 경로), validate_policy_schema가
     tier1에 대해 하는 검사와 같은 급으로 다룬다.
     """
     lines: list[str] = []

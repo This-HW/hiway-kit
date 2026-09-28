@@ -1,244 +1,124 @@
 # 에이전트 시스템 아키텍처
 
-> 이 문서는 이 킷의 에이전트 시스템 설계 원칙과 실전 운용 방법을 설명합니다.
+> 정본은 `plugins/common/rules/agent-system.md` 다. 이 문서는 **왜** 그렇게 정했는지를
+> 설명한다 — 로스터·모델·isolation 값을 여기서 다시 정의하지 않는다(값은 정본의 로스터 표,
+> 실제 값은 각 에이전트 frontmatter 가 소유한다).
 
 ---
 
-## 1. 3-Tier 아키텍처
-
-에이전트는 프로젝트 범용성에 따라 3개 계층으로 구분됩니다.
+## 1. 2-Tier 구조
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  Tier 1: plugins/common/        (모든 프로젝트에 적용)   │
-│  ├─ 33 agents  (planning, dev, meta, backend ...)        │
-│  ├─ 16 skills  (plan-task, auto-dev, review ...)         │
-│  ├─ 13 rules   (agent-system, code-quality ...)          │
-│  └─ hooks      (protect-sensitive, auto-format)          │
-├──────────────────────────────────────────────────────────┤
-│  Tier 2: plugins/{domain}/      (도메인별 특화)          │
-│  ├─ frontend/  (4 agents, 1 skill)                       │
-│  ├─ infra/     (7 agents, 1 skill)                       │
-│  ├─ ops/       (14 agents, 5 skills)                     │
-│  ├─ data/      (4 agents, 3 skills)                      │
-│  └─ integration/ (4 agents)                              │
-├──────────────────────────────────────────────────────────┤
-│  Tier 3: project-local/         (프로젝트 전용)          │
-│  └─ 사용자가 직접 추가하는 프로젝트 특화 에이전트        │
-└──────────────────────────────────────────────────────────┘
+Tier 1: plugins/common/   — 모든 소비자 프로젝트에 실리는 킷 에이전트 (로스터: 정본)
+Tier 2: 프로젝트 로컬     — 소비자가 자기 .claude/agents/ 에 직접 추가하는 에이전트
 ```
 
-**왜 3-Tier인가?**
-
-- Tier 1에만 모든 에이전트를 넣으면 도메인 무관한 에이전트가 오염됨
-- 도메인별로 분리하면 마켓플레이스에서 선택적 설치 가능
-- 프로젝트 로컬 Tier는 회사 내부 규칙·도구 등을 커스터마이즈 할 공간
+도메인별 플러그인(frontend·infra·ops 등)으로 나누던 옛 3-Tier 는 없어졌다. 킷은
+**범용 개발 흐름에 실제로 쓰이는 에이전트만** 싣고, 도메인 특화는 소비자 프로젝트의 몫이다.
 
 ---
 
-## 2. 모델 선택 기준
+## 2. 왜 15종인가 (v5.0.0)
 
-모델별로 비용과 성능이 다르기 때문에, 작업 특성에 맞게 선택해야 합니다.
+v4 까지 32종이었다. v5 에서 17종을 없앴다 — 기준은 셋이다.
 
-| 모델       | 적합한 작업           | 대표 에이전트                                     | 선택 이유                               |
-| ---------- | --------------------- | ------------------------------------------------- | --------------------------------------- |
-| **Opus**   | 전략, 분석, 리뷰      | `clarify-requirements`, `review-code`, `diagnose` | 복잡한 추론, 뉘앙스 이해가 필요한 작업  |
-| **Sonnet** | 코드 구현, 버그 수정  | `implement-code`, `fix-bugs`, `write-tests`       | 속도와 품질의 균형, 코드 생성에 최적화  |
-| **Haiku**  | 탐색, 검증, 단순 확인 | `explore-codebase`, `verify-code`, `monitor`      | 빠른 응답, 단순 조회·확인 작업에 효율적 |
+| 기준 | 없앤 예 | 대신 |
+| --- | --- | --- |
+| **네이티브와 중복** | 코드베이스 탐색 에이전트 | 호스트의 Explore 류 네이티브 에이전트 |
+| **다른 에이전트와 역할 중복** | 리팩토링 계획·서비스 설계 → 구현 계획, API 구현·최적화 → 구현, API 테스트 → 테스트 작성, 통합 검증 → 코드 검증 | 흡수 대상에 고유 내용만 짧게 옮김 |
+| **서브에이전트일 이유가 없음** | 다관점 리뷰의 조율자·종합자·합의 도출자·영향도 분석자 | `multi-perspective-review` 스킬의 **메인 세션 단계** |
 
-**잘못된 모델 선택의 결과:**
+에이전트 설명은 **매 세션 상시 컨텍스트**에 들어간다. 쓰이지 않는 에이전트는 비용만
+남기고, 비슷한 에이전트가 여럿이면 선택이 흔들린다. 없앤 목록과 대체의 정본은 CHANGELOG 의
+이주 표다.
+
+---
+
+## 3. 트리거는 "무엇이 주어졌을 때"로 쓴다
+
+`MUST USE when:` 에 "~해줘", "에러", "테스트", "git" 같은 **일상 단어를 단독 트리거**로 두면
+평범한 대화가 전부 서브에이전트로 빠진다 — 사용자는 대화 맥락을 잃고, 한 단계로 끝날 일이
+왕복 비용을 치른다. 그래서 트리거는 **입력 조건**으로 쓴다.
 
 ```
-# 잘못된 예: 단순 탐색에 Opus 사용
-clarify-requirements로 코드베이스 탐색 → 비용 3-5배 낭비, 응답 느림
-
-# 올바른 예: 탐색은 Haiku, 분석은 Opus
-explore-codebase(Haiku) → 결과를 clarify-requirements(Opus)에 전달
+나쁨: MUST USE when: "버그", "에러", "수정해줘" 요청.
+좋음: MUST USE when: 스택트레이스·실패하는 테스트·재현 절차가 주어졌고 원인을 확정해 고쳐야 할 때.
 ```
 
----
-
-## 3. 에이전트 선택
-
-에이전트 선택 키워드 매핑 표는 제거됐다(D-18) — 하네스가 시스템 프롬프트에 에이전트
-목록과 `MUST USE when:` 트리거를 이미 제공하므로, 정본이 이를 다시 나열하는 것은
-네이티브 재기술이다. 필요한 것은 아래 두 원칙뿐이다.
-
-**일반 에이전트(general-purpose) 사용 허용 조건:**
-
-- 특화 에이전트가 존재하지 않는 작업
-- 여러 도메인에 동시에 걸쳐있는 작업
-
-**원칙:** `NEVER use general-purpose subagent when a specialized agent exists`
-
-**적대적 병렬 검증:** 여러 관점의 적대적 검증이 필요하면 general-purpose 복제로 fan-out하지
-말고 **이종 전용 에이전트로 fan-out**한다 — `review-code`(적대 리뷰) + `devils-advocate`
-(실패 시나리오) + `verify-integration`(연동 검증). 동일 에이전트 다중 복제는 관점 다양성
-(편향 방지)을 잃는다. 단, 다중도메인·외부지식 자유 조사는 위 general-purpose 예외를 유지한다.
+두 에이전트가 같은 조건 문구를 공유하면 선택이 모호해진다 — 조건은 에이전트마다 달라야 한다.
+위임 여부 자체(에이전트냐 인라인이냐)는 `agent-delegation-chain.md` 가 정한다.
 
 ---
 
-## 4. DELEGATION_SIGNAL 형식 — 폐기됨 (2026-08-27, W-022 R1)
+## 4. 네이티브 에이전트를 막지 않는다
 
-이 절은 원래 위임 신호 블록 형식을 여기서도 반복 설명했다. 정본
-(`plugins/common/rules/agent-system.md`)에서 이 블록 정의를 제거했으므로 이 해설도
-따라간다 — 이 문서는 정본을 재정의하지 않는다는 원칙 그대로다. 서브에이전트 출력을
-받은 뒤의 절차는 `agent-delegation-chain.md`(해설본) §2를 보라. 폐기 근거:
-`docs/specs/2026-08-27-delegation-signal-contract-review.md`(W-021).
-
----
-
-## 5. isolation: worktree 기준
-
-`isolation: worktree`는 에이전트가 별도의 git worktree에서 실행되도록 합니다. 파일을 수정하는 에이전트에 반드시 적용해야 합니다.
-
-```yaml
-# 파일 수정 에이전트 — isolation 필수
----
-name: implement-code
-isolation: worktree # ← 반드시 설정
----
-# 읽기 전용 에이전트 — isolation 불필요
----
-name: explore-codebase
-# isolation 없음 — 파일 읽기만 하므로
----
-```
-
-| 에이전트              | isolation | 이유                              |
-| --------------------- | --------- | --------------------------------- |
-| `implement-code`      | ✅ 필요   | 새 코드 파일 생성, 기존 파일 수정 |
-| `fix-bugs`            | ✅ 필요   | 버그 수정 = 파일 변경             |
-| `write-tests`         | ✅ 필요   | 테스트 파일 생성                  |
-| `write-api-tests`     | ✅ 필요   | API 테스트 파일 생성              |
-| `implement-api`       | ✅ 필요   | API 코드 생성/수정                |
-| `generate-boilerplate`| ✅ 필요   | 보일러플레이트 파일 생성          |
-| `sync-docs`           | ✅ 필요   | 문서 파일 생성/수정               |
-| `optimize-logic`      | ✅ 필요   | 소스 코드 Edit                    |
-| `explore-codebase`    | ❌ 불필요 | 읽기 전용 탐색                    |
-| `review-code`         | ❌ 불필요 | 읽기 전용 검토                    |
-| `plan-implementation` | ❌ 불필요 | 계획 문서 작성만 (md 파일은 허용) |
-
-**worktree 없이 파일 수정 에이전트를 실행하면?**
-
-- 여러 에이전트가 동시에 같은 파일을 수정할 때 충돌 발생
-- 작업 실패 시 원본 브랜치가 오염됨
-- 격리 없이 부분 완료 상태가 메인 브랜치에 남음
+v4 의 정본에는 *"특화 에이전트가 있으면 general-purpose 를 절대 쓰지 마라"* 가 있었다.
+v5 에서 지웠다. 이 규칙은 킷 에이전트가 맞지 않는 작업에서도 억지로 킷 에이전트를 고르게
+만들었고, 호스트가 제공하는 네이티브 에이전트(general-purpose·Explore·Plan)로의 **정당한
+강등**을 막았다. 선택 기준은 각 에이전트의 트리거 하나다.
 
 ---
 
-## 6. disallowedTools 정책
+## 5. 모델 선택
 
-에이전트 유형에 따라 사용 가능한 도구를 제한합니다.
+모델은 작업의 성격을 따른다 — 명세·계획·적대적 리뷰처럼 추론이 결과를 좌우하면 opus,
+코드를 쓰면 sonnet, 명령을 돌려 결과를 판정하거나 기계적 확인이면 haiku. 분석 에이전트로
+단순 조회를 하면 비용이 몇 배로 들고 느리다.
 
-```yaml
-# 일반 에이전트 — 서브에이전트 생성 금지
-disallowedTools:
-  - Task
-
-# 메타 에이전트 (facilitator, synthesizer 등) — Bash 금지
-disallowedTools:
-  - Bash
-```
-
-**왜 일반 에이전트는 Task를 사용할 수 없는가?**
-
-- 서브에이전트가 또 다른 서브에이전트를 생성하면 무한 재귀 가능성
-- 위임 체인 관리가 복잡해져 디버깅이 어려워짐
-- 메인 Claude만 위임 체인을 조율하는 단일 조율자 원칙 위반
-
-**왜 메타 에이전트는 Bash를 사용할 수 없는가?**
-
-- 메타 에이전트(facilitator 등)는 분석·판단 역할
-- Bash는 시스템 명령 실행 → 분석 에이전트의 책임 범위 초과
-- 분석과 실행을 분리해 역할 명확화
+`define-business-logic`·`design-user-journey` 가 opus 인 이유: 산출물이 **다른 모든 단계의
+입력**이 되는 명세라서, 여기서 빠진 경계값·상태 전이는 구현·테스트·리뷰가 전부 물려받는다.
 
 ---
 
-## 7. Phase Gate 패턴
+## 6. 적대적 병렬 검증은 이종 에이전트로
 
-Phase Gate는 각 개발 단계를 완전히 완수하고 다음 단계로 넘어가는 원칙입니다.
-
-```
-┌──────────────────────┐
-│   Phase 1: Planning  │
-│   P0 모호함 = 0      │
-│   비즈니스 규칙 정의  │
-│   데이터 모델 완성   │
-└──────────┬───────────┘
-           │ Exit Gate: P0=0, 핵심 규칙 정의, 데이터 모델 완성
-           ▼
-┌──────────────────────┐
-│  Phase 2: Development│
-│  요구사항 구현 완료  │
-│  핵심 로직 테스트    │
-│  빌드·린트 통과      │
-└──────────┬───────────┘
-           │ Exit Gate: 빌드 성공, 테스트 80%+, 린트 통과
-           ▼
-┌──────────────────────┐
-│  Phase 3: Validation │
-│  코드 리뷰 완료      │
-│  보안 스캔 통과      │
-│  통합 테스트 통과    │
-└──────────┬───────────┘
-           │ Exit Gate: Must Fix=0, Critical 보안=0, 통합 테스트 통과
-           ▼
-        Complete
-```
-
-### Exit Gate 체크리스트
-
-**Phase 1 → Phase 2 (Planning → Dev)**
-
-- [ ] P0 모호함 0개 (핵심 비즈니스 규칙 모두 명확)
-- [ ] 비즈니스 규칙 정의됨 (계산·권한·상태 전이)
-- [ ] 데이터 모델 확정
-- [ ] 주요 사용자 흐름 명확
-
-**Phase 2 → Phase 3 (Dev → Validation)**
-
-- [ ] 빌드 성공
-- [ ] 핵심 로직 테스트 커버리지 ≥ 80%
-- [ ] 린트/타입 체크 통과
-- [ ] 모든 요구사항 구현 완료
-
-**Phase 3 → Complete (Validation → Done)**
-
-- [ ] 코드 리뷰 Must Fix 항목 0개
-- [ ] Critical 보안 이슈 0개
-- [ ] 통합 테스트 통과
-- [ ] 최종 빌드 성공
+같은 에이전트를 여러 번 복제해 fan-out 하면 **같은 사각지대**를 공유한다. 코드 결함
+(`review-code`), 보안(`security-scan`), 설계 실패 시나리오(`devils-advocate`)처럼 **관점이
+다른** 에이전트로 나눠야 편향이 줄어든다.
 
 ---
 
-## 8. 에이전트 Frontmatter 전체 옵션
+## 7. isolation: worktree
 
-```yaml
+파일을 수정하는 에이전트는 격리된 작업 트리에서 돈다 — 여러 에이전트가 같은 파일을 동시에
+고치면 충돌하고, 실패한 부분 작업이 원본 브랜치에 남기 때문이다. 읽기 전용 에이전트에
+격리를 거는 것은 비용만 늘린다.
+
+v5 에서 `define-business-logic`·`design-user-journey` 를 **읽기 전용 분석가**로 바꿨다.
+이전에는 명세 파일을 직접 썼는데, 그러면 격리 트리에서 쓴 파일을 호출자가 다시 병합해야
+했고, 파일과 반환 메시지 중 어느 쪽이 계약인지도 모호했다(eval 에서 채점 대상이 갈려
+플레이크가 났다). 이제 명세 전문을 반환하고 **저장은 호출자가** 한다.
+
+`git-workflow` 는 소스 파일이 아니라 저장소 상태를 바꾸고, 그 일 자체가 통합 지점이라
+격리하지 않는다. 병합 규범은 `parallel-worktree.md`.
+
 ---
-name: agent-name # kebab-case, 파일명과 일치
-description: | # 한국어 + 영어 트리거 조건
-  MUST USE when: "keywords"
-  OUTPUT: 결과 형식
-model: sonnet # opus | sonnet | haiku
-effort: medium # low | medium | high | max
-isolation: worktree # 파일 수정 에이전트만
-tools:
-  - Read
-  - Edit
-  - Bash
-disallowedTools:
-  - Task # 일반 에이전트
-permissionMode: acceptEdits
-hooks:
-  PreToolUse:
-    - matcher: "Edit"
-      hooks:
-        - type: command
-          command: "python3 ~/.claude/hooks/protect-sensitive.py"
-context_cache:
-  use_session: true
-  session_includes:
-    - CLAUDE.md
+
+## 8. disallowedTools
+
+**모든 에이전트는 서브에이전트를 부르지 못한다**(`Task`). 서브에이전트가 또 서브에이전트를
+만들면 조율이 흩어지고 디버깅이 어려워진다 — 조율은 호출한 스킬·세션 하나에 둔다.
+
+문서만 분석하는 에이전트(`devils-advocate`)는 셸도 막는다. 분석과 실행을 분리해 역할을
+명확히 하기 위해서다.
+
 ---
-```
+
+## 9. Phase Gate
+
+각 단계의 출구 조건을 채우고 나서 다음 단계로 간다. 조건은 정본에 있다.
+
+v4 정본의 *"핵심 로직 테스트 ≥ 80%"* 는 v5 에서 지웠다. 킷의 어떤 게이트도 커버리지를 재지
+않았고, 소비자 프로젝트마다 커버리지 도구·기준이 다르다 — **아무도 재지 않는 숫자는 게이트가
+아니다.** 대신 "변경된 동작의 테스트가 통과한다"로 적었다.
+
+---
+
+## 10. Frontmatter
+
+필수: `name`(파일명과 일치하는 kebab-case), `description`(`MUST USE when:` 포함), `model`,
+`maxTurns`. 선택: `effort`, `isolation`, `tools`, `disallowedTools`.
+
+**넣지 않는 필드**: `permissionMode`, `context_cache`, `output_schema`, `next_agents`, 인라인
+`hooks`, `references` — 호스트가 지원하지 않거나 킷 정책상 금지다. 지원되지 않는 필드는
+조용히 무시되므로, 넣어 두면 **동작한다고 오해**하게 만든다.

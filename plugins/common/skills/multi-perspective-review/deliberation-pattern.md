@@ -20,7 +20,7 @@ Deliberation Pattern은 여러 전문가가 **독립적 의견 → 상호 검토
 
 **목적:** 필요한 관점 식별 및 초점 영역 정의
 
-**수행자:** Facilitator (Meta Agent)
+**수행자:** 메인 세션 (스킬 단계)
 
 **프로세스:**
 
@@ -41,7 +41,10 @@ Deliberation Pattern은 여러 전문가가 **독립적 의견 → 상호 검토
    ├─ Security: 인증/권한, 민감 데이터
    └─ ... (관점별 구체적 포커스)
 
-4. Round 1 프롬프트 템플릿 생성
+4. 공통 컨텍스트 수집
+   └─ 대상 문서 + 프로젝트 에이전트 지침 파일(있는 것) — 모든 관점에 같은 것을 준다
+
+5. Round 1 프롬프트 템플릿 생성
 ```
 
 **출력:**
@@ -51,7 +54,7 @@ Deliberation Pattern은 여러 전문가가 **독립적 의견 → 상호 검토
   "perspectives": [
     {
       "name": "requirements",
-      "agent": "clarify-requirements",
+      "agent": "clarify-requirements (선택 — 없으면 관점 프롬프트)",
       "focus_areas": ["P0 모호함", "엣지 케이스"],
       "priority": "critical"
     }
@@ -70,9 +73,11 @@ Deliberation Pattern은 여러 전문가가 **독립적 의견 → 상호 검토
 **프로세스:**
 
 ```
+# 경로 A: 관점마다 서브에이전트 (한 메시지에 병렬) — 에이전트가 없으면 범용 + 관점 프롬프트
+# 경로 B: 서브에이전트 없음 — 메인 세션이 관점 블록을 하나씩 쓴다 (앞 블록 인용 금지, 쓴 블록 수정 금지)
 for perspective in perspectives:
-    Task(
-        subagent_type=perspective.agent,
+    review(
+        by=perspective.agent or perspective.prompt,
         prompt=f"""
         다음 문서를 {perspective.name} 관점에서 리뷰:
 
@@ -107,7 +112,7 @@ Data/Schema: 2개 테이블 추가
 
 ---
 
-## Synthesizer: Round 1 종합
+## 종합 1: Round 1 종합 (메인 세션)
 
 **목적:** 의견 통합, 충돌/중복 식별
 
@@ -165,9 +170,9 @@ Data/Schema: 2개 테이블 추가
 **프로세스:**
 
 ```
-for perspective in perspectives:
-    Task(
-        subagent_type=perspective.agent,
+for perspective in perspectives:   # 순차 — 경로 A·B 동일
+    review(
+        by=perspective.agent or perspective.prompt,
         prompt=f"""
         Round 1 결과를 고려하여 재검토:
 
@@ -215,9 +220,9 @@ Rate Limiting은 2차 방어이므로 Phase 2 연기 수용합니다."
 
 **목적:** 충돌 해결 및 최종 의사결정
 
-**수행자:** Consensus-Builder + Impact-Analyzer
+**수행자:** 메인 세션 (스킬 단계)
 
-### 3-1. 충돌 분석 (Consensus-Builder)
+### 3-1. 충돌 분석
 
 ```
 for conflict in conflicts:
@@ -253,7 +258,9 @@ C) Phase 분할: MVP 2주 + 고급 기능 1주
 - 리스크 완화: MVP로 빠른 검증 후 개선
 ```
 
-### 3-2. 영향도 분석 (Impact-Analyzer)
+### 3-2. 영향도 분석
+
+코드베이스 영향이 크면 직접 영향 파일은 analyze-dependencies 로 확인한다(없으면 직접 검색).
 
 ```
 1. 변경 범위 식별
@@ -276,7 +283,7 @@ C) Phase 분할: MVP 2주 + 고급 기능 1주
    └─ 승인 / 조건부 승인 / 재검토
 ```
 
-### 3-3. 최종 리포트 (Synthesizer)
+### 3-3. 최종 리포트
 
 ```
 Round 1 + Round 2 + 합의안 + 영향도 → 최종 문서
@@ -297,12 +304,12 @@ Round 1 + Round 2 + 합의안 + 영향도 → 최종 문서
 
 | Round       | 실행 방식 | 예상 시간   | 비고               |
 | ----------- | --------- | ----------- | ------------------ |
-| Round 0     | 단일      | 2-3분       | Facilitator        |
-| Round 1     | 병렬      | 5-10분      | 관점 수에 따라     |
-| 종합 1      | 단일      | 2-3분       | Synthesizer        |
+| Round 0     | 단일      | 2-3분       | 메인 세션          |
+| Round 1     | 병렬/순차 | 5-10분      | 경로 B 는 순차     |
+| 종합 1      | 단일      | 2-3분       | 메인 세션          |
 | Round 2     | 순차      | 10-15분     | 관점 수 × 2분      |
-| Round 3     | 단일      | 5분         | Consensus + Impact |
-| 최종 리포트 | 단일      | 2-3분       | Synthesizer        |
+| Round 3     | 단일      | 5분         | 메인 세션          |
+| 최종 리포트 | 단일      | 2-3분       | 메인 세션          |
 | **총계**    | -         | **26-41분** | 보통 30분          |
 
 ---
@@ -337,7 +344,7 @@ Round 1 + Round 2 + 합의안 + 영향도 → 최종 문서
 
 **원인:** Round 1 의견이 불명확
 
-**대응:** Synthesizer가 Round 1 종합 시 명확히 정리
+**대응:** 종합 1 에서 각 의견을 주장·근거·요구로 나눠 명확히 정리
 
 ### 케이스 2: 무한 논쟁
 
@@ -345,7 +352,7 @@ Round 1 + Round 2 + 합의안 + 영향도 → 최종 문서
 
 **원인:** Hard Constraint 충돌
 
-**대응:** 사용자에게 AskUserQuestion으로 위임
+**대응:** 호스트의 질문 수단으로 사용자 결정을 받는다
 
 ### 케이스 3: 시간 초과
 

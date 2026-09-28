@@ -1,9 +1,9 @@
 ---
 name: analyze-dependencies
 description: |
-  의존성 및 영향도 분석 전문가.
-  MUST USE when: "의존성", "패키지", "라이브러리", "영향 범위" 요청.
-  OUTPUT: 의존성 분석 결과
+  변경 대상의 의존/피의존·영향 범위 분석 (읽기 전용).
+  MUST USE when: 파일·함수·모듈을 바꾸거나 지우기 전에 그것을 import·호출하는 곳과 깨질 테스트를 확정해야 하거나, 매니페스트의 전이 의존성·버전 충돌을 판정해야 할 때.
+  OUTPUT: 의존 그래프 + 영향 파일 표 + 리스크
 model: haiku
 effort: low
 maxTurns: 10
@@ -127,7 +127,7 @@ disallowedTools:
 
 ---
 
-## 검색 패턴 예시
+## 검색 패턴 예시 (Grep 도구로 같은 패턴을 쓴다)
 
 ```bash
 # 특정 함수 사용처 찾기
@@ -139,31 +139,6 @@ grep -r "from './target'" --include="*.ts"
 # 클래스 상속 찾기
 grep -r "extends TargetClass" --include="*.ts"
 ```
-
----
-
-## 다음 단계 위임
-
-### 분석 완료 후 위임 대상
-
-| 상황 | 위임 대상 | 설명 |
-|------|----------|------|
-| 구조적 리팩토링 필요 | **plan-refactor** | 리팩토링 전략 수립 |
-| 순환 의존성 발견 | **plan-refactor** | 의존성 구조 개선 |
-| 패키지 버전 충돌 | **fix-bugs** | 의존성 버전 수정 |
-| 외부 라이브러리 조사 필요 | **research-external** | 대안/업데이트 조사 |
-| 영향 범위가 넓은 변경 | **plan-implementation** | 신중한 구현 계획 |
-
-### 위임 조건
-```
-분석 결과에 따라:
-- 리스크 High + 구조 문제 → plan-refactor
-- 리스크 Low + 단순 버전 문제 → fix-bugs
-- 외부 패키지 문제 → research-external
-- 변경 영향 범위 큼 → plan-implementation
-```
-
----
 
 ---
 

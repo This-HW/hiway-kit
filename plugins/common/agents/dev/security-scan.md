@@ -1,12 +1,12 @@
 ---
 name: security-scan
 description: |
-  보안 스캔 전문가.
-  MUST USE when: "보안", "취약점", "스캔", "시크릿", "OWASP" 요청.
-  OUTPUT: 보안 스캔 결과
+  보안 결함 스캔 — 시크릿·인젝션·인증/인가·취약 의존성 (수정 없음).
+  MUST USE when: 변경분이나 코드베이스를 OWASP Top 10·하드코딩 자격증명·안전하지 않은 설정 기준으로 점검해 보안 판정이 필요할 때.
+  OUTPUT: 보안 판정 + 심각도별 취약점 + 확인한 파일
 model: sonnet
-effort: max
-maxTurns: 10
+effort: high
+maxTurns: 25
 tools:
   - Read
   - Glob
@@ -210,54 +210,11 @@ const API_KEY = "sk-live-xxxxx"; // 노출됨
 
 ### 후속 조치
 
-- [ ] Critical/High 취약점 fix-bugs에 위임
+- [ ] Critical/High 는 권장 조치 맨 앞에 (수정은 호출자가 정한다)
 - [ ] 의존성 업데이트 목록 작성
 - [ ] 보안 정책 업데이트 필요 여부 확인
 
 ---
-
-## 다음 단계 위임
-
-### 스캔 결과에 따른 위임
-
-```
-security-scan 결과
-    │
-    ├── ✅ PASS → (완료, 위임 없음)
-    │            보안 이슈 없음
-    │
-    ├── ❌ Critical/High → fix-bugs
-    │                     즉시 수정 필요
-    │
-    └── ⚠️ Medium/Low → (문서화)
-                        백로그로 기록
-```
-
-### 위임 대상
-
-| 심각도   | 위임 대상           | 설명             |
-| -------- | ------------------- | ---------------- |
-| Critical | **fix-bugs** (즉시) | 즉각 수정 필수   |
-| High     | **fix-bugs**        | 빠른 수정 필요   |
-| Medium   | 문서화              | 스프린트 내 처리 |
-| Low      | 문서화              | 백로그 등록      |
-
-### 수정 후 재검증
-
-```
-security-scan ❌ FAIL
-    │
-    └──→ fix-bugs
-             │
-             ↓
-         verify-code
-             │
-             ↓
-         security-scan (재검증)
-```
-
----
-
 
 ## 출력 계약 — 마지막 확인 [건너뛰기 금지]
 

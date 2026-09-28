@@ -43,7 +43,7 @@ def _base_policy(**gate_overrides) -> dict:
             # 기본은 시나리오 없는 tier2 에이전트 1종 — enforce_fail 기본 False라
             # 기존 테스트들의 rc는 그대로 유지되고, tier2 관련 신규 테스트만 이 값을
             # 오버라이드한다.
-            "tier2": ["analyze-tech-debt"],
+            "tier2": ["analyze-dependencies"],
         },
         "coverage": {
             "tier1MinScenariosPerAgent": 1,
@@ -440,7 +440,7 @@ def test_tier2_gap_warns_only_when_enforce_fail_false(tmp_path, capsys):
     captured = capsys.readouterr()
     assert rc == 0
     assert cec.WARN in captured.out
-    assert "analyze-tech-debt" in captured.out
+    assert "analyze-dependencies" in captured.out
 
 
 def test_tier2_missing_key_fails_regardless_of_flag(tmp_path):
@@ -485,7 +485,7 @@ def test_classification_missing_agent_warns_by_default(tmp_path, capsys):
         policy=_base_policy(),
     )
     _add_agent_files(
-        root, ["fix-bugs", "review-code", "analyze-tech-debt", "mystery-agent"]
+        root, ["fix-bugs", "review-code", "analyze-dependencies", "mystery-agent"]
     )
     rc = cec.main(["--root", str(root)])
     captured = capsys.readouterr()
@@ -503,7 +503,7 @@ def test_classification_missing_agent_fails_when_enforced(tmp_path):
         policy=_base_policy(classificationCompleteEnforceFail=True),
     )
     _add_agent_files(
-        root, ["fix-bugs", "review-code", "analyze-tech-debt", "mystery-agent"]
+        root, ["fix-bugs", "review-code", "analyze-dependencies", "mystery-agent"]
     )
     rc = cec.main(["--root", str(root)])
     assert rc == 1
@@ -516,16 +516,16 @@ def test_all_aligned_pass_clean_no_warnings(tmp_path, capsys):
         scenario_pairs=[
             ("fix-bugs", "a"),
             ("review-code", "b"),
-            ("analyze-tech-debt", "c"),
+            ("analyze-dependencies", "c"),
         ],
         baseline_pairs=[
             ("fix-bugs", "a"),
             ("review-code", "b"),
-            ("analyze-tech-debt", "c"),
+            ("analyze-dependencies", "c"),
         ],
         policy=_base_policy(),
     )
-    _add_agent_files(root, ["fix-bugs", "review-code", "analyze-tech-debt"])
+    _add_agent_files(root, ["fix-bugs", "review-code", "analyze-dependencies"])
     rc = cec.main(["--root", str(root)])
     captured = capsys.readouterr()
     assert rc == 0

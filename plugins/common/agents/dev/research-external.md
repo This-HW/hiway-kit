@@ -1,9 +1,9 @@
 ---
 name: research-external
 description: |
-  외부 정보 조사 전문가.
-  MUST USE when: "외부 API", "라이브러리 조사", "문서 찾아줘" 요청.
-  OUTPUT: 조사 결과
+  레포 밖 1차 자료(공식 문서·릴리스 노트·이슈)를 웹에서 찾아 출처와 함께 정리.
+  MUST USE when: 답이 레포 안에 없고 외부 API 의 현재 동작·버전 간 breaking change·알려진 이슈를 URL 근거로 확인해야 할 때.
+  OUTPUT: 출처 URL 붙은 조사 결과
 model: sonnet
 effort: low
 maxTurns: 10
@@ -156,31 +156,6 @@ disallowedTools:
 - GitHub 공식 저장소
 - 메인테이너 블로그
 - Stack Overflow 공식 답변
-
----
-
-## 다음 단계 위임
-
-### 조사 완료 후 위임 대상
-
-| 상황 | 위임 대상 | 설명 |
-|------|----------|------|
-| 새 라이브러리 도입 필요 | **plan-implementation** | 도입 계획 수립 |
-| 기존 라이브러리 마이그레이션 | **plan-refactor** | 마이그레이션 전략 |
-| 에러 해결책 발견 | **fix-bugs** | 직접 수정 적용 |
-| API 연동 구현 필요 | **plan-implementation** | API 연동 계획 |
-| 의존성 변경 영향 분석 필요 | **analyze-dependencies** | 영향 범위 파악 |
-
-### 위임 조건
-```
-조사 결과에 따라:
-- 새로운 구현 필요 → plan-implementation
-- 기존 코드 마이그레이션 → plan-refactor
-- 단순 버그 수정 → fix-bugs
-- 변경 영향 불명확 → analyze-dependencies
-```
-
----
 
 ---
 

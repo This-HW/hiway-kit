@@ -17,27 +17,24 @@
       "file": "domain.md"
     },
     {
-      "type": "file_contains",
-      "file": "docs/planning/business-logic/point-rules.md",
+      "type": "output_regex",
       "pattern": "CALC-"
     },
     {
-      "type": "file_contains",
-      "file": "docs/planning/business-logic/point-rules.md",
+      "type": "output_regex",
       "pattern": "VAL-"
     },
     {
-      "type": "file_contains",
-      "file": "docs/planning/business-logic/point-rules.md",
+      "type": "output_regex",
       "pattern": "STATE-"
     },
     {
-      "type": "file_contains",
-      "file": "docs/planning/business-logic/point-rules.md",
+      "type": "output_regex",
       "pattern": "POL-"
     }
   ],
   "_designNote": {
+    "_v5ReadOnly": "v5.0.0(2026-09-28, 스펙 B2): 이 에이전트가 **읽기 전용 분석가**로 바뀌었다(Write·worktree 제거 — 산출물을 반환하고 호출자가 저장한다). 그래서 계약된 산출물 채널이 파일에서 **마지막 메시지(stdout)** 로 옮겨졌고, W-023 이 file_contains 로 옮긴 근거('파일이 계약, stdout 은 모델 재량')가 뒤집혔다 — 이제 stdout 이 계약이다(정의 §산출물 전달·§출력 계약). file_contains 를 같은 패턴의 output_regex 로 되돌렸다. **이 변경은 eval 을 재실행하지 않고 반영했다**(API 비용 — 브리프 금지). 기준선의 이 시나리오 status 는 옛 계약(파일)으로 측정된 값이라 새 어서션으로는 **미검증**이다. 다음 기준선 재생성에서 확인할 것.",
     "_surfaceFix": "W-023(2026-09-01): 이 4개 검사는 원래 stdout 에 대한 output_regex 였고, 그것이 이 시나리오 플레이크의 원인이었다. 이 에이전트의 **계약된 산출물은 파일**이다 — 정의 §'문서 저장 위치'가 docs/planning/business-logic/[도메인명]-rules.md 를 지정하고 tools 에 Write 가 있다. 파일은 매번 확실히 쓰이는 반면 stdout 에 그 내용을 다시 뱉는지는 모델 재량이라, 어서션이 계약되지 않은 부수 채널을 보고 있었다. 실증: 프로브 실행에서 docs/planning/business-logic/point-rules.md(15336B)에 마커 4종 전부 존재. 관측 3회 중 stdout 통과 2 / 실패 1.",
     "_whyPathInTask": "task.md 가 저장 경로를 지정하는 것은 정답을 지시하는 것이 아니다 — 측정 대상은 CALC/VAL/STATE/POL 분류 체계를 산출하는 능력이고, 그 분류는 task.md 가 아니라 에이전트 정의(OUTPUT: CALC/VAL/STATE/POL 규칙)가 약속한 것이다. 경로 고정은 파일명이 모델 재량([도메인명])이라 file_contains 로 지목할 수 없던 문제를 없앤다.",
     "output_not_contains": "stdout 대상이 맞다 — 응답이 '문제 없음' 류로 회피하지 않는지 보는 검사다."

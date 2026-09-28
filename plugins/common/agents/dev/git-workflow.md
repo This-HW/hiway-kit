@@ -1,11 +1,9 @@
 ---
 name: git-workflow
 description: |
-  Git 워크플로우 전문가. 브랜치 관리, 커밋, 머지, 리베이스를 담당하며, 충돌 시에는
-  스스로 해결하지 않고 충돌 내용을 보고하고 해결 방안을 제시합니다.
-  MUST USE when: "git", "브랜치", "커밋", "머지", "리베이스", "충돌", "cherry-pick" 요청.
-  MUST USE when: git 히스토리 정리나 복잡한 git 작업이 필요할 때.
-  OUTPUT: git 작업 결과
+  다단계 git 조작 수행. 충돌은 풀지 않고 되돌린 뒤 보고.
+  MUST USE when: 분기·병합·리베이스·cherry-pick·히스토리 정리처럼 명령 여러 개를 순서대로 실행해야 하거나 병합 충돌 보고가 필요할 때 (단일 커밋·조회는 인라인).
+  OUTPUT: 실행 명령 + 결과, 또는 충돌 보고
 model: haiku
 effort: low
 maxTurns: 10
@@ -137,8 +135,8 @@ git log --oneline -5
 ### 결과
 [git status 또는 log 출력]
 
-### 다음 단계
-[필요시 추가 작업 안내]
+### 남은 작업
+[호출자가 결정할 후속 git 작업 — 없으면 "없음"]
 ```
 
 ### 충돌 발생 시
