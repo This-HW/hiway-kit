@@ -45,6 +45,14 @@ would mean standing up and hosting an MCP server only to pass the form. Opening 
   request (organization `org-dwKLm12IsiU3BkwZROoLdmuk`) so our org is part of the escalation —
   **case 15960350** (Sev 4, auto-acknowledged 2026-09-28 20:32 KST; no human reply yet).
 
+**OpenAI's own skill safety scan: all 15 skills pass (2026-09-29, v5.0.3).** The With MCP draft's Skills tab
+accepts skill uploads and runs the real scan without submitting anything. A ZIP with the 15 skill folders at its
+root (not the plugin ZIP — that one is silently ignored there) came back **Passed** for every skill, with no errors
+or warnings. So the scan outage reported from 2026-09-26 no longer affects this organization; only the missing
+Skills only entry remains. The throwaway draft was deleted. How to repeat:
+`git archive HEAD plugins/common/skills | tar -x -C $T && (cd $T/plugins/common/skills && zip -r <uploads>/all-skills.zip .)`
+→ Create plugin → With MCP → Continue → Skills → upload → read each skill's status → delete the draft.
+
 **Package is pre-validated.** `scripts/build-codex-zip.py --check` builds the ZIP from tracked files and
 checks every documented error code that can be judged locally (submission-errors page). Running it first
 caught a real blocker — `interface.category: "Coding"` is not an accepted value — fixed in 4.0.4
