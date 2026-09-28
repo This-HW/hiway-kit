@@ -13,9 +13,11 @@
       "Read",
       "Write"
     ],
-    "category": "Coding",
+    "category": "Developer Tools",
+    "composerIcon": "./assets/icon.png",
     "developerName": "This-HW",
     "displayName": "hiway-kit",
+    "logo": "./assets/icon.png",
     "shortDescription": "Coding agent discipline kit"
   },
   "keywords": [
@@ -31,5 +33,5 @@
   "name": "hiway-kit",
   "repository": "https://github.com/This-HW/hiway-kit",
   "skills": "./skills/",
-  "version": "4.0.3"
+  "version": "4.0.4"
 }

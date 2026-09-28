@@ -42,7 +42,9 @@
         "displayName": "hiway-kit",
         "shortDescription": "Coding agent discipline kit",
         "developerName": "This-HW",
-        "category": "Coding",
+        "category": "Developer Tools",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
         "capabilities": [
           "Interactive",
           "Read",

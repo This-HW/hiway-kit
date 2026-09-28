@@ -13,7 +13,7 @@
 > listed in the shared ChatGPT/Codex "universal directory" alongside OpenAI-curated
 > plugins.
 
-## Status — 2026-09-28 (identity verified; blocked on the portal offering only "With MCP")
+## Status — 2026-09-28 (identity verified; blocked by a platform-side outage of Skills only)
 
 Submission portal: OpenAI Platform → **Plugins** (`platform.openai.com/plugins`), per
 [Submit plugins](https://developers.openai.com/plugins/deploy/submission). Checked through the Aside
@@ -31,23 +31,36 @@ case scenario is required"*, plus domain verification of the MCP host and a demo
 would mean standing up and hosting an MCP server only to pass the form. Opening the form auto-creates an
 "Untitled Plugin" draft; the two created while checking were deleted.
 
-Waiting for Skills only to appear (tracked hourly). Before uploading, per the Claude-plugin guide:
-`agents/` is unsupported (convert reusable behavior to skills or expect a warning), hooks must suit the
-Codex hook runtime, and Claude-specific wording in skills should be provider-neutral. The portal converts
-`.claude-plugin/plugin.json` to `.codex-plugin/plugin.json` on a direct Claude archive upload.
+**Why Skills only is missing — a platform-side problem, not our setup** (researched 2026-09-28):
 
-**Identity verification is done.** Once Skills only appears, the rest is mechanical:
+- The docs list no eligibility condition for Skills only; their only troubleshooting items (role with
+  write access, same organization as the verified identity, identity selectable) are all met here.
+- Other organizations report the identical symptom from **2026-09-26**, both individual- and
+  business-verified: [thread 1400892](https://community.openai.com/t/skills-only-missing-from-create-plugin-verified-business-identity-available/1400892)
+  (support confirmed the setup, escalated *"whether skills-only public submission is currently
+  enabled"*, no workaround). The same day, **every new skill safety scan started failing** for those
+  orgs ("Activity task failed", [thread 1401299](https://community.openai.com/t/skill-safety-scan-always-ends-in-error-activity-task-failed-for-every-skill-in-my-org-including-a-one-line-say-hello-skill/1401299)).
+  So even a Skills only upload would currently stall at the scan.
+- No OpenAI staff reply or fix date in either thread as of 2026-09-28. We filed our own support
+  request (organization `org-dwKLm12IsiU3BkwZROoLdmuk`) so our org is part of the escalation.
 
-1. Build the package (tracked files only, one top-level folder):
-   `git archive --format=zip --prefix=hiway-kit/ -o hiway-kit-codex-<ver>.zip HEAD:plugins/common`
-2. Portal → **Create plugin → Skills only** → upload the ZIP → listing fields (display name ≤ 30,
-   short description ≤ 30 — the manifest's `interface.shortDescription` is 27 chars since 4.0.2,
-   long description ≤ 4,000) → policy attestations → **Submit for Review**.
-3. Watch the skill safety scan (up to 2 h), then publish after approval.
+**Package is pre-validated.** `scripts/build-codex-zip.py --check` builds the ZIP from tracked files and
+checks every documented error code that can be judged locally (submission-errors page). Running it first
+caught a real blocker — `interface.category: "Coding"` is not an accepted value — fixed in 4.0.4
+(`Developer Tools`). It also drops the Antigravity root `plugin.json` from the ZIP (no `version`/`author`,
+and the portal reads a root `plugin.json` as a manifest candidate with undocumented precedence).
+Expected warnings only: `agents/` and hooks are not part of a skills-only listing.
 
-**Unverified risk to check at upload**: the ZIP root also holds the Antigravity `plugin.json`. The portal
-accepts a root `plugin.json` only with a supported Agent Plugins schema; if it picks that file over
-`.codex-plugin/plugin.json` and rejects it, exclude the root `plugin.json` from the ZIP.
+**Once Skills only appears** (tracked hourly):
+
+1. `scripts/build-codex-zip.py --out ~/.aside/u/0/uploads/hiway-kit-codex-<ver>.zip` (refuses a dirty
+   plugin root, so the ZIP matches the pushed release).
+2. Portal → **Create plugin → Skills only** → upload → read every validation message → listing (display
+   name `hiway-kit`, short description `Coding agent discipline kit`, long description ≤ 4,000, category
+   **Developer Tools**, icons `plugins/common/assets/icon.png`, Developer Identity = the verified
+   individual; Plugin Author must match that verified legal name) → policy attestations → **Submit for Review**.
+3. Watch the skill safety scan (up to 2 h), then publish after approval. Each later version is a new
+   ZIP upload with a higher `version` (`plugin_version_unchanged` otherwise).
 
 ## What this repo already has ready
 

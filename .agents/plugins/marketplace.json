@@ -5,7 +5,7 @@
   "name": "hiway-kit-marketplace",
   "plugins": [
     {
-      "category": "Coding",
+      "category": "Developer Tools",
       "name": "hiway-kit",
       "policy": {
         "authentication": "ON_INSTALL",

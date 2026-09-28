@@ -6,6 +6,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [4.0.4] — 2026-09-28
+
+### Fixed — Codex 매니페스트 `interface.category` 가 OpenAI 포털 허용 목록 밖이었다
+
+생성된 `.codex-plugin/plugin.json` 의 `category` 가 `"Coding"` 이었다. 포털이 받는 값은 13개
+(`Developer Tools` 등)뿐이라 업로드하면 `plugin_category_unknown` 으로 막혔을 것이다. 로컬 Codex 설치는
+이 값을 검사하지 않아 드러나지 않았다. SSOT `packaging/targets.json` 에서 `"Developer Tools"` 로 고쳤다
+(`.agents/plugins/marketplace.json` 도 같이 재생성).
+
+### Added — 플러그인 아이콘 + OpenAI 제출 ZIP 빌드·검사 스크립트
+
+- `plugins/common/assets/icon.png`(512×512) — Codex 매니페스트 `interface.logo`·`composerIcon` 으로 선언.
+  Claude 디렉토리 검사의 "아이콘 없음" 경고와 OpenAI 포털 아이콘 필드를 같은 파일로 채운다.
+- `scripts/build-codex-zip.py` — OpenAI 포털은 webhook 없이 버전마다 ZIP 을 손으로 올린다. 이 스크립트가
+  추적 파일만으로 한 폴더짜리 ZIP 을 만들고(Antigravity 루트 `plugin.json` 은 뺀다 — 포털이 매니페스트
+  후보로 읽는데 `version`·`author` 가 없다), 문서화된 오류 코드 중 로컬에서 판정 가능한 것을 대조한다.
+  판정하지 못한 것은 통과로 세지 않는다. `--check` 는 작업 트리 기준 검사만, `--out` 은 커밋된 상태로만 기록.
+  테스트는 픽스처 10종과 **실물 레포 패키지** 하나.
+
 ## [4.0.3] — 2026-09-28
 
 ### Changed — superpowers 전제 서술 정리
