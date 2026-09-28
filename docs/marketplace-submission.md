@@ -35,6 +35,11 @@ Submit at: https://platform.claude.com/plugins/submit
 경고 "내려받아 바로 실행" 2건(`eval-forge`, `hooks/examples/README.md`)은 `*verify*.sh` 같은 **파일명 패턴
 표기**를 오인한 것 — 실제 다운로드·실행 명령은 없다. 경고 "아이콘 없음"은 GitHub 아바타로 대체된다.
 
+**전임 킷 정리(2026-09-28)**: 관리 화면에 `claude-code-kit` 제출 2건(`597867fb-…` needs changes,
+`bc35fcf0-…` 검사 통과·미공개)이 남아 있었다. 포털엔 셀프 삭제가 없어(메뉴는 "Contact Anthropic" =
+`mailto:directory@anthropic.com` 뿐) **삭제 요청 메일을 보냈다** — 두 제출 철회·삭제, 미공개 건 공개 금지,
+구 커뮤니티 카탈로그의 `claude-code-kit` 항목(v2.12.3 `292ba07e` 고정) 제거. 처리 결과는 연락 메일로 온다.
+
 **필수 동의 4개 중 "선언된 구성 밖에서 자격증명 유출·코드 실행 없음"** 은 포털이 스스로 요약에
 "Runs code locally: 5 hooks" 로 훅을 선언된 로컬 실행으로 표시하므로, 선언되지 않은 실행·유출에 관한
 진술로 판단하고 확인했다(배포 훅 네트워크 호출 0 — grep 확인).

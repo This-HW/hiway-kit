@@ -13,6 +13,31 @@
 > listed in the shared ChatGPT/Codex "universal directory" alongside OpenAI-curated
 > plugins.
 
+## Status — 2026-09-28 (attempted, blocked on identity verification)
+
+Submission portal: OpenAI Platform → **Plugins** (`platform.openai.com/plugins`), per
+[Submit plugins](https://developers.openai.com/plugins/deploy/submission). Checked through the Aside
+browser signed in as `thisyj.work@gmail.com`:
+
+| Requirement | State |
+| --- | --- |
+| Organization / role | Personal Organization · **Owner** · Apps Management **Write** ✅ |
+| Verified developer identity | **Individual: not started · Business: not started** ❌ — "Create plugin" stops with *"You need a verified developer identity before you can create or upload a plugin."* |
+
+**The one human step left**: Organization settings → complete **individual verification**. It is an
+identity check, so an agent must not do it. After it is done, the rest is mechanical:
+
+1. Build the package (tracked files only, one top-level folder):
+   `git archive --format=zip --prefix=hiway-kit/ -o hiway-kit-codex-<ver>.zip HEAD:plugins/common`
+2. Portal → **Create plugin → Skills only** → upload the ZIP → listing fields (display name ≤ 30,
+   short description ≤ 30 — the manifest's `interface.shortDescription` is 27 chars since 4.0.2,
+   long description ≤ 4,000) → policy attestations → **Submit for Review**.
+3. Watch the skill safety scan (up to 2 h), then publish after approval.
+
+**Unverified risk to check at upload**: the ZIP root also holds the Antigravity `plugin.json`. The portal
+accepts a root `plugin.json` only with a supported Agent Plugins schema; if it picks that file over
+`.codex-plugin/plugin.json` and rejects it, exclude the root `plugin.json` from the ZIP.
+
 ## What this repo already has ready
 
 Run these before submitting — both should already be green on `main`:
