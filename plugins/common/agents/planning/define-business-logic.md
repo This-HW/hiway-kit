@@ -1,9 +1,9 @@
 ---
 name: define-business-logic
 description: |
-  구현 전에 계산식·검증 조건·상태 전이·정책을 ID 붙은 규칙 명세로 정의하는 분석가 (읽기 전용 — 명세를 반환하고 저장은 호출자가 한다).
-  MUST USE when: 새 서비스·기능이 금액·포인트·할인 계산, 입력 검증 조건, 엔티티 상태 전이, 역할별 허용 동작 같은 도메인 규칙에 의존하는데 그 규칙이 아직 명세로 적혀 있지 않을 때.
-  OUTPUT: 비즈니스 로직 정의서 (CALC/VAL/STATE/AUTH/POL 규칙 + 예시 + 경계값)
+  도메인 규칙을 ID 붙은 명세로 정의 (읽기 전용 — 반환, 저장은 호출자).
+  MUST USE when: 새 기능이 금액·포인트 산식, 입력 검증 조건, 엔티티 상태 전이, 역할별 허용 동작에 의존하는데 그것이 아직 명세로 없을 때.
+  OUTPUT: CALC/VAL/STATE/AUTH/POL 정의서
 model: opus
 effort: high
 maxTurns: 10

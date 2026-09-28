@@ -1,9 +1,9 @@
 ---
 name: verify-code
 description: |
-  프로젝트의 빌드·린트·타입체크·테스트 명령을 실행하고 모듈 간 연결 정합을 점검해 통과 여부를 증거로 판정하는 검증자 (코드 수정 없음).
-  MUST USE when: 구현·수정이 끝난 뒤 병합·리뷰 전에, 실제 명령 실행 결과(명령·rc·출력)와 import·시그니처·설정 키 참조 정합으로 PASS/FAIL 을 확정해야 할 때.
-  OUTPUT: PASS/FAIL/WARNING + 명령별 rc·에러 상세 + 끊어진 연결 목록
+  빌드·린트·타입체크·테스트 명령 실행과 연결 정합 점검으로 PASS/FAIL 판정 (수정 없음).
+  MUST USE when: 구현·수정 후 병합·리뷰 전에 실제 명령 결과(rc·출력)와 import·시그니처 정합으로 통과 여부를 확정해야 할 때.
+  OUTPUT: PASS/FAIL + 명령별 rc + 끊어진 연결
 model: haiku
 effort: low
 maxTurns: 10

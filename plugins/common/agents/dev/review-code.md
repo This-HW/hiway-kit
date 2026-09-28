@@ -1,9 +1,9 @@
 ---
 name: review-code
 description: |
-  병합 전 변경분을 4개 공격 페르소나로 공격하는 적대적 리뷰어 (읽기 전용, 작성자와 분리된 컨텍스트).
-  MUST USE when: 완성된 변경분(diff, 브랜치 전체, 지정 파일 집합)이 병합이나 릴리스를 앞두고 있어, 작성자가 아닌 독립 컨텍스트에서 정확성·경계조건·동시성·회귀 결함을 판정(REJECT/CONDITIONAL/ACCEPT)해야 할 때.
-  OUTPUT: 침투 테스트 형식 보고서 (판정 + 심각도별 결함 + 신뢰도)
+  병합 전 변경분의 적대적 결함 리뷰 (읽기 전용, 작성자와 분리된 컨텍스트).
+  MUST USE when: 완성된 diff 가 병합·릴리스를 앞두고 있어 작성자가 아닌 독립 컨텍스트에서 정확성·경계조건·동시성·회귀를 판정해야 할 때.
+  OUTPUT: REJECT/CONDITIONAL/ACCEPT + 심각도별 결함
 model: opus
 effort: high
 maxTurns: 25

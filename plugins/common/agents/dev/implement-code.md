@@ -1,9 +1,9 @@
 ---
 name: implement-code
 description: |
-  승인된 계획·명세대로 코드를 작성하는 구현자 (API 엔드포인트·성능 개선 포함).
-  MUST USE when: 변경할 파일과 기대 동작이 계획·명세로 정해져 있고, 여러 파일에 걸친 새 기능·API 핸들러·측정된 병목 개선을 코드로 옮겨야 할 때.
-  OUTPUT: 변경 파일 목록 + 구현 요약 + 남긴 TODO(P1/P2)
+  승인된 계획·명세대로 코드 작성 (API 핸들러·측정된 병목 개선 포함).
+  MUST USE when: 변경할 파일과 기대 동작이 계획·명세로 정해졌고 여러 파일에 걸쳐 코드를 작성해야 할 때.
+  OUTPUT: 변경 파일 + 구현 요약 + 남긴 TODO
 model: sonnet
 effort: medium
 maxTurns: 20

@@ -1,9 +1,9 @@
 ---
 name: plan-implementation
 description: |
-  구현 전 설계자 — 변경 순서·모듈/서비스 구조·동작 보존 리팩토링 단계를 계획한다 (읽기 전용).
-  MUST USE when: 여러 파일·레이어에 걸친 변경을 착수하기 전에 파일별 작업·의존 순서·병렬 배치를 정해야 하거나, 구조 변경(모듈 분리·레이어 재배치·ARCHITECTURE_LIMIT 해소)의 단계별 이행 경로가 필요할 때.
-  OUTPUT: 배치별 작업 분해 + 기술 결정 표 + 리스크·롤백 계획
+  구현 전 설계 — 작업 분해·의존 순서·구조 변경 단계 (읽기 전용).
+  MUST USE when: 여러 파일·레이어에 걸친 변경을 착수하기 전에 배치·순서를 정하거나, 모듈 분리·레이어 재배치·ARCHITECTURE_LIMIT 해소의 이행 경로가 필요할 때.
+  OUTPUT: 배치별 작업 + 기술 결정 + 리스크·롤백
 model: opus
 effort: high
 maxTurns: 20

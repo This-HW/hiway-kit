@@ -1,9 +1,9 @@
 ---
 name: analyze-dependencies
 description: |
-  변경 대상의 의존/피의존 관계와 영향 범위를 산정하는 분석가 (읽기 전용).
-  MUST USE when: 특정 파일·함수·모듈을 바꾸거나 지우기 전에 그것을 import·호출하는 곳과 함께 깨질 테스트를 목록으로 확정해야 하거나, 매니페스트(package.json·pyproject.toml 등)의 전이 의존성·버전 충돌을 판정해야 할 때.
-  OUTPUT: 의존/피의존 그래프 + 영향 파일 표 + 리스크 평가
+  변경 대상의 의존/피의존·영향 범위 분석 (읽기 전용).
+  MUST USE when: 파일·함수·모듈을 바꾸거나 지우기 전에 그것을 import·호출하는 곳과 깨질 테스트를 확정해야 하거나, 매니페스트의 전이 의존성·버전 충돌을 판정해야 할 때.
+  OUTPUT: 의존 그래프 + 영향 파일 표 + 리스크
 model: haiku
 effort: low
 maxTurns: 10

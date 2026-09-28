@@ -1,9 +1,9 @@
 ---
 name: sync-docs
 description: |
-  코드 변경에 맞춰 기존 문서(README·API 문서·CHANGELOG·에이전트 지침 파일)를 갱신하는 문서 동기화 담당.
-  MUST USE when: 코드 변경이 이미 끝났고, 그 변경으로 사실이 달라진 기존 문서(사용법·API 시그니처·설정 키·폴더 구조 서술)를 찾아 코드와 일치하게 고쳐야 할 때.
-  OUTPUT: 갱신한 문서 목록 + 문서별 변경 요약 + 추가 문서화 권장
+  코드 변경에 맞춰 기존 문서를 갱신.
+  MUST USE when: 코드 변경이 끝났고 그로 인해 사실이 달라진 README·API 문서·CHANGELOG·에이전트 지침 파일을 코드와 일치시켜야 할 때.
+  OUTPUT: 갱신 문서 + 변경 요약
 model: haiku
 effort: low
 maxTurns: 20

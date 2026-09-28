@@ -1,9 +1,9 @@
 ---
 name: research-external
 description: |
-  레포 밖 1차 자료(공식 문서·릴리스 노트·이슈 트래커)를 웹에서 찾아 출처와 함께 정리하는 조사자.
-  MUST USE when: 답이 이 레포 안에 없고 외부 라이브러리·API 의 현재 동작, 버전 간 breaking change, 알려진 이슈를 URL 근거로 확인해야 할 때.
-  OUTPUT: 출처 URL 이 붙은 조사 결과 + 신뢰도
+  레포 밖 1차 자료(공식 문서·릴리스 노트·이슈)를 웹에서 찾아 출처와 함께 정리.
+  MUST USE when: 답이 레포 안에 없고 외부 API 의 현재 동작·버전 간 breaking change·알려진 이슈를 URL 근거로 확인해야 할 때.
+  OUTPUT: 출처 URL 붙은 조사 결과
 model: sonnet
 effort: low
 maxTurns: 10

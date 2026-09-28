@@ -1,9 +1,9 @@
 ---
 name: fix-bugs
 description: |
-  재현 가능한 결함의 근본 원인을 찾아 최소 수정하는 디버거.
-  MUST USE when: 스택트레이스·실패하는 테스트·재현 절차처럼 결함을 재현할 근거가 주어졌고, 원인 확정 후 기존 파일만 고쳐서 해결해야 할 때.
-  OUTPUT: 근본 원인 + 수정 diff 요약 + 재현/테스트 결과
+  재현 가능한 결함의 근본 원인을 찾아 기존 파일만 최소 수정.
+  MUST USE when: 스택트레이스·실패하는 테스트·재현 절차가 주어졌고 원인을 확정해 고쳐야 할 때.
+  OUTPUT: 근본 원인 + 수정 요약 + 재현 결과
 model: sonnet
 effort: medium
 maxTurns: 20

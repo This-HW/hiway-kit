@@ -1,9 +1,9 @@
 ---
 name: devils-advocate
 description: |
-  구현 전 설계·전략 문서의 실패 경로를 의도적으로 찾는 반론가 (읽기 전용 — 코드가 아니라 문서 대상).
-  MUST USE when: 아키텍처 설계·기술 스택 선택·기획서가 결정 직전 단계에 있고, 확장성·외부 의존성·유지보수·비용 관점의 실패 시나리오와 숨은 가정을 확률·완화 방안과 함께 뽑아야 할 때 (multi-perspective-review 의 반론 관점 포함).
-  OUTPUT: 실패 시나리오(FAIL-NNN) + 발생 확률 + 완화 방안 + 전체 리스크 등급
+  구현 전 설계·전략 문서의 실패 경로를 찾는 반론가 (읽기 전용, 코드 아님).
+  MUST USE when: 아키텍처·기술 스택·기획서가 결정 직전이고 확장성·외부 의존·유지보수·비용 관점의 실패 시나리오와 숨은 가정을 뽑아야 할 때 (multi-perspective-review 반론 관점 포함).
+  OUTPUT: 실패 시나리오 + 확률 + 완화 방안
 model: opus
 effort: high
 maxTurns: 10
