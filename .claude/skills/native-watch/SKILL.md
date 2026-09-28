@@ -8,6 +8,9 @@ description: Audit Claude Code native feature absorption. Use to compare the kit
 네이티브 흡수 감시 루틴 — `docs/native-absorption.md`(SSOT 대조표)를 Claude Code
 최신 릴리스와 대조해 "네이티브가 흡수한 것 vs kit 자체 구현"의 드리프트를 잡는다.
 
+> **적용 범위**: 이 킷 레포 전용 프로젝트 스킬이다(`.claude/skills/` — 플러그인에 실리지
+> 않는다, v5.0.0). 경로는 레포 루트 기준이다.
+
 > 철학: 기술부채의 최대 원천은 네이티브가 하는 일의 중복 구현이다. 이 스킬은 그
 > 드리프트를 **정기 루틴**으로 만든다 (일회성 수동 감사 → 반복 가능 절차 — spec: `docs/specs/2026-07-07-toolkit-improvement-batch.md`).
 

@@ -8,6 +8,9 @@ description: Propose improvements to agent/skill/rule definitions from accumulat
 feedback ledger에 누적된 **반복 결함**을 근원(에이전트·스킬·룰 정의)에 반영하는
 재귀 개선 루프 — 단, **제안-전용(proposal-only)**이다. 적용은 게이트를 통과해야만 한다.
 
+> **적용 범위**: 이 킷 레포 전용 프로젝트 스킬이다(`.claude/skills/` — 플러그인에 실리지
+> 않는다, v5.0.0). `evals/`·`scripts/`·`plugins/common/` 경로는 전부 레포 루트 기준이다.
+
 <HARD-GATE>
 정의 파일(.md) 수정을 **적용된 상태로 남기려면** 다음 전부 충족:
 
@@ -42,9 +45,9 @@ evals 실행 불가(exit 2 SKIPPED)면 제안까지만 — SKIPPED를 통과로 
 
 ### 1. 입력 수집
 
-- **ledger 전량**: 원장 파일을 **직접 읽는다**. 경로는 `feedback_ledger.py` 의
-  `ledger_path()` 가 정한다(`<git-common-dir>/kit/ledger.md`) — 하드코딩하지 마라 (읽기는 허용 —
-  `feedback-loop.md`의 금지는 *편집*이다). `feedback.sh digest`는 세션 주입용으로
+- **ledger 전량**: 원장 파일을 **직접 읽는다**. 경로는
+  `plugins/common/hooks/feedback_ledger.py` 의 `ledger_path()` 가 정한다(`<git-common-dir>/kit/ledger.md`) — 하드코딩하지 마라 (읽기는 허용 —
+  `feedback-loop.md`의 금지는 *편집*이다). `scripts/feedback.sh digest`는 세션 주입용으로
   1,200자에서 절단되므로 전수 분석 입력으로 쓰지 않는다.
 - 최신 eval 자산: baseline은 `evals/baseline/`에서 **파일명 사전순 최대의
   `YYYY-MM-DD.json`** (`.bak`·`.gitkeep` 제외), 리포트는 `evals/reports/`의 최신 파일.
@@ -64,13 +67,13 @@ evals 실행 불가(exit 2 SKIPPED)면 제안까지만 — SKIPPED를 통과로 
 **frequency ≥ 2** 엔트리만 대상 (1회 결함은 노이즈 가능성 — LESSONS 회피로 충분):
 
 - 결함 pattern → 그 결함을 만들었거나 막지 못한 정의를 식별
-  (구현 결함→implement-code/implement-api 등, 리뷰 누락→review-code,
+  (구현 결함→implement-code 등, 리뷰 누락→review-code,
   절차 위반→skills/rules)
 - eval 리포트의 실패/flake 이력도 역추적 (예: 빈 반환/절단 flake →
   `## 완료:` 선언 계약 강화, 실사례)
 - **대상별 커버리지 태깅**: 각 제안 대상에 `[eval-covered]` 또는 `[no-eval-coverage]`
   를 붙인다 — 이후 게이트 경로가 갈린다.
-- 근원이 정의가 아니라 코드(hooks/scripts)면 범위 밖 — `fix-bugs` 위임 신호.
+- 근원이 정의가 아니라 코드(hooks/scripts)면 범위 밖 — 버그 수정 작업으로 따로 보고한다.
 
 ### 3. 수정 제안 (적용 아님)
 

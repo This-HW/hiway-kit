@@ -10,10 +10,9 @@ description: Turn an observed agent defect into a machine-checkable eval scenari
 "사용자 승인 단일 게이트"로 퇴화한다. 스킬이 그 한계를 정직하게 고지하고는 있지만,
 **고지는 해결이 아니다.** 이 스킬은 커버리지를 늘리는 비용을 낮춰 그 구멍을 메운다.
 
-> **적용 범위**: 이 스킬은 `evals/` 하네스(`evals/run.py`)가 있는 프로젝트 —
-> 즉 **kit 레포 자체의 개발**에서 동작한다. 그 하네스가 없는 소비자 프로젝트에서는
-> 스크립트가 exit 2(SKIPPED)로 정직하게 멈춘다. `/self-improve`·`/native-watch`와 같은
-> kit-개발용 스킬 계열이다.
+> **적용 범위**: **이 킷 레포 전용 프로젝트 스킬**이다(`.claude/skills/` — 플러그인에 실리지
+> 않는다, v5.0.0). 아래 경로(`scripts/`·`evals/`)는 전부 레포 루트 기준이다.
+> `/self-improve`·`/native-watch`와 같은 킷 개발용 스킬 계열이다.
 
 ## 사용 시점
 
@@ -85,7 +84,7 @@ python3 scripts/eval-forge.py --agent <name> --id <kebab-id> \
 | 2 | SKIPPED — evals 하네스 없음 | 0으로 위장하지 말 것 |
 
 생성은 **원자적**이다. 검증이 깨지면 반쯤 만들어진 시나리오가 남지 않는다 —
-남으면 `verify-done.sh §10`을 영구히 막는다.
+남으면 `scripts/verify-done.sh` §10을 영구히 막는다.
 
 ### 5. baseline은 건드리지 않는다 [건너뛰기 금지]
 
