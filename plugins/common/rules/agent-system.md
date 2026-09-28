@@ -6,40 +6,54 @@ indexLine: 에이전트 선택·모델 정책은 rules/agent-system.md 를 읽�
 
 # Agent System Rules
 
-Agents are auto-discovered from the plugin directory — check the available
-subagent_type list before calling Task (there is no manifest to consult).
-NEVER use general-purpose subagent when a specialized agent exists.
-ALWAYS specify subagent_type explicitly — no general-purpose fallback.
+Agents are auto-discovered from the plugin directory — pick from the agent list the host
+exposes (there is no manifest to consult). Each agent's `MUST USE when:` trigger is the
+selection rule; this file does not redefine it. When no kit agent fits, the host's native
+agents (general-purpose, Explore, Plan, …) are fine — do not force a kit agent onto a task.
 
-## Model Selection
+## Roster (SSOT — skills and docs point here instead of copying this table)
 
-- Opus: strategy/analysis/review (clarify-requirements, review-code)
-- Sonnet: code implementation/fixes (implement-code, fix-bugs, write-tests)
-- Haiku: exploration/verification/simple tasks (explore-codebase, verify-code, verify-integration)
+| Agent | Model | Writes files | isolation |
+| --- | --- | --- | --- |
+| clarify-requirements | opus | no | — |
+| define-business-logic | opus | no (returns spec; caller saves) | — |
+| design-user-journey | opus | no (returns spec; caller saves) | — |
+| plan-implementation | opus | no | — |
+| devils-advocate | opus | no | — |
+| review-code | opus | no | — |
+| implement-code | sonnet | yes | worktree |
+| fix-bugs | sonnet | yes | worktree |
+| write-tests | sonnet | yes | worktree |
+| security-scan | sonnet | no | — |
+| research-external | sonnet | no | — |
+| sync-docs | haiku | yes | worktree |
+| verify-code | haiku | no | — |
+| analyze-dependencies | haiku | no | — |
+| git-workflow | haiku | git state only | — |
 
-## general-purpose Allowed Only When
-
-- No specialized agent exists for the task
-- Task spans multiple domains simultaneously
+Model follows the job: opus for specs, plans, and adversarial review; sonnet for writing
+code; haiku for running commands and mechanical checks. The frontmatter owns the actual
+value — if this table and a frontmatter disagree, the frontmatter wins and this table is stale.
 
 ## Adversarial Parallel Verification
 
-여러 관점의 적대적 검증이 필요하면 general-purpose 복제로 fan-out하지 말고 **이종 전용
-에이전트로 fan-out**한다: `review-code`(적대 리뷰) + `devils-advocate`(실패 시나리오) +
-`verify-integration`(연동 검증). 동일 에이전트 다중 복제는 관점 다양성(편향 방지)을 잃는다.
-단, 다중도메인·외부지식이 필요한 자유 조사는 위 general-purpose 예외를 유지한다.
+When several independent adversarial views are needed, fan out to **different** agents —
+`review-code` (defects) + `security-scan` (security) + `devils-advocate` (design failure
+scenarios) — rather than cloning one agent. Clones share blind spots.
 
 ## isolation: worktree
 
-ALWAYS set `isolation: worktree` for file-modifying agents: implement-code, fix-bugs, write-tests, write-api-tests, implement-api, generate-boilerplate, sync-docs, optimize-logic.
-NEVER set `isolation: worktree` on read-only agents: explore-codebase, review-code, plan-implementation.
-Merge-back protocol: see parallel-worktree.md (verify-then-exit, sequential merge, conflict → git-workflow).
+ALWAYS set `isolation: worktree` on agents that modify source files (the `worktree` rows above).
+NEVER set it on read-only agents. `git-workflow` changes repository state, not the working
+tree's sources, and runs unisolated because its job is the integration point.
+Merge-back protocol: see parallel-worktree.md.
 
 ## disallowedTools Policy
 
-- Meta agents (facilitator, synthesizer, etc. — 6 total): disallowedTools: [Bash]
-- Regular agents (implement-code, fix-bugs, etc.): disallowedTools: [Task]
-- Skills: no restriction (main Claude runs them via Task)
+- Every agent: `disallowedTools: [Task]` — agents do not spawn agents; the calling skill or
+  session orchestrates.
+- Document-only analysts with no need for a shell (`devils-advocate`): also `Bash`.
+- Skills: no restriction (the main session runs them).
 
 ## Phase Gate
 
@@ -51,8 +65,8 @@ Phase 1 → Phase 2 (Planning → Dev):
 
 Phase 2 → Phase 3 (Dev → Validation):
 
-- Build passes, core logic tests ≥80%, lint/type checks pass
+- Build passes, tests for the changed behavior pass, lint/type checks pass
 
 Phase 3 → Complete (Validation → Done):
 
-- review-code Must Fix = 0, Critical security issues = 0, integration tests pass
+- review-code Must Fix = 0, Critical security issues = 0, verify-code PASS
