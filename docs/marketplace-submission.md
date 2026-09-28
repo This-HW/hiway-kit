@@ -35,6 +35,18 @@ Submit at: https://platform.claude.com/plugins/submit
 경고 "내려받아 바로 실행" 2건(`eval-forge`, `hooks/examples/README.md`)은 `*verify*.sh` 같은 **파일명 패턴
 표기**를 오인한 것 — 실제 다운로드·실행 명령은 없다. 경고 "아이콘 없음"은 GitHub 아바타로 대체된다.
 
+**v4.0.4 재스캔(2026-09-28 21:0x KST, `5c9c72d`)** — 보안 스캔 통과, "Version passed, ready to publish", 사람 심사
+대기. 남은 발견: 경고 *사용자 머신의 자격증명 사용*(이번엔 `.claude-plugin/plugin.json` 에 귀속 — 플러그인 안에서
+환경변수 자격증명을 읽는 코드는 grep 0건이고, 자격증명 이름은 `protect-sensitive` 훅의 탐지 패턴과 그 테스트
+픽스처에만 있다), 경고 *내려받아 바로 실행* 2건(위와 같은 오인, 문서 전용이라 포털 안내상 조치 불요), 정보 *훅 사용*,
+정보 *이미지 무검사 통과*(4.0.4 의 `assets/icon.png`).
+
+**목록 정보는 제출 시점에 고정된다.** Listing 탭이 각 행의 출처를 `plugin.json key:` 로 밝힌다 — `icon`,
+`documentationUrl`, `supportUrl`, `privacyPolicyUrl` 이 비어 있어 아이콘은 GitHub 아바타로 대체됐다. 그러나 포털 원문이
+*"Newer versions don't update them here"*, 문서가 *"name and short description follow the live version"* 이므로 지금
+키를 더해도 이 제출의 목록은 바뀌지 않는다. 게다가 Claude Code 매니페스트 스키마에 없는 키라 `claude plugin validate`
+가 경고하고 로드 시 제거한다. **그래서 넣지 않았다** — 공개 후 목록 편집 수단이 생기면 그때 채운다.
+
 **전임 킷 정리(2026-09-28)**: 관리 화면에 `claude-code-kit` 제출 2건(`597867fb-…` needs changes,
 `bc35fcf0-…` 검사 통과·미공개)이 남아 있었다. 포털엔 셀프 삭제가 없어(메뉴는 "Contact Anthropic" =
 `mailto:directory@anthropic.com` 뿐) **삭제 요청 메일을 보냈다** — 두 제출 철회·삭제, 미공개 건 공개 금지,
