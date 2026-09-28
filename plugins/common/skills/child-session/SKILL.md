@@ -111,7 +111,9 @@ Antigravity 등 훅을 싣지 않는 하네스도 같다.
 
 ## 관련
 
+경로는 플러그인 루트 기준이다(소비자 프로젝트 cwd 가 아니다).
+
 | 문서 | 위치 |
 | --- | --- |
-| 부모(컨트롤) 규율 | `plugins/common/skills/control-loop/SKILL.md` |
-| 브리프 4블록·보고 형식 계약 | `plugins/common/rules/delegation-contract.md` |
+| 부모(컨트롤) 규율 | `skills/control-loop/SKILL.md` |
+| 브리프 4블록·보고 형식 계약 | `rules/delegation-contract.md` |

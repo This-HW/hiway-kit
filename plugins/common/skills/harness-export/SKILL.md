@@ -43,7 +43,7 @@ NORMS="$(python3 "$EH" --stdout)"   # 캐시하고 sha 로 갱신 판단
 # → system 프롬프트 앞에 붙여 호출
 ```
 
-**레인별로 켜라.** 규범 블록은 수천 토큰이다(현재 약 3.4k). 분류·라우팅처럼 응답이
+**레인별로 켜라.** 규범 블록은 수천 토큰이다. 분류·라우팅처럼 응답이
 수백 토큰인 레인에 매번 실으면 비용이 본문을 압도한다. 코드 생성·결정 산출처럼
 **규율이 결과를 바꾸는 레인**에만 싣는다.
 
@@ -65,7 +65,7 @@ NORMS="$(python3 "$EH" --stdout)"   # 캐시하고 sha 로 갱신 판단
 ### 소비자(플러그인 설치) 환경 — 기본 경로
 
 구현은 **플러그인 안**에 있다(`<플러그인 루트>/hooks/export_harness.py`).
-설치한 프로젝트에는 이 kit의 `scripts/`가 없으므로 이 경로를 쓴다.
+설치한 프로젝트에는 킷 레포의 개발용 래퍼가 없으므로 이 경로를 쓴다.
 
 > **`$CLAUDE_PLUGIN_ROOT`를 그대로 신뢰하지 마라.** 이 변수는 스킬의 Bash 컨텍스트에
 > **설정돼 있지 않을 수 있다**(kit의 `feedback.sh`·`auto-dev`가 같은 이유로 의존을
@@ -97,7 +97,7 @@ python3 "$EH" --target /path/to/project
 명시하지 않으면 **스크립트 자기 위치**가 1순위이고(플러그인 캐시에서도 불변),
 환경변수는 그 다음이다 — 셸에 남은 다른 플러그인의 값이 남의 규범을 내보내지 않도록.
 
-### kit 레포에서 개발할 때
+### 이 킷 레포에서만 — 개발용 래퍼 (소비자 프로젝트에는 없다)
 
 ```bash
 ./scripts/export-harness.sh          # 내보내기
@@ -151,34 +151,28 @@ python3 "$EH" --target /path/to/project
 
 ## 다중 하네스 패키지와의 관계
 
-`plugins/common/`은 이 스킬(`AGENTS.md` 내보내기)과 별개로, Codex·Antigravity용
-**네이티브 플러그인 매니페스트**도 갖고 있다(`.codex-plugin/plugin.json`,
-`plugin.json` — `packaging/`가 SSOT, `scripts/build-targets.py`가 생성기). 둘은
-**대체 관계가 아니라 상보 관계**다:
+킷은 Codex·Antigravity 용 **네이티브 플러그인 매니페스트**로도 배포된다. 둘은 **대체가 아니라
+상보 관계**다:
 
-- 이 스킬(`AGENTS.md`)은 **규범 텍스트**를 어느 하네스에서든 읽을 수 있는 자유형식
-  파일로 실어 나른다 — 플러그인 설치 여부와 무관하게 동작한다.
-- 다중 하네스 패키지(`packaging/`)는 **스킬·컴포넌트**를 그 플랫폼의 네이티브
-  설치 메커니즘으로 실어 나른다 — Codex는 `skills/`만(플랫폼에 `rules` 전용 필드가
-  없어 규범은 여전히 이 스킬 경로로 간다), Antigravity는 `skills/`+`rules/`(단
-  `agents/`는 실측으로 비지원 확정 — `agy plugin validate`가 중첩 카테고리를
-  재귀하지 않는다).
+- 이 스킬(`AGENTS.md`)은 **규범 텍스트**를 어느 하네스에서든 읽히는 자유형식 파일로 실어
+  나른다 — 플러그인 설치 여부와 무관하게 동작한다.
+- 네이티브 패키지는 **스킬·컴포넌트**를 그 플랫폼의 설치 메커니즘으로 실어 나른다 — Codex 는
+  스킬만(규범 전용 필드가 없다), Antigravity 는 스킬+규범(에이전트는 비지원).
 
-**Codex에서는 규범이 이 스킬 없이는 전혀 전달되지 않는다** — 플러그인을 설치해도
-`.codex-plugin/plugin.json`에 규범용 필드가 없으므로, `/harness-export`로 만든
-`AGENTS.md`가 유일한 경로다. 설치 절차는 README의 "Other Harnesses" 절 참고.
+**Codex 에서 규범은 세션 시작 훅(훅 신뢰 승인 후에만 돈다) 아니면 이 스킬로만 전달된다** —
+훅이 돌지 않는 환경에서는 `/harness-export` 로 만든 `AGENTS.md` 가 유일한 경로다.
 
 ## 이식되지 않는 것 (정직한 한계)
 
 훅(`protect-sensitive`·`stop-validator`·`auto-format`), 서브에이전트 정의 전부,
-그리고 Claude Code 프리미티브에 종속된 룰 5개(`agent-system`·`agent-delegation-chain`·
-`parallel-worktree`·`mcp-usage`·`task-resume`)는 이식되지 않는다. 생성물이 그 목록과
-사유를 표로 남긴다.
+그리고 Claude Code 프리미티브에 종속된 규범(frontmatter `portable: false`)은 이식되지 않는다.
+생성물이 그 목록과 사유를 표로 남긴다.
 
 **다른 하네스에서 이 킷은 규율 *문서*로 동작하지 강제 *장치*로 동작하지 않는다.**
 강제가 필요하면 그 하네스의 네이티브 수단(pre-commit, CI)에 같은 검사를 건다.
 
 ## 게이트
 
-이 레포는 스스로 도그푸딩한다 — `scripts/verify-done.sh §11`과 CI가 `./scripts/export-harness.sh --check`를
-같은 명령으로 실행한다. `rules/`를 고치고 재생성하지 않으면 완료 게이트가 막힌다.
+소비자 프로젝트라면 `python3 "$EH" --check` 를 자기 CI·pre-commit 에 걸어라 — 진입점 파일이
+규범보다 낡으면 막힌다. (이 킷 레포는 스스로 도그푸딩한다 — 그 레포의 완료 게이트와 CI 가
+같은 `--check` 를 돈다.)

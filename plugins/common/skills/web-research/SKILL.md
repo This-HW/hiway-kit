@@ -1,6 +1,6 @@
 ---
 name: web-research
-description: Research external information using MCP servers. Use when users need to find documentation, compare technologies, or research best practices, or when a web task needs a real logged-in browser (dashboards, form submission, JS-rendered pages).
+description: Multi-source external research with cited sources, using search/docs MCP servers when installed and built-in web tools otherwise. Use when a question needs several external sources compared or synthesized, or a web task needs the user's logged-in browser. Not for a single quick lookup.
 ---
 
 # Web Research

@@ -250,9 +250,11 @@ P1 산출물을 놓고 채택·금지를 결정하고, 그 결정을 4블록 브
 
 ## 관련
 
+경로는 플러그인 루트 기준이다(소비자 프로젝트 cwd 가 아니다).
+
 | 문서 | 위치 |
 | --- | --- |
-| 브리프 4블록·보고 형식 계약 | `plugins/common/rules/delegation-contract.md` |
-| 워커 세션이 로드하는 규율 | `plugins/common/skills/child-session/SKILL.md` |
-| 워크트리 격리·병합 규율(네이티브 서브에이전트) | `plugins/common/rules/parallel-worktree.md` |
-| 루프 종료 가드 | `plugins/common/rules/loop-engineering.md` |
+| 브리프 4블록·보고 형식 계약 | `rules/delegation-contract.md` |
+| 워커 세션이 로드하는 규율 | `skills/child-session/SKILL.md` |
+| 워크트리 격리·병합 규율(네이티브 서브에이전트) | `rules/parallel-worktree.md` |
+| 루프 종료 가드 | `rules/loop-engineering.md` |
