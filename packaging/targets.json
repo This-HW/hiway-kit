@@ -40,7 +40,7 @@
       },
       "interface": {
         "displayName": "hiway-kit",
-        "shortDescription": "Planning gates, adversarial review, and definition-of-done discipline for coding agents",
+        "shortDescription": "Coding agent discipline kit",
         "category": "Coding",
         "capabilities": [
           "Interactive",

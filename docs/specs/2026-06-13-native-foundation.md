@@ -41,7 +41,10 @@
 
 ### 변경 3 — stop-validator continueOnBlock
 - 대상: `plugins/common/hooks/stop-validator.py`의 `block()` 함수
-- 변경: `sys.exit(2)` + stdout JSON → 네이티브 `hookSpecificOutput`(`decision: "block"`, `reason`, `continueOnBlock: true`)
+- 변경: `sys.exit(2)` + stdout JSON → 공식 Stop 훅 스키마 `{"decision":"block","reason":...}` + exit 0
+- **구현 노트(2.6.0)**: 초안의 `continueOnBlock` 은 **미문서화 필드라 채택하지 않았다.** `decision` 이
+  exit code 와 무관하게 차단을 제어하고 `reason` 이 Claude 컨텍스트에 주입된다 — 이 문서의 다른
+  `continueOnBlock` 언급은 초안 당시 표현이다.
 - `MAX_RETRIES=2` 무한루프 가드, lint 자동수정 로직, VALIDATED_MARKER 스킵 로직 전부 유지
 - 정확한 Stop 훅 출력 스키마는 구현 직전 검증 — 미지원 시 exit-2 fallback 분기 유지
 

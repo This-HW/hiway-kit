@@ -236,6 +236,10 @@ evals/
   (`advisory: true`). 게이트는 deterministic assertions가 전담한다.
 - **실패한 런은 baseline이 되지 못한다**: exit≠0이면 `--baseline` 저장을 거부한다.
   같은 날짜 재실행 시 기존 baseline은 `.bak`으로 백업 후 교체된다.
+- **기준선 파일 이름의 날짜는 UTC 다**(`run.py` 가 `datetime.now(timezone.utc)`). KST 로 보면 하루 어긋나
+  보일 수 있지만 이름을 고치면 같은 결함을 다시 만든다.
+- **실행 시간이 커버리지의 상한이 되면 답은 커버리지 축소가 아니라 스위트 분할이다** — 시나리오를 빼서
+  시간을 맞추면 그 에이전트가 게이트에서 조용히 빠진다.
 - **커버리지 후퇴도 후퇴다**: `--compare`는 pass_rate 하락뿐 아니라 에이전트/시나리오
   수 감소도 회귀로 판정한다.
 - **fix-bugs 게이밍 차단**: `file_unchanged` assertion이 테스트 파일 변조(테스트를

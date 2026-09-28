@@ -260,7 +260,7 @@ hiway-kit이 무엇을 어떻게 융합하는지 — 한눈에 보는 설계 원
    Small/Medium: 스킬 주도 플랫 dispatch   Large: 네이티브 ultracode
         │                                     │
         ▼  validation (review + security)     ▼
-   continueOnBlock 자동수정 마이크로루프
+   Stop 훅 block 자동수정 마이크로루프
         │
         ▼  결함 → feedback ledger → 다음 세션 LESSONS 주입  ◀─┐
         └──────────────────── 학습 루프 ──────────────────────┘

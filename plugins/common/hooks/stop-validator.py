@@ -184,7 +184,7 @@ def block(failure_type: str, reason: str, details: dict | None = None):
     Stop을 차단: 네이티브 Stop 훅 스키마(decision=block + reason)로
     Claude에게 수정 컨텍스트를 전달해 자동 수정 턴을 유도한다.
 
-    참조: DEC-002 (W-005) — 미문서화 continueOnBlock 대신 공식 문서의
+    참조: 2.6.0 — 미문서화 continueOnBlock 대신 공식 문서의
     {"decision":"block","reason":...} + exit 0 사용. decision 필드가
     exit code와 무관하게 차단을 제어하며, reason이 Claude 컨텍스트에 주입된다.
     """

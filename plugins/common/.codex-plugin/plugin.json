@@ -15,7 +15,7 @@
     ],
     "category": "Coding",
     "displayName": "hiway-kit",
-    "shortDescription": "Planning gates, adversarial review, and definition-of-done discipline for coding agents"
+    "shortDescription": "Coding agent discipline kit"
   },
   "keywords": [
     "agents",
@@ -30,5 +30,5 @@
   "name": "hiway-kit",
   "repository": "https://github.com/This-HW/hiway-kit",
   "skills": "./skills/",
-  "version": "4.0.1"
+  "version": "4.0.2"
 }

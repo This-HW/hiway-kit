@@ -274,7 +274,7 @@ class TestEnvTemplateException:
         assert blocked
 
     def test_env_example_backup_still_blocked(self):
-        # 정확 suffix 매치가 아닌 뒤붙임 변형은 계속 차단 (DEC-001)
+        # 정확 suffix 매치가 아닌 뒤붙임 변형은 계속 차단 (2.10.5)
         blocked, _ = check_protected(".env.example.backup")
         assert blocked
 

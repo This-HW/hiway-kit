@@ -105,7 +105,7 @@ jobs:
 
       - name: Run hook unit tests
         run: |
-          # 검증 도구는 **둘 다** 버전을 핀한다(.ruff-version / .pytest-version, F-036):
+          # 검증 도구는 **둘 다** 버전을 핀한다(.ruff-version / .pytest-version — 미핀 도구는 코드 변경 없이 CI 를 빨갛게 만든다):
           # 도구 기본 동작이 릴리스마다 바뀌어 "코드 변경 없이 CI가 red"가 되는 사고를
           # 막는다(2.12.0 실사고). ruff는 기본 룰셋이, pytest는 수집·fixture·deprecation
           # 처리가 메이저마다 달라진다 — 핀이 없으면 CI만 조용히 최신으로 떠내려간다.
@@ -115,7 +115,7 @@ jobs:
           # pytest exit 5 = "no tests collected" (OK to skip). 그 외 비정상 종료는
           # 실제 실패이므로 CI를 실패시킨다 (이전 `|| echo`는 실패도 green으로 삼켰음).
           rc=0
-          # 대상은 pytest.ini의 testpaths가 단일 소스 (F-023) — 인자를 주지 않는다.
+          # 대상은 pytest.ini의 testpaths가 단일 소스 — 인자를 주지 않는다(두 곳에 적으면 갈린다).
           python3 -m pytest -v || rc=$?
           # exit 5(수집 0)도 실패 — 테스트 220+개가 상존하는 레포에서 수집 0은
           # 전멸/경로 붕괴 신호다. verify-done §4와 fail-closed 방향 통일 (재감사 R2/ATK-004).
@@ -155,7 +155,7 @@ jobs:
           ./scripts/lint-shell.sh
 
       - name: Check doc agent/skill counts (drift guard)
-        # scripts/check_doc_counts.py 가 단일 소스 (F-023) — 로컬 verify-done.sh §6과
+        # scripts/check_doc_counts.py 가 단일 소스 — 로컬 verify-done.sh §6과
         # 동일 스크립트. 여기 인라인 재구현 금지(로직 이중화 = 드리프트).
         run: python3 scripts/check_doc_counts.py
 
@@ -251,7 +251,7 @@ jobs:
 
   # 소비자 환경 최저 파이썬(=macOS 기본 python3 3.9)에서 훅이 실제로 뜨는지 검증한다.
   # 훅은 소비자 머신의 `python3`로 실행되므로, 3.10 전용 문법이 들어가면 그 사용자에겐
-  # 훅이 전부 죽는다(2.12.0까지 4종이 그 상태였다 — F-037). 린트의 FA 룰이 정적 방어,
+  # 훅이 전부 죽는다(2.12.0까지 4종이 그 상태였다 — 2.12.1 에서 수정). 린트의 FA 룰이 정적 방어,
   # 이 잡이 실행 방어다.
   python39-compat:
     runs-on: ubuntu-latest

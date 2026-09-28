@@ -47,7 +47,9 @@ except ImportError:
 
 
 # 시크릿이 없는 env 템플릿(placeholder 전용, git-tracked이 정상)은 보호 대상 아님.
-# 정확 suffix 매치 4종만 예외(DEC-001) — 뒤붙임 변형(.env.example.backup)은 계속 차단.
+# 정확 suffix 매치 4종만 예외(2.10.5) — 뒤붙임 변형(.env.example.backup)은 계속 차단.
+# 접두사형 템플릿(app.env.example)은 의도적으로 미지원 — 보호 키워드 배제 로직이 필요해 예외가 복잡해진다.
+# 템플릿은 Read 도 허용한다. 템플릿에 실수로 넣은 실제 시크릿은 gitleaks·저장소 위생의 몫이다.
 # 좌측 (^|/) 앵커 필수(ATK-001): 미앵커 search는 credentials.env.example처럼 보호
 # 파일명에 템플릿 접미사만 붙여 credential/secret 차단을 재개방시킨다.
 ENV_TEMPLATE_RE = re.compile(
@@ -102,7 +104,7 @@ PROTECTED_PATTERNS = [
 
 # 메시지 콘텐츠 내 민감 정보 패턴 (Agent Teams S-C-08)
 # 형식-확정 패턴만: 실제 시크릿 형식(sk-, AKIA, PEM 블록 등)에만 매치되어
-# placeholder(API_KEY=your_key_here)와 충돌할 확률이 사실상 0이다 (DEC-003).
+# placeholder(API_KEY=your_key_here)와 충돌할 확률이 사실상 0이다 (2.10.5).
 # env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔은 이 서브셋만 사용한다.
 HIGH_CONFIDENCE_CONTENT_PATTERNS = [
     # API 키 패턴
@@ -163,7 +165,7 @@ def check_content_sensitive(
 
     patterns: 기본은 message/broadcast 스캔용 전체 패턴(SENSITIVE_CONTENT_PATTERNS).
     env 템플릿 쓰기 콘텐츠 스캔(FR-4)은 HIGH_CONFIDENCE_CONTENT_PATTERNS만 넘겨
-    placeholder false-positive를 피한다(DEC-003).
+    placeholder false-positive를 피한다(2.10.5).
     """
     if not content:
         return False, ""
@@ -195,7 +197,7 @@ def check_protected(file_path: str) -> tuple[bool, str]:
     path_lower = file_path.lower()
 
     # env 템플릿(.env.example 등)은 시크릿이 없는 placeholder 전용 파일이 정상이므로
-    # 보호 대상에서 제외한다(W-016 FR-1/DEC-001). main()의 원본→realpath 2단 검사
+    # 보호 대상에서 제외한다(2.10.5). main()의 원본→realpath 2단 검사
     # 구조 덕분에 symlink로 실제 .env를 가리키는 우회는 여전히 차단된다(ATK-007).
     if ENV_TEMPLATE_RE.search(path_lower):
         return False, ""
@@ -305,7 +307,7 @@ def main():
                 print(f"   {message_real}", file=sys.stderr)
                 sys.exit(2)
 
-        # env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔 (W-016 FR-4/DEC-003).
+        # env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔 (2.10.5).
         # 예외로 통과한 경로라도 실제 형식의 시크릿을 기록하는 쓰기는 차단한다.
         # placeholder(API_KEY=your_key_here)와 충돌하지 않도록 HIGH_CONFIDENCE 패턴만 사용.
         # 원본 경로뿐 아니라 realpath도 확인 — symlink(foo.txt → .env.example)를

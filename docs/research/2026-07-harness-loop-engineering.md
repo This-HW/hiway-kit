@@ -202,3 +202,7 @@ Dynamic Workflows(계획이 코드로, 재개 가능).
 - https://github.com/obra/Superpowers · https://github.com/ai-boost/awesome-harness-engineering
 - https://platform.claude.com/cookbook/tool-use-context-engineering-context-engineering-tools
 - https://www.stackone.com/blog/agent-suicide-by-context
+
+> **보류로 닫은 후보(2026-07-03)**: EARS 표기는 루프 정렬과 무관해 채택하지 않았다. ruff/pytest argv 의
+> `--` 구분자는 효과가 거의 없어 넣지 않았다. 환경 재구성 스크립트(`init.sh`) 이식은
+> `docs/specs/2026-07-03-durable-executor-discipline.md` 의 deferred 항목으로 추적한다.

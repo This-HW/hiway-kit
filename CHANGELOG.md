@@ -6,6 +6,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [4.0.2] — 2026-09-28
+
+### Removed — 로컬 Work 기록(`docs/works/`) 정리
+
+4.0.0 에서 Work 시스템을 걷어낸 뒤 남은 기록을 지웠다(강제 트래킹돼 있던 20개 파일 포함). 지우기 전에
+전수 대조했고, 트래킹 문서에 없던 것만 옮겼다:
+
+- Stop 훅 차단 스키마 결정(미문서화 `continueOnBlock` 대신 공식 `{"decision":"block"}`) → native-foundation
+  스펙 구현 노트. README·auto-dev 의 낡은 `continueOnBlock` 서술도 정정
+- env 템플릿 정책(접두사형 미지원, 템플릿 Read 허용) → `protect-sensitive.py` 주석
+- eval 기준선 파일 이름은 UTC 날짜 · 시간 한도엔 스위트 분할 → `evals/README.md`
+- 컨트롤 운영 교훈(merge-tree 리허설·브랜치 이름 가정 금지·조용한 idle) → `docs/control-loop-transport.md` §8
+
+**끊길 뻔한 인용을 고쳤다.** 코드가 `docs/works` 에만 있던 결정 ID(`DEC-001/002/003`)를, CI·정책 파일이
+원장 재번호로 **지금은 다른 교훈을 가리키는** ID(`F-023/024/028/036/037`)를 인용하고 있었다 — CHANGELOG
+버전이나 교훈 문장 자체로 바꿨다.
+
+### Fixed — Codex 매니페스트 짧은 설명이 디렉토리 제출 한도(30자)를 넘었다
+
+`packaging/targets.json` codex `interface.shortDescription` 87자 → "Coding agent discipline kit"(27자).
+
 ## [4.0.1] — 2026-09-28
 
 ### Fixed — `mcp-builder` 스킬의 틀린 안내 3건 (디렉토리 심사 보류에서 발견)

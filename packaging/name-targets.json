@@ -35,7 +35,6 @@
   "oldNameScanExclude": [
     "docs/specs/",
     "docs/research/",
-    "docs/works/",
     "docs/CHANGELOG-archive.md",
     "docs/marketplace-submission.md",
     "CHANGELOG.md",
