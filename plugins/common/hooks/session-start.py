@@ -236,12 +236,10 @@ def _render_plugin_paths(text: str, plugin_root: Path) -> str:
             rel, tail = rel[:-1], tail + "."
         target = plugin_root / rel
         try:
-            inside = target.resolve().relative_to(root) is not None
+            target.resolve().relative_to(root)  # 루트 밖이면 ValueError
         except (OSError, ValueError):
-            inside = False
-        if inside and target.exists():
-            return f"{target}{tail}"
-        return match.group(1)
+            return match.group(1)
+        return f"{target}{tail}" if target.exists() else match.group(1)
 
     return _PLUGIN_REL_PATH_RE.sub(_sub, text)
 
@@ -331,8 +329,8 @@ def conditional_signals(project_root: Path, *, active_plans: str, lessons: str) 
     """`tier: conditional` 규범을 켜는 신호 — 키는 규범 파일명 stem.
 
     신호가 없는 conditional 규범은 **한 번도 주입되지 않는다**. 그래서 이 표가 SSOT 이고,
-    `scripts/check_injection_budget.py` 는 실물 규범의 conditional 목록을 이 표와 대조한다
-    (신호 없는 conditional = red).
+    `scripts/check_injection_budget.py` 는 이 훅의 실제 출력으로 대조한다 — conditional
+    규범이 최악 조합 출력에 없으면(신호 없음) 또는 빈 레포 출력에도 있으면(상시 참) red.
 
     - `loop-engineering`·`task-resume` — 활성 계획이 있을 때(루프·재개가 의미 있는 유일한 때)
     - `feedback-loop` — 원장에 교훈이 있을 때
