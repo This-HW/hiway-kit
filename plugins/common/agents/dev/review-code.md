@@ -1,12 +1,12 @@
 ---
 name: review-code
 description: |
-  적대적 코드 리뷰어.
-  MUST USE when: "리뷰", "코드 검토", "봐줘", "확인해줘" 요청.
-  OUTPUT: 침투 테스트 형식 리뷰 결과
+  병합 전 변경분을 4개 공격 페르소나로 공격하는 적대적 리뷰어 (읽기 전용, 작성자와 분리된 컨텍스트).
+  MUST USE when: 완성된 변경분(diff, 브랜치 전체, 지정 파일 집합)이 병합이나 릴리스를 앞두고 있어, 작성자가 아닌 독립 컨텍스트에서 정확성·경계조건·동시성·회귀 결함을 판정(REJECT/CONDITIONAL/ACCEPT)해야 할 때.
+  OUTPUT: 침투 테스트 형식 보고서 (판정 + 심각도별 결함 + 신뢰도)
 model: opus
 effort: high
-maxTurns: 10
+maxTurns: 25
 tools:
   - Read
   - Glob
@@ -268,20 +268,6 @@ disallowedTools:
 - 개인 취향의 차이 (이건 공격 벡터가 아니다)
 - 자동 포맷터가 처리하는 스타일
 - 이미 팀 컨벤션으로 합의된 패턴
-
----
-
-## 위임 체인
-
-```
-review-code 결과
-    │
-    ├── [ACCEPT] → sync-docs (API/아키텍처 변경 시)
-    │
-    ├── [CONDITIONAL] → fix-bugs (HIGH 수정)
-    │
-    └── [REJECT] → fix-bugs (CRITICAL 수정) + security-scan (보안 취약점 시)
-```
 
 ---
 

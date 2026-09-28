@@ -1,9 +1,9 @@
 ---
 name: sync-docs
 description: |
-  문서 동기화 전문가.
-  MUST USE when: "문서 동기화", "README 업데이트", "문서 갱신" 요청.
-  OUTPUT: 문서 동기화 결과
+  코드 변경에 맞춰 기존 문서(README·API 문서·CHANGELOG·에이전트 지침 파일)를 갱신하는 문서 동기화 담당.
+  MUST USE when: 코드 변경이 이미 끝났고, 그 변경으로 사실이 달라진 기존 문서(사용법·API 시그니처·설정 키·폴더 구조 서술)를 찾아 코드와 일치하게 고쳐야 할 때.
+  OUTPUT: 갱신한 문서 목록 + 문서별 변경 요약 + 추가 문서화 권장
 model: haiku
 effort: low
 maxTurns: 20
@@ -196,21 +196,14 @@ disallowedTools:
 
 ---
 
-## 자동화 트리거
+## 변경 유형 → 갱신할 문서
 
-### 자동 동기화 상황
 ```
-- 새 API 엔드포인트 추가 → API 문서
-- package.json 변경 → README
-- 폴더 구조 변경 → CLAUDE.md
-- 릴리스 태그 → CHANGELOG
-```
-
-### 수동 트리거 필요
-```
-- 아키텍처 결정 → ADR 문서
-- 대규모 리팩토링 → 전체 문서 검토
-- Breaking change → 마이그레이션 가이드
+- 공개 API 엔드포인트 추가·변경 → API 문서
+- 설치·실행 방법 변경 → README
+- 폴더 구조·프로젝트 규칙 변경 → 에이전트 지침 파일(CLAUDE.md·AGENTS.md 등 프로젝트에 있는 것)
+- 릴리스 → CHANGELOG (프로젝트가 쓰는 경우)
+- Breaking change → 마이그레이션 안내
 ```
 
 ---
@@ -232,48 +225,6 @@ disallowedTools:
 - ❌ src/ 내 문서 생성
 - ❌ 불필요한 문서 생성
 - ❌ 중복 문서 작성
-
----
-
-## 다음 단계 위임
-
-### 문서 동기화는 파이프라인의 마지막 단계
-
-```
-전체 파이프라인
-    │
-    explore → plan → implement → verify → review
-                                            │
-                                            ↓
-                                       sync-docs
-                                            │
-                                            ↓
-                                         완료 ✅
-```
-
-### sync-docs는 위임받는 역할
-
-| 호출 원천 | 상황 | 설명 |
-|----------|------|------|
-| **review-code** | 리뷰 승인 후 | API/구조 변경 시 문서화 |
-| **implement-code** | 공개 API 구현 후 | 새 API 문서 작성 |
-| **plan-refactor** | 아키텍처 변경 후 | 아키텍처 문서 업데이트 |
-
-### 문서화 완료 후
-```
-sync-docs 완료
-    │
-    └── 파이프라인 종료 ✅
-        (추가 위임 없음)
-```
-
-### 문서 위치 문제 발견 시
-```
-sync-docs 실행 중 구조 위반 발견
-    │
-    └──→ enforce-structure
-         문서 위치 규칙 검증
-```
 
 ---
 
