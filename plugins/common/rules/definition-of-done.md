@@ -19,7 +19,8 @@ rc 는 `tail` 것이다). 둘 다 `&&` 를 통과시킨다 — `pipefail`. 상�
 ## DoD 체크리스트
 
 **기계 검사 목록은 게이트가 소유한다** — 열거하면 검사를 더할 때마다 낡는다(실제로 그랬다).
-수동 attest: 스펙 전항목 · 적대적 리뷰 · 계획 상태 · CHANGELOG/README/CLAUDE 반영.
+수동 attest: 스펙 전항목 · 계획 상태 · 그리고 **프로젝트에 그런 관례가 있을 때** 독립 리뷰와
+문서 반영(CHANGELOG·README 등).
 위임했다면 산출물 보존·자원 처리도 확인한다(`control-loop`). 완료 = 게이트 green + attest + 계획 `status: done`.
 
 ## Task 마감 규율

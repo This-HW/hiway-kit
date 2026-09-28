@@ -46,19 +46,3 @@ When using Context7, ALWAYS specify the version: `"use context7 for Next.js 15 A
 
 Verify library APIs against docs, not training memory alone — with Context7 when available,
 otherwise official docs via WebFetch/WebSearch.
-
-## Agent MCP Configuration — MCP lives in skills, NOT agent allowlists
-
-**NEVER put `mcp__*` tools in a shipped agent's `tools:` allowlist.** Consumers install
-different (or no) MCP servers, and a project-scoped MCP tool that is listed but absent
-makes the agent **hallucinate plausible-but-wrong results or hard-fail** — see Claude Code
-issue #13898 "Custom Subagents Cannot Access Project-Scoped MCP Servers (Hallucinate
-Instead)" (github.com/anthropics/claude-code/issues/13898). Therefore:
-
-- **MCP-dependent research / docs lookup → the `web-research` skill.** A skill runs in the
-  main session context, safely inherits installed MCP servers, and falls back to built-in
-  WebSearch/WebFetch when they are absent.
-- **Shipped agents use built-in WebSearch/WebFetch only** (research-external included).
-- For library-API verification during coding, reach Context7 via the main session / a
-  skill — do NOT wire MCP into the agent frontmatter.
-

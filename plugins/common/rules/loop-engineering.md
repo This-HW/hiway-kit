@@ -1,5 +1,6 @@
 ---
-tier: core
+tier: conditional
+activates: 활성 계획 존재
 portable: true
 ---
 
@@ -18,10 +19,10 @@ drift한다) → unblocked 항목 선택 → 실행 → 완료 시 checklist pas
 ## 종료 가드 (안티-런어웨이 = 필수)
 
 **P0**(데이터/보안/결제/핵심로직 모호 → 선택지 제시, 호스트 수단으로) · **완료**(검증
-게이트 green + 수동 DoD attest + 배치 전체 계획·항목 해소, `definition-of-done.md` —
-"마지막 스텝 도달"≠완료) · **max_iterations/루프 감지**(동일 Task 무진전 반복 상한/2회+
-→ 에스컬레이션·중단 보고) · **idle**(N iteration 새 커밋 0건 → 종료, git 커밋 기준) ·
-**검증 실패 잔존**(가드 재시도 후에도 실패 → 보고) 에서 반드시 멈춘다.
+게이트 green + 수동 DoD attest + 배치 전체 계획·항목 해소, `definition-of-done` —
+"마지막 스텝 도달"≠완료) · **무진전**(같은 항목이 2회 연속 새 커밋·checklist 통과 없이
+끝남 → 에스컬레이션·중단 보고) · **검증 실패 잔존**(가드 재시도 후에도 실패 → 보고)
+에서 반드시 멈춘다.
 
 배치 실행(킷의 `auto-dev` 등)은 계획 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
 본 작업을 막지 않는다.
