@@ -1,8 +1,9 @@
 """session-check.py (SessionStart 훅) 회귀 테스트.
 
-이 훅은 세션 시작마다 **모든 소비자 환경**에서 가장 먼저 실행된다. 계약은 두 가지뿐:
+이 훅은 세션 시작마다 **모든 소비자 환경**에서 가장 먼저 실행된다. 계약은 셋:
   1. 무슨 일이 있어도 exit 0 + 유효한 SessionStart JSON (fail-open — 세션을 막지 않는다)
-  2. 관측 가능해야 할 문제는 stderr 경고로 남긴다 (침묵 실패 금지)
+  2. 관측 가능해야 할 문제는 `systemMessage` 로 남긴다 — stderr 는 모델도 사용자도 못 본다
+  3. 소비자 레포에 아무것도 쓰지 않는다 (v5.0.0 — pre-commit 설치는 setup.sh opt-in 만)
 
 특히 python floor 경고는 "구버전 python에서 다른 훅들이 조용히 죽는" 상황을 사용자에게
 알리는 유일한 통로다 — 훅이 fail-open이라 그 죽음 자체는 아무 흔적을 남기지 않는다.
@@ -20,11 +21,16 @@ SETUP_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "setup"
 SCRIPT = SETUP_DIR / "session-check.py"
 
 
+def _warning(captured) -> str:
+    """사용자에게 보이는 경고 채널(`systemMessage`). 없으면 빈 문자열."""
+    return json.loads(captured.out).get("systemMessage", "")
+
+
 def _run_isolated(tmp_path, monkeypatch):
     """격리 환경(HOME·cwd 모두 tmp)에서 스크립트 top-level을 실행한다.
 
     HOME이 tmp면 `.setup-state.json` 부재 → plugin-only 모드로 판정되어 setup.sh
-    관련 경고가 억제되고, cwd가 git 저장소 밖이라 pre-commit 설치 경로도 타지 않는다.
+    관련 검사가 돌지 않는다.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)
@@ -47,8 +53,8 @@ def test_warns_when_python_below_floor(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "version_info", (3, 8, 10, "final", 0))
     assert _run_isolated(tmp_path, monkeypatch) == 0
     captured = capsys.readouterr()
-    assert "3.9+" in captured.err
-    assert "3.8" in captured.err
+    assert "3.9+" in _warning(captured)
+    assert "3.8" in _warning(captured)
     # 경고를 내면서도 세션은 계속돼야 한다(fail-open).
     assert (
         json.loads(captured.out)["hookSpecificOutput"]["hookEventName"]
@@ -59,7 +65,7 @@ def test_warns_when_python_below_floor(tmp_path, monkeypatch, capsys):
 def test_no_python_warning_on_supported_version(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sys, "version_info", (3, 9, 6, "final", 0))
     assert _run_isolated(tmp_path, monkeypatch) == 0
-    assert "3.9+" not in capsys.readouterr().err
+    assert "3.9+" not in _warning(capsys.readouterr())
 
 
 # ── stale venv 감지 (프로젝트 디렉토리 이동/복사) ────────────────────────────
@@ -101,7 +107,7 @@ def test_warns_when_venv_shebang_points_outside_project(tmp_path, monkeypatch, c
     """디렉토리 이동 후의 stale venv — 경고가 없으면 원인 파악에 한참 걸린다."""
     _make_venv(tmp_path, "/old/path/former-location/.venv/bin/python")
     assert _run_in_repo(tmp_path, monkeypatch) == 0
-    err = capsys.readouterr().err
+    err = _warning(capsys.readouterr())
     assert ".venv" in err
     assert "/old/path/former-location/.venv/bin/python" in err
 
@@ -110,7 +116,7 @@ def test_no_venv_warning_when_shebang_is_inside_project(tmp_path, monkeypatch, c
     """정상 venv를 stale로 오탐하면 경고가 노이즈가 되어 아무도 안 읽는다."""
     _make_venv(tmp_path, str(tmp_path / ".venv/bin/python"))
     assert _run_in_repo(tmp_path, monkeypatch) == 0
-    assert "venv" not in capsys.readouterr().err
+    assert "venv" not in _warning(capsys.readouterr())
 
 
 def test_stale_venv_warning_keeps_sessionstart_contract(tmp_path, monkeypatch, capsys):
@@ -126,7 +132,7 @@ def test_detects_stale_venv_in_plain_venv_dir(tmp_path, monkeypatch, capsys):
     """`.venv`뿐 아니라 `venv`도 본다 — 두 이름 다 실제로 쓰인다."""
     _make_venv(tmp_path, "/old/path/kit/venv/bin/python", name="venv")
     assert _run_in_repo(tmp_path, monkeypatch) == 0
-    assert "venv 스크립트" in capsys.readouterr().err
+    assert "venv 스크립트" in _warning(capsys.readouterr())
 
 
 def test_malformed_shebang_does_not_abort_later_checks(tmp_path, monkeypatch, capsys):
@@ -145,9 +151,9 @@ def test_malformed_shebang_does_not_abort_later_checks(tmp_path, monkeypatch, ca
     assert _run_in_repo(tmp_path, monkeypatch) == 0
     captured = capsys.readouterr()
     # 판정 불가한 shebang은 조용히 건너뛴다 — 예외가 새어나온 흔적이 없어야 한다.
-    assert "null" not in captured.err
+    assert "null" not in _warning(captured)
     # 그리고 뒤따르는 검사(dual-load)는 정상적으로 도달해야 한다.
-    assert "동시 감지" in captured.err
+    assert "동시 감지" in _warning(captured)
     assert (
         json.loads(captured.out)["hookSpecificOutput"]["hookEventName"]
         == "SessionStart"
@@ -158,7 +164,7 @@ def test_venv_warning_escapes_control_chars_from_shebang(tmp_path, monkeypatch, 
     """shebang은 파일에서 읽은 값 — 터미널 이스케이프를 그대로 stderr에 흘리지 않는다."""
     _make_venv(tmp_path, "/old/\x1b[2Jpath/python")
     assert _run_in_repo(tmp_path, monkeypatch) == 0
-    err = capsys.readouterr().err
+    err = _warning(capsys.readouterr())
     assert ".venv" in err
     assert "\x1b" not in err
 
@@ -175,19 +181,19 @@ def test_no_venv_warning_when_venv_python_is_a_symlink(tmp_path, monkeypatch, ca
     outside.write_text("#!/bin/sh\n")
     (venv / "bin" / "python").symlink_to(outside)
     assert _run_in_repo(tmp_path, monkeypatch) == 0
-    assert "venv" not in capsys.readouterr().err
+    assert "venv" not in _warning(capsys.readouterr())
 
 
 def test_no_venv_warning_for_relocatable_shebang(tmp_path, monkeypatch, capsys):
     """`#!/bin/sh` 래퍼(uv --relocatable 등)는 절대경로 python이 없다 → 판정 불가 → 침묵."""
     _make_venv(tmp_path, "/bin/sh")
     assert _run_in_repo(tmp_path, monkeypatch) == 0
-    assert "venv" not in capsys.readouterr().err
+    assert "venv" not in _warning(capsys.readouterr())
 
 
 def test_no_venv_warning_when_no_venv_exists(tmp_path, monkeypatch, capsys):
     assert _run_in_repo(tmp_path, monkeypatch) == 0
-    assert "venv" not in capsys.readouterr().err
+    assert "venv" not in _warning(capsys.readouterr())
 
 
 def test_subprocess_run_never_blocks_session(tmp_path):
@@ -205,56 +211,75 @@ def test_subprocess_run_never_blocks_session(tmp_path):
     assert json.loads(r.stdout)["hookSpecificOutput"]["hookEventName"] == "SessionStart"
 
 
-# ── pre-commit 설치·갱신 (install-once 결함 회귀) ──────────────────────────────
+# ── 소비자 레포에 쓰지 않는다 (v5.0.0 A1) ─────────────────────────────────
 #
-# 배경: 원래는 훅이 **없을 때만** 설치했다. 그래서 한 번 설치된 훅이 그 시점 판에
-# 영구 동결됐고, 이후 릴리스의 검사가 기존 사용자에게 영원히 도달하지 않았다.
-# 실측 사고: `.private-names` 비공개 이름 차단이 소스에만 있고 어느 저장소에도
-# 설치되지 않은 채 "활성"으로 릴리스 보고됐다. 아래 4종이 그 계약을 고정한다.
-
-SRC_HOOK = SETUP_DIR / "pre-commit"
+# v5.0.0 전까지 plugin-only 모드에서 이 훅이 `.git/hooks/pre-commit` 을 묻지 않고
+# 설치·갱신했다. 세션 시작은 부수효과가 없어야 하는 이벤트다 — 설치는 setup.sh 의
+# 명시적 opt-in 경로만 한다. 아래 테스트는 그 동작이 되살아나면 red 가 된다.
 
 
-def _installed_hook(tmp_path):
-    return tmp_path / ".git" / "hooks" / "pre-commit"
+def _hooks_snapshot(repo):
+    hooks = repo / ".git" / "hooks"
+    if not hooks.exists():
+        return None
+    return sorted((p.name, p.read_bytes()) for p in hooks.iterdir())
 
 
-def test_installs_pre_commit_when_absent(tmp_path, monkeypatch):
-    """훅이 없으면 설치한다 — 기존 동작(회귀 방지)."""
-    assert _run_in_repo(tmp_path, monkeypatch) == 0
-    assert _installed_hook(tmp_path).read_bytes() == SRC_HOOK.read_bytes()
-
-
-def test_updates_stale_kit_owned_hook(tmp_path, monkeypatch, capsys):
-    """킷이 심은 낡은 훅은 **갱신한다** — 이것이 install-once 결함의 핵심 수정이다."""
+def test_plugin_only_mode_writes_nothing_to_git_hooks(tmp_path, monkeypatch):
     _init_repo(tmp_path)
-    hook = _installed_hook(tmp_path)
-    hook.parent.mkdir(parents=True, exist_ok=True)
-    hook.write_text("#!/bin/bash\n# Auto-installed by session-check.py\n# 낡은 판\n")
+    before = _hooks_snapshot(tmp_path)
     assert _run_isolated(tmp_path, monkeypatch) == 0
-    assert hook.read_bytes() == SRC_HOOK.read_bytes()
-    # 조용히 덮지 않는다 — 사용자 저장소의 실행 파일이 바뀐 사건이므로 알린다.
-    assert "pre-commit" in capsys.readouterr().err
+    assert _hooks_snapshot(tmp_path) == before
 
 
-def test_never_touches_user_owned_hook(tmp_path, monkeypatch):
-    """마커가 없는 훅은 사용자 것이다 — 덮으면 그 사람의 검사가 조용히 사라진다."""
+def test_stale_kit_owned_hook_is_left_alone(tmp_path, monkeypatch):
+    """예전에 킷이 심은 낡은 훅도 **갱신하지 않는다** — 갱신은 setup.sh --force 의 몫."""
     _init_repo(tmp_path)
-    hook = _installed_hook(tmp_path)
+    hook = tmp_path / ".git" / "hooks" / "pre-commit"
     hook.parent.mkdir(parents=True, exist_ok=True)
-    mine = "#!/bin/bash\necho 'my own check'\n"
-    hook.write_text(mine)
+    stale = "#!/bin/bash\n# Auto-installed by session-check.py\n# 낡은 판\n"
+    hook.write_text(stale)
     assert _run_isolated(tmp_path, monkeypatch) == 0
-    assert hook.read_text() == mine
+    assert hook.read_text() == stale
 
 
-def test_no_rewrite_when_already_current(tmp_path, monkeypatch, capsys):
-    """이미 최신이면 쓰지 않는다 — 매 세션 갱신 알림이 뜨면 그 경고는 죽는다."""
+def test_plugin_only_mode_skips_template_dir_query(tmp_path, monkeypatch):
+    """결과를 버리는 조회는 하지 않는다 — plugin-only 에서 init.templateDir 는 무의미하다."""
+    calls = []
+    real_run = subprocess.run
+
+    def spy(cmd, *a, **kw):
+        calls.append(list(cmd))
+        return real_run(cmd, *a, **kw)
+
+    monkeypatch.setattr(subprocess, "run", spy)
     _init_repo(tmp_path)
-    hook = _installed_hook(tmp_path)
-    hook.parent.mkdir(parents=True, exist_ok=True)
-    hook.write_bytes(SRC_HOOK.read_bytes())
-    before = hook.stat().st_mtime_ns
     assert _run_isolated(tmp_path, monkeypatch) == 0
-    assert hook.stat().st_mtime_ns == before
-    assert "갱신" not in capsys.readouterr().err
+    assert not [c for c in calls if "init.templateDir" in c]
+
+
+def test_full_mode_reports_missing_global_setup(tmp_path, monkeypatch, capsys):
+    """setup.sh 를 실행한 사용자에게만 전역 설정 누락을 알린다."""
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / ".setup-state.json").write_text("{}")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "empty.gitconfig"))
+    assert _run_isolated(tmp_path, monkeypatch) == 0
+    msg = _warning(capsys.readouterr())
+    assert "ruff.toml 미설치" in msg
+    assert "init.templateDir 미설정" in msg
+
+
+def test_warnings_go_to_system_message_not_stderr(tmp_path, monkeypatch, capsys):
+    """SessionStart 훅의 stderr 는 아무도 보지 못한다 — 경고는 systemMessage 여야 한다."""
+    monkeypatch.setattr(sys, "version_info", (3, 8, 10, "final", 0))
+    assert _run_isolated(tmp_path, monkeypatch) == 0
+    captured = capsys.readouterr()
+    assert "3.9+" in json.loads(captured.out)["systemMessage"]
+    assert captured.err == ""
+
+
+def test_no_system_message_when_clean(tmp_path, monkeypatch, capsys):
+    """정상 환경에서 경고 채널은 비어 있어야 한다 — 상시 참인 경고는 죽는다."""
+    _init_repo(tmp_path)
+    assert _run_isolated(tmp_path, monkeypatch) == 0
+    assert "systemMessage" not in json.loads(capsys.readouterr().out)
