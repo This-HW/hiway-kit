@@ -6,6 +6,96 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.0.0] — 2026-09-28
+
+**Breaking.** 4.0.0 에서 Work 시스템을 걷어낸 뒤 같은 결함 클래스 — 소비자 환경에서 성립하지 않는 지시, 매 세션
+비용만 드는 텍스트, 일상 요청을 느린 경로로 빼돌리는 트리거, 소비자 레포에 묻지 않고 쓰는 동작 — 를 전수 감사해
+걷어냈다(읽기 전용 감사 4건 + 컨트롤 직접 확인). 스펙: `docs/specs/2026-09-28-v5-slimming/spec.md`.
+
+### 이주 표 — 없어진 것과 대신 쓸 것
+
+| 없어진 것 | 대신 |
+| --- | --- |
+| 에이전트 `explore-codebase` | 내장 `Explore` 서브에이전트 |
+| `plan-refactor`, `design-services` | `plan-implementation` (내장 `Plan` 도 가능) |
+| `implement-api`, `optimize-logic` | `implement-code` |
+| `write-api-tests` | `write-tests` |
+| `verify-integration` | `verify-code` |
+| `facilitator`, `synthesizer`, `consensus-builder`, `impact-analyzer`, `define-metrics` | `/multi-perspective-review` 의 스킬 단계(메인 세션이 수행) |
+| `analyze-tech-debt`, `enforce-structure`, `generate-boilerplate`, `manage-api-versions`, `analyze-domain` | 없음 — 어떤 스킬도 부르지 않았다. 필요하면 `/agent-creator` 로 프로젝트 에이전트를 만든다 |
+| 스킬 `/skill-creator` | 공식 skill-creator 스킬 |
+| `/mcp-builder` | 공식 mcp-builder 스킬 · MCP SDK 문서 |
+| `/doc-coauthoring` | 없음 — 일반 템플릿이었다 |
+| `/eval-forge`, `/native-watch`, `/self-improve` | 킷 개발 전용 — 이 레포의 `.claude/skills/` 로 옮겼다(소비자 환경에선 원래 동작하지 않았다) |
+| 규칙 `code-quality`, `ssot` | 없음 — 모델 기본 행동과 같은 일반론이었다 |
+
+### Removed / Changed — 에이전트 32 → 15 (Claude Code)
+
+- 남는 15종의 `description` 을 **입력 조건형**으로 다시 썼다. "~해줘"·"수정해줘"·"안돼"·"봐줘"·"확인해줘"·"분석해줘"·
+  "git"·"커밋" 같은 일상 표현이 단독 트리거였던 곳이 139건(기준 커밋 실측) → 0건, 에이전트 간 같은 트리거 0건.
+  평범한 요청이 느린 서브에이전트 왕복으로 새던 경로를 막는다.
+- `rules/agent-delegation-chain`: 사전 승인(재확인 불요)은 유지하되 **위임 범위를 좁혔다** — 전문이 맞고 별도 컨텍스트가
+  이득일 때(여러 파일·병렬·리뷰 독립성)만 위임, 대화형·단순·한 단계는 인라인. `rules/agent-system` 의 "NEVER general-purpose"
+  삭제(내장 에이전트로의 강등을 막고 있었다).
+- `review-code` maxTurns 10→25(도구 17회 소진으로 리포트 없이 끝난 실패 기록이 있었다), `security-scan` effort max→high.
+  `define-business-logic`·`design-user-journey` 는 읽기 전용 분석가로(worktree·Write 제거 — 산출물을 반환하고 호출자가 쓴다).
+- 서브에이전트가 실행할 수 없는 "다음 단계 위임" 표 전부 삭제(위임 신호 폐기 이후 잔재).
+- `/multi-perspective-review`: 메타 에이전트 4종·define-metrics 역할을 메인 세션 단계로. 서브에이전트가 없는 하네스(Codex)용
+  순차 경로를 명시.
+- evals: 없앤 에이전트 시나리오 삭제, 기준선 `evals/baseline/2026-09-28.json` 파생(38→22).
+  TEST-RATCHET-ALLOW: 스펙 B6 — 삭제된 에이전트 16종의 eval 시나리오를 의도적으로 제거했다(테스트 순감소는 그 시나리오 픽스처다).
+
+### Removed / Changed — 스킬 21 → 15, 규칙 14 → 12 (Claude Code · Codex 공통)
+
+- 삭제: `skill-creator`·`mcp-builder`·`doc-coauthoring`. 레포 전용으로 이전: `eval-forge`·`native-watch`·`self-improve`
+  (`.claude/skills/` — 소비자 환경에서는 원래 `evals/`·`scripts/`·`docs/` 가 없어 동작하지 않았다).
+- **크기 게이트**: `brainstorming` 은 설계가 필요한 Large 새 기능에만. 버그·Small·Medium 은 건너뛴다(이전: "모든 구현 전 필수" +
+  사용자 승인 2회). `plan-task`·`auto-dev` 도 같은 기준, Small 경로를 가볍게.
+- `task-resume`: 활성 계획이 있어도 단순 질문은 **그냥 답한다**(이전: "재개할까요?" 묻고 대기 — 옛 progress.md 와 같은 마찰).
+- `loop-engineering` 은 활성 계획이 있을 때만 주입(conditional), `parallel-worktree` 는 참조 등급(워크트리 안에서 상시 켜져
+  사실상 상시 비용이었다). `code-quality`·`ssot` 삭제(모델 기본 행동과 같은 일반론). `definition-of-done` 의 레포 전용 attest
+  (CHANGELOG·README 반영·적대적 리뷰)는 "프로젝트에 그런 관례가 있을 때"로.
+- `disable-model-invocation: true` 를 `using-hiway-kit`(세션 시작 때 이미 주입)·`harness-export`·`skill-forge`(수동 실행)에 —
+  공식 문서상 설명이 컨텍스트에서 빠진다. `docs/native-absorption.md` 의 해당 행을 `native-adopted` 로 재판정.
+- `review`·`test`·`debug` 에 복사돼 있던 36줄 강등 블록을 공통 8줄로, 존재하지 않는 에이전트·정의 없는 신호·재번호된 원장 ID·
+  레포 전용 경로 서술 정리.
+
+### Fixed / Changed — 훅·런타임 (Claude Code · Codex)
+
+- **`session-check` 가 소비자 레포에 쓰지 않는다.** 이전 버전은 플러그인만 설치한 경우 세션 시작 때마다 소비자의
+  `.git/hooks/pre-commit` 을 묻지 않고 설치·갱신했다(그 훅은 커밋 시 `ruff --fix`·`git add` 를 돌린다). 이제 설치는
+  `setup.sh` 의 명시적 경로뿐이다. 이미 자동 설치된 훅(첫 주석 `# Auto-installed by session-check.py`)은 더 갱신되지
+  않으니, 원하지 않으면 지우고 원하면 `setup.sh` 로 다시 설치한다. 경고는 아무도 못 보던 stderr 대신 `systemMessage` 로.
+- **`auto-format`**: prettier·eslint 는 프로젝트의 `node_modules/.bin` 에 있을 때만 — `npx` 레지스트리 조회를 없앴다.
+  ruff 는 파일당 2회, 훅 전체 25초 예산(타임아웃 30초 안), `MultiEdit` 도 처리.
+- **`stop-validator`**: 수정된 `.py` 가 없으면 트랜스크립트를 읽기 전에 끝난다. ruff 는 auto-format 이 못 본 파일에만,
+  전체 110초 예산(타임아웃 120초 안).
+- 훅 지연(5회 중앙값): auto-format `.md` 편집 242→19ms, stop-validator 무변경 턴(181MB 트랜스크립트) 274→49ms,
+  session-check 44→24ms.
+- **`session-start`**: 한 번도 발화하지 않던 STALE TASKS 스캐너와 `CKKIT_STALE_TASKS*` 환경변수 삭제. 주입 본문의
+  `skills/`·`rules/`·`hooks/` 경로를 플러그인 절대경로로 렌더(소비자 cwd 에는 그 경로가 없다).
+- **`protect-sensitive`**: 제거된 Agent Teams 의 `message|broadcast` matcher 와 그 전용 휴리스틱 삭제, Read 차단 문구 정정.
+- 죽은 코드 삭제: `feedback_ledger.py promote` 와 레지스트리 기계(호출자 0) — 그 계약을 검증하던
+  `docs/registry-describe-protocol.md`·`scripts/check_registry_describe.py` 도 함께. 구 이름(`cck`) 마커 이주 경로 삭제
+  (v2.x 시절 블록은 이제 일반 텍스트다 — 남아 있으면 손으로 지운다). `utils.py` 미사용 함수. `docs/works` 이주 안내는
+  6.0.0 에서 제거한다.
+  TEST-RATCHET-ALLOW: 삭제한 죽은 코드(promote·cck 이주·STALE TASKS·message/broadcast)의 테스트를 함께 지웠다.
+- 훅 테스트를 배포물 밖 `tests/hooks/` 로 옮겼다 — 플러그인 용량의 26%(290KB)였고 가짜 키 픽스처가 스캐너에 걸릴 수 있었다.
+- `hooks/examples/README.md` 의 인라인 `cp`/`chmod` 설치 블록을 opt-in 절차 서술로(다운로드-실행 오인 제거).
+
+### 매 세션 비용 (실측)
+
+| 축 | v4.0.4 | v5.0.0 |
+| --- | --- | --- |
+| 세션 시작 주입 — 빈 레포(실제 훅 출력) | 9,048B | 6,611B |
+| 세션 시작 주입 — 워크트리 | 빈 레포 + parallel-worktree ~1.8KB | 6,611B (빈 레포와 같다) |
+| 세션 시작 주입 — 최악(원장·계획·MCP 겹침) | 23,307B | 20,933B |
+| 에이전트 설명(상시) | 7,933B (32종) | 5,329B (15종) |
+| 스킬 설명(상시) | 3,826자 (21종) | 2,274자 (15종 중 12종 — 3종은 `disable-model-invocation`) |
+
+`scripts/check_injection_budget.py` 는 이제 규범만이 아니라 **실제 `session-start` 출력**을 픽스처 레포 5종에서 잰다
+(이전 판은 LESSONS·활성 계획을 빼고 재서 최악 출력을 약 5KB 과소평가했다). 상한: 항상 7KiB · 최악 22KiB · 에이전트 6KiB.
+
 ## [4.0.4] — 2026-09-28
 
 ### Fixed — Codex 매니페스트 `interface.category` 가 OpenAI 포털 허용 목록 밖이었다

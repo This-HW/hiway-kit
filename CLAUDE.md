@@ -157,7 +157,7 @@ fix could not be verified in the same session. Two consequences:
   working tree.
 
 Hooks and `scripts/` are different — hooks run from `${CLAUDE_PLUGIN_ROOT}` (also the
-cache), but `scripts/` and `evals/` are repo-local and take effect immediately.
+cache), but `scripts/`, `evals/` and `tests/` (hook tests live in `tests/hooks/` since v5.0.0 — they are not shipped) are repo-local and take effect immediately.
 
 ### Adding a New Agent
 
@@ -217,8 +217,11 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
 `plugins/common/setup/`):
 
 - `session-check.py` — `SessionStart` environment/setup check (runs before
-  `session-start.py`; registered from `setup/`). Warns on: python below the 3.9
-  floor, missing global setup, `.claude/agents` dual-load, and a **stale venv**
+  `session-start.py`; registered from `setup/`). **Writes nothing into the consumer's
+  repo** (until v5.0.0 it silently installed `setup/pre-commit` in plugin-only mode —
+  installation is now `setup.sh` only). Warnings go out as `systemMessage` (a
+  SessionStart hook's stderr is seen by no one) and only for real defects: python below the 3.9
+  floor, missing global setup (setup.sh users only), `.claude/agents` dual-load, and a **stale venv**
   (`.venv`/`venv` console-script shebangs still pointing at the project's old
   path after a directory move/copy — `bin/python` keeps working while every
   script dies with `bad interpreter`, or silently runs the old site-packages)
@@ -230,11 +233,15 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   does **not** otherwise scan file *content* or intercept `Bash`/`git commit` —
   secret scanning is gitleaks at push time — CI, and `verify-done.sh` §24 locally over
   unpushed commits. `setup/pre-commit` does **not** run gitleaks.
-- `auto-format.py` — auto-formats code after edits (uses ruff for Python) (`PostToolUse`)
+- `auto-format.py` — auto-formats code after edits (`PostToolUse`): ruff for Python (≤2 runs);
+  prettier/eslint **only when the project has them in `node_modules/.bin`** — never `npx`
+  (it looked up the registry on every Markdown edit). Whole hook fits a 25 s budget (< 30 s timeout)
 - `stop-validator.py` — on `Stop`, lints edited `.py` (ruff) and runs pytest on
   the test files this session edited (never the full suite — that's CI/`/test`'s
   job); on failure emits native `{"decision":"block","reason":...}` so Claude
-  continues and auto-fixes. Timeouts are non-blocking (`CLAUDE_STOP_TEST_TIMEOUT`)
+  continues and auto-fixes. Timeouts are non-blocking (`CLAUDE_STOP_TEST_TIMEOUT`).
+  If git reports no modified `.py`, it returns **before reading the transcript**; ruff runs
+  only on files auto-format could not see (e.g. written via Bash). Everything fits 110 s (< 120 s)
 - Stop state reuses `$TMPDIR/claude-{uid}` only when it is an owned, non-symlink
   directory with mode `0700`. Unsafe or unavailable stable state uses a private
   temporary directory for that process; it never trusts counters from the shared

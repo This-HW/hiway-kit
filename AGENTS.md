@@ -4,7 +4,7 @@
 > 재생성: `./scripts/export-harness.sh` (플러그인 사용자는 `/harness-export` 스킬 참조)
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:710a96f7a54ec0909f2c89b95c5abe575174418b442882770d5e11862efc8fbc -->
+<!-- kit:begin rules-v1.4.0 sha256:26591321ab7ef30dbc94fceccfff233743e7c31b746d2ee0487676f66468d6ff -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -31,18 +31,16 @@ brainstorming  →  plan-task  →  auto-dev
 | 룰 | 이식 사유 |
 | --- | --- |
 | `rules/untrusted-text` | 비신뢰 텍스트 취급 — 호스트 무관 공통 규율 |
-| `rules/code-quality` | 호스트 무관 |
 | `rules/definition-of-done` | 호스트 무관 |
 | `rules/feedback-loop` | 저장은 파일, 읽기는 CLI — 훅이 없는 하네스도 직접 조회하면 성립한다 |
 | `rules/loop-engineering` | 호스트 무관 |
-| `rules/parallel-worktree` | 호스트 무관 |
 | `rules/planning-protocol` | 호스트 무관 |
-| `rules/ssot` | 호스트 무관 |
 
 ### 이름만 알리는 룰 (참조 티어 — 본문 미인라인)
 
 - `rules/child-marker` — 본문은 플러그인 설치 경로의 `rules/child-marker.md` 에 있다
 - `rules/delegation-contract` — 본문은 플러그인 설치 경로의 `rules/delegation-contract.md` 에 있다
+- `rules/parallel-worktree` — 본문은 플러그인 설치 경로의 `rules/parallel-worktree.md` 에 있다
 
 참조 티어라 본문을 인라인하지 않는다. 세션 시작 훅이 도는 하네스(Claude Code, 훅 신뢰를
 승인한 Codex)는 세션 시작 때 절대 경로로 안내된다. 설치 경로를 모르면 원문은
@@ -53,7 +51,7 @@ brainstorming  →  plan-task  →  auto-dev
 | 영역 | 이유 |
 | --- | --- |
 | 차단·검증 훅 (protect-sensitive · stop-validator) | Claude Code 전용 — Codex 에는 싣지 않는다(PreToolUse 차단이 유지되지 않는다). 세션 시작 주입(session-start)·자동 포맷(auto-format)은 Codex 에서도 돈다(훅 신뢰 승인 필요) — 그 밖의 하네스에는 실행 지점이 없다 |
-| 서브에이전트 정의 (32종) | Claude Code 서브에이전트 규격 전용 |
+| 서브에이전트 정의 (15종) | Claude Code 서브에이전트 규격 전용 |
 | 룰 본문의 kit-레포 전용 명령 (`scripts/verify-done.sh` 등) | "요약 금지 / 원문 그대로" 정책의 대가 — 각 룰이 "이 레포에선"으로 한정하고 있으니, 당신 프로젝트의 해당 명령으로 읽어라 |
 | `rules/agent-delegation-chain` | Claude Code 고유 프리미티브에 종속 |
 | `rules/agent-system` | Claude Code 고유 프리미티브에 종속 |
@@ -94,26 +92,6 @@ portable_reason: 비신뢰 텍스트 취급 — 호스트 무관 공통 규율
 
 ---
 
-<!-- source: rules/code-quality.md (원문 그대로) -->
----
-tier: core
-portable: true
----
-
-### Code Quality Rules
-
-- **Functions**: one job, a name that says it (`calculateTotalPrice`, not `calc`/`handle`).
-  Growing length, parameter count, or nesting is the signal to split.
-- **Errors**: don't swallow them. Handle the types you can; otherwise rethrow upward with
-  context (code, message, cause) preserved. A deliberate fail-open gets a comment saying why.
-- **Conditionals**: prefer early return over nesting; name complex boolean expressions.
-- **Type safety**: bypassing the type system (`any`, unchecked casts) hides bugs — use
-  explicit types and guards, and handle null/absent values explicitly.
-- **Testability**: construction hardcoded inside a function is hard to test — inject it.
-  Prefer pure functions.
-
----
-
 <!-- source: rules/definition-of-done.md (원문 그대로) -->
 ---
 tier: core
@@ -136,7 +114,8 @@ rc 는 `tail` 것이다). 둘 다 `&&` 를 통과시킨다 — `pipefail`. 상�
 #### DoD 체크리스트
 
 **기계 검사 목록은 게이트가 소유한다** — 열거하면 검사를 더할 때마다 낡는다(실제로 그랬다).
-수동 attest: 스펙 전항목 · 적대적 리뷰 · 계획 상태 · CHANGELOG/README/CLAUDE 반영.
+수동 attest: 스펙 전항목 · 계획 상태 · 그리고 **프로젝트에 그런 관례가 있을 때** 독립 리뷰와
+문서 반영(CHANGELOG·README 등).
 위임했다면 산출물 보존·자원 처리도 확인한다(`control-loop`). 완료 = 게이트 green + attest + 계획 `status: done`.
 
 #### Task 마감 규율
@@ -160,29 +139,19 @@ portable_reason: 저장은 파일, 읽기는 CLI — 훅이 없는 하네스도 
 
 validation·review에서 반복 발견된 결함을 학습해 같은 실수를 반복하지 않는다.
 
-#### digest 확보 — 방법은 하네스마다 다르고 규율은 같다
-
-훅이 있으면 세션 시작 시 `=== LESSONS ===`로 **자동 주입**된다. 훅이 없으면
-**직접 조회한다** — `python3 <킷 hooks 경로>/feedback_ledger.py digest`.
-세션이 아닌 API 성 호출이면 **호출자가 미리 조회해 프롬프트에 싣는다**.
-
-**"주입을 못 받았으니 해당 없음"으로 넘어가지 마라** — 조회 수단이 있으면 조회한다.
-경로를 못 찾으면 무동작이다(fail-open, 학습 루프가 본 작업을 막지 않는다).
-
-#### 적용
-
-- digest를 확보했으면 **구현·리뷰 전 우선 점검**한다 — 구현 시 그 패턴을 사전 회피하고,
-  리뷰 시 우선 검사 항목에 넣는다.
-- 검증에서 **실제로 발견된** 결함만 `feedback_ledger.py upsert`로 누적한다
-  (통과 패턴·추측은 노이즈).
-- ledger는 헬퍼(`hooks/feedback_ledger.py`)가 SSOT — 상한·중복제거·감쇠를 코드로
-  보장한다. **직접 테이블을 편집하지 않는다.**
+- **digest 확보**: 훅이 있으면 `=== LESSONS ===`로 자동 주입된다. 없으면 직접 조회한다 —
+  `python3 <킷 hooks 경로>/feedback_ledger.py digest`(API 성 호출이면 호출자가 조회해 싣는다).
+  경로를 못 찾으면 무동작이다(fail-open).
+- **적용**: 구현·리뷰 전에 그 패턴을 우선 점검한다.
+- **누적**: 검증에서 **실제로 발견된** 결함만 `feedback_ledger.py upsert`로 넣는다(통과
+  패턴·추측은 노이즈). 상한·중복제거·감쇠는 헬퍼가 보장한다 — 테이블을 직접 편집하지 않는다.
 
 ---
 
 <!-- source: rules/loop-engineering.md (원문 그대로) -->
 ---
-tier: core
+tier: conditional
+activates: 활성 계획 존재
 portable: true
 ---
 
@@ -201,73 +170,13 @@ drift한다) → unblocked 항목 선택 → 실행 → 완료 시 checklist pas
 #### 종료 가드 (안티-런어웨이 = 필수)
 
 **P0**(데이터/보안/결제/핵심로직 모호 → 선택지 제시, 호스트 수단으로) · **완료**(검증
-게이트 green + 수동 DoD attest + 배치 전체 계획·항목 해소, `definition-of-done.md` —
-"마지막 스텝 도달"≠완료) · **max_iterations/루프 감지**(동일 Task 무진전 반복 상한/2회+
-→ 에스컬레이션·중단 보고) · **idle**(N iteration 새 커밋 0건 → 종료, git 커밋 기준) ·
-**검증 실패 잔존**(가드 재시도 후에도 실패 → 보고) 에서 반드시 멈춘다.
+게이트 green + 수동 DoD attest + 배치 전체 계획·항목 해소, `definition-of-done` —
+"마지막 스텝 도달"≠완료) · **무진전**(같은 항목이 2회 연속 새 커밋·checklist 통과 없이
+끝남 → 에스컬레이션·중단 보고) · **검증 실패 잔존**(가드 재시도 후에도 실패 → 보고)
+에서 반드시 멈춘다.
 
 배치 실행(킷의 `auto-dev` 등)은 계획 완료 시 자동 전진, 단발 실행은 루프 없음 — opt-in, 루프 실패가
 본 작업을 막지 않는다.
-
----
-
-<!-- source: rules/parallel-worktree.md (원문 그대로) -->
----
-tier: conditional
-activates: 워크트리 여부 감지 (.git 파일 == linked worktree)
-portable: true
----
-
-### Parallel Worktree Rules
-
-파일 수정 작업자는 격리된 작업 트리에서 검증한 산출물을 반환하고, 지정된 통합 담당자가
-병합한다. 격리는 필요조건일 뿐이다 — 병합 규범이 없으면 충돌이 통합 시점으로 이연된다.
-
-#### 격리 수단은 호스트가 정한다 — 규범이 지정하지 않는다
-
-**여기 있는 것은 불변식이지 메커니즘이 아니다.** 격리·복귀를 무엇으로 하는지는
-호스트와 레포가 정한다: 네이티브 서브에이전트의 워크트리 격리(`isolation: worktree`
-+ `ExitWorktree`)는 **그 수단 중 하나일 뿐** 이고, 별도 오케스트레이터의 자식 세션이나
-사람이 만든 `git worktree` 도 같은 불변식을 만족한다. **레포가 특정 수단을 금지할 수
-있다** — 실제로 그런 레포가 있다(서브에이전트 위임을 훅으로 차단하고 외부 오케스트레이터를
-정본으로 쓴다). 그러니 이 규범을 "그 수단이 사용 가능하다"는 뜻으로 읽지 마라.
-쓸 수 있는 수단은 **호스트에 직접 확인** 한다.
-
-- ALWAYS: 소스 파일을 **수정** 하는 작업자는 격리 진입. (킷이 자기 에이전트를 저작할 때는
-  frontmatter `isolation: worktree` + tools 에 `ExitWorktree` 로 구현한다.)
-- NEVER: **읽기 전용** 작업자에 격리 설정 — 비용만 늘고 얻는 것이 없다.
-- 병합·충돌 해결 담당은 의도적으로 비격리 — 그 일은 통합 지점에서 일어나야 한다.
-
-#### 파일 소유권 = 병렬 안전의 전제조건 (위임 전)
-
-병렬 안전은 **위임 시점의 파일 분리**로 확보한다. 통합 담당자가 병합을 직렬화해도
-겹치는 파일을 동시에 수정한 충돌은 남는다. 독립 청크의 수정 대상을 disjoint하게 나눈다.
-
-- ALWAYS: 병렬 위임 **전에** 청크 간 수정 대상 파일이 겹치지 않는지 확인.
-- 겹침을 피할 수 없으면 → **순차 위임** 으로 강등한다(하나 위임 → 반환·통합 확인 → 다음).
-  의존성 상류(공유 타입·유틸) 청크를 먼저. "순차 병합"이 아니라 **"순차 위임"이
-  오케스트레이터가 실제로 통제하는 레버** 다.
-- 공유 파일(설정·배럴 export·라우트 등록부·버전·CHANGELOG)은 병렬 청크에 배정하지 않고
-  마지막에 오케스트레이터가 단독 수정한다.
-
-#### 반환과 통합 — 권한을 구분한다
-
-- 작업자는 격리 트리에서 검증(린트 + 관련 테스트)한 커밋/diff·결과를 반환한다. 실패도 명시한다.
-- 지정된 통합 담당자만 검증된 산출물을 병합한다. 격리 종료 도구는 통합 브랜치 쓰기 권한이 아니다.
-- **작업자의 "그린" 보고는 게이트가 아니다** — 담당자가 근거를 확인하고 통합 후 완료 게이트를 돌린다.
-
-#### 충돌 에스컬레이션
-
-- NEVER: 충돌 시 작업자가 임의로 ours/theirs 선택. git 워크플로 담당에게 넘긴다(호스트가
-  제공하는 위임 수단으로). 그 수단이 없으면 오케스트레이터가 직접 처리하되, **임의 선택
-  금지는 그대로다** — 충돌 파일·내용을 보고하고 사용자에게 ours/theirs/manual 선택지를 준다.
-- 같은 지점에서 충돌 2회 반복 = 청크 분해 오류 신호 → 계획 단계로 에스컬레이션.
-
-#### 공유 상태 파일
-
-- NEVER: 격리 트리 안에서 진행 상태·원장(`docs/plans/**`의 `status`·checklist, feedback
-  ledger 등) 갱신 — 병합 전까지 반영되지 않아 상태가 유실/분기된다. 상태 갱신은
-  오케스트레이터의 몫.
 
 ---
 
@@ -304,21 +213,6 @@ portable: true
 모호함을 **찾는 네 자리**, 물을 것 **선별**, 값의 **출처 표기**, 정책값 분리, 규모별 완료
 조건 — 절차 SSOT 는 `skills/plan-task/references/elicitation.md` 다. 기획을 수행한다면
 그것을 읽고 시작한다. **완료 조건은 실행 가능한 명령**이어야 Dev 로 넘긴다.
-
----
-
-<!-- source: rules/ssot.md (원문 그대로) -->
----
-tier: core
-portable: true
----
-
-### SSOT (Single Source of Truth) Rules
-
-- Define error types, API endpoints, and env vars in one place and reference that
-  definition — copied values get fixed on one side only and drift.
-- One change that needs edits in many files, or the same bug in several places, is an
-  SSOT violation signal. If the project has a central error handler, route errors through it.
 <!-- kit:end -->
 
 <!-- kit2:begin conventions-v1.0.0 sha256:fd5e5cca5a1c7b0ae08ee51c0950403b1663518f34ce16f0f0315216c8a0a49e -->

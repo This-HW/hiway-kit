@@ -8,9 +8,10 @@
 
 이 킷의 대표 결함 클래스는 *"커밋·테스트·문서를 다 갖춘 가드가 설치본에 없어 집행이
 0회"* 다. 실측(v3.7.0): `.private-names` 비공개 이름 차단이 `setup/pre-commit` 소스에만
-있고 어느 저장소에도 설치되지 않은 채 "활성"으로 릴리스 보고됐다. 원인은 `session-check`
-가 훅이 **없을 때만** 설치해 최초 판이 영구 동결된 것이었다(v3.8.0 수정). 고쳤어도 이
-검사가 있어야 다음번에 같은 형태가 조용히 지나가지 않는다.
+있고 어느 저장소에도 설치되지 않은 채 "활성"으로 릴리스 보고됐다. 원인은 당시 `session-check`
+가 훅이 **없을 때만** 설치해 최초 판이 영구 동결된 것이었다(v3.8.0 수정). v5.0.0 부터는
+session-check 가 소비자 레포에 아무것도 쓰지 않고 설치는 `setup.sh` 만 한다 — 설치 경로가
+하나로 줄었어도 이 검사가 있어야 낡은 설치본이 조용히 지나가지 않는다.
 
 ## 왜 red 가 아니라 경고인가
 
@@ -20,7 +21,8 @@
 
 ## 미설치의 의미는 **위치에서 파생된다**
 
-- `setup/pre-commit` — `session-check` 가 자동 설치한다. **없으면** 집행이 안 도는
+- `setup/pre-commit` — `setup.sh` 가 설치한다(v5.0.0 전에는 session-check 가 자동 설치했다).
+  이 검사는 **이 킷 레포에서만** 돈다 — 메인테이너 레포에 **없으면** 커밋타임 집행이 안 도는
   것이므로 알린다.
 - `setup/git-hooks/*` — 그 디렉토리는 **opt-in 훅을 담으려고** 존재한다. **없는 것이
   정상**이므로 침묵한다. 안 켠 것을 결함으로 보고하면 켜지 않은 모든 소비자에게 상시
@@ -56,10 +58,10 @@ RESET = "\033[0m"
 # 나열을 정당화하는 주석을 쓴다고 나열이 안전해지지는 않는다.
 #
 # 정당화의 전제("각각 미설치 의미가 다르다")도 틀렸다 — 그 의미는 **위치에서
-# 파생된다**: `setup/pre-commit` 은 `session-check` 가 자동 설치하므로 없으면 알리고,
+# 파생된다**: `setup/pre-commit` 은 `setup.sh` 가 설치하는 기본 훅이므로 없으면 알리고,
 # `setup/git-hooks/` 는 **opt-in 훅을 담으려고 존재하는 디렉토리**이므로 없는 것이
 # 정상이다. 파일마다 사람이 아는 지식이 아니라 규칙이다.
-AUTO_INSTALLED = ("plugins/common/setup/pre-commit",)
+SETUP_INSTALLED = ("plugins/common/setup/pre-commit",)
 OPT_IN_DIR = "plugins/common/setup/git-hooks"
 
 # 설치본이 킷 소유인지 가르는 마커. 소스가 어느 쪽을 갖고 있는지로 고른다.
@@ -83,14 +85,14 @@ def discover_hooks() -> tuple[list[tuple[str, str, str, bool]], list[str]]:
     """(검사 대상, 마커 없는 정본). 나열이 아니라 파생이다.
 
     **이 검사가 도는 조건**(`warning-signal.md` §4): `setup/git-hooks/` 안의 모든 파일과
-    `AUTO_INSTALLED` 에 적힌 경로. 새 훅은 그 디렉토리에 놓이는 것만으로 대상이 된다.
+    `SETUP_INSTALLED` 에 적힌 경로. 새 훅은 그 디렉토리에 놓이는 것만으로 대상이 된다.
 
     마커가 없는 정본은 **건너뛰지 않고 돌려준다** — 호출자가 red 로 만든다. 마커 없는
     킷 훅은 설치본과 대조할 수단이 없으므로, 조용히 통과시키면 그 훅만 감시 밖이 된다.
     """
     targets: list[tuple[str, str, str, bool]] = []
     unmarked: list[str] = []
-    srcs = [REPO_ROOT / rel for rel in AUTO_INSTALLED]
+    srcs = [REPO_ROOT / rel for rel in SETUP_INSTALLED]
     opt_in = REPO_ROOT / OPT_IN_DIR
     if opt_in.is_dir():
         srcs += sorted(p for p in opt_in.iterdir() if p.is_file() and _looks_like_hook(p))
@@ -107,7 +109,7 @@ def discover_hooks() -> tuple[list[tuple[str, str, str, bool]], list[str]]:
         if marker is None:
             unmarked.append(rel)
             continue
-        targets.append((rel, src.name, marker, rel in AUTO_INSTALLED))
+        targets.append((rel, src.name, marker, rel in SETUP_INSTALLED))
     return targets, unmarked
 
 

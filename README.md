@@ -83,10 +83,10 @@ is skipped and says so — it never reports protection it isn't providing.
 
 > **Check before you rely on it**: `grep -c private-names "$(git rev-parse --git-path hooks)/pre-commit"`.
 > A `0` means your installed hook predates this feature and the guard is **not** active.
-> `session-check.py` installs `setup/pre-commit` only when no `pre-commit` hook exists yet —
-> it never replaces an existing one, so a repo set up before this release keeps its old hook
-> indefinitely. Copy `plugins/common/setup/pre-commit` over it to upgrade (it overwrites any
-> local edits to that hook, so diff first if you customized it).
+> Nothing installs this hook for you at session start — since v5.0.0 the plugin never writes into
+> your `.git/hooks/` (earlier versions silently installed it in plugin-only mode). Install it
+> explicitly with `./setup.sh`, or copy `plugins/common/setup/pre-commit` over your hook (that
+> overwrites local edits to it, so diff first if you customized it).
 
 This exists because it actually happened: on 2026-09-08 a private project name reached three
 design documents and the repo's gitleaks rule caught **none** of them (its regex only matched
@@ -315,7 +315,7 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 | ----------------- | ------ | ------ | ----------------------------------------- |
 | `hiway-kit` | 15     | 15     | Core: planning, development, review, meta |
 
-v5.0.0 cut the kit from 32 agents and 21 skills to what earns its place: components with a native
+v5.0.0 cut the kit roughly in half, down to what earns its place: components with a native
 equivalent, that no skill ever invoked, or that only worked inside this repository were removed —
 see the migration table in [CHANGELOG](CHANGELOG.md).
 
