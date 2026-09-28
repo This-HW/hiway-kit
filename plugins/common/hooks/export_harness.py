@@ -727,7 +727,7 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     #
     # 예전에는 이 의도를 BLOCK_HEADER 에 **요약본을 하나 더 적어서** 달성했다 — 원문과
     # 번호 항목이 한 글자도 다르지 않은 중복이었고, 같은 규범이 두 곳에 있으니 한쪽만
-    # 고치면 조용히 갈린다(rules/ssot.md 가 금지하는 형태). 게다가 이 블록은 스스로
+    # 고치면 조용히 갈린다(단일 출처 원칙 위반). 게다가 이 블록은 스스로
     # "원문 그대로"를 정책으로 내걸고 있어 요약본은 그 정책과도 어긋났다.
     # 중복 대신 **순서**로 해결한다 — 한 번만, 원문으로, 맨 앞에.
     portable = sorted(portable, key=lambda x: (x.stem != "untrusted-text", x.stem))

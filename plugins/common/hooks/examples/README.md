@@ -25,13 +25,14 @@
 | `setup/git-hooks/reference-transaction` | 태그 없는 `git stash` | stash 스택은 저장소의 모든 워크트리·동시 세션이 **공유**한다. 태그가 없으면 `pop` 이 남의 항목을 꺼내고 꺼낸 쪽은 모른다 |
 | `setup/git-hooks/pre-push` | 자식 세션 워크트리에서 나가는 `git push` | 원격 반영은 부모(컨트롤) 세션의 몫이다. 같은 차단이 `child-git-guard.py` 에도 있지만 **그것은 Claude Code 에서만 돈다** — 아래 §파리티 참고 |
 
-```bash
-H="$(git rev-parse --git-path hooks)"
-for hook in reference-transaction pre-push; do
-  cp "<플러그인 루트>/setup/git-hooks/$hook" "$H/$hook"
-  chmod +x "$H/$hook"
-done
-```
+**켜는 방법 (opt-in — 킷은 git 훅을 설치하지 않는다).** 자동 설치 명령은 싣지 않는다 —
+복사해 붙여넣는 한 줄은 "읽지 않고 실행"을 부른다. 켜려는 사람이 직접 다음을 한다:
+
+1. 훅 파일을 **먼저 읽는다** — 플러그인 설치본의 `setup/git-hooks/` 아래 원하는 파일
+   (`reference-transaction`·`pre-push`). 무엇을 막고 어떻게 푸는지 파일 머리에 적혀 있다.
+2. 설치 위치를 `git rev-parse --git-path hooks` 로 확인한다.
+3. 그 디렉토리에 **같은 이름으로** 복사하고 실행 권한을 준다. 같은 이름의 훅이 이미
+   있으면 덮어쓰지 말고 합친다 — 덮으면 기존 검사가 조용히 사라진다.
 
 `pre-push` 는 **주 저장소에 한 번만** 깔면 된다. 연결된 워크트리는 hooks 디렉토리를
 공유하므로(`--git-path hooks` 가 주 저장소를 가리킨다) 이후 생기는 모든 워커 워크트리에
@@ -49,7 +50,7 @@ done
 > 마커가 판정 근거다.
 
 **차단해도 작업은 보존된다** — ref 갱신이 abort 되면 작업트리 리셋이 일어나지 않는다
-`[confirmed]`. 회귀 테스트가 이 계약을 고정한다(`tests/test_git_stash_guard.py`).
+`[confirmed]`. 회귀 테스트가 이 계약을 고정한다(레포의 `tests/hooks/test_git_stash_guard.py`).
 
 ## 설치 방법
 
@@ -171,7 +172,7 @@ git 이 다시). 겹치는 것은 의도된 것이다 — 한 층이 꺼져 있�
 `MARKER_REL = ("kit", "child.json")` 과 경로·스키마가 같고, 스키마 SSOT 는
 `rules/child-marker.md` 다. **두 훅이 다른 것을 보면 그 자체가 결함이다** — 한쪽은 막고
 한쪽은 통과시키는 상태를 아무도 설명할 수 없다. 회귀 테스트가 이 동등성을 고정한다
-(`tests/test_pre_push_child_guard.py`).
+(레포의 `tests/hooks/test_pre_push_child_guard.py`).
 
 판정 규칙은 `child-git-guard.py` 와 동일하다:
 
