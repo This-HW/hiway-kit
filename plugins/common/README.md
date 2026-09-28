@@ -42,7 +42,7 @@ A selection below — 15 skills total, auto-discovered from `skills/` (not hand-
 ## Hooks (auto-registered)
 
 - **SessionStart** — Injects governance rules, recurring review lessons, and open plan files
-- **PreToolUse** — Blocks reads and edits of sensitive file paths such as `.env` and keys (`protect-sensitive.py`)
+- **PreToolUse** — Blocks reads and edits of sensitive file paths such as `.env`, `~/.ssh/`, `~/.aws/` and key files (`protect-sensitive.py`). It only matches the *path* the agent is about to open and refuses it — it never opens, reads or transmits those files, and it makes no network calls. The paths appear in its source because they are the blocklist.
 - **PostToolUse** — Auto-formats the edited file (`auto-format.py`: ruff for Python; prettier/eslint only when the project has them installed)
 - **Stop** — Lints edited Python files and runs the tests you edited; on failure, the turn continues so the agent fixes it
 
