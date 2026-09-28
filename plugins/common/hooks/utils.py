@@ -10,10 +10,6 @@ import pathlib
 import sys
 import traceback
 
-# 상수
-FORMATTER_TIMEOUT_SECONDS = 30
-DEFAULT_SCRATCH_MAX_AGE_DAYS = 7
-
 
 def get_project_root() -> str:
     """
@@ -80,31 +76,3 @@ def safe_path(file_path: str) -> bool:
         return False
 
     return True
-
-
-def format_size(size: int) -> str:
-    """파일 크기를 읽기 쉬운 형식으로 변환"""
-    for unit in ["B", "KB", "MB", "GB"]:
-        if size < 1024:
-            return f"{size:.1f}{unit}"
-        size /= 1024
-    return f"{size:.1f}TB"
-
-
-def load_yaml_safe(file_path: str) -> dict:
-    """
-    YAML 파일 안전하게 로드
-
-    PyYAML이 설치되지 않은 경우 빈 dict 반환
-    """
-    try:
-        import yaml
-
-        with open(file_path) as f:
-            return yaml.safe_load(f) or {}
-    except ImportError:
-        debug_log("PyYAML not installed, skipping YAML load")
-        return {}
-    except Exception as e:
-        debug_log(f"YAML load error: {file_path}", e)
-        return {}

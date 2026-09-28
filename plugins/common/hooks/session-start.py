@@ -86,6 +86,7 @@ _PLAN_DONE_STATUS = "done"
 _MAX_ACTIVE_PLANS = 10
 
 #: 구버전(<4.0) Work 시스템 흔적. 읽지 않고 안내 한 줄만 낸다.
+#: 4.x → 5.x 업그레이드 경로다 — **6.0.0 에서 제거한다**(2026-09-28 결정).
 _LEGACY_WORKS_ACTIVE = ("docs", "works", "active")
 _LEGACY_WORKS_NOTICE = (
     "구버전 docs/works/active 가 있다 — hiway-kit 4.0 부터 "

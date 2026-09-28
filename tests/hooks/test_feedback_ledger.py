@@ -715,3 +715,11 @@ def test_digest_is_empty_but_loud_when_unreadable(tmp_path, capsys):
 
     assert _mod.load_digest(root=tmp_path) == ""
     assert "읽지 못해" in capsys.readouterr().err
+
+
+def test_promote_subcommand_is_gone(capsys):
+    """v5.0.0: 호출자 0 이던 레지스트리 승격 경로를 삭제했다 — 모르는 명령으로 거절한다."""
+    assert _mod._main(["promote"]) == 2
+    assert "unknown command" in capsys.readouterr().err
+    assert not hasattr(_mod, "promote")
+    assert not hasattr(_mod, "discover_registry_pointer")

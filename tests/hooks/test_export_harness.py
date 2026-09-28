@@ -908,35 +908,27 @@ def test_conventions_preserves_user_content_around_both_blocks(tmp_path):
     assert out.count("kit2:begin") == 1
 
 
-# ── 구 마커 이행 경로 (v3.9.0) ────────────────────────────────────────────────
+# ── 구 마커 이행 경로 삭제 (v5.0.0) ─────────────────────────────────────────
 #
-# 소비자의 AGENTS.md 에는 이미 구 토큰(`cck:`) 블록이 들어 있다. 새 토큰만 인식하면  (old-name-ok: 구 마커 인식 = 이행 경로)
-# 그 블록이 **고아로 남은 채** 새 블록이 덧붙어, 한 파일에 규범 블록이 둘이 된다.
-# 읽기는 둘 다 받고 쓰기는 새 토큰으로만 — 그래야 다음 export 가 제자리에서 교체한다.
+# 개명(v3.0.0) 전 토큰을 읽어 들이던 이행 경로는 두 메이저 뒤 삭제했다. 그 판의
+# 블록은 이제 마커가 아니라 **사용자 텍스트**다 — 생성기가 건드리지 않는다.
 
 
-def test_old_marker_block_is_replaced_in_place_not_duplicated(tmp_path):
+def test_pre_rename_marker_block_is_user_text_now(tmp_path):
+    old = "c" + "ck"  # 구 이름을 한 토큰으로 쓰지 않는다(§20 구 이름 게이트)
     root = _minimal(tmp_path)
     target = tmp_path / "proj"
     target.mkdir()
-    (target / "AGENTS.md").write_text(
-        "# 내 파일\n\n앞 문장\n\n"
-        "<!-- cck:begin rules-v9.9.9 sha256:" + "a" * 64 + " -->\n"  # old-name-ok: 구 마커 인식 = 이행 경로
+    legacy = (
+        f"<!-- {old}:begin rules-v9.9.9 sha256:" + "a" * 64 + " -->\n"
         "낡은 규범 본문\n"
-        "<!-- cck:end -->\n\n"  # old-name-ok: 구 마커 인식 = 이행 경로
-        "뒤 문장\n",
-        encoding="utf-8",
+        f"<!-- {old}:end -->\n"
     )
+    (target / "AGENTS.md").write_text("# 내 파일\n\n" + legacy, encoding="utf-8")
     assert _mod.main(["--plugin-root", str(root), "--target", str(target)]) == 0
     out = (target / "AGENTS.md").read_text(encoding="utf-8")
-
-    # 제자리 교체: 블록은 하나뿐이고 새 토큰이며, 구 토큰은 남지 않는다.
-    assert out.count("kit:begin") == 1
-    assert out.count("kit:end") == 1
-    assert "cck:begin" not in out and "cck:end" not in out  # old-name-ok: 구 마커 인식 = 이행 경로
-    assert "낡은 규범 본문" not in out
-    # 마커 밖 사용자 콘텐츠는 불가침.
-    assert "앞 문장" in out and "뒤 문장" in out and "# 내 파일" in out
+    assert legacy in out, "구 토큰 블록을 마커로 해석했다 — 삭제된 이행 경로가 살아 있다"
+    assert out.count("<!-- kit:begin") == 1
 
 
 # ── 다중 진입점 (v3.10.0) ────────────────────────────────────────────────────
@@ -1178,77 +1170,12 @@ def test_partial_conventions_is_drift_but_rules_block_is_still_written(tmp_path,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ATK-010 — 구/신 마커 공존은 영구 red 가 아니라 이행 경로다
+# 마커 손상은 추측해서 고치지 않는다
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _seed_legacy_duplicate(target: Path, *, old: str = "kit", new: str = "cck") -> str:  # old-name-ok: 구 마커 인식 = 이행 경로
-    """정상 생성물의 블록을 구 토큰으로 복제해 구 1 + 신 1 공존 상태를 만든다."""
-    import re as _re
-
-    path = target / "AGENTS.md"
-    text = path.read_text(encoding="utf-8")
-    b = _re.search(rf"^<!-- {old}:begin .*-->$", text, _re.MULTILINE)
-    e = _re.search(rf"^<!-- {old}:end -->$", text, _re.MULTILINE)
-    block = text[b.start() : e.end()]
-    legacy = block.replace(f"{old}:begin", f"{new}:begin").replace(
-        f"{old}:end", f"{new}:end"
-    )
-    marker = "USER-CONTENT-MUST-SURVIVE"
-    path.write_text(f"{legacy}\n\n{marker}\n\n{text}", encoding="utf-8")
-    return marker
-
-
-def test_legacy_and_new_block_coexistence_is_migrated_not_refused(tmp_path):
-    """구 토큰 블록 1개 + 신 토큰 블록 1개는 **구 블록을 제거하고 신 블록을 갱신**한다.
-
-    수정 전에는 `begins=2, ends=2` → MarkerError → 재생성으로도 못 고치는 영구 red였다
-    (LESSONS에 x3로 등재된 패턴). 마커 밖 사용자 콘텐츠는 그대로 살아 있어야 한다.
-    """
-    root = _minimal(tmp_path)
-    target = tmp_path / "proj"
-    target.mkdir()
-    assert _mod.main(
-        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
-    ) == 0
-    marker = _seed_legacy_duplicate(target)
-
-    rc = _mod.main(
-        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
-    )
-    assert rc == 0, "이행 가능한 공존이 거부됐다 — 영구 red"
-    body = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert "cck:begin" not in body, "구 토큰 블록이 남았다"  # old-name-ok: 구 마커 인식 = 이행 경로
-    assert body.count("<!-- kit:begin") == 1
-    assert marker in body, "마커 밖 사용자 콘텐츠가 삭제됐다"
-
-    # 재생성 후 --check가 초록이어야 "재생성으로 고쳐진다"가 실제로 참이다.
-    assert _mod.main(
-        ["--plugin-root", str(root), "--target", str(target),
-         "--entrypoints", "AGENTS.md", "--check"]
-    ) == 0
-
-
-def test_check_reports_legacy_coexistence_as_drift_not_green(tmp_path, capsys):
-    """`--check`는 공존을 **초록으로 넘기지 않는다** — 그러면 구 블록이 영구히 남는다."""
-    root = _minimal(tmp_path)
-    target = tmp_path / "proj"
-    target.mkdir()
-    assert _mod.main(
-        ["--plugin-root", str(root), "--target", str(target), "--entrypoints", "AGENTS.md"]
-    ) == 0
-    _seed_legacy_duplicate(target)
-
-    rc = _mod.main(
-        ["--plugin-root", str(root), "--target", str(target),
-         "--entrypoints", "AGENTS.md", "--check"]
-    )
-    assert rc == 1
-    assert "공존" in capsys.readouterr().err, "공존을 다른 실패와 구별해 보고하지 않는다"
-
-
 def test_other_marker_corruption_is_still_refused(tmp_path):
-    """이행 경로는 **구 1 + 신 1** 한 형태만이다. 그 외 손상은 지금처럼 거부한다.
+    """짝 없는 begin 같은 손상은 거부한다.
 
     추측해서 고치면 사용자 콘텐츠를 잃는다 — 생성기는 해석이 하나가 아닐 때 멈춘다.
     """
@@ -1262,10 +1189,10 @@ def test_other_marker_corruption_is_still_refused(tmp_path):
     ) == 0
     path = target / "AGENTS.md"
     text = path.read_text(encoding="utf-8")
-    # begin 만 하나 더 (짝 없는 구 begin) — begins=2, ends=1
+    # begin 만 하나 더 (짝 없는 begin) — begins=2, ends=1
     b = _re.search(r"^<!-- kit:begin .*-->$", text, _re.MULTILINE)
     path.write_text(
-        text[: b.start()] + b.group(0).replace("kit:", "cck:") + "\n" + text[b.start() :],  # old-name-ok: 구 마커 인식 = 이행 경로
+        text[: b.start()] + b.group(0) + "\n" + text[b.start() :],
         encoding="utf-8",
     )
     before = path.read_text(encoding="utf-8")
@@ -1379,7 +1306,7 @@ def _plugin_root_with_agents(tmp_path, count: int):
 
 def test_agent_count_in_block_is_counted_not_literal(tmp_path):
     """에이전트를 하나 더하면 표의 수가 따라 움직여야 한다 — 리터럴이면 여기서 실패한다."""
-    import export_harness as eh
+    eh = _mod  # 파일 단독 실행에서도 로드되게 — sys.path 에 기대지 않는다
 
     root = _plugin_root_with_agents(tmp_path, 7)
     block, _ = eh.build_block(root)
@@ -1398,7 +1325,7 @@ def test_agent_count_is_omitted_when_uncountable(tmp_path):
     """
     import shutil
 
-    import export_harness as eh
+    eh = _mod  # 파일 단독 실행에서도 로드되게 — sys.path 에 기대지 않는다
 
     root = _plugin_root_with_agents(tmp_path, 3)
     shutil.rmtree(root / "agents")
