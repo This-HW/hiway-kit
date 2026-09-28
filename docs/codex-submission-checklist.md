@@ -25,6 +25,12 @@ browser signed in as `thisyj.work@gmail.com`:
 | Verified developer identity | **Individual: Verified** ✅ (2026-09-28) |
 | Submission type | ❌ "Create plugin" offers only **With MCP** ("uses the same MCP URL for every user"). The **Skills only** path that [the Claude-plugin guide](https://developers.openai.com/plugins/guides/submit-claude-plugin) prescribes for plugins without an MCP server is **not shown** for this organization yet. hiway-kit has no MCP server, so With MCP does not apply. |
 
+**With MCP cannot carry a skills-only kit — checked, not assumed.** Its form does have a Skills tab
+(ZIP/folder upload), but the Submit tab lists hard blockers: *"MCP server URL is required"* and *"Test
+case scenario is required"*, plus domain verification of the MCP host and a demo recording URL. Using it
+would mean standing up and hosting an MCP server only to pass the form. Opening the form auto-creates an
+"Untitled Plugin" draft; the two created while checking were deleted.
+
 Waiting for Skills only to appear (tracked hourly). Before uploading, per the Claude-plugin guide:
 `agents/` is unsupported (convert reusable behavior to skills or expect a warning), hooks must suit the
 Codex hook runtime, and Claude-specific wording in skills should be provider-neutral. The portal converts
