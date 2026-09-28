@@ -17,6 +17,15 @@ downgraded to a non-blocking [WARN] (configurable via CLAUDE_STOP_TEST_TIMEOUT,
 default 60s). This makes timeout false-blocks structurally impossible on large
 repos while still blocking real failures in edited test files.
 
+Cost discipline (v5.0.0): this hook fires on EVERY turn end, so the cheap signal
+comes first — if git reports no modified .py, the hook exits before reading the
+transcript (which can be hundreds of MB). Lint is limited to files the
+auto-format PostToolUse hook did not already see (Bash writes, codegen, no
+transcript). Every subprocess draws from one budget, _BUDGET_SECONDS (110s),
+kept below the Stop hook timeout in hooks.json (120s) — a hook the harness kills
+leaves no trace, so this one stops itself first and says so. The pytest timeout
+is min(CLAUDE_STOP_TEST_TIMEOUT, remaining budget).
+
 To disable: in plugins/common/hooks/hooks.json, replace the Stop section with
 the prompt-based hook (see CHANGELOG.md [2.2.0]) or remove it entirely.
 """
@@ -30,6 +39,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 
@@ -98,6 +108,21 @@ VALIDATED_MARKER = _STATE_DIR / f".claude_validated_{_hash}"
 RETRY_COUNTER = _STATE_DIR / f".claude_stop_retries_{_hash}"
 MAX_RETRIES = 2
 _MAX_FILE_SIZE = 1_048_576  # 1MB: auto_fix_lint에서 파일 읽기 상한
+
+#: 훅 호출 전체의 subprocess 예산(초). hooks.json Stop 타임아웃(120s)보다 작아야 한다 —
+#: 하네스가 죽인 훅은 흔적을 남기지 않으므로 그 전에 스스로 멈추고 [WARN] 을 남긴다.
+_BUDGET_SECONDS = 110
+#: ruff 한 번의 상한(초). 편집한 몇 개 파일의 lint 는 보통 수십 ms 다.
+_RUFF_TIMEOUT = 10
+#: main() 이 시작할 때 정한다. None 이면(모듈을 함수 단위로 쓰는 호출자) cap 만 적용한다.
+_DEADLINE: float | None = None
+
+
+def _remaining(cap: float) -> float:
+    """남은 예산과 cap 중 작은 값(초). 0 이하면 그 단계를 시작하지 않는다."""
+    if _DEADLINE is None:
+        return cap
+    return min(cap, _DEADLINE - time.monotonic())
 
 
 # ── 유틸 ────────────────────────────────────────────────────────
@@ -276,15 +301,36 @@ def _real(f: str) -> str:
     return os.path.realpath(f if os.path.isabs(f) else str(PROJECT_ROOT / f))
 
 
-def _session_edited_files(data: dict) -> set[str] | None:
-    """이번 세션이 Edit/Write 계열 도구로 만진 파일의 정규화 절대경로 집합.
+#: auto-format(PostToolUse)이 이미 ruff 를 돌린 도구 — 이 도구로만 쓴 .py 는 lint 를 반복하지 않는다.
+#: hooks.json 의 PostToolUse matcher 와 같아야 한다(테스트가 대조한다).
+_AUTO_FORMATTED_TOOLS = frozenset({"Edit", "MultiEdit", "Write"})
 
-    Stop 훅 stdin의 transcript_path(JSONL 대화 기록)에서 tool_use 블록을 스캔한다.
+
+class _SessionEdits:
+    """트랜스크립트에서 얻은 이 세션의 편집 흔적. 경로는 전부 `_real` 정규화."""
+
+    def __init__(self) -> None:
+        self.edited: set[str] = set()  # 검증 스코프 — 이 세션이 쓴 모든 파일
+        self.formatted: set[str] = set()  # auto-format 이 본 파일(Edit/MultiEdit/Write)
+        self.bash_written: set[str] = set()  # Bash 로 쓴 .py(정밀 추출)
+
+    def lint_targets(self, files: list[str]) -> list[str]:
+        """auto-format 이 못 본 파일만 — Bash 로도 쓴 파일은 auto-format 이후 바뀌었을 수 있다."""
+        seen_only = self.formatted - self.bash_written
+        return [f for f in files if _real(f) not in seen_only]
+
+
+def _scan_transcript(data: dict) -> _SessionEdits | None:
+    """Stop 훅 stdin의 transcript_path(JSONL 대화 기록)에서 tool_use 블록을 스캔한다.
+
     이로써 '레포 전체 dirty .py'가 아니라 '이 세션이 실제로 편집한 파일'만 검증
     대상으로 좁혀, 병렬 세션이 남긴 미커밋 .py에 의한 오탐(이번 사건 1차 트리거)을 막는다.
 
     transcript_path가 없거나(구 하니스) 파싱 실패면 None을 반환 → 호출부는
     기존 동작(전체 dirty .py 검증)으로 폴백한다(그레이스풀 디그레이드).
+
+    **비싸다** — 트랜스크립트는 수백 MB 가 될 수 있다(173MB 에서 729ms 실측). 그래서
+    main() 은 git 이 수정된 .py 를 보고한 뒤에만 이 함수를 부른다.
     """
     tp = data.get("transcript_path")
     if not tp:
@@ -292,8 +338,8 @@ def _session_edited_files(data: dict) -> set[str] | None:
     path = Path(tp).expanduser()
     if not path.exists():
         return None
-    edit_tools = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
-    edited: set[str] = set()
+    edit_tools = _AUTO_FORMATTED_TOOLS | {"NotebookEdit"}
+    edits = _SessionEdits()
     has_reliable_py = False  # Edit/Write류로 .py를 만졌나 (스코핑 신뢰 근거)
     bash_py_writeish = False  # Bash로 .py를 썼을 가능성 (폴백 판정)
     try:
@@ -319,7 +365,10 @@ def _session_edited_files(data: dict) -> set[str] | None:
                         inp = block.get("input") or {}
                         fp = inp.get("file_path") or inp.get("notebook_path")
                         if fp:
-                            edited.add(_real(str(fp)))
+                            real = _real(str(fp))
+                            edits.edited.add(real)
+                            if name in _AUTO_FORMATTED_TOOLS:
+                                edits.formatted.add(real)
                             if str(fp).endswith(".py"):
                                 has_reliable_py = True
                     elif name == "Bash":
@@ -329,7 +378,9 @@ def _session_edited_files(data: dict) -> set[str] | None:
                         cmd = (block.get("input") or {}).get("command")
                         if isinstance(cmd, str):
                             for tgt in _bash_py_write_targets(cmd):
-                                edited.add(_real(tgt))
+                                real = _real(tgt)
+                                edits.edited.add(real)
+                                edits.bash_written.add(real)
                             if _bash_writeish_py(cmd):
                                 bash_py_writeish = True
         # 적대적 리뷰 P1(false-green): 세션이 .py를 Bash로만 쓰고(신뢰가능한 Edit/Write
@@ -338,9 +389,15 @@ def _session_edited_files(data: dict) -> set[str] | None:
         # None(전체 dirty 검증)으로 폴백한다 — 안전망은 미검증(green)보다 오검증(red)이 낫다.
         if bash_py_writeish and not has_reliable_py:
             return None
-        return edited
+        return edits
     except Exception:
         return None
+
+
+def _session_edited_files(data: dict) -> set[str] | None:
+    """이번 세션이 Edit/Write 계열 도구(+Bash 쓰기)로 만진 파일의 정규화 절대경로 집합."""
+    edits = _scan_transcript(data)
+    return None if edits is None else edits.edited
 
 
 # redirect(> >>), tee, sed -i, cp/mv/install 의 .py 대상 경로. blanket 감지 대신
@@ -420,12 +477,16 @@ def check_lint(target_files: list[str]) -> tuple[bool, str]:
     existing = _resolve_paths(target_files)
     if not existing:
         return True, ""
+    timeout = _remaining(_RUFF_TIMEOUT)
+    if timeout <= 0:
+        print("[WARN] stop-validator 예산 소진 — lint check skipped", file=sys.stderr)
+        return True, ""
     try:
         result = subprocess.run(
             ["ruff", "check", *existing],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
             check=False,
         )
         return result.returncode == 0, result.stdout + result.stderr
@@ -451,11 +512,15 @@ def auto_fix_lint(target_files: list[str]) -> tuple[bool, list[str], str]:
         before = {
             f: Path(f).read_text(encoding="utf-8", errors="replace") for f in existing
         }
+        timeout = _remaining(_RUFF_TIMEOUT)
+        if timeout <= 0:
+            print("[WARN] stop-validator 예산 소진 — auto-fix skipped", file=sys.stderr)
+            return True, [], ""
         subprocess.run(
             ["ruff", "check", "--fix", *existing],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
             check=False,
         )
         after = {
@@ -522,7 +587,10 @@ def check_tests(modified_files: list[str]) -> tuple[bool, str]:
         # 소스만 변경 → 전체 회귀는 CI/`/test`에 위임. 훅은 차단하지 않는다.
         return True, ""
 
-    timeout = _test_timeout()
+    timeout = _remaining(_test_timeout())
+    if timeout <= 0:
+        print("[WARN] stop-validator 예산 소진 — test check skipped", file=sys.stderr)
+        return True, ""
     try:
         result = subprocess.run(
             [
@@ -554,7 +622,7 @@ def check_tests(modified_files: list[str]) -> tuple[bool, str]:
         # 타임아웃은 실제 실패와 다르다 → 차단하지 않고 비차단 WARN으로 강등.
         # (CLAUDE_STOP_TEST_TIMEOUT으로 한도 조절 가능.)
         print(
-            f"[WARN] pytest timeout ({timeout}s, 변경 테스트 {len(edited_tests)}개) — "
+            f"[WARN] pytest timeout ({timeout:.0f}s, 변경 테스트 {len(edited_tests)}개) — "
             "test check skipped. 필요시 CLAUDE_STOP_TEST_TIMEOUT으로 한도를 늘리세요.",
             file=sys.stderr,
         )
@@ -635,6 +703,9 @@ def _consume_marker_if_valid() -> bool:
 
 # ── 메인 ────────────────────────────────────────────────────────
 def main():
+    global _DEADLINE  # noqa: PLW0603 — 호출 단위 예산의 시작점을 한 번 확정
+    _DEADLINE = time.monotonic() + _BUDGET_SECONDS
+
     # 0. 네이티브 무한 루프 가드: 이미 stop-hook 재진입 루프 중이면 재차단 금지.
     #    (Claude는 직전 block 후 한 턴 수정을 시도했고, 그 턴의 Stop에서
     #     stop_hook_active=true로 들어온다. 여기서 멈추지 않으면 무한 반복.)
@@ -655,19 +726,22 @@ def main():
     if _consume_marker_if_valid():
         allow("auto-dev validation marker found. Skipping stop-validator.")
 
-    # 2. 변경된 .py를 '이 세션이 편집한 파일'로 스코핑 → 병렬 세션의 미커밋 .py에
+    # 2. 싼 신호 먼저: git 이 수정된 .py 를 하나도 보고하지 않으면 트랜스크립트(수백 MB
+    #    가능)를 열기 전에 끝낸다. 대부분의 턴이 이 경로다.
+    modified_files = get_modified_py_files()
+    if not modified_files:
+        allow()
+
+    # 3. 변경된 .py를 '이 세션이 편집한 파일'로 스코핑 → 병렬 세션의 미커밋 .py에
     #    의한 오탐 차단. transcript 없으면 전체 dirty .py로 폴백. session_edited에
     #    더해 git-untracked .py도 union — opaque codegen(python gen.py 등)이 검증에서
     #    누락되지 않도록(적대적 리뷰 F2). 새 .py는 대개 이 세션 산출물.
-    modified_files = get_modified_py_files()
-    session_edited = _session_edited_files(data)
-    if session_edited is not None:
-        scope = session_edited | _untracked_py_files()
+    edits = _scan_transcript(data)
+    if edits is not None:
+        scope = edits.edited | _untracked_py_files()
         modified_files = [f for f in modified_files if _real(f) in scope]
-
-    # 3. 검증 대상 .py 없음 → 스킵
-    if not modified_files:
-        allow()
+        if not modified_files:
+            allow()
 
     # 4. max retries guard — 한계 도달 시 차단(block)이 아니라 중단(allow).
     #    block()은 "턴을 끝내지 말라"는 신호라 cap에서 block+counter reset 하면
@@ -681,10 +755,12 @@ def main():
             "남아 검증을 중단합니다. 수동 확인이 필요합니다."
         )
 
-    # 5. 린트 검사
-    lint_passed, _lint_errors = check_lint(modified_files)
+    # 5. 린트 검사 — auto-format(PostToolUse)이 이미 ruff 를 돌린 파일은 빼고.
+    #    남는 것: Bash 로 쓴 파일, codegen 산출물, 트랜스크립트가 없는 경우의 전부.
+    lint_files = modified_files if edits is None else edits.lint_targets(modified_files)
+    lint_passed, _lint_errors = check_lint(lint_files)
     if not lint_passed:
-        fixed, fixed_files, remaining = auto_fix_lint(modified_files)
+        fixed, fixed_files, remaining = auto_fix_lint(lint_files)
         if fixed:
             # 정보성 메시지는 stderr로 — stdout은 decision 프로토콜 전용으로 유지.
             print(
@@ -697,7 +773,7 @@ def main():
             block(
                 "lint_error",
                 "자동 수정 후에도 린트 오류가 남아있습니다.",
-                {"errors": remaining[:2000], "files": modified_files},
+                {"errors": remaining[:2000], "files": lint_files},
             )
 
     # 6. 테스트 검사 (test_failure는 자동 수정 불가 → 바로 block)

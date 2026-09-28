@@ -31,6 +31,8 @@ def _isolate_tmp_files(tmp_path, monkeypatch):
     fake_counter = tmp_path / "claude_stop_retries"
     monkeypatch.setattr(_mod, "VALIDATED_MARKER", fake_marker)
     monkeypatch.setattr(_mod, "RETRY_COUNTER", fake_counter)
+    # main() 이 호출 예산의 시작점을 모듈 전역에 쓴다 — 테스트 사이에 새지 않게 되돌린다.
+    monkeypatch.setattr(_mod, "_DEADLINE", None, raising=False)
 
 
 def _extract_json(output: str) -> dict:
@@ -393,10 +395,10 @@ def test_main_validates_session_edited_file(tmp_path, monkeypatch):
     monkeypatch.setattr(
         _mod, "_read_input", lambda: {"transcript_path": str(transcript)}
     )
-    called = {"lint": False, "tests": False}
+    called = {"lint": None, "tests": False}
 
     def _fake_lint(files):
-        called["lint"] = True
+        called["lint"] = list(files)
         return True, ""
 
     def _fake_tests(files):
@@ -410,7 +412,9 @@ def test_main_validates_session_edited_file(tmp_path, monkeypatch):
         _mod.main()
 
     assert exc_info.value.code == 0
-    assert called["lint"] and called["tests"], "스코핑 통과 후 검증이 실행돼야 한다"
+    # Edit 로 쓴 .py 는 auto-format(PostToolUse)이 이미 ruff 를 돌렸다 — lint 는 빈 대상.
+    assert called["lint"] == [], "auto-format 이 본 파일을 다시 lint 하면 안 된다"
+    assert called["tests"], "스코핑 통과 후 테스트 검증은 실행돼야 한다"
 
 
 # ── TC10: check_tests — 편집한 테스트 파일만 스코프 실행 ──────────
@@ -891,3 +895,150 @@ def test_fallback_allocation_failure_never_returns_shared_root(state_root, monke
     monkeypatch.setattr(_mod.tempfile, "TemporaryDirectory", no_temporary_space)
     with pytest.raises(OSError, match="no temporary space"):
         _mod._state_dir()
+
+
+# ── v5.0.0 A3: 싼 신호 먼저 · auto-format 과 ruff 중복 제거 · 예산 ────────────
+
+
+def test_no_modified_py_never_reads_transcript(tmp_path, monkeypatch):
+    """git 이 수정된 .py 를 보고하지 않으면 트랜스크립트를 열지 않는다(173MB 에서 729ms)."""
+    monkeypatch.setattr(_mod, "get_modified_py_files", list)
+    transcript = _write_transcript(tmp_path, [tmp_path / "a.py"])
+    monkeypatch.setattr(_mod, "_read_input", lambda: {"transcript_path": str(transcript)})
+    opened = []
+    real_open = Path.open
+
+    def _spy_open(self, *a, **kw):
+        opened.append(str(self))
+        return real_open(self, *a, **kw)
+
+    monkeypatch.setattr(Path, "open", _spy_open)
+    with pytest.raises(SystemExit) as exc_info:
+        _mod.main()
+    assert exc_info.value.code == 0
+    assert str(transcript) not in opened, "수정된 .py 가 없는데 트랜스크립트를 열었다"
+
+
+def _bash_transcript(tmp_path, command):
+    f = tmp_path / "bash-transcript.jsonl"
+    events = [
+        {"message": {"content": [{"type": "tool_use", "name": "Edit",
+                                   "input": {"file_path": str(_mod.PROJECT_ROOT / "edited.py")}}]}},
+        {"message": {"content": [{"type": "tool_use", "name": "Bash",
+                                   "input": {"command": command}}]}},
+    ]
+    f.write_text("\n".join(json.dumps(e) for e in events), encoding="utf-8")
+    return f
+
+
+def test_lint_limited_to_files_auto_format_did_not_see(tmp_path, monkeypatch):
+    """Edit 로 쓴 파일은 빼고, Bash 로 쓴 파일은 lint 한다."""
+    monkeypatch.setattr(
+        _mod, "get_modified_py_files", lambda: ["edited.py", "gen.py"]
+    )
+    transcript = _bash_transcript(tmp_path, "cat > gen.py <<'EOF'\nx=1\nEOF")
+    monkeypatch.setattr(_mod, "_read_input", lambda: {"transcript_path": str(transcript)})
+    seen = {}
+
+    def _lint(files):
+        seen["lint"] = list(files)
+        return True, ""
+
+    monkeypatch.setattr(_mod, "check_lint", _lint)
+    monkeypatch.setattr(_mod, "check_tests", lambda files: (True, ""))
+    with pytest.raises(SystemExit):
+        _mod.main()
+    assert seen["lint"] == ["gen.py"]
+
+
+def test_bash_rewrite_of_edited_file_is_linted_again(tmp_path, monkeypatch):
+    """Edit 뒤 Bash 로 다시 쓴 파일은 auto-format 이후 바뀌었다 — lint 대상이다."""
+    monkeypatch.setattr(_mod, "get_modified_py_files", lambda: ["edited.py"])
+    transcript = _bash_transcript(tmp_path, "sed -i '' 's/a/b/' edited.py")
+    monkeypatch.setattr(_mod, "_read_input", lambda: {"transcript_path": str(transcript)})
+    seen = {}
+
+    def _lint(files):
+        seen["lint"] = list(files)
+        return True, ""
+
+    monkeypatch.setattr(_mod, "check_lint", _lint)
+    monkeypatch.setattr(_mod, "check_tests", lambda files: (True, ""))
+    with pytest.raises(SystemExit):
+        _mod.main()
+    assert seen["lint"] == ["edited.py"]
+
+
+def test_without_transcript_everything_is_linted(monkeypatch):
+    monkeypatch.setattr(_mod, "get_modified_py_files", lambda: ["a.py"])
+    monkeypatch.setattr(_mod, "_read_input", dict)
+    seen = {}
+
+    def _lint(files):
+        seen["lint"] = list(files)
+        return True, ""
+
+    monkeypatch.setattr(_mod, "check_lint", _lint)
+    monkeypatch.setattr(_mod, "check_tests", lambda files: (True, ""))
+    with pytest.raises(SystemExit):
+        _mod.main()
+    assert seen["lint"] == ["a.py"]
+
+
+def _hooks_manifest():
+    return json.loads((HOOKS_DIR / "hooks.json").read_text(encoding="utf-8"))
+
+
+def test_budget_is_below_stop_hook_timeout():
+    stop = [
+        h["timeout"]
+        for e in _hooks_manifest()["hooks"]["Stop"]
+        for h in e["hooks"]
+        if "stop-validator.py" in json.dumps(h)
+    ]
+    assert stop and all(t > _mod._BUDGET_SECONDS for t in stop), stop
+
+
+def test_auto_formatted_tools_match_post_tool_use_matcher():
+    """lint 를 건너뛰는 근거(auto-format 이 봤다)는 matcher 와 같아야만 참이다."""
+    matchers = [
+        e.get("matcher", "")
+        for e in _hooks_manifest()["hooks"]["PostToolUse"]
+        if "auto-format.py" in json.dumps(e)
+    ]
+    assert len(matchers) == 1
+    assert set(matchers[0].split("|")) == set(_mod._AUTO_FORMATTED_TOOLS)
+
+
+def test_pytest_timeout_is_cut_by_remaining_budget(tmp_path, monkeypatch):
+    import time
+
+    test_file = tmp_path / "test_x.py"
+    test_file.write_text("def test_x():\n    assert True\n", encoding="utf-8")
+    monkeypatch.setattr(_mod, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setenv("CLAUDE_STOP_TEST_TIMEOUT", "300")
+    monkeypatch.setattr(_mod, "_DEADLINE", time.monotonic() + 5)
+    seen = {}
+
+    def _run(cmd, **kw):
+        seen["timeout"] = kw["timeout"]
+        return _mod.subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(_mod.subprocess, "run", _run)
+    assert _mod.check_tests([str(test_file)]) == (True, "")
+    assert seen["timeout"] <= 5
+
+
+def test_exhausted_budget_skips_with_warning(tmp_path, monkeypatch, capsys):
+    import time
+
+    f = tmp_path / "a.py"
+    f.write_text("x = 1\n", encoding="utf-8")
+    monkeypatch.setattr(_mod, "_DEADLINE", time.monotonic() - 1)
+
+    def _run(cmd, **kw):
+        raise AssertionError("예산이 없는데 subprocess 를 띄웠다")
+
+    monkeypatch.setattr(_mod.subprocess, "run", _run)
+    assert _mod.check_lint([str(f)]) == (True, "")
+    assert "예산" in capsys.readouterr().err
