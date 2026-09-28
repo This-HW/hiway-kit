@@ -41,6 +41,12 @@ Submit at: https://platform.claude.com/plugins/submit
 픽스처에만 있다), 경고 *내려받아 바로 실행* 2건(위와 같은 오인, 문서 전용이라 포털 안내상 조치 불요), 정보 *훅 사용*,
 정보 *이미지 무검사 통과*(4.0.4 의 `assets/icon.png`).
 
+**v5.0.0 재스캔(2026-09-29 00:1x KST, `3f9d191`)** — 보안 스캔 통과, 사람 심사 대기. 남은 발견: 경고 *사용자 머신의
+자격증명 사용*(여전히 `.claude-plugin/plugin.json` 귀속 — v5 에서 가짜 키 테스트 픽스처를 배포물 밖 `tests/hooks/` 로
+옮겼는데도 남았으므로 **그 픽스처가 원인이 아니었다**), 경고 *내려받아 바로 실행* 1건(2건→1건: `eval-forge` 가 레포 전용으로
+빠지며 사라졌고 `hooks/examples/README.md` 만 남음 — 그 문서의 `uv run`·`npm publish`·`docker push` 같은 **명령 이름 표기**
+로 보인다. 포털 안내상 문서 전용이면 조치 불요라 추측으로 문구를 바꾸지 않았다), 정보 *훅 사용*·*이미지 무검사 통과*.
+
 **목록 정보는 제출 시점에 고정된다.** Listing 탭이 각 행의 출처를 `plugin.json key:` 로 밝힌다 — `icon`,
 `documentationUrl`, `supportUrl`, `privacyPolicyUrl` 이 비어 있어 아이콘은 GitHub 아바타로 대체됐다. 그러나 포털 원문이
 *"Newer versions don't update them here"*, 문서가 *"name and short description follow the live version"* 이므로 지금
