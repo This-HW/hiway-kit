@@ -1,6 +1,7 @@
 ---
 name: skill-forge
 description: Distill a hard problem you just solved into a reusable skill draft - proposal-only, behind a three-condition threshold. Use after finishing a non-trivial task whose procedure would otherwise die with the session. Trigger with /skill-forge.
+disable-model-invocation: true
 ---
 
 # Skill Forge — 성공 경험을 재사용 자산으로
@@ -26,7 +27,7 @@ kit의 학습 루프는 **비대칭**이다. 실패는 ledger → LESSONS 로 �
 
 | 조건 | 판정 질문 | 미충족 시 강등 경로 |
 | --- | --- | --- |
-| **재현성** | 이 절차를 그 세션의 맥락 없이 그대로 다시 실행할 수 있는가? | ledger 한 줄 — `python3 "<플러그인 루트>/hooks/feedback_ledger.py" upsert <category> <severity> "<요지>"` (루트 해석은 `plan-task/references/task-tools-fallback.md` 와 같다. 못 찾으면 완료 보고에 기록) |
+| **재현성** | 이 절차를 그 세션의 맥락 없이 그대로 다시 실행할 수 있는가? | ledger 한 줄 — `python3 "<플러그인 루트>/hooks/feedback_ledger.py" upsert <category> <severity> "<요지>"` (루트 해석은 `skills/plan-task/references/task-tools-fallback.md` 와 같다. 못 찾으면 완료 보고에 기록) |
 | **반복성** | 앞으로 **다시** 마주칠 문제인가? (1회성 마이그레이션·특정 사고 대응은 아니다) | 계획 파일(`docs/plans/*/plan.md`)이 있으면 그 `## 결정` 에, 없으면 완료 보고에 기록 |
 | **비중복** | 기존 스킬로 커버되지 않는가? | 기존 스킬 **보강 제안**으로 전환 (새 스킬 만들지 않음) |
 

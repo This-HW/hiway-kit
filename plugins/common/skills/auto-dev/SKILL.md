@@ -5,7 +5,7 @@ description: Automated development pipeline. Runs a completed plan file through 
 
 # Auto-Dev 스킬
 
-계획 파일(`docs/plans/<YYYY-MM-DD>-<slug>/plan.md` — 규약 SSOT: `plan-task/references/plan-format.md`)을
+계획 파일(`docs/plans/<YYYY-MM-DD>-<slug>/plan.md` — 규약 SSOT: `skills/plan-task/references/plan-format.md`)을
 입력으로 Development → Validation 파이프라인을 자동 실행합니다.
 
 ```
@@ -35,7 +35,7 @@ description: Automated development pipeline. Runs a completed plan file through 
 
 1. 호스트 태스크 도구가 있으면 로드한다(Claude Code: `ToolSearch("select:TaskCreate,TaskUpdate,TaskList")`).
 
-> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `plan-task/references/task-tools-fallback.md`
+> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
 > 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
 2. `TaskList` 로 이 계획의 `[Dev]`/`[Validation]` Task 가 있으면 상태 확인 후 재개 (재생성 스킵)
 3. 없으면 → Step 1
@@ -69,7 +69,7 @@ T-dev-4: [Dev] 테스트 작성            ← blockedBy: T-dev-2, T-dev-3
 ```
 
 **checklist 생성** (계획 파일이 있을 때): `## 완료 조건` 의 명령을 항목의 `verify` 로 삼아
-계획 디렉토리에 `init` 한다(호출 경로: `plan-task/references/task-tools-fallback.md`).
+계획 디렉토리에 `init` 한다(호출 경로: `skills/plan-task/references/task-tools-fallback.md`).
 `verify` 는 계획에서 **파생**한다 — 실행자가 새로 지어내지 않는다.
 
 ---
@@ -116,7 +116,7 @@ ours/theirs/manual 선택지를 호스트 수단으로 묻는다)은 규범 `par
 - **미완 1항목/iteration**: 한 iteration은 checklist 미완 항목 **하나**만 목표로 한다
   (한 번에 다수 항목을 "완료"로 몰아 찍지 않는다 — 검증 없는 일괄 통과 방지).
 - **verify 통과 전 passes 금지**: `checklist.json`의 `passes:true`는 오직
-  checklist `pass <id>`(경로는 `plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
+  checklist `pass <id>`(경로는 `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
   항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만 전환된다.
   모델 판단으로 completed를 self-mark하지 않는다.
 - **상태 쓰기는 메인 세션 소유**: `checklist.json`·`plan.md` 쓰기는 **메인 세션**만
@@ -185,7 +185,7 @@ review-code/security-scan 결과에 **발견된 결함이 있으면(pass·fail �
 ```bash
 # category ∈ {lint, security, architecture, test, convention}
 # severity ∈ {critical, high, medium, low}
-# 경로는 plan-task/references/task-tools-fallback.md 의 플러그인 루트 해석을 따른다
+# 경로는 skills/plan-task/references/task-tools-fallback.md 의 플러그인 루트 해석을 따른다
 python3 "<plugin root>/hooks/feedback_ledger.py" upsert <category> <severity> "<결함 요지>"
 ```
 
@@ -221,7 +221,7 @@ T-review, T-security 결과를 구조적으로 검증:
 0. **[Guard]** 판정 기준 미충족 시: 미충족 항목 + 이슈 목록 + 권고사항을 사용자에게 보고하고 파이프라인을 중단한다. `TaskUpdate(T-merge, status="failed")`. 아래 단계를 실행하지 않는다.
 1. **검증 마커 생성** — Stop hook 이중 검증 방지 (Claude Code 전용 — 이 훅이 없는 하네스는 건너뛴다).
    지문·마커 경로 계산은 `stop-validator.py` 모듈이 단일 소스다. 경로는
-   `plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석과 같게 찾는다
+   `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석과 같게 찾는다
    (`CLAUDE_PLUGIN_ROOT` 가 비어도 깨지지 않게):
    ```bash
    SV="${CLAUDE_PLUGIN_ROOT:-}/hooks/stop-validator.py"
@@ -311,4 +311,4 @@ plan-task 가 Small 로 판정해 계획 파일이 없는 경우, 태스크·상
 ## 참고 문서
 
 플러그인 안의 경로다(소비자 프로젝트 cwd 기준이 아니다):
-계획 파일 규약 `plan-task/references/plan-format.md` · Planning 프로토콜 규범 `planning-protocol`.
+계획 파일 규약 `skills/plan-task/references/plan-format.md` · Planning 프로토콜 규범 `planning-protocol`.

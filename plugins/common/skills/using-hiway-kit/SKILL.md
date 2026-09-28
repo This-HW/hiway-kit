@@ -18,4 +18,4 @@ Small·버그:     바로 구현 (완료 조건 명령으로 검증)
 ```
 
 크기 기준은 `plan-task` 가 소유한다. 계획 파일은 Medium/Large 만
-`docs/plans/<날짜>-<slug>/plan.md` 에 둔다(규약 `plan-task/references/plan-format.md`).
+`docs/plans/<날짜>-<slug>/plan.md` 에 둔다(규약 `skills/plan-task/references/plan-format.md`).

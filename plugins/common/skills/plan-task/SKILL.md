@@ -33,7 +33,7 @@ description: Structured task planning into a plan file. Use for any new feature,
 
 1. 호스트 태스크 도구가 있으면 로드한다(Claude Code: `ToolSearch("select:TaskCreate,TaskUpdate,TaskList")`).
 
-   > **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `plan-task/references/task-tools-fallback.md`
+   > **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
    > 의 대체 경로로 추적한다.
 
    이미 `[Planning]` Task 가 있으면 생성을 건너뛴다. 없으면:
