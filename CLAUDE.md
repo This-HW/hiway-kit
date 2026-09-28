@@ -36,7 +36,7 @@ git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 
 ```
 plugins/
-└── common/      — Core agents (32) + skills (21) + rules (14) + hooks
+└── common/      — Core agents (15) + skills (15) + rules (12) + hooks
 ```
 
 `plugins/common/` contains:
@@ -60,18 +60,15 @@ plugins/
 | web-research             | `/web-research`             | MCP-powered research                            |
 | review                   | `/review`                   | Code review: ruff + review-code + security-scan |
 | multi-perspective-review | `/multi-perspective-review` | 3-Round Deliberation with 10 perspectives       |
-| doc-coauthoring          | `/doc-coauthoring`          | AI-assisted documentation authoring             |
 | debug                    | `/debug`                    | 4-Phase debug pipeline                          |
 | test                     | `/test`                     | Run tests and auto-fix failures                 |
 | agent-creator            | `/agent-creator`            | Generate plugin agents                          |
-| skill-creator            | `/skill-creator`            | Generate plugin skills                          |
-| mcp-builder              | `/mcp-builder`              | Scaffold MCP servers                            |
 | control-loop              | `/control-loop`             | Multi-session control discipline — investigate/decide/dispatch/verify/merge |
 | child-session              | (loaded, not invoked)       | Discipline a dispatched worker session loads at start |
-| native-watch             | `/native-watch`             | Audit native-feature absorption vs the kit (SSOT: docs/native-absorption.md) |
-| self-improve             | `/self-improve`             | Propose agent/skill/rule improvements from ledger+evals (proposal-only, gated) |
+| native-watch             | `/native-watch`             | **Repo-only** (`.claude/skills/`) — audit native-feature absorption vs the kit (SSOT: docs/native-absorption.md) |
+| self-improve             | `/self-improve`             | **Repo-only** (`.claude/skills/`) — propose agent/skill/rule improvements from ledger+evals (proposal-only, gated) |
 | harness-export           | `/harness-export`           | Export host-neutral rules to AGENTS.md + GEMINI.md for hosts without hooks (drift-gated) |
-| eval-forge               | `/eval-forge`               | Forge an eval scenario from an observed defect — generated + self-validated       |
+| eval-forge               | `/eval-forge`               | **Repo-only** (`.claude/skills/`) — forge an eval scenario from an observed defect — generated + self-validated |
 | skill-forge              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft (proposal-only)         |
 | cross-engine-review      | `/cross-engine-review`      | Evidence-backed consensus between sessions on **different engines** (Claude ↔ Codex ↔ …) |
 
@@ -80,7 +77,7 @@ plugins/
 ### 2-Tier Model
 
 ```
-Tier 1: plugins/common/  — All projects (32 agents)
+Tier 1: plugins/common/  — All projects (15 agents)
 Tier 2: project-local/   — Project-specific (user-added)
 ```
 
@@ -113,14 +110,14 @@ disallowedTools:
 | ---------- | -------------------------- | ------------------------------------- |
 | **Opus**   | Strategy, analysis, review | clarify-requirements, review-code     |
 | **Sonnet** | Code implementation, fixes | implement-code, fix-bugs, write-tests |
-| **Haiku**  | Exploration, simple checks | explore-codebase, verify-code         |
+| **Haiku**  | Quick checks               | verify-code, git-workflow             |
 
 ### isolation: worktree
 
 Apply to agents that **modify files** — prevents filesystem conflicts:
 
-- ✅ implement-code, fix-bugs, write-tests, write-api-tests, implement-api, generate-boilerplate, sync-docs, optimize-logic
-- ❌ explore-codebase, review-code, plan-implementation (read-only)
+- ✅ implement-code, fix-bugs, write-tests, sync-docs
+- ❌ review-code, plan-implementation, define-business-logic, design-user-journey (read-only — they return analysis, the caller writes)
 
 Merge-back protocol (exit conditions, sequential merge, conflict escalation) is
 governed by `plugins/common/rules/parallel-worktree.md`.
@@ -178,14 +175,14 @@ cache), but `scripts/` and `evals/` are repo-local and take effect immediately.
 
 ### Naming Conventions
 
-- Agents: `verb-noun.md` (fix-bugs, plan-refactor, explore-codebase)
+- Agents: `verb-noun.md` (fix-bugs, implement-code, review-code)
 - Skills: `noun-action` (web-research, plan-task, auto-dev)
 - All agent names must be kebab-case and match the `name:` frontmatter field
 
 ### Sub-agent Rules
 
 - Regular agents: `disallowedTools: [Task]` — cannot spawn sub-agents
-- Meta agents (facilitator, synthesizer, devil's advocate, impact-analyzer, consensus-builder — 5 total): `disallowedTools: [Bash]`
+- Meta agent (`devils-advocate` — the only one since v5.0.0; the multi-perspective-review roles it used to share with 4 others are now skill steps): `disallowedTools: [Bash]`
 - Skills (auto-dev, etc.) drive delegation; leaf agents stay flat.
 
 ### Orchestration Model — Scale-Appropriate Primitives (Spec 2 / W-006)

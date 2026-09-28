@@ -1,6 +1,6 @@
 # hiway-kit
 
-> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 32 agents + 21 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
+> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 15 agents + 15 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
 
 A focused, single-plugin AI agent system built for Claude Code. Covers the full software development lifecycle: planning, implementation, review, testing, and meta-tooling. (Not a TUI component library or a scaffolding installer — this is the agents + skills plugin.)
 
@@ -102,9 +102,9 @@ differs by platform capability, verified against the real CLIs (not assumed):
 
 | Component | Codex | Antigravity |
 | --- | --- | --- |
-| Skills (21) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
-| Rules (14) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
-| Agents (32) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`backend`/`dev`/`meta`/`planning`); it miscounts the 4 category folders as agent entries and finds none of the real 32. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
+| Skills (15) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
+| Rules (12) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
+| Agents (15) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` does not recurse into `agents/`'s category subdirectories (`dev`/`meta`/`planning`); it miscounts the category folders as agent entries and finds none of the real agents. No config exists to opt into recursion (confirmed against official docs and the plugin schema) |
 | Hooks | ⚠ shipped (`session-start`, `auto-format`) but **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is deliberately **not** shipped: hooks fired but the command still ran, so the block does not hold | ❌ not shipped this batch — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
 
@@ -115,8 +115,8 @@ How they arrive differs, and the difference is measured, not assumed:
 | --- | --- | --- | --- |
 | Rules | hook injection | **hook injection** (measured) — `AGENTS.md` is the fallback. Before 3.34.1 Codex cut the hook output at 2,500 tokens and the **middle rules were lost**; see the note below | `AGENTS.md`/`GEMINI.md` only |
 | Ledger digest (memory) | hook injection | **hook injection** (measured); rules also tell the agent to fetch it itself | self-fetch per the rule |
-| Skills | native | **all 21 recognized** (measured) | recognized |
-| Subagents | 32 agents | **not exposed** — skills degrade to in-session execution | not supported (nested layout) |
+| Skills | native | **all 15 recognized** (measured, v5.0.0) | recognized |
+| Subagents | 15 agents | **not exposed** — skills degrade to in-session execution | not supported (nested layout) |
 | Agent `model` / `effort` frontmatter | ✅ applied per agent | ❌ **not applied** — agents are shipped in the package but not exposed as subagents (measured: the files land in the installed plugin cache, but the Codex manifest has no agent field — `packaging/targets.json` `omit.agents`), so everything runs on the model/effort in the user's Codex config | ❌ not applied — agents are not recognized (see above) |
 | Automatic blocking | `PreToolUse` veto | **no** — no blocking hook is shipped: in measurement a `PreToolUse` block did not stop the command, so `protect-sensitive` is left out (see *Hooks* above) | no |
 
@@ -180,8 +180,8 @@ without trust is automatic delivery, not the discipline.
 
 #### Skills that name a sub-agent: read them as a contract, not a transport
 
-Codex loads all 21 skills, but it exposes **no sub-agents**. Four skills (`debug`,
-`review`, `test`, `skill-creator`) contain `Task tool 사용:` / `subagent_type:` blocks.
+Codex loads all 15 skills, but it exposes **no sub-agents**. Skills that dispatch an agent
+(`debug`, `review`, `test`, `auto-dev`, `multi-perspective-review`) name the agent as a contract.
 Each of those skills now carries an explicit degradation path: the delegation is one
 **transport**, and the invariant is the **contract** inside the block — persona, checks,
 output format, completion declaration. On a harness with no delegation, perform the same
@@ -285,7 +285,7 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 | **Scale-appropriate orchestration** | Small/Medium 스킬 주도 플랫, Large 네이티브 `ultracode` 위임 | 스케일별 최적, main 컨텍스트 병목 회피 |
 | **Adversarial review** | `review-code`가 4 페르소나(hacker·murphy·future-self·picky-user)로 침투 검토 | 버그·엣지케이스를 능동 발굴 |
 | **Multi-perspective deliberation** | 10 관점 × 3 라운드 합의(`/multi-perspective-review`) + devil's advocate | 설계 사각지대 제거 |
-| **Agent specialization** | 32 전문 에이전트 × 모델 티어(Opus 전략 / Sonnet 구현 / Haiku 탐색) | 작업별 최적 모델·비용 |
+| **Agent specialization** | 15 전문 에이전트 × 모델 티어(Opus 전략 / Sonnet 구현 / Haiku 탐색) | 작업별 최적 모델·비용 |
 | **Worktree isolation** | 파일 수정 에이전트를 격리 git worktree에서 실행 | 병렬 작업 충돌 방지 |
 | **Harness engineering** | 컨텍스트 주입(session-start)·도구 큐레이션·가드레일 훅·계획 파일 | 환경이 모델을 올바른 궤도로 유지 |
 | **SSOT governance** | `rules/` + decisions 추적 + 거버넌스/시크릿 보호 훅 | 일관성·감사 가능성 |
@@ -313,7 +313,11 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 
 | Plugin            | Agents | Skills | Description                               |
 | ----------------- | ------ | ------ | ----------------------------------------- |
-| `hiway-kit` | 32     | 21     | Core: planning, development, review, meta |
+| `hiway-kit` | 15     | 15     | Core: planning, development, review, meta |
+
+v5.0.0 cut the kit from 32 agents and 21 skills to what earns its place: components with a native
+equivalent, that no skill ever invoked, or that only worked inside this repository were removed —
+see the migration table in [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -322,35 +326,26 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 ### 2-Tier Agent Model
 
 ```
-Tier 1: plugins/common/  — Core agents for all projects (32 agents)
+Tier 1: plugins/common/  — Core agents for all projects (15 agents)
 Tier 2: project-local/   — Project-specific agents (user-defined)
 ```
 
 ### Phase Gate Pattern
 
-All workflows follow a 3-phase gate:
+Larger work follows a 3-phase gate; small fixes don't need the ceremony:
 
 ```
-Phase 1 (Planning)     → Remove 100% ambiguity via planning agents
+Phase 1 (Planning)     → Remove ambiguity (brainstorming only for Large new features)
 Phase 2 (Development)  → Implement based on Phase 1 artifacts
-Phase 3 (Validation)   → Parallel review + security scan
+Phase 3 (Validation)   → Review + security scan
 ```
 
 ### Delegation Signal — removed in v2.16.0
 
 Agents used to end every response with a structured `---DELEGATION_SIGNAL---` block so that
 main Claude could read `TYPE`/`TARGET` and auto-invoke the next agent. **That contract is gone.**
-
-Two findings retired it. First, **nothing parsed it** — a full sweep of `hooks/`, `skills/`,
-`scripts/` and `rules/` found no deterministic consumer; the one place that referenced it was a
-rule telling main Claude to scan for it, which is an instruction to a model, not a parser.
-Second, **orchestration had already moved on**: sequencing comes from the invoking skill
-(see [Orchestration Model](CLAUDE.md)), not from a signal embedded in agent output.
-
-Delegation itself is unchanged — main Claude still dispatches agents and collects their results.
-What disappeared is the machine-readable block, not the delegation.
-
-Full rationale and the exact removal scope: `docs/specs/2026-08-27-delegation-signal-contract-review.md`.
+Nothing parsed it, and sequencing already came from the invoking skill. Full rationale:
+`docs/specs/2026-08-27-delegation-signal-contract-review.md`.
 
 ### Model Selection
 
@@ -358,14 +353,12 @@ Full rationale and the exact removal scope: `docs/specs/2026-08-27-delegation-si
 | ---------- | -------------------------- | ------------------------------------------------------------ |
 | **Opus**   | Strategy, analysis, review | `clarify-requirements`, `review-code`, `plan-implementation` |
 | **Sonnet** | Code implementation, fixes | `implement-code`, `fix-bugs`, `write-tests`                  |
-| **Haiku**  | Exploration, quick checks  | `explore-codebase`, `verify-code`, `enforce-structure`       |
+| **Haiku**  | Quick checks               | `verify-code`, `git-workflow`, `analyze-dependencies`        |
 
 ### Worktree Isolation
 
 File-modifying agents run in an isolated git worktree to prevent conflicts:
-
-- `implement-code`, `fix-bugs`, `write-tests`, `write-api-tests`
-- `implement-api`, `generate-boilerplate`, `sync-docs`, `optimize-logic`
+`implement-code`, `fix-bugs`, `write-tests`, `sync-docs`.
 
 Merge-back rules (verify-then-exit, sequential merge, conflict escalation to
 `git-workflow`) live in `rules/parallel-worktree.md`.
@@ -378,80 +371,53 @@ Merge-back rules (verify-then-exit, sequential merge, conflict escalation to
 
 | Skill                      | Command                     | Description                                                                |
 | -------------------------- | --------------------------- | -------------------------------------------------------------------------- |
-| `plan-task`                | `/plan-task`                | 5-phase planning pipeline: explore → clarify → journey → logic → implement |
-| `auto-dev`                 | `/auto-dev`                 | Full automated development pipeline                                        |
-| `web-research`             | `/web-research`             | MCP-powered research: Context7 (docs) + Exa (code) + Tavily (web)          |
-| `review`                   | `/review`                   | Code review pipeline: ruff + review-code + security-scan                   |
-| `multi-perspective-review` | `/multi-perspective-review` | 3-Round Deliberation: 10 perspectives, consensus-driven                    |
-| `doc-coauthoring`          | `/doc-coauthoring`          | AI-assisted documentation authoring and review                             |
-| `debug`                    | `/debug`                    | 4-Phase debug: diagnose → fix-bugs → verify-code                           |
-| `test`                     | `/test`                     | Run tests and auto-fix failures via verify-code + fix-bugs                 |
-| `agent-creator`            | `/agent-creator`            | Generate hiway-kit plugin agents with correct frontmatter            |
-| `skill-creator`            | `/skill-creator`            | Generate hiway-kit skills with best practices                        |
-| `mcp-builder`              | `/mcp-builder`              | Scaffold MCP servers and configure Claude Code integration                 |
-| `native-watch`             | `/native-watch`             | Audit native-feature absorption against the SSOT ledger (`docs/native-absorption.md`) |
-| `self-improve`             | `/self-improve`             | Propose agent/skill improvements from ledger + evals — proposal-only, double-gated    |
-| `harness-export`           | `/harness-export`           | Export host-neutral rules to `AGENTS.md` so Codex/OpenCode/Pi/Hermes share the discipline |
-| `eval-forge`               | `/eval-forge`               | Forge an eval scenario from an observed defect — generated, self-validated, atomic        |
-| `skill-forge`              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft — proposal-only, 3-condition    |
+| `brainstorming`            | `/brainstorming`            | Design and spec for Large new features, before planning                    |
+| `plan-task`                | `/plan-task`                | Structured planning into `docs/plans/<date>-<slug>/plan.md`                |
+| `auto-dev`                 | `/auto-dev`                 | Run a completed plan through development and validation                    |
+| `web-research`             | `/web-research`             | Research with whatever search/docs/browser tools the session has           |
+| `review`                   | `/review`                   | Lint + adversarial `review-code` + `security-scan` (also works on Codex)   |
+| `multi-perspective-review` | `/multi-perspective-review` | 3-round deliberation across perspectives, consensus-driven                 |
+| `debug`                    | `/debug`                    | Diagnose an error, fix it with `fix-bugs`, confirm with `verify-code`      |
+| `test`                     | `/test`                     | Run tests and fix failures                                                 |
+| `agent-creator`            | `/agent-creator`            | Create a project agent in `.claude/agents/` with valid frontmatter         |
+| `control-loop`             | `/control-loop`             | Coordinate worker sessions — investigate, decide, dispatch, verify, merge  |
+| `child-session`            | (loaded by workers)         | Discipline a dispatched worker session follows                             |
+| `cross-engine-review`      | `/cross-engine-review`      | Evidence-backed consensus between sessions on different engines            |
+| `harness-export`           | `/harness-export`           | Export host-neutral rules to `AGENTS.md`/`GEMINI.md` for other harnesses   |
+| `skill-forge`              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft                  |
+| `using-hiway-kit`          | (injected at session start) | Workflow chain and plan file rules                                         |
 
-### Planning Agents (5 — Opus)
+### Planning Agents (3 — Opus)
 
-Read-only. No file modifications. Used in Phase 1.
+Used in Phase 1. They return analysis; the caller writes any files.
 
 | Agent                   | Description                                                                   |
 | ----------------------- | ----------------------------------------------------------------------------- |
 | `clarify-requirements`  | Detects ambiguous requests, generates P0/P1/P2 questions                      |
-| `analyze-domain`        | DDD-based domain analysis, bounded context identification                     |
 | `define-business-logic` | Defines policies, rules, calculations, state transitions (CALC/VAL/STATE/POL) |
-| `design-user-journey`   | UX flows, screen design, onboarding, payment processes                        |
-| `define-metrics`        | KPI, SLO, SLA, dashboard metric definitions                                   |
+| `design-user-journey`   | User flows, screens, onboarding, state transitions                            |
 
-### Meta Agents (6 — Opus)
+### Meta Agent (1 — Opus)
 
-Orchestrate multi-perspective review workflows. No `Bash` access.
+| Agent             | Description                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------- |
+| `devils-advocate` | Failure scenario analysis via 4 attack personas (scalability / dependency / maintainability / cost) |
 
-| Agent               | Description                                                                                         |
-| ------------------- | --------------------------------------------------------------------------------------------------- |
-| `facilitator`       | Analyzes what perspectives are needed, assigns agents                                               |
-| `synthesizer`       | Consolidates Round 1/2 results, identifies conflicts and duplicates                                 |
-| `devils-advocate`   | Failure scenario analysis via 4 attack personas (scalability / dependency / maintainability / cost) |
-| `consensus-builder` | Conflict analysis across perspectives → Win-Win resolution                                          |
-| `impact-analyzer`   | System-wide impact, risk, and development cost of proposed changes                                  |
-
-### Backend Agents (4)
-
-| Agent             | Model  | Description                                                |
-| ----------------- | ------ | ---------------------------------------------------------- |
-| `design-services` | Opus   | Clean/Hexagonal architecture, microservices, DDD patterns  |
-| `implement-api`   | Sonnet | REST/GraphQL API implementation (Express, FastAPI, NestJS) |
-| `write-api-tests` | Sonnet | API unit / integration / E2E tests                         |
-| `optimize-logic`  | Sonnet | Algorithm optimization, caching, N+1 query fixes           |
-
-### Dev Agents (18)
-
-Core development workflow agents.
+### Dev Agents (11)
 
 | Agent                  | Model  | Description                                                                |
 | ---------------------- | ------ | -------------------------------------------------------------------------- |
-| `explore-codebase`     | Haiku  | Project structure, dependencies, pattern analysis                          |
 | `plan-implementation`  | Opus   | Requirements → tech decisions → task breakdown → risk analysis             |
 | `implement-code`       | Sonnet | Code implementation (worktree isolated)                                    |
-| `write-tests`          | Sonnet | Unit / integration / E2E tests (worktree isolated)                         |
+| `write-tests`          | Sonnet | Unit / integration / API / E2E tests (worktree isolated)                   |
 | `review-code`          | Opus   | Adversarial review via 4 personas: hacker, murphy, future-self, picky-user |
 | `fix-bugs`             | Sonnet | Minimal-change bug fixes (worktree isolated)                               |
 | `verify-code`          | Haiku  | Type check, lint, build, test execution                                    |
 | `security-scan`        | Sonnet | OWASP Top 10, secret exposure, vulnerable component detection              |
-| `verify-integration`   | Haiku  | Connection integrity, data flow, version compatibility                     |
-| `git-workflow`         | Sonnet | Branches, PRs, commit messages, merge strategies                           |
-| `sync-docs`            | Sonnet | API and architecture documentation sync                                    |
-| `plan-refactor`        | Opus   | Structural improvement planning, ARCHITECTURE_LIMIT resolution             |
-| `analyze-dependencies` | Sonnet | Library versions, security updates                                         |
-| `manage-api-versions`  | Opus   | API versioning strategy, migration, backwards compatibility                |
-| `analyze-tech-debt`    | Sonnet | Code quality analysis, tech debt prioritization                            |
+| `git-workflow`         | Haiku  | Branches, merges, rebases; reports conflicts instead of guessing           |
+| `sync-docs`            | Haiku  | API and architecture documentation sync (worktree isolated)                |
+| `analyze-dependencies` | Haiku  | Dependency versions, impact range, security updates                        |
 | `research-external`    | Sonnet | External library / technology / best practice research                     |
-| `generate-boilerplate` | Sonnet | Project templates, base structure generation                               |
-| `enforce-structure`    | Haiku  | File placement, naming convention compliance                               |
 
 ---
 
@@ -460,7 +426,7 @@ Core development workflow agents.
 ### Feature Development
 
 ```
-clarify-requirements → analyze-domain → design-user-journey → define-business-logic
+clarify-requirements → design-user-journey → define-business-logic
   → plan-implementation → implement-code → write-tests → verify-code
   → review-code + security-scan (parallel) → fix-bugs → sync-docs
 ```
@@ -469,10 +435,9 @@ clarify-requirements → analyze-domain → design-user-journey → define-busin
 
 ```
 /multi-perspective-review
-  → facilitator (assigns perspectives)
-  → [devils-advocate + synthesizer + impact-analyzer] (Round 1 parallel)
-  → synthesizer (Round 2 consolidation)
-  → consensus-builder (Round 3 resolution)
+  → the main session picks the perspectives
+  → Round 1: perspective reviews in parallel (devils-advocate among them)
+  → Round 2: the main session consolidates and resolves conflicts
 ```
 
 ### Debug
@@ -513,7 +478,7 @@ The plugin collects nothing and sends nothing anywhere.
 
 ```
 plugins/
-└── common/      — Core agents (32) + skills (21) + rules (14) + hooks
+└── common/      — Core agents (15) + skills (15) + rules (12) + hooks
 ```
 
 The plugin contains:
