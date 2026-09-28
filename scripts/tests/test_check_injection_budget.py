@@ -1,12 +1,12 @@
-"""Unit tests for scripts/check_injection_budget.py — 예산 축소측정 회귀 방지 (ATK-006).
+"""Unit tests for scripts/check_injection_budget.py — 예산 축소측정 회귀 방지.
 
-`rules_bytes()` 가 `load_rules(PLUGIN_ROOT, False)` 를 부르고 있었다 — `signals` 인자가
-없어 `tier: conditional` 규범이 하나도 포함되지 않았고, 결국 **core 규범만** 쟀다.
-실제 세션은 conditional 신호를 켜서 부르므로 게이트가 **실제보다 적게 재고 통과**시켰다.
+v5.0.0: 규범 축이 `load_rules()` 직접 호출에서 **훅의 실제 main() 출력**으로 바뀌었다.
+예전 측정은 LESSONS·ACTIVE PLANS 를 빼고 쟀고, conditional 신호를 게이트가 가상으로
+전부 켜서 main() 에 신호가 없는 규범도 멀쩡해 보였다.
 
-픽스처 `rules/` 를 쓰되 `session-start.py` 는 **실물을 복사**한다 — 측정 대상이
-그 함수이므로 재구현하면 테스트가 실물을 건드리지 않는다(픽스처로 통과한 것은
-"동작한다"가 아니다, `warning-signal.md` §측정 오염 1).
+픽스처 `rules/` 를 쓰되 훅 스크립트(`session-start.py`·`utils.py`·`feedback_ledger.py`)는
+**실물을 복사**한다 — 측정 대상이 그 프로세스이므로 재구현하면 테스트가 실물을 건드리지
+않는다(`warning-signal.md` §측정 1).
 """
 
 from __future__ import annotations
@@ -24,24 +24,24 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 from module_loader import load_module_by_path
 
-CORE_BODY = "core rule body\n"
-COND_BODY = "conditional rule body — 이 문장이 최악 측정에 들어가야 한다\n"
+CORE_BODY = "# Core Rule\ncore rule body\n"
+#: session-start.conditional_signals() 의 실제 키 — 픽스처 규범 이름은 이것과 같아야 켜진다.
+SIGNALLED = ("feedback-loop", "loop-engineering", "mcp-usage", "task-resume")
+HOOK_FILES = ("session-start.py", "utils.py", "feedback_ledger.py")
 
 
 def _fake_plugin_root(tmp_path: Path, *, conditional_names: tuple[str, ...]) -> Path:
     root = tmp_path / "common"
     (root / "rules").mkdir(parents=True)
     (root / "hooks").mkdir(parents=True)
-    shutil.copy(
-        REPO_ROOT / "plugins" / "common" / "hooks" / "session-start.py",
-        root / "hooks" / "session-start.py",
-    )
+    for name in HOOK_FILES:
+        shutil.copy(REPO_ROOT / "plugins" / "common" / "hooks" / name, root / "hooks" / name)
     (root / "rules" / "aa-core.md").write_text(
         f"---\ntier: core\n---\n\n{CORE_BODY}", encoding="utf-8"
     )
     for name in conditional_names:
         (root / "rules" / f"{name}.md").write_text(
-            f"---\ntier: conditional\n---\n\n{COND_BODY}", encoding="utf-8"
+            f"---\ntier: conditional\n---\n\n# COND {name}\nbody\n", encoding="utf-8"
         )
     return root
 
@@ -54,100 +54,73 @@ def _load(plugin_root: Path):
     return mod
 
 
-def test_conditional_signals_are_derived_not_hardcoded(tmp_path):
-    """새 conditional 규범이 코드 수정 없이 측정 대상에 들어와야 한다.
-
-    목록을 하드코딩하면 새 규범이 추가될 때 **조용히 커버리지를 잃는다**
-    (`warning-signal.md` §검토 절차 5).
-    """
+def test_conditional_rules_are_derived_not_hardcoded(tmp_path):
+    """새 conditional 규범이 코드 수정 없이 검사 대상에 들어와야 한다(§검토 절차 5)."""
     root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "brand-new-rule"))
-    assert _load(root).conditional_signals() == {
-        "cond-one": True,
-        "brand-new-rule": True,
-    }
+    assert _load(root).conditional_rules() == ["brand-new-rule", "cond-one"]
 
 
-def _rules_text(root: Path, *, signals):
-    session_start = load_module_by_path(
-        root / "hooks" / "session-start.py", "session_start_probe"
-    )
-    return session_start.load_rules(root, False, signals=signals)
+def test_measures_real_main_output_including_lessons_and_plans(tmp_path):
+    """측정 대상은 훅의 실제 출력이다 — LESSONS·ACTIVE PLANS 가 최악에 들어가야 한다."""
+    root = _fake_plugin_root(tmp_path, conditional_names=SIGNALLED)
+    out = _load(root).measure_scenarios(root)
+    assert set(out) == {"empty", "ledger", "plan", "worktree", "peak"}
+    assert "=== LESSONS ===" in out["peak"] and "=== ACTIVE PLANS ===" in out["peak"]
+    assert "=== LESSONS ===" in out["ledger"] and "=== ACTIVE PLANS ===" in out["plan"]
+    assert "=== LESSONS ===" not in out["empty"]
+    assert "Core Rule" in out["empty"]
+    sizes = {k: len(v.encode()) for k, v in out.items()}
+    assert sizes["empty"] < sizes["ledger"] < sizes["peak"]
+    assert sizes["empty"] < sizes["plan"] < sizes["peak"]
 
 
-def test_worst_case_includes_conditional_bodies(tmp_path):
-    """최악 측정이 conditional 본문을 실제로 포함해야 한다 — core 만 재면 안 된다."""
-    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
+def test_signalled_conditionals_pass_coverage(tmp_path):
+    """**양성 대조** — main() 이 켜는 신호의 규범은 통과해야 한다. 아니면 가드가 고장이다."""
+    root = _fake_plugin_root(tmp_path, conditional_names=SIGNALLED)
     mod = _load(root)
-    _always, peak, signals = mod.rules_bytes()
-
-    assert signals == {"cond-one": True}
-    # conditional 본문의 바이트가 최악 측정에 실제로 반영됐는가.
-    assert peak > len(CORE_BODY.encode()) + len(COND_BODY.encode())
-    # 그리고 **항상** 축에는 들어가지 않아야 한다 — 그게 두 축을 나눈 이유다.
-    assert COND_BODY.strip() not in _rules_text(root, signals=None)
+    assert mod.check_conditional_coverage(mod.measure_scenarios(root), root) == []
 
 
-def test_always_axis_excludes_conditional(tmp_path):
-    """'항상' 축은 신호 없는 세션의 바닥값이다 — conditional 이 섞이면 과대보고다."""
-    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
-    always, peak, _sig = _load(root).rules_bytes()
-    assert always < peak, (
-        f"'항상'({always}B)이 '최악'({peak}B)보다 작지 않다 — 두 축이 같은 것을 재고 있다"
-    )
+def test_conditional_without_signal_is_red(tmp_path):
+    """main() 에 신호가 없는 conditional 은 **한 번도 주입되지 않는다** — red.
 
-
-def test_worst_case_is_strictly_larger_than_core_only(tmp_path):
-    """되돌림 감지의 핵심 — signals 없이 부르면 나오는 수보다 반드시 커야 한다."""
-    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
+    워크트리 신호를 지운 뒤 `parallel-worktree` 가 conditional 로 남아 있으면 정확히 이
+    상태다. 예전 게이트는 신호를 가상으로 켜서 재 이것을 못 봤다.
+    """
+    root = _fake_plugin_root(tmp_path, conditional_names=(*SIGNALLED, "parallel-worktree"))
     mod = _load(root)
-    _, peak, _ = mod.rules_bytes()
+    problems = mod.check_conditional_coverage(mod.measure_scenarios(root), root)
+    assert len(problems) == 1 and problems[0].startswith("parallel-worktree:"), problems
 
-    session_start = load_module_by_path(
-        root / "hooks" / "session-start.py", "session_start_t"
+
+def test_always_on_signal_is_red(tmp_path):
+    """빈 레포에서도 켜지는 신호는 상시 참이다 — conditional 이 아니다."""
+    root = _fake_plugin_root(tmp_path, conditional_names=SIGNALLED)
+    hook = root / "hooks" / "session-start.py"
+    src = hook.read_text(encoding="utf-8")
+    assert '"mcp-usage": _mcp_config_present(project_root),' in src
+    hook.write_text(
+        src.replace('"mcp-usage": _mcp_config_present(project_root),', '"mcp-usage": True,'),
+        encoding="utf-8",
     )
-    core_only = len(session_start.load_rules(root, False).encode()) + len(
-        session_start.load_workflow_skill(root).encode()
-    )
-    assert peak > core_only, (
-        f"최악 측정({peak}B)이 core 전용 측정({core_only}B)보다 크지 않다 — "
-        "conditional 규범이 측정에서 빠졌다"
-    )
+    mod = _load(root)
+    problems = mod.check_conditional_coverage(mod.measure_scenarios(root), root)
+    assert any(p.startswith("mcp-usage:") and "상시" in p for p in problems), problems
 
 
 def test_zero_conditional_rules_is_an_error(tmp_path):
-    """파생 결과가 0개면 파싱 경로가 깨진 것이다 — 조용히 core 만 재고 통과시키지 않는다."""
+    """파생 결과가 0개면 파싱 경로가 깨진 것이다 — 조용히 통과시키지 않는다."""
     root = _fake_plugin_root(tmp_path, conditional_names=())
-    with pytest.raises(RuntimeError, match="conditional 규범을 하나도 파생하지 못했다"):
-        _load(root).rules_bytes()
-
-
-def test_signal_key_schema_drift_is_red(tmp_path):
-    """파생한 신호가 `load_rules` 에 **닿았는지**를 따로 증명한다 (W6 F-4).
-
-    0-파생 가드만으로는 부족하다. `conditional_signals()` 와 `load_rules()` 는 신호 키가
-    **파일명 stem** 이라는 약속으로만 이어져 있고 그 정합을 아무도 강제하지 않았다.
-    `load_rules` 쪽 스키마가 stem 에서 바뀌면 신호가 전부 무시되는데, 파생은 여전히
-    성공하므로 0-파생 가드는 통과하고 게이트는 **green** 이었다 — 이 파일 독스트링이
-    고쳤다고 선언한 과소측정으로 조용히 되돌아간다.
-
-    `warning-signal.md` §측정 3: 음성 결과는 "그 지점에 도달했다"를 따로 증명해야 한다.
-    """
-    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
     mod = _load(root)
-    # 키 스키마 드리프트 — stem 이 아닌 키를 준다. load_rules 는 전부 무시한다.
-    mod.conditional_signals = lambda: {
-        f"rules/{k}.md": True for k in ("cond-one", "cond-two")
-    }
-    with pytest.raises(RuntimeError, match="신호가 load_rules 에 닿지 않았다"):
-        mod.rules_bytes()
+    problems = mod.check_conditional_coverage(mod.measure_scenarios(root), root)
+    assert problems and "하나도 파생하지 못했다" in problems[0]
 
 
-def test_reached_signals_still_pass(tmp_path):
-    """**양성 대조** — 정상 신호는 그대로 통과해야 한다. 아니면 가드가 아니라 고장이다."""
-    root = _fake_plugin_root(tmp_path, conditional_names=("cond-one", "cond-two"))
-    always, peak, signals = _load(root).rules_bytes()
-    assert signals == {"cond-one": True, "cond-two": True}
-    assert peak > always
+def test_broken_hook_is_a_measurement_failure_not_green(tmp_path):
+    root = _fake_plugin_root(tmp_path, conditional_names=SIGNALLED)
+    (root / "hooks" / "session-start.py").write_text("raise SystemExit(3)\n", encoding="utf-8")
+    with pytest.raises(RuntimeError, match="rc=3"):
+        _load(root).measure_scenarios(root)
 
 
 def test_unparseable_agent_is_red_not_silently_skipped(tmp_path):
@@ -216,7 +189,7 @@ def _policy_file(tmp_path: Path, session_start: dict | None, **target_extra) -> 
 
 def _host_check(tmp_path: Path, capsys, session_start: dict | None, **extra):
     rc = _real_module().check_host_delivery(
-        _policy_file(tmp_path, session_start, **extra), _PEAK, _LESSONS_WORST
+        _policy_file(tmp_path, session_start, **extra), _PEAK + _LESSONS_WORST
     )
     return rc, capsys.readouterr().out
 
@@ -273,15 +246,10 @@ def test_host_limit_unknown_host_is_red_not_borrowed(tmp_path, capsys):
     assert "조사되지 않았다" in out
 
 
-def test_real_policy_passes_and_lessons_worst_reads_the_ledger_cap():
+def test_real_policy_passes_with_the_real_peak_cap():
     """실물 대조 — 픽스처 초록은 "동작한다"가 아니다(`warning-signal.md` §측정 1)."""
     mod = _real_module()
-    ledger = load_module_by_path(
-        REPO_ROOT / "plugins" / "common" / "hooks" / "feedback_ledger.py", "fl_probe"
-    )
-    worst = mod.lessons_worst_bytes()
-    assert worst > ledger.DIGEST_CHAR_CAP * 4  # 머리말까지 더해졌다
-    assert mod.check_host_delivery(mod.TARGETS_POLICY, mod.RULES_PEAK_CAP, worst) == 0
+    assert mod.check_host_delivery(mod.TARGETS_POLICY, mod.INJECTION_PEAK_CAP) == 0
 
 
 @pytest.mark.parametrize("style", ["|", ">", "|-", ">-", "|+", ">+"])
