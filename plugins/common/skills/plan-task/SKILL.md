@@ -15,11 +15,9 @@ description: Structured task planning into a plan file. Use for any new feature,
 
 ## Phase Gate
 
-이 스킬은 **brainstorming** 이후에 실행되어야 합니다.
-
-`docs/specs/`에 관련 스펙 파일이 없으면:
-- 새 기능이라면 → 먼저 `brainstorming` 스킬을 invoke하세요
-- 버그 수정/소규모 작업이라면 → 계속 진행 가능 (단, 이 사실을 명시)
+`brainstorming`(설계 승인)은 **설계가 필요한 Large 새 기능**에만 선행한다 — 크기 기준은
+아래 Step 1-1 과 같다. 그런 작업인데 `docs/specs/`에 관련 스펙이 없으면 먼저 `brainstorming`
+을 invoke 한다. 버그 수정·Small·Medium 은 바로 진행한다(건너뛴 사실만 한 줄 적는다).
 
 ---
 
@@ -149,8 +147,6 @@ Planning이 완료되었습니다. 바로 개발을 시작하겠습니다.
 
 ## 참고 문서
 
-| 문서              | 경로                                              |
-| ----------------- | ------------------------------------------------- |
-| 계획 파일 규약    | `plugins/common/skills/plan-task/references/plan-format.md` |
-| 요구사항 정련 절차 | `plugins/common/skills/plan-task/references/elicitation.md` |
-| Planning 프로토콜 | `plugins/common/rules/planning-protocol.md`       |
+이 스킬 디렉토리 기준 경로다(소비자 프로젝트 cwd 기준이 아니다):
+계획 파일 규약 `references/plan-format.md` · 요구사항 정련 절차 `references/elicitation.md` ·
+Planning 프로토콜은 규범 `planning-protocol`(세션 주입).

@@ -1,24 +1,21 @@
 ---
 name: using-hiway-kit
-description: Session-start meta-skill. Kit workflow chain and plan file rules.
+description: Session-start meta-skill (hook-injected). Kit workflow chain and plan file rules.
+disable-model-invocation: true
 ---
 
 # Using hiway-kit
 
-**작업이 스킬의 사용 시점에 해당하면 구현 전에 그 스킬을 먼저 invoke한다.** 같은 규율을 제공하는
-다른 플러그인이 함께 설치돼 있으면 그쪽을 따라도 된다 — 킷은 그 존재를
-가정하지도, 충돌하지도 않는다.
+**작업이 스킬의 사용 시점에 해당하면 구현 전에 그 스킬을 먼저 invoke한다.** 같은 규율을 주는
+다른 플러그인이 있으면 그쪽을 따라도 된다 — 킷은 그 존재를 가정하지도, 충돌하지도 않는다.
 
-## Workflow Chain
+## Workflow Chain — 크기에 맞춰 탄다
 
 ```
-brainstorming → plan-task → auto-dev
+Large 새 기능:  brainstorming → plan-task → auto-dev
+Medium:         plan-task → auto-dev
+Small·버그:     바로 구현 (완료 조건 명령으로 검증)
 ```
 
-**brainstorming**(설계·스펙) 과 **plan-task**(구조화 계획) 는 HARD-GATE,
-**auto-dev** 는 구현 + 검증 파이프라인이다. 게이트·루프·완료 규율은 `rules/` 가 이미
-주입했다 — 여기서 다시 쓰지 않는다.
-
-## 계획 파일
-
-Medium/Large 만 `docs/plans/<날짜>-<slug>/plan.md` 에 둔다 — 규약 `plan-task/references/plan-format.md`.
+크기 기준은 `plan-task` 가 소유한다. 계획 파일은 Medium/Large 만
+`docs/plans/<날짜>-<slug>/plan.md` 에 둔다(규약 `plan-task/references/plan-format.md`).
