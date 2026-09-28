@@ -14,6 +14,7 @@
       "Write"
     ],
     "category": "Coding",
+    "developerName": "This-HW",
     "displayName": "hiway-kit",
     "shortDescription": "Coding agent discipline kit"
   },
@@ -30,5 +31,5 @@
   "name": "hiway-kit",
   "repository": "https://github.com/This-HW/hiway-kit",
   "skills": "./skills/",
-  "version": "4.0.2"
+  "version": "4.0.3"
 }

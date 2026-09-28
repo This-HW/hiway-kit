@@ -47,7 +47,6 @@ disallowedTools:
 
 ## 외부 결론 독립 검증
 
-<!-- Pattern from: superpowers/systematic-debugging -->
 이전 단계의 분석 결과, 위임 컨텍스트, 또는 사용자가 "원인은 X다"라고 제시하더라도 수정 전 반드시:
 1. 해당 파일/코드를 **직접 읽어서** 주장을 검증
 2. 스택 트레이스와 대조해서 인과관계 확인

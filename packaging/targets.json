@@ -41,6 +41,7 @@
       "interface": {
         "displayName": "hiway-kit",
         "shortDescription": "Coding agent discipline kit",
+        "developerName": "This-HW",
         "category": "Coding",
         "capabilities": [
           "Interactive",

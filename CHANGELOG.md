@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [4.0.3] — 2026-09-28
+
+### Changed — superpowers 전제 서술 정리
+
+superpowers 는 더 쓰지 않는다. 소비자에게 실리는 텍스트에서 그 이름을 전제하는 7곳을 일반화·삭제했다
+(`using-hiway-kit`·`skill-forge` 의 "superpowers 등" → "다른 플러그인", `debug` 제목의 출처 표기, `fix-bugs`·
+`auto-dev`·`review` 의 `Pattern from: superpowers/…` 주석). README "Works with superpowers" 절은 삭제 — 이미
+사실과 달랐다(범용 규율을 superpowers 에 양보한다는 서술은 이전 릴리스에서 되돌려졌다). 다른 플러그인과
+공존한다는 원칙(가정하지 않음·충돌하지 않음·단독 자급)은 그대로다. 결정 근거로 인용되는 연구·스펙 문서는
+기록으로 남긴다.
+
+### Fixed — Codex 매니페스트에 `interface.developerName` 추가
+
+OpenAI 디렉토리 최종 제출은 `author.name` 과 `interface.developerName` 일치를 요구한다
+(`developer_name_defaulted`). SSOT `packaging/targets.json` 에 `"developerName": "This-HW"`.
+
 ## [4.0.2] — 2026-09-28
 
 ### Removed — 로컬 Work 기록(`docs/works/`) 정리

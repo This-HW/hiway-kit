@@ -235,7 +235,7 @@ hiway-kit이 무엇을 어떻게 융합하는지 — 한눈에 보는 설계 원
 | 갈래 | 무엇을 가져왔나 | kit에서 |
 | --- | --- | --- |
 | **Claude Code 네이티브** | agents, skills, hooks, dynamic workflow, OTEL, memory | 토대 프리미티브 — 매니페스트 의존성, exec-form 훅, `decision:block` 자동수정, 네이티브 관측 |
-| **superpowers 규율** | brainstorming→plan→execute, phase gate, TDD, verification-before-completion | `brainstorming → plan-task → auto-dev` HARD-GATE 체인, Iron Law 검증 |
+| **개발 방법론 규율** | brainstorming→plan→execute, phase gate, TDD, verification-before-completion | `brainstorming → plan-task → auto-dev` HARD-GATE 체인, Iron Law 검증 |
 | **Hermes 피드백 루프** | "메모리·피드백 루프가 코어" | validation 결함 → feedback ledger → 다음 구현 컨텍스트 주입 (학습 루프) |
 | **계획 파일 규약** | 파일 기반 진행 추적 | `docs/plans/<slug>/plan.md`·checklist.json — 포맷은 [`plan-format.md`](plugins/common/skills/plan-task/references/plan-format.md) |
 
@@ -293,16 +293,6 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 > 심화 리서치 노트: [하네스 엔지니어링 & 루프 엔지니어링 — 2026 중반 지형도](docs/research/2026-07-harness-loop-engineering.md)
 > (개념 계보 · 3대 루프 구현체 · 검증 원칙 · 병렬 에이전트 도구 생태계 · kit 대조)
 
-## Works with superpowers
-
-[obra/superpowers](https://github.com/obra/superpowers) 플러그인과 **상호보완**하도록 설계됐습니다 — 둘을 같이 켜도 충돌·중복이 없습니다.
-
-- **각자 자동 적용**: 둘 다 세션 시작에 자기 메타스킬을 자동 주입 (`using-hiway-kit` / `using-superpowers`). 수동 호출 불필요.
-- **중복 제거**: `using-hiway-kit`은 범용 스킬 규율(1% 룰·red flags)을 superpowers에 양보하고, **kit 고유 델타**(에이전트맵·계획 파일 규약·native/loop/DoD)만 제공 → 병행 시 중복 0.
-- **역할 분담**: superpowers = 방법론 지휘자, hiway-kit = 실행 레이어(전문 에이전트·auto-dev 파이프라인·hooks·계획 파일 추적).
-- **시너지**: kit의 Definition-of-Done(기계 게이트) + superpowers의 verification-before-completion(원칙)이 상호보강.
-- **단독 동작**: superpowers 없이 hiway-kit만으로도 자급자족.
-
 ## Works with your MCPs (memory 등)
 
 kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대신 세션에 있는 MCP를
@@ -314,8 +304,8 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
   없으면 조용히 스킵 — 설치 의무 없음.
 - **충돌 없음**: kit 에이전트는 MCP 툴을 허용목록에 하드코딩하지 않습니다
   (`rules/mcp-usage.md`) — 어떤 MCP 조합에서도 환각·충돌 없이 동작합니다.
-- 다른 플러그인·MCP와의 호환은 kit의 **명시적 설계 목표**입니다 (superpowers 병행이
-  그 예시).
+- 다른 플러그인·MCP와의 호환은 kit의 **명시적 설계 목표**입니다 — 함께 설치된 플러그인의
+  존재를 가정하지도, 충돌하지도 않으며, 단독으로도 자급자족합니다.
 
 ---
 

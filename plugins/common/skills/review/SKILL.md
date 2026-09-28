@@ -152,7 +152,6 @@ $ARGUMENTS에 `--quick`이 포함되어 있으면:
 
 ## 1.7단계: 사용자 의견 처리 원칙 (조건부)
 
-<!-- Pattern from: superpowers/receiving-code-review -->
 **트리거**: $ARGUMENTS에 파일 경로·옵션(`--quick` 등)이 아닌 **자연어 문장이 포함된 경우**에만 실행.
 
 예시:

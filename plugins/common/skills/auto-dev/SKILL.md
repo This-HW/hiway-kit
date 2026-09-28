@@ -222,7 +222,6 @@ python3 "<plugin root>/hooks/feedback_ledger.py" upsert <category> <severity> "<
 명령을 실행하지 않고 완료를 주장하는 것은 오류다.
 ```
 
-<!-- Pattern from: superpowers/verification-before-completion -->
 T-review, T-security 결과를 구조적으로 검증:
 - review-code 리포트의 `## 판정:` 이 `[ACCEPT]` 인가 (CRITICAL·HIGH 0건)?
 - 리포트가 `## 완료:` 줄로 끝나는가?

@@ -5,7 +5,7 @@ description: Analyze errors and apply fixes. Use when you have an error message,
 
 # 디버깅 실행
 
-> 4-Phase Debugging (Superpowers 패턴)
+> 4-Phase Debugging
 > Reproduce → Isolate → Fix → Verify
 
 호출되면 바로 파이프라인을 시작한다. 단계가 바뀔 때 한 줄로 진행을 알린다.

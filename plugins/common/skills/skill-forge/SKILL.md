@@ -52,7 +52,7 @@ ls plugins/common/skills/                       # kit 스킬
 ls ~/.claude/plugins/*/*/skills/ 2>/dev/null    # 설치된 다른 플러그인 (없으면 건너뛴다)
 ```
 
-> **다른 플러그인의 존재를 가정하지 않는다.** superpowers 등이 설치돼 있으면 그
+> **다른 플러그인의 존재를 가정하지 않는다.** 다른 플러그인이 설치돼 있으면 그
 > 목록과도 대조하고, 없으면 그 단계를 조용히 건너뛴다 (fail-open). 특정 플러그인이
 > 있어야만 동작하는 절차는 consumer-first 위반이다.
 
