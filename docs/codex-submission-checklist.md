@@ -42,7 +42,8 @@ would mean standing up and hosting an MCP server only to pass the form. Opening 
   orgs ("Activity task failed", [thread 1401299](https://community.openai.com/t/skill-safety-scan-always-ends-in-error-activity-task-failed-for-every-skill-in-my-org-including-a-one-line-say-hello-skill/1401299)).
   So even a Skills only upload would currently stall at the scan.
 - No OpenAI staff reply or fix date in either thread as of 2026-09-28. We filed our own support
-  request (organization `org-dwKLm12IsiU3BkwZROoLdmuk`) so our org is part of the escalation.
+  request (organization `org-dwKLm12IsiU3BkwZROoLdmuk`) so our org is part of the escalation —
+  **case 15960350** (Sev 4, auto-acknowledged 2026-09-28 20:32 KST; no human reply yet).
 
 **Package is pre-validated.** `scripts/build-codex-zip.py --check` builds the ZIP from tracked files and
 checks every documented error code that can be judged locally (submission-errors page). Running it first
