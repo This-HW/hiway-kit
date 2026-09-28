@@ -47,6 +47,17 @@ Submit at: https://platform.claude.com/plugins/submit
 빠지며 사라졌고 `hooks/examples/README.md` 만 남음 — 그 문서의 `uv run`·`npm publish`·`docker push` 같은 **명령 이름 표기**
 로 보인다. 포털 안내상 문서 전용이면 조치 불요라 추측으로 문구를 바꾸지 않았다), 정보 *훅 사용*·*이미지 무검사 통과*.
 
+**스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
+`https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
+**근거 파일·문구까지** 나온다(Review 탭은 제목만 보여 준다). 이걸로 이분 탐색했다(브랜치 16개, 끝나고 전부 삭제):
+- *내려받아 바로 실행* = `hooks/examples/README.md` 의 단어 `` `eval` `` → 5.0.2 에서 제거, 재검증으로 소멸 확인.
+  (5.0.1 의 `uv run` 추정은 틀렸다.)
+- *사용자 머신의 자격증명 사용*(정책 보류) = "환경 읽기"+"밖으로 보내기" 두 표면의 결합. 표기를 걷어낼 때마다 근거가 옮겨 가
+  최종적으로 `protect-sensitive` 의 **차단 경로 목록**(`~/.ssh`·`~/.aws`) 하나로 양쪽이 성립 → 보안 기능이라 코드 유지.
+  배포 README 에 경로를 **글자 그대로** 적으면 근거가 하나 더 생긴다(5.0.2 에서 밟고 5.0.3 에서 되돌림).
+  포털 안내("무관하면 제출에 밝혀라")에 따라 2026-09-29 00:40 KST `directory@anthropic.com` 에 근거와 함께 설명 메일.
+- *검증기가 따라가지 못한 스크립트*(정책 보류) = Python 훅 5개. 포털 안내상 심사자가 읽는 항목.
+
 **목록 정보는 제출 시점에 고정된다.** Listing 탭이 각 행의 출처를 `plugin.json key:` 로 밝힌다 — `icon`,
 `documentationUrl`, `supportUrl`, `privacyPolicyUrl` 이 비어 있어 아이콘은 GitHub 아바타로 대체됐다. 그러나 포털 원문이
 *"Newer versions don't update them here"*, 문서가 *"name and short description follow the live version"* 이므로 지금
