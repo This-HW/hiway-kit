@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-HOOKS_DIR = Path(__file__).resolve().parent.parent
+HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 _spec = importlib.util.spec_from_file_location(
     "auto_format", HOOKS_DIR / "auto-format.py"
 )

@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-SETUP_DIR = Path(__file__).resolve().parent.parent.parent / "setup"
+SETUP_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "setup"
 SCRIPT = SETUP_DIR / "session-check.py"
 
 

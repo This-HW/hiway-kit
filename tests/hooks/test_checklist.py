@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from types import ModuleType
 
-HOOKS_DIR = Path(__file__).resolve().parent.parent
+HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 
 
 def _load_module() -> ModuleType:

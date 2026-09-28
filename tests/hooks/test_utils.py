@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
-HOOKS_DIR = Path(__file__).resolve().parent.parent
+HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 sys.path.insert(0, str(HOOKS_DIR))
 
 from utils import debug_log, get_project_root, is_debug_mode, safe_path
