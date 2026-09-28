@@ -47,7 +47,7 @@ model tier that matches the nature of its work.
 |-------|----------|----------|
 | Opus | Strategy, analysis, review | clarify-requirements, review-code |
 | Sonnet | Code implementation, fixes | implement-code, fix-bugs, write-tests |
-| Haiku | Exploration, simple checks | explore-codebase, verify-code |
+| Haiku | Quick checks | verify-code, git-workflow |
 
 Leaf agents never spawn further sub-agents (`disallowedTools: [Task]`). This
 isn't dogma that "only the orchestrator coordinates" — at our current scale,
@@ -81,7 +81,7 @@ itself.
 ```
 Isolated run -> verification green -> sequential merge
                     | red
-              escalate to plan-refactor or git-workflow (never pick sides arbitrarily)
+              escalate to plan-implementation or git-workflow (never pick sides arbitrarily)
 ```
 
 ## 4. Deterministic Guardrails

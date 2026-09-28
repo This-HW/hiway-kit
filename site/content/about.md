@@ -45,7 +45,7 @@ Phase 3 (Validation)  → 리뷰 + 보안 스캔 병렬 실행 (루프 + 게이�
 |------|------|------|
 | Opus | 전략·분석·리뷰 | clarify-requirements, review-code |
 | Sonnet | 코드 구현·수정 | implement-code, fix-bugs, write-tests |
-| Haiku | 탐색·단순 점검 | explore-codebase, verify-code |
+| Haiku | 단순 점검 | verify-code, git-workflow |
 
 leaf 에이전트는 서브 에이전트를 다시 생성하지 않는다(`disallowedTools: [Task]`).
 이건 "메인만 조율해야 한다"는 도그마가 아니라, 현재 스케일에서 에이전트 중첩이
@@ -77,7 +77,7 @@ leaf 에이전트는 서브 에이전트를 다시 생성하지 않는다(`disal
 ```
 격리 실행 → 검증 그린 → 순차 병합
                 ↓ 레드
-          plan-refactor 또는 git-workflow로 에스컬레이션 (충돌 임의 선택 금지)
+          plan-implementation 또는 git-workflow로 에스컬레이션 (충돌 임의 선택 금지)
 ```
 
 ## 4. 결정적 가드레일(Deterministic Guardrails)

@@ -80,8 +80,8 @@ Planning → Gap 발견 → Planning 내에서 해결 → 충분히 완료 → D
 │                                          │
 │ Round 2: 피드백 루프                    │
 │   ├─ AskUserQuestion (P0 모호함)        │
-│   ├─ explore-codebase (기존 패턴 확인)  │
-│   └─ analyze-domain (도메인 분석)       │
+│   ├─ 내장 Explore (기존 패턴 확인)     │
+│   └─ clarify-requirements (재질문)      │
 │                                          │
 │ 메인 Claude 판단:                       │
 │   "충분한가?" → 충분 → Dev Phase        │
@@ -125,8 +125,7 @@ Planning → Gap 발견 → Planning 내에서 해결 → 충분히 완료 → D
 │ 병렬 검증:                              │
 │   ├─ verify-code                        │
 │   ├─ review-code                        │
-│   ├─ security-scan                      │
-│   └─ verify-integration                 │
+│   └─ security-scan                      │
 │                                          │
 │ 메인 Claude 판단:                       │
 │   "프로덕션 배포 가능한가?"             │
