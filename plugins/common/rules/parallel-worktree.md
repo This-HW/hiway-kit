@@ -1,7 +1,7 @@
 ---
-tier: conditional
-activates: 워크트리 여부 감지 (.git 파일 == linked worktree)
+tier: reference
 portable: true
+indexLine: 병렬 위임·워크트리 산출물 병합 전 rules/parallel-worktree.md 를 읽어라
 ---
 
 # Parallel Worktree Rules

@@ -65,45 +65,18 @@
 
 ---
 
-## 4. 에이전트 vs 스킬: MCP는 어디에 두는가
+## 4. 에이전트 vs 스킬: MCP는 어디에 두는가 (킷 저작 규칙 — 주입되지 않는다)
 
-**배포 에이전트 frontmatter에 `mcp__*` 툴을 넣지 않는다.** 소비자마다 MCP 설치가 다르고,
-미설치 project-scoped MCP가 allowlist에 있으면 에이전트가 환각/hard-fail한다(CC #13898).
-따라서:
+**배포 에이전트 frontmatter에 `mcp__*` 툴을 넣지 않는다**는 원칙은 v5.0.0 에서 주입 규범에서
+뺐다. 이것은 **킷을 저작하는 사람**의 규칙이지 소비자 세션의 행동 규범이 아니다 — 소비자
+세션에 매번 실을 이유가 없다. 원칙의 근거는 그대로다: 소비자마다 MCP 설치가 다르고, 미설치
+project-scoped MCP가 allowlist에 있으면 에이전트가 환각/hard-fail한다(CC #13898). 그래서
+MCP 의존 리서치는 `web-research` 스킬(main 컨텍스트에서 설치된 MCP를 상속하고 없으면
+빌트인으로 폴백)에 살고, 배포 에이전트는 빌트인 WebSearch/WebFetch만 쓴다.
 
-- **MCP 의존 리서치·문서조회 → `web-research` 스킬.** 스킬은 main 컨텍스트에서 설치된 MCP를
-  안전 상속하고, 미설치 시 빌트인 WebSearch/WebFetch로 폴백한다.
-- **배포 에이전트는 빌트인 WebSearch/WebFetch만** 사용한다. 라이브러리 문서가 필요하면
-  `web-research` 스킬로 위임한다 — 에이전트 frontmatter에 MCP를 배선하지 않는다.
-
-```yaml
-# 배포 에이전트 — MCP 미배선 (빌트인만)
----
-name: implement-code
-model: sonnet
-tools:
-  - Read
-  - Write
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-disallowedTools:
-  - Task
-# mcp__* 없음. 최신 라이브러리 문서가 필요하면 web-research 스킬로 위임.
----
-
-# MCP 리서치가 필요하면 — 에이전트가 아니라 스킬로
-# skills/web-research/SKILL.md (main 컨텍스트에서 MCP 안전 사용 + 폴백)
-```
-
-> 정본 규칙: `plugins/common/rules/mcp-usage.md` → "Agent MCP Configuration".
-
-**회귀 가드는 규범이 아니라 게이트에 있다.** 이 원칙의 기계 검사(에이전트 frontmatter
-`tools:` 의 `mcp__*`, 그리고 산문이 Context7/Tavily 를 자기 능력으로 지시하는 것)는 이 레포의
-`scripts/verify-done.sh` 가 한다. 예전에는 주입 규범 끝에 그 가드를 설명하는 문단이 있었으나
-제거됐다 — 소비자 세션에 주입되는 규범이 소비자에게 없는 이 레포 전용 스크립트를 가리킬
-이유가 없기 때문이다. 검사 자체는 그대로다.
+**강제는 이 레포의 게이트가 한다** — 에이전트 frontmatter `tools:` 의 `mcp__*` 와 산문이
+Context7/Tavily 를 자기 능력으로 지시하는 것을 `scripts/verify-done.sh` 가 막는다. 저작
+체크리스트는 레포 `CLAUDE.md` 의 Contributing 절이 소유한다.
 
 ---
 
@@ -169,7 +142,8 @@ MCP 도구는 컨텍스트를 소비합니다. 아래 원칙으로 효율을 높
 
 **그래서 신호를 넓혀야 하는가 — 아니다.** 세 가지를 확인하고 좁은 채로 둔다.
 
-1. **이 규범의 고유 내용이 프로젝트 스코프 결함이다.** 다른 곳에 없는 내용은 §4 의
+1. **이 규범의 고유 내용이 프로젝트 스코프 결함이다.** (v5.0.0 전 기준 — §4 는 이제 주입되지
+   않는다.) 다른 곳에 없는 내용은 §4 의
    에이전트 allowlist 회귀 가드인데, 그 근거인 CC #13898 의 제목 자체가
    *"Custom Subagents Cannot Access **Project-Scoped** MCP Servers"* 다. 신호와 결함의
    스코프가 정확히 일치한다.

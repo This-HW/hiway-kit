@@ -5,7 +5,7 @@ description: Automated development pipeline. Runs a completed plan file through 
 
 # Auto-Dev 스킬
 
-계획 파일(`docs/plans/<YYYY-MM-DD>-<slug>/plan.md` — 규약 SSOT: `plan-task/references/plan-format.md`)을
+계획 파일(`docs/plans/<YYYY-MM-DD>-<slug>/plan.md` — 규약 SSOT: `skills/plan-task/references/plan-format.md`)을
 입력으로 Development → Validation 파이프라인을 자동 실행합니다.
 
 ```
@@ -35,7 +35,7 @@ description: Automated development pipeline. Runs a completed plan file through 
 
 1. 호스트 태스크 도구가 있으면 로드한다(Claude Code: `ToolSearch("select:TaskCreate,TaskUpdate,TaskList")`).
 
-> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `plan-task/references/task-tools-fallback.md`
+> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
 > 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
 2. `TaskList` 로 이 계획의 `[Dev]`/`[Validation]` Task 가 있으면 상태 확인 후 재개 (재생성 스킵)
 3. 없으면 → Step 1
@@ -69,7 +69,7 @@ T-dev-4: [Dev] 테스트 작성            ← blockedBy: T-dev-2, T-dev-3
 ```
 
 **checklist 생성** (계획 파일이 있을 때): `## 완료 조건` 의 명령을 항목의 `verify` 로 삼아
-계획 디렉토리에 `init` 한다(호출 경로: `plan-task/references/task-tools-fallback.md`).
+계획 디렉토리에 `init` 한다(호출 경로: `skills/plan-task/references/task-tools-fallback.md`).
 `verify` 는 계획에서 **파생**한다 — 실행자가 새로 지어내지 않는다.
 
 ---
@@ -93,26 +93,12 @@ Agent(task_B) ─┼─ 동일 응답에서 동시 dispatch
 Agent(task_C) ─┘
 ```
 
-**dispatch 전 파일 소유권 확인 (rules/parallel-worktree.md) [건너뛰기 금지]:**
-병렬 안전은 병합 직렬화가 아니라 **dispatch 시점의 파일 분리**로 확보한다(반환 시점만으로
-파일 소유권 충돌을 막을 수 없다). 따라서:
-
-1. 병렬 청크의 수정 대상 파일이 disjoint한지 확인한다. disjoint하면 각 에이전트가
-   언제 복귀하든 트리 충돌이 없다.
-2. 겹침을 피할 수 없으면 해당 청크들을 **순차 dispatch**로 강등한다(하나 dispatch →
-   검증된 산출물 반환·통합 확인 → 다음). 의존성 상류(공유 타입/유틸) 청크를 먼저.
-3. 공유 파일(설정·배럴 export·라우트 등록부)은 병렬 청크에 배정하지 않고 마지막에
-   메인 세션이 단독 수정한다.
-
-**Worktree 반환·통합 (병렬 dispatch 후):**
-
-- 작업자는 격리 트리에서 검증한 커밋/diff와 결과를 반환한다. 지정된 통합 담당자가 근거를
-  확인하고 병합한 뒤 통합 검증한다(`rules/parallel-worktree.md`). 네이티브 격리 종료 도구의
-  사용 가능 여부·동작은 호스트에서 확인하며, 그 도구가 통합 브랜치 쓰기 권한을 부여하지 않는다.
-- 병합 충돌 발생 시(전제가 깨진 경우): 임의 해결 금지 → `git-workflow`에 위임해 충돌
-  파일/내용 보고 + NEED_USER_INPUT(ours/theirs/manual) 에스컬레이션.
-- 같은 지점 충돌 2회 반복 = 청크 분해 오류 → 남은 dispatch 중단, plan 단계로 돌아가
-  청크 경계(파일 소유권)를 재설계한다.
+**dispatch 전 파일 소유권 확인 [건너뛰기 금지]:** 병렬 청크의 수정 대상 파일이 disjoint 해야
+한다 — 겹치면 순차 dispatch 로 강등하고, 공유 파일(설정·배럴 export·등록부)은 마지막에 메인
+세션이 단독 수정한다. 반환·통합·충돌 에스컬레이션(임의 ours/theirs 금지, 사용자에게
+ours/theirs/manual 선택지를 호스트 수단으로 묻는다)은 규범 `parallel-worktree`(참조 등급 — 세션 주입의
+참고 목록이 경로를 준다)를 따른다.
+같은 지점 충돌 2회 반복 = 청크 분해 오류 → 남은 dispatch 중단, 계획 단계로 돌아간다.
 
 **Large 라우팅:** 계획 `size: large`이고 unblocked 병렬 청크가 **10개 이상**이면,
 스킬 주도 dispatch는 main 컨텍스트에 부담이 큽니다. 이 경우 청크 목록을 정리해
@@ -130,12 +116,12 @@ Agent(task_C) ─┘
 - **미완 1항목/iteration**: 한 iteration은 checklist 미완 항목 **하나**만 목표로 한다
   (한 번에 다수 항목을 "완료"로 몰아 찍지 않는다 — 검증 없는 일괄 통과 방지).
 - **verify 통과 전 passes 금지**: `checklist.json`의 `passes:true`는 오직
-  checklist `pass <id>`(경로는 `plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
+  checklist `pass <id>`(경로는 `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
   항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만 전환된다.
   모델 판단으로 completed를 self-mark하지 않는다.
 - **상태 쓰기는 메인 세션 소유**: `checklist.json`·`plan.md` 쓰기는 **메인 세션**만
   수행한다. worktree subagent는 코드만 변경하고 상태 파일은 건드리지 않는다
-  (`rules/parallel-worktree.md` 병합 충돌 해소 — 상태는 단일 writer).
+  (규범 `parallel-worktree` 의 공유 상태 파일 절 — 상태는 단일 writer).
 
 모든 Dev Task 완료 후 Step 3 으로 간다.
 
@@ -199,7 +185,7 @@ review-code/security-scan 결과에 **발견된 결함이 있으면(pass·fail �
 ```bash
 # category ∈ {lint, security, architecture, test, convention}
 # severity ∈ {critical, high, medium, low}
-# 경로는 plan-task/references/task-tools-fallback.md 의 플러그인 루트 해석을 따른다
+# 경로는 skills/plan-task/references/task-tools-fallback.md 의 플러그인 루트 해석을 따른다
 python3 "<plugin root>/hooks/feedback_ledger.py" upsert <category> <severity> "<결함 요지>"
 ```
 
@@ -233,22 +219,19 @@ T-review, T-security 결과를 구조적으로 검증:
 `T-merge` 실행:
 
 0. **[Guard]** 판정 기준 미충족 시: 미충족 항목 + 이슈 목록 + 권고사항을 사용자에게 보고하고 파이프라인을 중단한다. `TaskUpdate(T-merge, status="failed")`. 아래 단계를 실행하지 않는다.
-1. **검증 마커 생성** — Stop hook 이중 검증 방지:
+1. **검증 마커 생성** — Stop hook 이중 검증 방지 (Claude Code 전용 — 이 훅이 없는 하네스는 건너뛴다).
+   지문·마커 경로 계산은 `stop-validator.py` 모듈이 단일 소스다. 경로는
+   `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석과 같게 찾는다
+   (`CLAUDE_PLUGIN_ROOT` 가 비어도 깨지지 않게):
    ```bash
-   python3 - <<'PY'
-   # 지문 계산의 단일 소스 = stop-validator.py의 _worktree_state_hash().
-   # 과거엔 이 스니펫이 같은 로직을 복제했고(MUST MATCH 산문 계약), 예외절·타임아웃이
-   # 침묵 드리프트했다(재감사 R2/ATK-002) — 이제 훅 모듈을 직접 로드해 호출한다.
-   import importlib.util, os, subprocess, tempfile
-   root = subprocess.run(["git","rev-parse","--show-toplevel"], capture_output=True,
-                         text=True, timeout=10).stdout.strip() or os.getcwd()
-   sv_path = os.path.join(root, "plugins/common/hooks/stop-validator.py")
-   if not os.path.isfile(sv_path):  # 플러그인 설치 환경 폴백
-       sv_path = os.path.join(os.environ.get("CLAUDE_PLUGIN_ROOT",""), "hooks/stop-validator.py")
-   spec = importlib.util.spec_from_file_location("stop_validator", sv_path)
+   SV="${CLAUDE_PLUGIN_ROOT:-}/hooks/stop-validator.py"
+   [ -f "$SV" ] || SV=$(ls -1 ~/.claude/plugins/cache/*/*/*/hooks/stop-validator.py 2>/dev/null | sort -V | tail -1)
+   [ -f "$SV" ] && SV="$SV" python3 - <<'PY'
+   import importlib.util, os, tempfile
+   spec = importlib.util.spec_from_file_location("stop_validator", os.environ["SV"])
    sv = importlib.util.module_from_spec(spec); spec.loader.exec_module(sv)
    state = sv._worktree_state_hash()
-   marker = str(sv.VALIDATED_MARKER)  # 경로·키 계산도 훅과 단일 소스
+   marker = str(sv.VALIDATED_MARKER)
    d = os.path.dirname(marker)
    os.makedirs(d, mode=0o700, exist_ok=True)
    fd, tmp = tempfile.mkstemp(dir=d)
@@ -257,10 +240,9 @@ T-review, T-security 결과를 구조적으로 검증:
    os.replace(tmp, marker)  # rename은 심링크 자체를 교체(CWE-59)
    PY
    ```
-   > 마커에는 **검증 스코프 지문**(HEAD + 검증 대상 .py들의 내용 sha256)을 기록하고
-   > 사용자별 `$TMPDIR/claude-{uid}`(0700)에 둔다. Stop hook은 이름이 아니라 이
-   > 내용으로 판정한다. 지문/마커명 계산은 stop-validator 모듈 호출로 **물리적으로
-   > 단일 소스** — 복제 로직 드리프트가 원천 차단된다.
+   > 마커에는 검증 스코프 지문(HEAD + 검증 대상 .py 내용 sha256)을 기록한다. Stop hook은
+   > 이름이 아니라 이 내용으로 판정한다. 모듈을 못 찾으면 마커 없이 진행한다(fail-open —
+   > Stop hook 이 한 번 더 검증할 뿐이다).
 2. T-review, T-security 결과와 `## 완료 조건` 명령의 실행 결과(명령·rc)를 `plan.md` 끝의
    `## 검증 결과` 절에 추가하고 frontmatter `status: done` 으로 바꾼다
    (Small 이면 대화창에 출력)
@@ -288,13 +270,13 @@ T-review, T-security 결과를 구조적으로 검증:
 
 ## Step 4: Small — 계획 파일 없이
 
-plan-task 가 Small 로 판정해 계획 파일이 없는 경우, 상태 파일 없이 파이프라인만 실행:
+plan-task 가 Small 로 판정해 계획 파일이 없는 경우, 태스크·상태 파일·위임 없이 가볍게 실행한다:
 
-1. **탐색**: 코드베이스 파악 (직접 탐색)
-2. **구현**: 대화창의 계획대로 코드 작성 (`implement-code` 계약, 수정 worker 는 격리)
-3. **테스트**: 테스트 작성 (`write-tests` 계약)
-4. **검증**: 완료 조건 명령 실행 + 코드 리뷰 + 보안 스캔 (병렬)
-5. **보고**: 결과를 대화창에 출력
+1. **구현**: 대화창의 계획대로 직접 코드 작성 (위임은 선택 — 별도 컨텍스트가 이득일 때만)
+2. **테스트**: 동작이 바뀌었으면 테스트를 추가·수정한다
+3. **검증**: 완료 조건 명령을 실행하고 변경분을 스스로 리뷰한다. 보안 스캔은 인증·입력
+   처리·시크릿·권한처럼 **보안에 닿는 변경일 때만** 돌린다
+4. **보고**: 결과(명령·rc)를 대화창에 출력
 
 ---
 
@@ -328,7 +310,5 @@ plan-task 가 Small 로 판정해 계획 파일이 없는 경우, 상태 파일 
 
 ## 참고 문서
 
-| 문서              | 경로                                              |
-| ----------------- | ------------------------------------------------- |
-| 계획 파일 규약    | `plugins/common/skills/plan-task/references/plan-format.md` |
-| Planning 프로토콜 | `plugins/common/rules/planning-protocol.md`       |
+플러그인 안의 경로다(소비자 프로젝트 cwd 기준이 아니다):
+계획 파일 규약 `skills/plan-task/references/plan-format.md` · Planning 프로토콜 규범 `planning-protocol`.

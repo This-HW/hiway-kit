@@ -1,11 +1,20 @@
 ---
 name: brainstorming
-description: Design and spec before any planning or code. MUST USE before new features, creative work, or any implementation. Explores requirements, proposes approaches, gets design approval, then chains to plan-task.
+description: Design and spec a Large new feature or system change before planning - explores requirements, proposes approaches, gets design approval, then chains to plan-task. Skip for bug fixes and Small/Medium work; go straight to plan-task or just do it.
 ---
 
 # Brainstorming
 
-설계 승인 없이 plan-task를 invoke하거나 코드를 작성하면 안 됩니다.
+## 크기 게이트 — 먼저 판정한다
+
+이 스킬은 **설계가 필요한 Large 새 기능·시스템 변경**에만 쓴다(Large = 4개+ 모듈·10파일+,
+기준 SSOT `skills/plan-task/references/elicitation.md` §6).
+
+- **버그 수정 · Small · Medium** → 이 스킬을 건너뛴다. Medium 은 바로 `plan-task`, Small 은
+  그냥 구현한다. 건너뛴 사실을 한 줄 적고 진행한다 — 사용자에게 설계 승인을 받으려고 멈추지 않는다.
+- 판정이 애매하면 Medium 으로 보고 `plan-task` 로 간다(규모가 드러나면 거기서 되돌아온다).
+
+아래는 게이트를 통과한(Large) 작업에만 적용된다.
 
 <HARD-GATE>
 이 스킬이 invoke된 작업은 사용자가 설계를 승인하기 전까지 plan-task 호출·코드 작성·파일 생성을 하지 않는다 — 승인 없는 구현은 되돌리는 비용이 크다.
@@ -15,7 +24,7 @@ description: Design and spec before any planning or code. MUST USE before new fe
 
 진입 즉시 ToolSearch("select:TaskCreate,TaskUpdate,TaskList")로 Task 도구를 로드한 후,
 
-> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `plan-task/references/task-tools-fallback.md`
+> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
 > 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
 아래 항목 각각에 대해 TaskCreate를 실행하세요.
 

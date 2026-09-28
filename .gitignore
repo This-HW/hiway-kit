@@ -19,8 +19,10 @@ venv/
 *.swp
 *.swo
 
-# Claude Code (로컬 전용)
-.claude/
+# Claude Code (로컬 전용) — 단, 킷 개발 전용 프로젝트 스킬은 추적한다(v5.0.0 C2:
+# eval-forge·native-watch·self-improve 는 이 레포에서만 성립해 플러그인 밖으로 옮겼다)
+.claude/*
+!.claude/skills/
 *.claude-local
 
 # 빌드 산출물
