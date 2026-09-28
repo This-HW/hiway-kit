@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-HOOKS_ROOT = Path(__file__).resolve().parent.parent
+HOOKS_ROOT = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 HOOK_SRC = HOOKS_ROOT.parent / "setup" / "git-hooks" / "pre-push"
 GUARD_SRC = HOOKS_ROOT / "examples" / "child-git-guard.py"
 

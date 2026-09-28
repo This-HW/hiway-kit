@@ -11,7 +11,7 @@
 
 | 축 | 출처 | 우리가 줄이는 방법 |
 | --- | --- | --- |
-| 규범 + WORKFLOW | 이 킷의 SessionStart 훅이 주입 | core 티어를 축약하거나 conditional/reference 로 내린다 |
+| 세션 주입(WORKFLOW·규범·LESSONS·활성 계획) | 이 킷의 SessionStart 훅이 주입 | core 티어를 축약하거나 conditional/reference 로 내린다 |
 | 에이전트 설명 | **하네스**가 에이전트 선택용으로 노출 | 에이전트 수 / description 길이 |
 
 두 번째 축은 `claude plugin details` 의 `Always-on` 추정에도 **잡히지 않는다** —
@@ -20,94 +20,86 @@
 
 ## 왜 축을 합치지 않는가
 
-규범 축은 합산이 옳다 — 절을 파일 사이로 **옮기는 것만으로** 통과시키는 게이밍이
+주입 축은 합산이 옳다 — 절을 파일 사이로 **옮기는 것만으로** 통과시키는 게이밍이
 가능하기 때문이다(실측). 반면 에이전트 축은 다른 축과 재료가 다르고(우리가 쓰는 산문 vs
 하네스가 노출하는 목록) **줄이는 수단도 다르다.** 합치면 "규범을 깎아 에이전트를 늘리는"
 교환이 조용히 통과한다 — 그 둘은 교환 가능한 자원이 아니다.
 
 ## 왜 축이 둘이 아니라 셋인가 (2026-09-10 컨트롤 판정)
 
-규범 축은 다시 **둘**로 나뉜다. 한 숫자로 합치면 둘 다 못 답한다:
+주입 축은 다시 **둘**로 나뉜다. 한 숫자로 합치면 둘 다 못 답한다:
 
 | 축 | 묻는 것 | 상한 |
 | --- | --- | --- |
-| 규범(항상) | *"모든 세션이 무조건 내는 비용은?"* | 10 KiB |
-| 규범(최악) | *"조건이 다 겹치면 얼마까지?"* | 22 KiB |
-| 에이전트 | *"하네스가 노출하는 목록의 비용은?"* | 8 KiB |
+| 주입(항상) | *"모든 세션이 무조건 내는 비용은?"* — 빈 레포 | 7 KiB |
+| 주입(최악) | *"조건이 다 겹치면 얼마까지?"* — 원장·활성 계획·MCP·구 Work 흔적 | 22 KiB |
+| 에이전트 | *"하네스가 노출하는 목록의 비용은?"* | 4 KiB |
 
-**항상만 재면** 지금까지처럼 조용히 과소측정한다(그것이 ATK-006 이다).
-**최악만 재면** 평범한 세션에 대해 과대보고해서 경고가 죽는다 — 상시 참인 경고는
-정보가 아니라 소음이고, 소음은 옆의 진짜 경고까지 죽인다(`warning-signal.md`).
+**항상만 재면** 조용히 과소측정한다(ATK-006). **최악만 재면** 평범한 세션에 대해
+과대보고해서 경고가 죽는다(`warning-signal.md`).
 
-최악 상한 20 KiB 는 v3.36.0 실측 19,297B 위 약 1.2 KiB 다(그 전에는 22 KiB / 실측 20,675B). 넉넉하지 않은 것이
-의도다 — 이 레포의 상한은 미학이 아니라 **조용한 증가를 막는 래칫**이다.
+## 무엇을 재는가 — 훅의 **실제 출력** (v5.0.0)
+
+v5.0.0 전에는 `load_rules()`·`load_workflow_skill()` 을 직접 불러 **규범만** 쟀다.
+LESSONS·ACTIVE PLANS 는 측정 밖이었고, conditional 신호는 게이트가 frontmatter 에서
+파생해 **전부 켠** 가상 조합이었다 — 훅(main)이 실제로 켜는 조합과 따로 놀았다.
+그래서 **main() 에 신호가 없어 한 번도 주입되지 않는 conditional 규범**(워크트리 신호가
+빠진 뒤의 `parallel-worktree` 가 그랬다)도 게이트에서는 최악 측정에 잡혀 멀쩡해 보였다.
+
+이제 픽스처 레포(빈 레포·원장 있음·활성 계획 있음·워크트리·전부 겹침)를 만들고
+`session-start.py` 를 **하네스가 부르는 그대로** 서브프로세스로 돌려 `additionalContext`
+바이트를 잰다. 원장은 실물 `feedback_ledger.py upsert` 로 채우고(4바이트 문자로 digest
+상한까지), 활성 계획은 표시 상한을 넘겨 생략 줄까지 나오게 한다 — 최악은 최악이어야 한다.
+
+conditional 규범마다 두 가지를 본다(`check_conditional_coverage`): **최악에는 들어가고**
+(아니면 신호가 없거나 발화하지 않는다 — 한 번도 발화하지 않는 검사), **빈 레포에는 안
+들어간다**(아니면 상시 참 신호다 — core 로 재야 한다). 규범 목록은 frontmatter 에서
+파생한다(나열하면 새 규범이 조용히 빠진다).
 
 ## 왜 넷째 축인가 — 호스트 전달 한도 (2026-09-11, W13)
 
 셋 다 *"우리가 얼마를 내보내는가"* 만 물었다. **"그것이 모델에 닿는가"** 는 아무도 묻지
 않았다. Codex 는 SessionStart 훅 출력이 **2,500 토큰**(`ceil(bytes / 4)`)을 넘으면 머리·
-꼬리만 모델에 주고 가운데를 버린다. 우리 규범 최악 상한 20 KiB 는 그 자체로 5,120 토큰 —
-**기본 한도의 2.25배**다. 예산 게이트는 green 이었는데 실제 세션에서는:
-
-| 세션 | 훅 출력 | 모델에 도착 | 사라진 규범 |
-| --- | --- | --- | --- |
-| 이 킷 워크트리 (원장 있음) | 16,622B (4,156 토큰) | 10,028B | Feedback Loop · Loop Engineering · Parallel Worktree |
-| 다른 레포 워크트리 (원장 없음) | 13,843B | 10,026B | Parallel Worktree |
-
-출력 순서상 RULES 가 가운데라 **규범이** 잘렸고, 머리와 꼬리가 살아 있어 겉보기엔 온전했다.
-두 숫자(Codex 의 2,500 · 우리의 22 KiB)가 **따로 움직였고 대조하는 곳이 없었다.**
+꼬리만 모델에 주고 가운데를 버린다. 실측: 16,622B 출력 중 10,028B 만 도착했고 가운데
+RULES 의 규범 3종이 사라졌다 — 예산 게이트는 green 이었다.
 
 그래서 이 축은 `packaging/targets.json` 의 session-start 훅마다 한도를 읽는다. 키가 없으면
 상류 기본값이고, `0`(spill 비활성)이면 한도의 소유자가 이 게이트 하나라 통과, 유한값이면
-`ceil((RULES_PEAK_CAP + LESSONS 최악) / bytes_per_token) ≤ 한도` 여야 통과한다.
-LESSONS 최악은 `feedback_ledger.DIGEST_CHAR_CAP` 을 **import** 해 UTF-8 최악(4B/문자)으로
-환산하고 섹션 머리말을 더한다 — 상수를 복사하면 저쪽이 바뀔 때 이 축이 조용히 낡는다.
-active work·stale 은 개수 상한으로 따로 묶여 있어 여기서 더하지 않는다.
+`ceil(INJECTION_PEAK_CAP / bytes_per_token) ≤ 한도` 여야 통과한다. 최악 상한은 이제
+LESSONS·ACTIVE PLANS 를 포함한 실제 출력의 상한이므로 따로 더하지 않는다.
 
 Claude Code 는 SessionStart 주입을 자르지 않으므로(2.1.268 실측) 이 축에 들어가지 않는다.
 훅을 싣는 새 호스트가 생기면 그 호스트의 한도 모델을 `HOST_HOOK_LIMITS` 에 **조사해서**
 등재해야 한다 — 등재 전에는 red 다.
 
-## 왜 **최악의 경우**도 재는가
-
-`rules_bytes()` 는 `load_rules(PLUGIN_ROOT, False)` 를 불렀다 — `signals` 인자가 **없는**
-호출이라 `tier: conditional` 규범이 하나도 포함되지 않았고, 결국 **core 규범만** 재고
-있었다. 그런데 실제 세션은 `parallel-worktree`·`feedback-loop`·`mcp-usage`·`task-resume`
-신호를 켜서 부른다(`session-start.py` 의 호출부). 즉 **게이트가 실제 주입량보다 적게
-재고 통과시켰다.** 예산 게이트의 존재 이유가 *"매 세션 이만큼을 쓴다"* 인데 그 숫자가
-실제보다 작으면, 그 게이트는 예산이 아니라 장식이다.
-
-이제 **conditional 신호를 전부 켠 상태**를 잰다. 신호 이름은 **하드코딩하지 않고**
-`rules/*.md` 의 frontmatter `tier: conditional` 에서 파생한다 — 목록을 코드에 나열하면
-새 conditional 규범이 추가될 때 **조용히 커버리지를 잃는다**(`warning-signal.md`
-§검토 절차 5: "대상을 나열하지 말고 제외를 나열한다"). 파생 결과가 0개면 red 다:
-파싱 경로가 깨진 채 "core 만 쟀다"로 되돌아가는 것을 막는다.
-
 ## 상한 도출
 
 **먼저 깎고 나서 숫자를 정한다(D-46)** — 반대로 하면 예산이 압력을 잃고 장식이 된다.
-에이전트 축은 죽은 `facilitator-teams`(제거된 Agent Teams 모드의 Lead, 470B)를 걷어낸
-**뒤** 7,837B 에서 8,192B(8 KiB)로 잡았다. 여유 355B 는 **평균 에이전트 1개분**이라,
-에이전트를 하나 더할 때마다 "매 세션 이 비용을 낼 값어치가 있는가"를 묻게 된다.
+v5.0.0 에서 규칙 14→12(code-quality·ssot 삭제, loop-engineering conditional,
+parallel-worktree reference), STALE TASKS 삭제, 에이전트 32→15 를 **한 뒤** 잡았다.
+통합 트리 실측(컨트롤 브랜치 규칙·스킬 + 이 훅, 레포 경로에서): 빈 레포 6,587B · 최악 20,909B.
+출력의 킷 경로는 절대경로로 렌더되므로 **설치 경로 길이만큼 수치가 움직인다**(수십 바이트 ×
+경로 수) — 여유는 그 변동을 흡수할 만큼 둔다.
 
-규범 축도 같은 절차를 두 번째로 밟았다(v3.36.0). `planning-protocol` 에서 **기획을
-수행할 때만** 필요한 절차(탐색 자리·출처 표기·규모별 조건)를 `plan-task` 의 reference 로
-내리고, WORKFLOW 블록에서 **같은 페이로드 안에 본문이 이미 들어있는 규범**(untrusted-text)
-을 가리키던 중복 포인터를 걷어냈다. 10,206B → 8,917B. **먼저 깎은 뒤** 상한을 10 KiB 에서
-9 KiB 로 내렸다 — 여유 299B 는 짧은 규범 1개분이라, 규범을 더할 때 같은 질문을 하게 된다.
-상한을 그대로 두면 회수한 1.3 KiB 가 조용히 다시 채워진다(래칫이 없는 개선은 되돌아간다).
+- 항상 7 KiB — 여유 581B. 짧은 규범 하나가 겨우 들어간다: 규범을 core 로 더하려면 이 질문을
+  먼저 해야 한다 — *"매 세션 이 비용을 낼 값어치가 있는가."*
+- 최악 22 KiB — 여유 1.6 KiB. LESSONS(4바이트 최악)·활성 계획 12개가 이미 들어 있다.
+- 에이전트 4 KiB — v5 로스터 15종의 **정리 전** 설명 합이 3,236B 였다. B1(트리거를 구체
+  조건으로 재작성)이 종당 ~50B 늘 수 있어 평균 ~270B × 15 로 잡았다. 통합 뒤 실측으로
+  다시 조인다.
+
+이전 판(v3.36.0)의 상한 9 KiB·20 KiB·8 KiB 는 **규범만** 잰 값이라 이 표와 직접 비교되지 않는다.
 """
 
 from __future__ import annotations
 
-import contextlib
-import importlib.util
 import json
 import math
 import os
 import re
+import subprocess
 import sys
-import types
+import tempfile
 from pathlib import Path
 
 from git_tracked import SkipTally
@@ -131,15 +123,11 @@ HOST_HOOK_LIMITS: dict[str, dict[str, int]] = {
         "bytes_per_token": 4,
     },
 }
-#: UTF-8 한 문자의 최대 바이트 — LESSONS 상한은 **문자** 수라 바이트 최악을 곱으로 구한다.
-UTF8_MAX_BYTES_PER_CHAR = 4
-#: `feedback_ledger.load_digest` 가 절단 시 붙이는 `" …"` 의 바이트 수(공백 1 + U+2026 3).
-DIGEST_TRUNCATION_SUFFIX_BYTES = 4
 SESSION_START_SCRIPT = "hooks/session-start.py"
 
-RULES_CORE_CAP = 9216  # 9 KiB — **항상** 내는 비용 (core 규범 + WORKFLOW)
-RULES_PEAK_CAP = 20480  # 20 KiB — conditional 이 전부 겹칠 때의 **최대** 비용
-AGENTS_CAP = 8192  # 8 KiB — 에이전트 name + description
+INJECTION_ALWAYS_CAP = 7168  # 7 KiB — **항상** 내는 비용 (빈 레포의 실제 훅 출력)
+INJECTION_PEAK_CAP = 22528  # 22 KiB — 신호·원장·계획이 전부 겹칠 때의 **최대** 출력
+AGENTS_CAP = 4096  # 4 KiB — 에이전트 name + description (v5 로스터 15종)
 #: CLAUDE.md 본문 + `@docs/...` 로 인라인되는 문서 전량. 훅이 아니라 **호스트**가 싣지만
 #: 세션마다 무조건 들어간다는 성질은 같다 — 그래서 같은 게이트가 소유한다.
 #: v3.37.0 실측 41,007B 위 약 2 KiB(4.9%). 규범 축과 같은 압력이다.
@@ -194,78 +182,163 @@ def _agent_description(frontmatter: str) -> str:
 
 TIER_RE = re.compile(r"^tier:\s*(\S+)\s*$", re.MULTILINE)
 
+#: 픽스처 git 이 사용자 전역 설정(서명·templateDir 훅 등)에 흔들리지 않게 한다.
+_GIT_ENV = {
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_AUTHOR_NAME": "budget",
+    "GIT_AUTHOR_EMAIL": "budget@example.invalid",
+    "GIT_COMMITTER_NAME": "budget",
+    "GIT_COMMITTER_EMAIL": "budget@example.invalid",
+}
+#: LESSONS 최악 — UTF-8 4바이트 문자로 digest 문자 상한까지 채운다.
+_WORST_CHAR = "\U0001d538"
+#: 활성 계획 최악 — session-start 의 표시 상한(10)을 넘겨 생략 줄까지 나오게 한다.
+_WORST_PLAN_COUNT = 12
 
-def conditional_signals() -> dict[str, bool]:
-    """`rules/*.md` 의 frontmatter 에서 `tier: conditional` 규범을 **파생**해 전부 켠다.
 
-    신호 키는 `load_rules` 가 쓰는 것과 같은 **파일명 stem** 이다. 목록을 하드코딩하지
-    않는 이유는 위 독스트링 참고 — 새 conditional 규범이 조용히 측정에서 빠지면
-    예산은 실제보다 작게 나오고, 그것이 바로 이 게이트가 막아야 할 false-green 이다.
+def conditional_rules(plugin_root: Path | None = None) -> list[str]:
+    """`rules/*.md` 의 frontmatter 에서 `tier: conditional` 규범의 stem 을 **파생**한다.
+
+    목록을 하드코딩하지 않는다 — 새 conditional 규범이 조용히 측정에서 빠지면
+    예산은 실제보다 작게 나오고, 그것이 바로 이 게이트가 막아야 할 false-green 이다
+    (`warning-signal.md` §검토 절차 5).
     """
-    signals: dict[str, bool] = {}
-    for path in sorted((PLUGIN_ROOT / "rules").glob("*.md")):
+    root = plugin_root or PLUGIN_ROOT
+    stems: list[str] = []
+    for path in sorted((root / "rules").glob("*.md")):
         fm = FRONTMATTER_RE.match(path.read_text(encoding="utf-8"))
         if fm is None:
             continue
         tier = TIER_RE.search(fm.group(1))
         if tier is not None and tier.group(1) == "conditional":
-            signals[path.stem] = True
-    return signals
+            stems.append(path.stem)
+    return stems
 
 
-def rules_bytes() -> tuple[int, int, dict[str, bool]]:
-    """(항상 비용, 최악 비용, 켠 신호). 재구현하지 않고 session-start.py 의 함수를 부른다.
+def _rule_probe(path: Path) -> str:
+    """규범 본문의 첫 줄 — 주입 출력에 그 규범이 들어갔는지 가르는 탐침."""
+    body = FRONTMATTER_RE.sub("", path.read_text(encoding="utf-8"), count=1)
+    return next(line.strip() for line in body.splitlines() if line.strip())
 
-    - **항상**: core 전부 + reference 색인. 신호가 하나도 없는 세션이 내는 바닥값이다.
-    - **최악**: 거기에 conditional 전부. `include_task_resume` 도 True(활성 Work 세션).
 
-    두 값을 **따로** 돌려주는 이유는 아래 "왜 축이 둘이 아니라 셋인가" 참고.
-    """
-    spec = importlib.util.spec_from_file_location(
-        "session_start", PLUGIN_ROOT / "hooks" / "session-start.py"
+def _git(args: list[str], cwd: Path) -> None:
+    subprocess.run(
+        ["git", *args], cwd=str(cwd), env={**os.environ, **_GIT_ENV},
+        capture_output=True, text=True, timeout=30, check=True,
     )
-    if spec is None or spec.loader is None:
-        raise RuntimeError("session-start.py 를 로드할 수 없다")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    signals = conditional_signals()
-    if not signals:
-        raise RuntimeError(
-            "conditional 규범을 하나도 파생하지 못했다 — frontmatter 파싱 경로가 깨졌다. "
-            "이대로면 core 만 재고 통과시키던 옛 결함으로 되돌아간다"
-        )
-    workflow = len(mod.load_workflow_skill(PLUGIN_ROOT).encode())
-    always = len(mod.load_rules(PLUGIN_ROOT, False).encode()) + workflow
-    peak = len(mod.load_rules(PLUGIN_ROOT, True, signals=signals).encode()) + workflow
 
-    # ── 양성 대조 (W6 F-4) ────────────────────────────────────────────────
-    # 0-파생 가드만으로는 부족하다. `conditional_signals()` 와 `load_rules()` 는 신호
-    # 키가 **파일명 stem** 이라는 약속으로만 이어져 있고, **그 정합을 아무도 강제하지
-    # 않았다.** `load_rules` 쪽 스키마가 stem 에서 바뀌면 파생한 신호가 전부 무시되는데,
-    # `conditional_signals()` 는 여전히 4종을 파생하므로 0-파생 가드는 통과하고 게이트는
-    # **green** 이 된다 — 이 파일 독스트링이 고쳤다고 선언한 과소측정으로 조용히 되돌아간다.
-    #
-    # `warning-signal.md` §측정 3: *음성 결과는 "그 지점에 도달했다"를 따로 증명해야
-    # 한다.* 그래서 신호마다 **그 신호 하나만 켠 결과가 실제로 커지는지** 확인한다 —
-    # 커지지 않았다면 그 키는 `load_rules` 에 닿지 않은 것이다.
-    base = len(mod.load_rules(PLUGIN_ROOT, False).encode())
-    unreached = [
-        key
-        for key in sorted(signals)
-        if len(mod.load_rules(PLUGIN_ROOT, False, signals={key: True}).encode()) <= base
-    ]
-    if unreached:
-        raise RuntimeError(
-            f"신호가 load_rules 에 닿지 않았다: {', '.join(unreached)} — "
-            "conditional_signals() 의 키 스키마와 load_rules() 가 갈렸다. "
-            "이대로면 파생은 성공한 채 측정만 조용히 과소평가된다"
+
+def _init_repo(path: Path) -> Path:
+    path.mkdir(parents=True)
+    _git(["init", "-q", "--template="], path)
+    _git(["commit", "-q", "--allow-empty", "-m", "init"], path)
+    return path
+
+
+def _add_worst_ledger(repo: Path, plugin_root: Path, home: Path) -> None:
+    """실물 `feedback_ledger.py upsert` 로 원장을 채운다 — 형식을 재구현하지 않는다."""
+    for i in range(6):
+        subprocess.run(
+            [sys.executable, str(plugin_root / "hooks" / "feedback_ledger.py"), "upsert",
+             "convention", "high", f"측정용 교훈 {i} " + _WORST_CHAR * 400],
+            cwd=str(repo), env=_hook_env(repo, home),
+            capture_output=True, text=True, timeout=30, check=True,
         )
-    if peak <= always:
-        raise RuntimeError(
-            f"최악({peak}B)이 항상({always}B)보다 크지 않다 — conditional 규범이 "
-            "하나도 반영되지 않았다는 뜻이다"
+
+
+def _add_worst_plans(repo: Path) -> None:
+    for i in range(_WORST_PLAN_COUNT):
+        d = repo / "docs" / "plans" / f"2026-01-{i + 1:02d}-{_WORST_CHAR * 20}"
+        d.mkdir(parents=True)
+        (d / "plan.md").write_text(
+            f'---\ntitle: "{_WORST_CHAR * 80}"\nstatus: {_WORST_CHAR * 20}\n---\n',
+            encoding="utf-8",
         )
-    return always, peak, signals
+        (d / "checklist.json").write_text(
+            json.dumps([{"passes": False}] * 999), encoding="utf-8"
+        )
+
+
+def _hook_env(project: Path, home: Path) -> dict[str, str]:
+    return {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(home),
+        "CLAUDE_PROJECT_DIR": str(project),
+        **_GIT_ENV,
+    }
+
+
+def run_session_start(plugin_root: Path, project: Path, home: Path) -> str:
+    """훅을 **하네스가 부르는 그대로** 실행해 `additionalContext` 를 돌려준다."""
+    r = subprocess.run(
+        [sys.executable, str(plugin_root / SESSION_START_SCRIPT)],
+        cwd=str(project), env=_hook_env(project, home), input="{}",
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+    if r.returncode != 0:
+        raise RuntimeError(f"session-start 가 rc={r.returncode} 로 끝났다: {r.stderr[:300]}")
+    return json.loads(r.stdout)["hookSpecificOutput"]["additionalContext"]
+
+
+def measure_scenarios(plugin_root: Path | None = None) -> dict[str, str]:
+    """픽스처 레포마다 **실제 main() 출력**. 키: empty · ledger · plan · worktree · peak.
+
+    예전에는 `load_rules()` 를 직접 불러 규범만 쟀다 — LESSONS·ACTIVE PLANS 는 측정 밖이었고
+    조합 방식(main 의 신호 계산)이 게이트와 따로 놀았다. 이제 훅 프로세스를 그대로 돌린다.
+    """
+    root = plugin_root or PLUGIN_ROOT
+    with tempfile.TemporaryDirectory(prefix="injection-budget-") as tmp:
+        base = Path(tmp)
+        home = base / "home"
+        home.mkdir()
+        empty = _init_repo(base / "empty")
+        ledger = _init_repo(base / "ledger")
+        _add_worst_ledger(ledger, root, home)
+        plan = _init_repo(base / "plan")
+        _add_worst_plans(plan)
+        worktree = base / "worktree"
+        _git(["worktree", "add", "-q", "-b", "wt", str(worktree)], empty)
+        peak = _init_repo(base / "peak")
+        _add_worst_ledger(peak, root, home)
+        _add_worst_plans(peak)
+        (peak / ".mcp.json").write_text("{}", encoding="utf-8")
+        (peak / "docs" / "works" / "active" / "legacy").mkdir(parents=True)
+        return {
+            name: run_session_start(root, repo, home)
+            for name, repo in (
+                ("empty", empty), ("ledger", ledger), ("plan", plan),
+                ("worktree", worktree), ("peak", peak),
+            )
+        }
+
+
+def check_conditional_coverage(outputs: dict[str, str], plugin_root: Path | None = None) -> list[str]:
+    """conditional 규범마다: 최악에는 **들어가고** 빈 레포에는 **안 들어가야** 한다.
+
+    - 최악에 없다 → 신호가 main() 에 없거나 발화하지 않는다. 그 규범은 한 번도 주입되지
+      않는다(한 번도 발화하지 않는 검사 — `warning-signal.md` §검토 절차 4).
+    - 빈 레포에도 있다 → 신호가 상시 참이다. conditional 이 아니라 core 로 재야 한다
+      (§검토 절차 1 — 워크트리 신호가 정확히 이것이었다).
+    반환: red 사유 목록(비었으면 통과).
+    """
+    root = plugin_root or PLUGIN_ROOT
+    stems = conditional_rules(root)
+    if not stems:
+        return [
+            "conditional 규범을 하나도 파생하지 못했다 — frontmatter 파싱 경로가 깨졌다"
+        ]
+    problems: list[str] = []
+    for stem in stems:
+        probe = _rule_probe(root / "rules" / f"{stem}.md")
+        if probe not in outputs["peak"]:
+            problems.append(
+                f"{stem}: 최악 조합에서도 주입되지 않는다 — session-start 의 "
+                "conditional_signals() 에 신호가 없거나 발화하지 않는다"
+            )
+        elif probe in outputs["empty"]:
+            problems.append(f"{stem}: 빈 레포에서도 주입된다 — 상시 참 신호다(core 로 재라)")
+    return problems
 
 
 def agent_entries() -> tuple[list[tuple[int, str]], SkipTally]:
@@ -300,64 +373,6 @@ def agent_entries() -> tuple[list[tuple[int, str]], SkipTally]:
         entry = f"{name.group(1) if name else path.stem}: {text}"
         out.append((len(entry.encode()), path.stem))
     return sorted(out, reverse=True), skipped
-
-
-@contextlib.contextmanager
-def _stubbed_ledger(digest: str):
-    """`session-start.load_lessons` 가 import 하는 `feedback_ledger` 를 잠시 바꿔 끼운다.
-
-    `load_lessons` 는 `CLAUDE_PROJECT_DIR` 도 `setdefault` 하므로 함께 되돌린다 —
-    게이트 프로세스의 상태를 측정이 오염시키지 않게.
-    """
-    stub = types.ModuleType("feedback_ledger")
-    stub.load_digest = lambda **_kw: digest  # type: ignore[attr-defined]
-    saved_mod = sys.modules.get("feedback_ledger")
-    saved_env = os.environ.get("CLAUDE_PROJECT_DIR")
-    sys.modules["feedback_ledger"] = stub
-    try:
-        yield
-    finally:
-        if saved_mod is None:
-            sys.modules.pop("feedback_ledger", None)
-        else:
-            sys.modules["feedback_ledger"] = saved_mod
-        if saved_env is None:
-            os.environ.pop("CLAUDE_PROJECT_DIR", None)
-        else:
-            os.environ["CLAUDE_PROJECT_DIR"] = saved_env
-
-
-def _load_hook(plugin_root: Path, stem: str) -> types.ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        f"budget_{stem.replace('-', '_')}", plugin_root / "hooks" / f"{stem}.py"
-    )
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"{stem}.py 를 로드할 수 없다")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def lessons_worst_bytes(plugin_root: Path | None = None) -> int:
-    """LESSONS 섹션이 낼 수 있는 최대 바이트 — 상한도 머리말도 **실물에서 읽는다**.
-
-    상한은 `feedback_ledger.DIGEST_CHAR_CAP`(문자 수)를 import 해 UTF-8 최악 바이트로
-    환산하고, 머리말은 `session-start.load_lessons` 에 탐침 digest 를 넣어 잰다.
-    둘 중 하나라도 복사하면 저쪽이 바뀔 때 이 축이 조용히 낡는다.
-    """
-    root = plugin_root or PLUGIN_ROOT
-    ledger = _load_hook(root, "feedback_ledger")
-    session_start = _load_hook(root, "session-start")
-    probe = "\x00"
-    with _stubbed_ledger(probe):
-        section = session_start.load_lessons(REPO_ROOT)
-    if probe not in section:
-        raise RuntimeError(
-            "LESSONS 섹션이 탐침 digest 를 싣지 않았다 — 머리말 측정 경로가 깨졌다"
-        )
-    framing = len(section.encode()) - len(probe.encode())
-    digest = ledger.DIGEST_CHAR_CAP * UTF8_MAX_BYTES_PER_CHAR
-    return framing + digest + DIGEST_TRUNCATION_SUFFIX_BYTES
 
 
 def session_start_limits(policy: dict) -> tuple[list[tuple[str, object, bool]], int]:
@@ -422,11 +437,11 @@ def _report_delivery(
     return 1
 
 
-def check_host_delivery(policy_path: Path, peak_cap: int, lessons_worst: int) -> int:
+def check_host_delivery(policy_path: Path, worst_bytes: int) -> int:
     """넷째 축. 훅 출력이 **호스트에서 잘리지 않고** 모델에 닿는가.
 
-    최악 출력 = 규범 최악 상한 + LESSONS 최악. 경로를 인자로 받는 것은 테스트가
-    픽스처 정책을 주입하기 위해서다.
+    최악 출력 = 주입 최악 상한(`INJECTION_PEAK_CAP` — LESSONS·ACTIVE PLANS 를 포함한
+    실제 출력의 상한). 경로를 인자로 받는 것은 테스트가 픽스처 정책을 주입하기 위해서다.
     """
     try:
         policy = json.loads(policy_path.read_text(encoding="utf-8"))
@@ -445,7 +460,7 @@ def check_host_delivery(policy_path: Path, peak_cap: int, lessons_worst: int) ->
         return 1
     rc = 0
     for target_id, raw, explicit in entries:
-        rc |= _report_delivery(target_id, raw, explicit, peak_cap + lessons_worst)
+        rc |= _report_delivery(target_id, raw, explicit, worst_bytes)
     return rc
 
 
@@ -481,35 +496,33 @@ def project_doc_bytes() -> tuple[int, list[str]]:
 
 def main() -> int:
     try:
-        always, peak, signals = rules_bytes()
+        outputs = measure_scenarios()
     except Exception as err:  # noqa: BLE001 — 측정 실패를 green 으로 위장하지 않는다
-        print(f"[injection-budget] ✗ 규범 축 측정 실패: {err}")
+        print(f"[injection-budget] ✗ 주입 측정 실패: {err}")
         return 1
 
+    sizes = {name: len(text.encode()) for name, text in outputs.items()}
     print(
-        f"[injection-budget] · conditional {len(signals)}종: "
-        + ", ".join(sorted(signals))
+        "[injection-budget] · 실제 main() 출력 — "
+        + " · ".join(f"{name} {size:,}B" for name, size in sizes.items())
     )
-    rc = _report(
-        "규범+WORKFLOW(항상)",
-        always,
-        RULES_CORE_CAP,
+    problems = check_conditional_coverage(outputs)
+    for problem in problems:
+        print(f"[injection-budget] ✗ conditional {problem}")
+    rc = 1 if problems else 0
+    rc |= _report(
+        "세션 주입(항상 — 빈 레포)",
+        sizes["empty"],
+        INJECTION_ALWAYS_CAP,
         "core 티어를 축약하거나 상시 필요 없는 것을 conditional/reference 로 내려라 (D-17)",
     )
     rc |= _report(
-        "규범+WORKFLOW(최악)",
-        peak,
-        RULES_PEAK_CAP,
-        "conditional 규범을 축약하거나 신호 조건을 좁혀라 — 최악은 흔한 조합이다"
-        " (워크트리 + 활성 Work + MCP 존재 + 원장 있음)",
+        "세션 주입(최악 — 원장·활성 계획·MCP·구 Work 흔적 겹침)",
+        max(sizes.values()),
+        INJECTION_PEAK_CAP,
+        "conditional 규범·LESSONS·ACTIVE PLANS 상한을 줄이거나 신호 조건을 좁혀라",
     )
-
-    try:
-        lessons_worst = lessons_worst_bytes()
-    except Exception as err:  # noqa: BLE001 — 측정 실패를 green 으로 위장하지 않는다
-        print(f"[injection-budget] ✗ LESSONS 최악 측정 실패: {err}")
-        return 1
-    rc |= check_host_delivery(TARGETS_POLICY, RULES_PEAK_CAP, lessons_worst)
+    rc |= check_host_delivery(TARGETS_POLICY, INJECTION_PEAK_CAP)
 
     try:
         proj, proj_parts = project_doc_bytes()

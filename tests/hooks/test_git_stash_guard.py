@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 HOOK_SRC = (
-    Path(__file__).resolve().parent.parent.parent / "setup" / "git-hooks" / "reference-transaction"
+    Path(__file__).resolve().parents[2] / "plugins" / "common" / "setup" / "git-hooks" / "reference-transaction"
 )
 
 

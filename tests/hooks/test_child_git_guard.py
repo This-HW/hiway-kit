@@ -8,7 +8,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-HOOKS_DIR = Path(__file__).resolve().parent.parent
+HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 EXAMPLES_DIR = HOOKS_DIR / "examples"
 
 _spec = importlib.util.spec_from_file_location(

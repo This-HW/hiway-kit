@@ -13,57 +13,24 @@ session-start가 주입할 digest를 제공하는 학습 루프의 SSOT (Spec 3 
   - auto-dev T-merge가 CLI로 upsert (쓰기):
       python3 feedback_ledger.py upsert <category> <severity> <pattern...>
       python3 feedback_ledger.py digest [K]
-      python3 feedback_ledger.py promote   (26-16, 아래 "스테이징→승격" 참고)
 
 ledger 경로: <git-common-dir>/kit/ledger.md — **모든 워크트리가 공유**한다.
   구 위치(<project_root>/docs/works/feedback/ledger.md)는 작업 트리 안이라
   워크트리마다 갈라졌다. 남아 있으면 첫 실행이 **병합 이관**하고 .migrated 로 개명한다.
+  이 이관 경로는 4.x → 5.x 업그레이드용이다 — **6.0.0 에서 제거한다**(2026-09-28 결정).
 ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 
-## 스테이징 → 승격 (26-16, D-43)
+## 레지스트리 승격 경로는 없다 (v5.0.0 삭제)
 
-컨트롤 프로젝트의 레지스트리가 있으면 이 ledger는 **세션 로컬 스테이징 버퍼**다 —
-`promote()`가 승격에 성공하면 비운다. 없으면 지금까지처럼 이 ledger가 **내구
-진실**이고 `/self-improve`가 직접 읽는다(폴백). 어느 쪽이든 upsert/parse/digest의
-동작은 동일하다 — 달라지는 것은 `promote()`가 호출됐을 때뿐이다.
-
-레지스트리 발견: `$(git rev-parse --git-common-dir)/kit/registry.json` 포인터를
-읽는다(공유 gitdir — untracked, 클론과 함께 죽는다). 포인터는 `command`(argv)만
-허용하고 `url`은 거절한다(D-48, exec 전용 — 이 킷이 자격증명을 다루지 않는다).
-`describe` 동사를 호출해 능력을 협상하고, **`describe` 외의 동사 이름을 코드에
-하드코딩하지 않는다**(D-42) — 실제로 호출할 승격 동사 이름은 포인터 파일 자신의
-`promotionVerb` 필드(컨트롤이 쓰는 값, 킷 소스가 아니다)에서 읽거나, `describe`가
-`write` 동사를 정확히 하나만 선언하면 그것으로 추론한다. 어느 쪽도 안 되면
-승격을 보류하고 그 이유를 보고한다 — 추측으로 동사를 고르지 않는다.
-
-신선도(D-49·D-50): `describe`의 선택적 `head` 필드를 현재 git HEAD와 대조한다.
-일치하면 승격, 불일치면 보류(ledger 보존), 불일치가 연속 임계(3회)를 넘으면
-레지스트리를 **미신뢰로 강등**하고 이후 호출은 폴백(내구 ledger 유지)으로
-처리한다 — 이 강등 상태는 `$(git-common-dir)/kit/registry_trust.json`에 기록된다.
-`head` 미선언은 오류가 아니라 "신선도 모름" 경고로만 남긴다 — 미선언 레지스트리에서
-승격이 영구 차단되면 그 자체가 동작하지 않는 안전장치가 된다.
-
-이 파일이 실제로 읽는 describe 필드는 **`verbs[].name` 과 `verbs[].effect`, 그리고
-최상위 `head` 뿐**이다. D-42/D-44 스키마에는 `args`·`idempotent` 도 있으나 이 구현은
-**둘 다 참조하지 않는다** — 있다고 적고 안 쓰는 것이 최악이므로 명시한다.
-`idempotent` 를 안 봐도 되는 이유는 승격이 **성공분을 항상 차감**하기 때문이다(아래
-`promote()`): 성공한 항목은 원장에서 빠지므로 다음 호출이 같은 동사를 재호출하지 않는다.
-예외는 하나뿐이고 코드가 그 자리에 적어 뒀다 — 승격 직후 원장을 읽지 못해 차감을
-건너뛴 경우, 다음 호출이 재승격한다(원장 파괴보다 낫다는 의도된 선택). 비멱등 동사를
-쓰는 레지스트리는 그 경로에서 중복을 받을 수 있다.
-
-설계 공백 하나도 명시한다: D-42/D-44의 describe 스키마에는 "이 동사가 승격/등록용이다"를
-나타내는 필드가 없다. `promotionVerb`를 포인터 파일(컨트롤 소유·비-repo 파일)에 두는 것은
-그 필드가 킷 소스에 박히는 것이 아니라 **컨트롤이 자기 레지스트리를 소개할 때
-스스로 선언하는 값**이라 D-42의 "동사 이름을 하드코딩하지 않는다"를 어기지 않는다
-— 다만 이 구체적 필드명 자체는 설계 문서에 명문화돼 있지 않은 이 구현의 해석이다.
+2026-08 에 넣은 `promote` 하위명령(컨트롤 레지스트리로 스테이징→승격)은 호출자가
+0 이었다 — 킷 안의 어떤 스킬·훅·스크립트도 부르지 않았다. v5.0.0 에서 레지스트리
+발견·describe 협상·신뢰 강등 기계와 함께 삭제했다. 이 원장이 유일한 내구 진실이다.
 """
 
 from __future__ import annotations
 
 import fcntl
 import hashlib
-import json
 import os
 import stat
 import subprocess
@@ -80,19 +47,7 @@ DIGEST_CHAR_CAP = 1200  # digest 문자 상한 (토큰 예산 보호)
 VALID_CATEGORIES = {"lint", "security", "architecture", "test", "convention"}
 VALID_SEVERITIES = {"critical", "high", "medium", "low"}
 
-# ── 26-16: 레지스트리 스테이징→승격 (D-42·D-43·D-48·D-49·D-50) ─────────
-_REGISTRY_POINTER_REL = ("kit", "registry.json")
-_TRUST_STATE_REL = ("kit", "registry_trust.json")
-_DESCRIBE_TIMEOUT_SECONDS = 10
-_PROMOTE_CALL_TIMEOUT_SECONDS = 10
-_MISMATCH_DEMOTE_THRESHOLD = 3  # head 연속 불일치 임계 — 초과 시 레지스트리 미신뢰 강등
 _LOCK_TIMEOUT_SECONDS = 5  # 락 획득 데드라인 — 초과 시 무락 진행(fail-open)
-# 승격 **총량** 데드라인. 항목당 타임아웃만 있으면 최악은 CAP(50) × 10s = ~500초이고,
-# 그 시간 내내 호출자(세션 훅·파이프라인)가 블로킹된다. 락에는 5초 데드라인을 걸어
-# "정지한 프로세스 때문에 파이프라인이 무한 대기하지 않게" 해 놓고 그보다 100배 긴
-# 경로를 열어 두는 것은 같은 파일 안의 비대칭이다. 초과분은 실패로 계상돼 partial 로
-# 떨어지고, 남은 항목은 원장에 남아 다음 호출이 재시도한다 — 유실되지 않는다.
-_PROMOTE_TOTAL_BUDGET_SECONDS = 60
 
 _HEADER = (
     "# Feedback Ledger\n\n"
@@ -172,6 +127,8 @@ def _merge_entries(base: list[dict], incoming: list[dict]) -> list[dict]:
 def migrate_legacy_ledger(root: Path | None = None) -> str:
     """구 위치 원장을 정본으로 **병합** 이관한다. 반환: 'merged' | 'noop'.
 
+    4.x → 5.x 업그레이드 경로다 — **6.0.0 에서 제거한다**(2026-09-28 결정).
+
     **이동이 아니라 병합인 이유**: 워크트리마다 원장이 갈려 있었으므로 먼저 도착한
     하나만 채택하면 나머지의 학습이 사라진다. 각 워크트리가 자기 것을 병합해 올린다.
 
@@ -248,7 +205,7 @@ class LedgerUnreadable(Exception):
 
     둘을 같은 값(빈 리스트)으로 뭉개면 그 직후 `upsert` 가 `_write_ledger` 로 파일을
     통째로 교체해 **최대 50개 학습 항목이 조용히 사라진다.** 이 파일은 스스로
-    *"fail-open 은 '막지 않는다'이지 '지운다'가 아니다"* 라고 적어 놓고(promote 주석)
+    *"fail-open 은 '막지 않는다'이지 '지운다'가 아니다"* 라고 적어 놓고(v5.0.0 에서 삭제한 promote 주석)
     읽기 경로에는 그 원칙을 적용하지 않고 있었다.
 
     발생 조건(전부 평범하다): 손편집·부분쓰기로 생긴 `UnicodeDecodeError`,
@@ -479,7 +436,7 @@ def _write_ledger(path: Path, entries: list[dict]) -> None:
             # tmp+replace 는 **프로세스 사망**에는 원자적이지만 호스트 크래시에는
             # 아니다. rename 만 반영되고 데이터가 안 반영되면 최대 CAP 개의 학습
             # 항목이 빈/잘린 원장으로 남는다 — 이 파일에서 고친 유실 결함 둘
-            # (`promote()` 전체 비우기 · `parse_ledger` 부재/실패 뭉갬)과 같은 계열이다.
+            # (v5.0.0 에서 삭제한 `promote()` 의 전체 비우기 · `parse_ledger` 부재/실패 뭉갬)과 같은 계열이다.
             fh.flush()
             os.fsync(fh.fileno())
         os.chmod(tmp, mode)
@@ -649,408 +606,11 @@ def _git_common_dir(root: Path) -> Path | None:
     return p
 
 
-def _current_head(root: Path) -> str | None:
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return r.stdout.strip() if r.returncode == 0 else None
-
-
-def _pointer_source_is_safe(pointer_path: Path) -> bool:
-    """포인터 파일과 **그 부모 디렉토리**가 내 소유이고 남이 쓸 수 없는가.
-
-    이 포인터의 `command` 는 `subprocess.run` 으로 **실행**된다 — 이 파일에서 가장
-    위험한 경로다. 그런데 같은 파일이 `/tmp` 락 디렉토리에는 정확히 이 검사를 걸어
-    두고(`_lock_dir_is_safe`), 원장 심링크에도 걸어 두고(`_symlinked_target_is_safe`),
-    **exec 경로에만 걸어 두지 않았다.** 그 비대칭이 이 함수의 근거다
-    (`docs/conventions/path-containment.md` 규칙 3: 읽기 경로도 봉쇄한다 — 여기서는
-    읽은 값이 곧 실행이므로 더 강하게 적용된다).
-
-    부모 디렉토리까지 보는 이유: 파일만 검사하면 남이 쓸 수 있는 디렉토리에서
-    파일을 갈아치우는 경로가 남는다. `lstat` 을 쓴다(`stat` 이 아니라) — 심링크는
-    그 자체로 거절해야 하는데 `stat` 은 링크를 따라가 대상의 속성을 보여 준다.
-
-    **한계는 정직하게 적는다.** 같은 uid 로 도는 공격자(공유 CI 러너에서 모두가 같은
-    계정인 경우)는 이 검사를 통과한다. 그 시나리오에서는 `.git/hooks/` 도 쓸 수
-    있으므로 이 검사가 마지막 방어선이 아니다 — 여기서 막는 것은 **다른 사용자가
-    심어 두거나 갈아치울 수 있는 포인터**다.
-    """
-    for target, want_dir in ((pointer_path.parent, True), (pointer_path, False)):
-        try:
-            st = os.lstat(str(target))
-        except OSError:
-            return False
-        if want_dir and not stat.S_ISDIR(st.st_mode):
-            return False
-        if not want_dir and not stat.S_ISREG(st.st_mode):
-            return False  # 심링크·특수 파일 — 따라가지 않는다
-        try:
-            if st.st_uid != os.getuid():
-                return False
-        except AttributeError:
-            pass  # getuid 없는 플랫폼 — 소유권 개념이 없으니 퍼미션 검사만 한다
-        if st.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
-            return False
-    return True
-
-
-def discover_registry_pointer(root: Path | None = None) -> dict | None:
-    """컨트롤 레지스트리 포인터를 읽는다. 없거나 부적합하면 None(fail-open, 폴백).
-
-    `url` 필드가 있으면 무조건 거절한다(D-48) — 이 킷은 exec 전용 계약이다.
-    포인터 파일·부모 디렉토리의 소유권도 검사한다(`_pointer_source_is_safe`) —
-    여기서 읽은 `command` 는 실행되므로 남이 통제하는 파일을 신뢰하지 않는다.
-    """
-    root = root or _project_root()
-    common = _git_common_dir(root)
-    if common is None:
-        return None
-    pointer_path = common.joinpath(*_REGISTRY_POINTER_REL)
-    if not pointer_path.exists():
-        return None  # 없음은 정상 경로다(폴백) — 경고하지 않는다
-    if not _pointer_source_is_safe(pointer_path):
-        # 조용히 넘어가지 않는다: 관측 가능해야 다음 사람이 원인을 찾는다.
-        # 다만 막지도 않는다 — 폴백(킷 ledger 가 내구 진실)으로 계속 돈다.
-        print(
-            "[feedback_ledger] 레지스트리 포인터가 남의 소유이거나 남이 쓸 수 있다 — "
-            f"실행하지 않고 폴백한다: {pointer_path}",
-            file=sys.stderr,
-        )
-        return None
-    try:
-        raw = pointer_path.read_text(encoding="utf-8")
-        data = json.loads(raw)
-    except (OSError, ValueError):
-        return None
-    if not isinstance(data, dict) or "url" in data:
-        return None
-    command = data.get("command")
-    if (
-        not isinstance(command, list)
-        or not command
-        or not all(isinstance(c, str) for c in command)
-    ):
-        return None
-    return data
-
-
-def describe_registry(command: list[str], cwd: Path | None = None) -> dict | None:
-    """`command + ['describe']`를 실행해 파싱된 응답을 반환한다.
-
-    `cwd`는 대상 레포 루트를 넘긴다 — 레지스트리가 "이 응답이 반영하는 레포
-    커밋"(head)을 계산할 때 어느 레포를 봐야 하는지 알 수 있게 한다.
-
-    실행 실패·타임아웃·비-JSON·스키마 밖 형태는 전부 None — 부분 신뢰하지 않는다
-    (D-44: "describe 부재·파싱 실패·스키마 미해석 → 전면 폴백").
-    """
-    try:
-        r = subprocess.run(
-            [*command, "describe"],
-            cwd=cwd,
-            capture_output=True,
-            text=True,
-            timeout=_DESCRIBE_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if r.returncode != 0:
-        return None
-    try:
-        parsed = json.loads(r.stdout)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(parsed, dict) or not isinstance(parsed.get("verbs"), list):
-        return None
-    return parsed
-
-
-def _read_trust_state(common: Path) -> dict:
-    p = common.joinpath(*_TRUST_STATE_REL)
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-        if isinstance(data, dict):
-            return data
-    except (OSError, ValueError):
-        pass
-    return {"consecutiveMismatches": 0, "untrusted": False}
-
-
-def _write_trust_state(common: Path, state: dict) -> None:
-    p = common.joinpath(*_TRUST_STATE_REL)
-    try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(json.dumps(state), encoding="utf-8")
-    except OSError:
-        pass  # 신뢰 상태 기록 실패는 치명적이지 않다 — 다음 승격 시도가 다시 판단한다
-
-
-def _select_promotion_verb(pointer: dict, verbs: list[dict]) -> tuple[str | None, str]:
-    """승격에 쓸 동사 이름을 고른다. 실패 시 (None, 이유)를 반환한다.
-
-    D-42(동사 이름 하드코딩 금지)를 지키기 위해 이름은 코드가 아니라
-    포인터 파일(컨트롤 소유)의 `promotionVerb`에서 읽거나, describe가 write
-    동사를 정확히 하나만 선언하면 그것으로 추론한다 — 추측이 아니라 명시적 선언 우선.
-    """
-    declared_names = {v.get("name") for v in verbs if isinstance(v, dict)}
-    explicit = pointer.get("promotionVerb")
-    if explicit is not None:
-        if explicit in declared_names:
-            return explicit, ""
-        return None, f"registry.json의 promotionVerb '{explicit}'가 describe에 없다"
-    write_verbs = [
-        v.get("name")
-        for v in verbs
-        if isinstance(v, dict) and v.get("effect") == "write" and v.get("name")
-    ]
-    if len(write_verbs) == 1:
-        return write_verbs[0], ""
-    return (
-        None,
-        "승격 동사를 특정할 수 없다 — registry.json에 promotionVerb를 지정하거나 "
-        "write 동사를 정확히 하나만 선언해야 한다",
-    )
-
-
-def _call_promotion_verb(
-    command: list[str], verb_name: str, entries: list[dict], root: Path
-) -> tuple[list[dict], list[str]]:
-    """승격 동사를 항목마다 호출한다. **락 밖에서** 돈다 (ATK-001).
-
-    항목당 타임아웃(`_PROMOTE_CALL_TIMEOUT_SECONDS`)과 **총량 예산**
-    (`_PROMOTE_TOTAL_BUDGET_SECONDS`)을 둘 다 건다 — 항목당만 있으면 최악이
-    CAP × 항목당 = ~500초이고 그동안 호출자가 블로킹된다.
-
-    반환: (승격에 성공한 항목들, 실패 사유들).
-    """
-    succeeded: list[dict] = []
-    failures: list[str] = []
-    deadline = time.monotonic() + _PROMOTE_TOTAL_BUDGET_SECONDS
-    for idx, e in enumerate(entries):
-        if time.monotonic() >= deadline:
-            # 남은 항목은 **호출하지 않고** 실패로 계상한다. 차감은 성공분만 하므로
-            # (F-2) 이것들은 원장에 그대로 남아 다음 호출이 이어서 시도한다.
-            failures.append(
-                f"총량 예산 {_PROMOTE_TOTAL_BUDGET_SECONDS}초 초과 — "
-                f"남은 {len(entries) - idx}건은 다음 호출로 미룸"
-            )
-            break
-        payload = json.dumps(
-            {
-                "category": e["category"],
-                "severity": e["severity"],
-                "pattern": e["pattern"],
-                "frequency": e["frequency"],
-                "lastSeen": e["last_seen"],
-            }
-        )
-        try:
-            r = subprocess.run(
-                [*command, verb_name, payload],
-                cwd=root,
-                capture_output=True,
-                text=True,
-                timeout=_PROMOTE_CALL_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError) as ex:
-            failures.append(str(ex))
-            continue
-        if r.returncode == 0:
-            succeeded.append(e)
-        else:
-            failures.append(r.stderr.strip() or f"exit {r.returncode}")
-    return succeeded, failures
-
-
-def _remaining_after_promotion(current: list[dict], promoted: list[dict]) -> list[dict]:
-    """원장에서 **승격에 성공한 만큼만 정확히 차감**한 결과를 돌려준다 (ATK-001).
-
-    `promoted` 는 락을 놓기 **전** 스냅샷이다. 락 밖에서 승격이 도는 동안 다른
-    프로세스가 새 항목을 쓰거나 기존 항목의 frequency 를 올렸을 수 있고, 그 증분은
-    아직 승격되지 않았으므로 **남겨야 한다.** 불변식: promote 가 도는 동안 추가된
-    항목은 절대 사라지지 않는다.
-    """
-    debit: dict[str, int] = {}
-    for e in promoted:
-        key = _normalize(e["category"], e["pattern"])
-        debit[key] = debit.get(key, 0) + e["frequency"]
-    kept: list[dict] = []
-    for e in current:
-        key = _normalize(e["category"], e["pattern"])
-        owed = debit.get(key, 0)
-        if not owed:
-            kept.append(e)
-            continue
-        debit[key] = 0  # 차감은 한 번만 — 같은 키의 행이 둘이면 뒤엣것은 그대로 남긴다
-        remaining = e["frequency"] - owed
-        if remaining <= 0:
-            continue  # 승격된 만큼으로 전부 상쇄됐다 → 제거
-        kept.append({**e, "frequency": remaining})
-    return kept
-
-
-def promote(root: Path | None = None) -> dict:
-    """스테이징된 ledger를 컨트롤 레지스트리로 승격하고 비운다(D-43).
-
-    **`mode` 가 계약이고 `promoted` 는 편의값이다.** 불리언으로 분기하지 마라 —
-    `promoted: True` 는 세 상태를 뭉뚱그렸었다(빈 원장 / partial / 전량 성공). 그중
-    빈 원장은 **레지스트리를 아예 건드리지 않은** 상태라 "승격했다"와 성질이 다르다.
-
-    반환 dict의 `mode`:
-
-    - `'fallback'` — 레지스트리 없음/응답 손상. ledger 보존.
-    - `'held'` — 신선도 불일치 또는 동사 미특정. ledger 보존.
-    - `'noop'` — **승격할 항목이 없다**(`count: 0`). 레지스트리 미접촉, ledger 불변.
-    - `'promoted'` — 전량 성공. 성공분을 원장에서 차감했다.
-    - `'partial'` — 일부만 성공. 성공분만 차감하고 실패분은 재시도 대상으로 남긴다.
-
-    `promoted` 는 `mode in {'noop', 'promoted', 'partial'}` 의 편의 표현이다 —
-    "실패하지 않았다"는 뜻이지 "무언가를 승격했다"는 뜻이 아니다.
-    """
-    root = root or _project_root()
-    pointer = discover_registry_pointer(root)
-    if pointer is None:
-        return {
-            "promoted": False,
-            "mode": "fallback",
-            "reason": "레지스트리 없음 — 킷 ledger가 내구 진실(폴백)",
-        }
-
-    command: list[str] = pointer["command"]
-    describe = describe_registry(command, cwd=root)
-    if describe is None:
-        return {
-            "promoted": False,
-            "mode": "fallback",
-            "reason": "describe 실패/손상 — 전면 폴백, ledger 보존",
-        }
-
-    common = _git_common_dir(root)
-    trust = (
-        _read_trust_state(common)
-        if common
-        else {
-            "consecutiveMismatches": 0,
-            "untrusted": False,
-        }
-    )
-
-    declared_head = describe.get("head")
-    actual_head = _current_head(root)
-    freshness = "undeclared"
-    if isinstance(declared_head, str):
-        if actual_head is not None and declared_head == actual_head:
-            freshness = "match"
-            trust["consecutiveMismatches"] = 0
-            trust["untrusted"] = False
-        elif actual_head is not None:
-            freshness = "mismatch"
-            trust["consecutiveMismatches"] = trust.get("consecutiveMismatches", 0) + 1
-            if trust["consecutiveMismatches"] >= _MISMATCH_DEMOTE_THRESHOLD:
-                trust["untrusted"] = True
-    if common is not None:
-        _write_trust_state(common, trust)
-
-    if trust.get("untrusted"):
-        return {
-            "promoted": False,
-            "mode": "fallback",
-            "reason": (
-                "레지스트리가 head 지속 불일치로 미신뢰 강등됨 — "
-                "킷 ledger가 내구 진실(D-50)"
-            ),
-        }
-    if freshness == "mismatch":
-        return {
-            "promoted": False,
-            "mode": "held",
-            "reason": (
-                f"head 불일치({trust.get('consecutiveMismatches', 0)}/"
-                f"{_MISMATCH_DEMOTE_THRESHOLD}) — 승격 보류, ledger 보존"
-            ),
-        }
-    if freshness == "undeclared":
-        print(
-            "[feedback_ledger] warning: 레지스트리가 head를 선언하지 않음 — "
-            "신선도를 확인할 수 없다(D-49)",
-            file=sys.stderr,
-        )
-
-    verb_name, reason = _select_promotion_verb(pointer, describe.get("verbs", []))
-    if verb_name is None:
-        return {"promoted": False, "mode": "held", "reason": reason}
-
-    path = ledger_path(root)
-    # **락 안에서는 읽기(claim)만 한다.** 승격 subprocess 는 락 밖에서 돈다 — 항목 수 ×
-    # _PROMOTE_CALL_TIMEOUT_SECONDS 만큼 락을 붙잡으면 _LOCK_TIMEOUT_SECONDS(5초,
-    # **의도된 fail-open**) 를 넘긴 다른 프로세스의 upsert 가 **무락으로** 원장에 쓴다.
-    # 그 상태에서 원장을 통째로 비우면 그 항목은 승격도 보존도 되지 않고 사라진다(ATK-001).
-    # fail-open 은 "막지 않는다"이지 "지운다"가 아니다.
-    with _ledger_lock(path):
-        try:
-            claimed = parse_ledger(path)
-        except LedgerUnreadable as err:
-            # 읽지 못한 원장은 승격하지 않는다 — 그리고 **비우지도 않는다.**
-            return {"promoted": False, "mode": "fallback", "reason": f"원장 읽기 실패: {err}"}
-    if not claimed:
-        # 빈 원장은 **승격이 아니다** — 레지스트리 동사를 한 번도 부르지 않았다.
-        # `mode: "promoted"` 로 뭉개면 호출자가 "레지스트리에 반영됐다"로 읽는다.
-        return {"promoted": True, "mode": "noop", "count": 0}
-
-    succeeded, failures = _call_promotion_verb(command, verb_name, claimed, root)
-
-    if not succeeded:
-        return {
-            "promoted": False,
-            "mode": "fallback",
-            "reason": f"승격 호출 전부 실패 — ledger 보존: {failures[:3]}",
-        }
-    # **성공분은 partial 이든 아니든 차감한다.** 이전 구현은 `failures` 가 있으면 원장을
-    # 미변경으로 두고 곧장 반환했다 — 그러면 다음 promote 가 **이미 성공한 항목을 다시
-    # claim 해 승격 동사를 재호출**한다. describe 스키마가 동사를 `idempotent: false` 로
-    # 선언할 수 있는 이상 재호출은 frequency 를 부풀리고, frequency 가 digest 순위를
-    # 정하므로 진짜 반복 결함이 digest 밖으로 밀린다(ATK-008 이 막으려던 손해).
-    # "재시도를 위해 비우지 않는다" 의 올바른 구현은 **비우지 않는 것**이 아니라
-    # **실패분만 남기는 것**이고, `_remaining_after_promotion` 이 정확히 그것을 한다.
-    with _ledger_lock(path):
-        # 비우지 않고 **차집합을 다시 계산해** 쓴다. 승격 중 추가·증가된 것은 남는다.
-        try:
-            current = parse_ledger(path)
-        except LedgerUnreadable as err:
-            # 승격은 이미 성공했으나 차감할 대상을 읽지 못했다. **덮어쓰지 않는다** —
-            # 다음 호출에서 재승격이 일어나는 편이 원장을 파괴하는 것보다 낫다.
-            print(
-                f"[feedback_ledger] 승격 후 원장을 읽지 못해 차감을 건너뛴다 — {err}",
-                file=sys.stderr,
-            )
-            return {"promoted": True, "mode": "partial", "count": len(succeeded),
-                    "reason": "차감 실패 — 원장 보존"}
-        _write_ledger(path, _remaining_after_promotion(current, succeeded))
-    if failures:
-        return {
-            "promoted": True,
-            "mode": "partial",
-            "count": len(succeeded),
-            "failed": len(failures),
-            "reason": "일부 실패 — 성공분만 차감하고 실패분은 재시도 대상으로 남김",
-        }
-    return {"promoted": True, "mode": "promoted", "count": len(succeeded)}
-
-
 def _main(argv: list[str]) -> int:
     if not argv:
         print(
             "usage: feedback_ledger.py upsert <category> <severity> <pattern> "
-            "| digest [K] | promote",
+            "| digest [K]",
             file=sys.stderr,
         )
         return 2
@@ -1065,10 +625,6 @@ def _main(argv: list[str]) -> int:
     if cmd == "digest":
         k = int(argv[1]) if len(argv) > 1 and argv[1].isdigit() else DEFAULT_DIGEST_K
         print(load_digest(k))
-        return 0
-    if cmd == "promote":
-        result = promote()
-        print(json.dumps(result, ensure_ascii=False))
         return 0
     print(f"unknown command: {cmd}", file=sys.stderr)
     return 2

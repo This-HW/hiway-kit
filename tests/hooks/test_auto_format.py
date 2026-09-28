@@ -7,7 +7,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-HOOKS_DIR = Path(__file__).resolve().parent.parent
+HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 _spec = importlib.util.spec_from_file_location(
     "auto_format", HOOKS_DIR / "auto-format.py"
 )
@@ -114,7 +114,7 @@ class TestRunPipeline:
         mock_result.stderr = ""
 
         def fake_run(cmd, **kwargs):
-            if "check" in cmd and "--fix" not in cmd:
+            if "check" in cmd:
                 return mock_result
             ok = MagicMock()
             ok.returncode = 0
@@ -238,7 +238,7 @@ class TestTargetsFromPayload:
         a.write_text("x = 1\n")
         b.write_text("y = 1\n")
         seen = []
-        with patch.object(_mod, "run_pipeline", side_effect=lambda p: seen.append(p) or 0):
+        with patch.object(_mod, "run_pipeline", side_effect=lambda p, *_a: seen.append(p) or 0):
             code = run_main(
                 {
                     "tool_name": "apply_patch",
@@ -266,3 +266,167 @@ class TestTargetsFromPayload:
                 }
             )
         assert code == 2
+
+
+# ── v5.0.0 A2: 지연 비용 ─────────────────────────────────────────────────────
+#
+# 이 훅은 모든 파일 쓰기마다 돈다. 아래는 되돌리면 red 가 되는 계약들이다:
+# npx 미호출(로컬 바이너리 없으면 subprocess 0회) · ruff 파일당 2회 이하 ·
+# 호출 전체 예산이 훅 타임아웃보다 작음 · MultiEdit 처리 · 모르는 페이로드 무해 통과.
+
+
+def _ok(*_a, **_kw):
+    r = MagicMock()
+    r.returncode = 0
+    r.stdout = ""
+    r.stderr = ""
+    return r
+
+
+def _repo(tmp_path):
+    (tmp_path / ".git").mkdir()
+    return tmp_path
+
+
+def _fake_bin(root, tool):
+    bindir = root / "node_modules" / ".bin"
+    bindir.mkdir(parents=True, exist_ok=True)
+    exe = bindir / tool
+    exe.write_text("#!/bin/sh\nexit 0\n")
+    exe.chmod(0o755)
+    return exe
+
+
+class TestNoNpx:
+    def test_md_without_local_prettier_spawns_nothing(self, tmp_path):
+        """prettier 가 없는 프로젝트의 .md 편집 — 예전엔 npx 가 매번 떴다(245ms)."""
+        f = _repo(tmp_path) / "README.md"
+        f.write_text("# x\n")
+        with patch("subprocess.run", side_effect=_ok) as run:
+            assert run_pipeline(str(f)) == 0
+        assert run.call_count == 0
+
+    def test_js_with_eslint_config_but_no_local_bins_spawns_nothing(self, tmp_path):
+        root = _repo(tmp_path)
+        (root / ".eslintrc.json").write_text("{}")
+        f = root / "app.js"
+        f.write_text("const x = 1;\n")
+        with patch("subprocess.run", side_effect=_ok) as run:
+            assert run_pipeline(str(f)) == 0
+        assert run.call_count == 0
+
+    def test_local_prettier_is_used_directly(self, tmp_path):
+        root = _repo(tmp_path)
+        exe = _fake_bin(root, "prettier")
+        sub = root / "docs"
+        sub.mkdir()
+        f = sub / "a.md"
+        f.write_text("# x\n")
+        with patch("subprocess.run", side_effect=_ok) as run:
+            run_pipeline(str(f))
+        cmds = [c.args[0] for c in run.call_args_list]
+        assert cmds == [[str(exe), "--write", str(f)]]
+        assert not any("npx" in part for cmd in cmds for part in cmd)
+
+    def test_local_eslint_runs_once_with_fix(self, tmp_path):
+        root = _repo(tmp_path)
+        (root / ".eslintrc.json").write_text("{}")
+        eslint = _fake_bin(root, "eslint")
+        f = root / "app.js"
+        f.write_text("const x = 1;\n")
+        with patch("subprocess.run", side_effect=_ok) as run:
+            run_pipeline(str(f))
+        cmds = [c.args[0] for c in run.call_args_list]
+        assert cmds == [[str(eslint), "--fix", "--format=compact", str(f)]]
+
+    def test_bin_lookup_stops_at_repo_root(self, tmp_path):
+        """레포 밖(상위 디렉토리)의 node_modules 는 이 프로젝트의 도구가 아니다."""
+        _fake_bin(tmp_path, "prettier")
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / ".git").mkdir()
+        f = repo / "a.md"
+        f.write_text("# x\n")
+        assert _mod._local_node_bin(str(f), "prettier") is None
+
+
+class TestRuffCallCount:
+    def test_python_file_invokes_ruff_at_most_twice(self, tmp_path):
+        f = tmp_path / "m.py"
+        f.write_text("x = 1\n")
+        with (
+            patch.object(_mod, "_has_tool", return_value=True),
+            patch("subprocess.run", side_effect=_ok) as run,
+        ):
+            assert run_pipeline(str(f)) == 0
+        ruff_calls = [c.args[0] for c in run.call_args_list if c.args[0][0] == "ruff"]
+        assert 1 <= len(ruff_calls) <= 2, ruff_calls
+
+
+class TestBudget:
+    def test_budget_is_below_hook_timeouts(self):
+        """호출 전체 예산 < 훅 타임아웃 — 하네스가 죽이기 전에 스스로 멈춘다."""
+        for manifest in ("hooks.json", "hooks-codex.json"):
+            data = json.loads((HOOKS_DIR / manifest).read_text(encoding="utf-8"))
+            timeouts = [
+                h["timeout"]
+                for entry in data["hooks"]["PostToolUse"]
+                for h in entry["hooks"]
+                if "auto-format.py" in json.dumps(h)
+            ]
+            assert timeouts, manifest
+            assert all(t > _mod.BUDGET_SECONDS for t in timeouts), (manifest, timeouts)
+        assert _mod.STEP_TIMEOUT <= _mod.BUDGET_SECONDS
+
+    def test_step_timeout_is_cut_by_remaining_budget(self, tmp_path):
+        import time
+
+        f = tmp_path / "m.py"
+        f.write_text("x = 1\n")
+        with (
+            patch.object(_mod, "_has_tool", return_value=True),
+            patch("subprocess.run", side_effect=_ok) as run,
+        ):
+            run_pipeline(str(f), time.monotonic() + 3)
+        assert run.call_args_list
+        assert all(c.kwargs["timeout"] <= 3 for c in run.call_args_list)
+
+    def test_exhausted_budget_skips_steps_and_says_so(self, tmp_path, capsys):
+        import time
+
+        f = tmp_path / "m.py"
+        f.write_text("x = 1\n")
+        with patch("subprocess.run", side_effect=_ok) as run:
+            assert run_pipeline(str(f), time.monotonic() - 1) == 0
+        assert run.call_count == 0
+        assert "예산" in capsys.readouterr().err
+
+
+class TestPayloadShapes:
+    def test_multiedit_is_formatted(self):
+        assert _mod._targets_from_payload(
+            {"tool_name": "MultiEdit", "tool_input": {"file_path": "/x.py", "edits": []}}
+        ) == ["/x.py"]
+
+    def test_unknown_codex_payloads_pass_silently(self, capsys):
+        """Codex PostToolUse 가 보낼 수 있는 모르는 tool_name — 예외 없이 exit 0."""
+        payloads = [
+            {"tool_name": "shell", "tool_input": {"command": ["ls", "-la"]}},
+            {"tool_name": "exec_command", "tool_input": {"cmd": "ls"}},
+            {"tool_name": "update_plan", "tool_input": {"plan": [{"step": "x"}]}},
+            {"tool_name": "mcp__server__tool", "tool_input": None},
+            {"tool_name": None},
+            {},
+        ]
+        with patch("subprocess.run", side_effect=_ok) as run:
+            for payload in payloads:
+                assert run_main(payload) == 0, payload
+        assert run.call_count == 0
+        assert capsys.readouterr().err == ""
+
+    def test_non_object_payload_exits_zero(self):
+        with patch("sys.stdin", StringIO("[1, 2, 3]")):
+            try:
+                _mod.main()
+            except SystemExit as e:
+                assert e.code == 0

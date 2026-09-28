@@ -60,7 +60,7 @@ ignore = [
 [lint.per-file-ignores]
 # 테스트: sys.path 조작 후 import(플러그인 레이아웃상 패키지가 아님) + assert가 본질 +
 # "/tmp/.env" 류는 실제 파일이 아니라 경로 판정을 먹이는 **문자열 픽스처**다.
-"plugins/common/hooks/tests/*.py" = ["E402", "S101", "S108"]
+"tests/hooks/*.py" = ["E402", "S101", "S108"]
 "evals/tests/*.py" = ["E402", "S101", "S108"]
 # scripts/ 의 게이트 스크립트 테스트도 동일 — 하이픈 파일명이라 importlib로 로드한다.
 "scripts/tests/*.py" = ["E402", "S101", "S108"]

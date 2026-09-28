@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
-"""SessionStart hook: 로컬 설정 체크 + 경고 (rules 주입은 session-start.py 전담)"""
+"""SessionStart hook: 로컬 환경의 실재 결함만 사용자에게 알린다 (rules 주입은 session-start.py 전담).
+
+**소비자 레포에 아무것도 쓰지 않는다.** v5.0.0 전까지 이 훅은 plugin-only 모드에서
+`.git/hooks/pre-commit` 을 묻지 않고 설치·갱신했다 — 세션 시작이라는 부수효과 없는
+이벤트가 사용자 레포의 실행 파일을 바꾸는 동작이었다. 설치는 이제 `setup.sh` 의
+명시적 opt-in 경로뿐이다.
+
+경고는 stderr 가 아니라 `systemMessage` 로 낸다 — SessionStart 훅의 stderr 는 모델도
+사용자도 보지 못한다. 대상은 **정상 운영에서 거짓인 조건**뿐이다
+(`docs/conventions/warning-signal.md`): 파이썬 하한·낡은 venv·에이전트 이중 로드,
+그리고 setup.sh 를 실행한 사용자에게만 해당하는 전역 설정 누락.
+"""
 
 import json
 import os
@@ -9,11 +20,6 @@ import sys
 
 # D-012: __file__ 기반 경로 해결 (cwd 무관, Plugin 캐시 위치 무관)
 SETUP_DIR = pathlib.Path(__file__).resolve().parent  # plugins/common/setup/
-
-# 킷이 자기 훅으로 심은 pre-commit 을 식별하는 마커. `setup/pre-commit` 첫 주석과
-# 같아야 한다 — 이 문자열이 있으면 "킷이 심은 것"이므로 갱신해도 안전하고, 없으면
-# 사용자가 직접 만든 훅이므로 **절대 건드리지 않는다**.
-HOOK_MARKER = b"# Auto-installed by session-check.py"
 
 
 def _plugin_name() -> str:
@@ -34,33 +40,6 @@ def _plugin_name() -> str:
 
 
 PLUGIN = _plugin_name()
-
-warnings = []
-
-
-def _default_git_hooks_dir(repo_root: pathlib.Path) -> pathlib.Path:
-    """저장소의 기본 hooks 디렉토리를 `git rev-parse --git-path hooks` 로 얻는다.
-
-    `repo_root / ".git/hooks"` 로 조립하면 **워크트리에서 깨진다** — 워크트리의
-    `.git` 은 디렉토리가 아니라 gitdir 포인터 파일이라 `.git/hooks` 접근이
-    ENOTDIR 로 실패하고, 이 킷이 권장하는 운영 형태(isolation: worktree,
-    parallel-worktree)에서 **매 세션 경고가 발화**했다 (D-51 위반).
-
-    `--git-path` 는 워크트리에서 공용 hooks 절대경로를, 주 체크아웃에서 상대경로를
-    각각 올바르게 돌려준다. 상대경로일 수 있으므로 repo_root 기준으로 resolve 한다.
-    """
-    try:
-        r = subprocess.run(
-            ["git", "rev-parse", "--git-path", "hooks"],
-            cwd=str(repo_root), capture_output=True, text=True, timeout=5, check=False,
-        )
-        if r.returncode == 0 and r.stdout.strip():
-            return (repo_root / r.stdout.strip()).resolve()
-    except (OSError, subprocess.TimeoutExpired):
-        pass
-    # git 조회 실패 시에도 침묵하지 않되, 조립은 하지 않는다 — 판정 불가는 None 이 아니라
-    # 기존 관례대로 최선 추정을 쓰되 호출부가 존재 검사를 한다.
-    return (repo_root / ".git" / "hooks").resolve()
 
 
 def stale_venv_interp(venv_dir):
@@ -115,11 +94,19 @@ def stale_venv_interp(venv_dir):
     return None
 
 
-# ── 1. 설정 체크 / 경고 ──────────────────────────────────────────────────────
-try:
-    # 1z. python floor — 훅은 이 인터프리터로 실행된다. 3.9 미만이면 다른 훅들이
+def _run_git(args: list) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args], capture_output=True, text=True, timeout=5, check=False
+    )
+
+
+def collect_warnings() -> list:
+    """관측 가능해야 할 실재 결함 목록. 각 검사가 도는 조건은 주석에 한 문장으로 적는다."""
+    warnings = []
+
+    # python floor — 훅은 이 인터프리터로 실행된다. 3.9 미만이면 다른 훅들이
     # import 시점에 죽는데, 훅은 fail-open이라 **아무 메시지 없이 조용히** 사라진다.
-    # 침묵 대신 한 줄 경고로 관측 가능하게 만든다 (이 파일 자체는 구버전에서도 로드됨).
+    # (이 파일 자체는 구버전에서도 로드되도록 3.10 문법을 쓰지 않는다.)
     if sys.version_info < (3, 9):
         warnings.append(
             "python3 %d.%d 감지 — kit 훅은 3.9+ 필요. auto-format·stop-validator 등이 "
@@ -127,182 +114,67 @@ try:
             % (sys.version_info[0], sys.version_info[1])
         )
 
-    # ATK-005: Plugin-only 사용자(setup.sh 미실행)에게 경고 피로 방지
-    setup_state = pathlib.Path.home() / ".claude/.setup-state.json"
-    is_plugin_only = not setup_state.exists()
-
-    # 1a. 전역 설정 누락 경고 (풀 모드 전용)
-    ruff_dst = pathlib.Path.home() / ".config/ruff/ruff.toml"
-    if not ruff_dst.exists() and not is_plugin_only:
-        warnings.append("ruff.toml 미설치 — setup.sh를 다시 실행하세요")
-
-    try:
-        tpl_result = subprocess.run(
-            ["git", "config", "--global", "--get", "init.templateDir"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        )
-        if tpl_result.returncode == 1 and not is_plugin_only:
-            warnings.append("init.templateDir 미설정 — setup.sh를 다시 실행하세요")
-    except subprocess.TimeoutExpired:
-        warnings.append("git config 조회 시간 초과 (init.templateDir)")
-
-    # 1b. 현재 repo 로컬 설정
-    git_toplevel = ""
-    try:
-        git_toplevel = subprocess.run(
-            ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-            check=False,
-        ).stdout.strip()
-    except subprocess.TimeoutExpired:
-        warnings.append("git rev-parse 시간 초과")
-
-    if git_toplevel:
-        repo_root = pathlib.Path(git_toplevel)
-
-        # D-015: core.hooksPath 확인 (H-1, IM-04)
-        raw_hooks_path = ""
+    # setup.sh 를 실행한 사용자(`~/.claude/.setup-state.json` 존재)에게만 도는 검사.
+    # plugin-only 사용자에게는 이 조건이 **항상 참**이라 경고가 죽는다(ATK-005) —
+    # 그래서 억제가 아니라 **조회 자체를 하지 않는다**.
+    if (pathlib.Path.home() / ".claude/.setup-state.json").exists():
+        if not (pathlib.Path.home() / ".config/ruff/ruff.toml").exists():
+            warnings.append("ruff.toml 미설치 — setup.sh를 다시 실행하세요")
         try:
-            hooks_path_result = subprocess.run(
-                ["git", "config", "core.hooksPath"],
-                capture_output=True,
-                text=True,
-                cwd=git_toplevel,
-                timeout=5,
-                check=False,
-            )
-            raw_hooks_path = hooks_path_result.stdout.strip()
-            if hooks_path_result.returncode == 0 and raw_hooks_path:
-                p = pathlib.Path(raw_hooks_path)
-                candidate = (p if p.is_absolute() else (repo_root / p)).resolve()
-                # path traversal 방어: repo_root 상위로 탈출 차단
-                try:
-                    candidate.relative_to(repo_root.resolve())
-                    git_hooks_dir = candidate
-                except ValueError:
-                    # ATK-008: path traversal 감지 시 경고 메시지 추가
-                    warnings.append(
-                        f"core.hooksPath가 repo 외부를 가리킵니다: {raw_hooks_path!r}. "
-                        "기본 .git/hooks를 사용합니다."
-                    )
-                    git_hooks_dir = _default_git_hooks_dir(repo_root)
-            else:
-                git_hooks_dir = _default_git_hooks_dir(repo_root)
-        except subprocess.TimeoutExpired:
-            warnings.append("git config core.hooksPath 시간 초과")
-            git_hooks_dir = _default_git_hooks_dir(repo_root)
+            if (
+                _run_git(["config", "--global", "--get", "init.templateDir"]).returncode
+                == 1
+            ):
+                warnings.append("init.templateDir 미설정 — setup.sh를 다시 실행하세요")
+        except (OSError, subprocess.TimeoutExpired):
+            pass  # 판정 불가 — 경고하지 않는다(오탐은 전체 경고를 안 읽게 만든다)
 
-        # 1c. stale venv 감지 — 프로젝트 디렉토리 이동/복사 후의 침묵 실패 (stale_venv_interp 참고)
-        for venv_name in (".venv", "venv"):
-            stale_interp = stale_venv_interp(repo_root / venv_name)
-            if stale_interp:
-                warnings.append(
-                    # !r — shebang은 파일에서 읽은 값이다. 터미널 이스케이프가 섞여도
-                    # 그대로 렌더되지 않도록 repr로 감싼다(core.hooksPath 경고와 동일 관례).
-                    f"{venv_name} 스크립트의 shebang이 프로젝트 밖 python을 가리킵니다 "
-                    f"({stale_interp!r}) — 디렉토리 이동/복사 후 stale 상태입니다. "
-                    f"재생성: rm -rf {venv_name} && python3 -m venv {venv_name} (의존성 재설치)"
-                )
-                break
-
-        # D-015: dual-load 감지 (CR-07)
-        claude_agents = repo_root / ".claude/agents"
-        if claude_agents.exists() and any(claude_agents.rglob("*.md")):
-            warnings.append(
-                ".claude/agents/ + Plugin 동시 감지! 에이전트 중복 로딩 위험. "
-                "'setup.sh --migrate' 실행 권장"
-            )
-
-except Exception as e:
-    print(f"[{PLUGIN}] session-check warning (설정 체크): {e}", file=sys.stderr)
-
-# ── 2. pre-commit 설치·갱신 (plugin-only 모드) ────────────────────────────────
-
-
-def _pre_commit_action(hook_dst: pathlib.Path, src_bytes: bytes) -> str:
-    """설치/갱신/무동작 중 무엇을 할지 판정한다. 반환: 'install' | 'update' | ''.
-
-    **왜 갱신 경로가 필요한가.** 원래는 `not hook_dst.exists()` 로 없을 때만 설치했다.
-    그 결과 훅이 최초 설치 시점 판에서 **영구 동결**됐고, 이후 릴리스에서 추가된 검사가
-    기존 사용자에게 영원히 도달하지 않았다 — 실측: `.private-names` 비공개 이름 차단이
-    소스에만 있고 어느 저장소에도 설치되지 않은 채 "활성"으로 보고됐다. 배포된 것과
-    실행되는 것이 갈리는 이 킷의 대표 결함 클래스다.
-
-    **왜 무조건 덮지 않는가.** 사용자가 직접 만든 pre-commit 을 덮으면 그 사람의 검사가
-    조용히 사라진다. 그래서 킷이 심은 것(HOOK_MARKER 보유)만 갱신하고, 마커가 없으면
-    남의 것으로 보고 손대지 않는다. 읽을 수 없으면 판정 불가이므로 역시 손대지 않는다.
-    """
-    if not hook_dst.exists():
-        return "install"
+    # 아래는 git 저장소 안에서만 도는 검사.
     try:
-        existing = hook_dst.read_bytes()
-    except OSError:
-        return ""
-    if HOOK_MARKER not in existing:
-        return ""  # 사용자 소유 훅 — 건드리지 않는다
-    return "update" if existing != src_bytes else ""
+        git_toplevel = _run_git(["rev-parse", "--show-toplevel"]).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        git_toplevel = ""
+    if not git_toplevel:
+        return warnings
+    repo_root = pathlib.Path(git_toplevel)
+
+    # stale venv — 프로젝트 디렉토리 이동/복사 후의 침묵 실패 (stale_venv_interp 참고)
+    for venv_name in (".venv", "venv"):
+        stale_interp = stale_venv_interp(repo_root / venv_name)
+        if stale_interp:
+            warnings.append(
+                # !r — shebang은 파일에서 읽은 값이다. 터미널 이스케이프가 섞여도
+                # 그대로 렌더되지 않도록 repr로 감싼다.
+                f"{venv_name} 스크립트의 shebang이 프로젝트 밖 python을 가리킵니다 "
+                f"({stale_interp!r}) — 디렉토리 이동/복사 후 stale 상태입니다. "
+                f"재생성: rm -rf {venv_name} && python3 -m venv {venv_name} (의존성 재설치)"
+            )
+            break
+
+    # dual-load — 프로젝트 `.claude/agents/` 에 에이전트 정의가 있을 때만 (CR-07)
+    claude_agents = repo_root / ".claude/agents"
+    if claude_agents.exists() and any(claude_agents.rglob("*.md")):
+        warnings.append(
+            ".claude/agents/ + Plugin 동시 감지! 에이전트 중복 로딩 위험. "
+            "'setup.sh --migrate' 실행 권장"
+        )
+    return warnings
 
 
-def _write_hook(hook_dst: pathlib.Path, src_bytes: bytes) -> None:
-    """ATK-001: TOCTOU 방어 — 임시파일에 쓰고 os.replace 로 원자 교체."""
-    import tempfile
+def main() -> None:
+    try:
+        warnings = collect_warnings()
+    except Exception as e:
+        # 검사 자체의 결함도 **보이게** 남긴다 — stderr 는 아무도 읽지 않는다.
+        warnings = [f"session-check 내부 오류(설정 체크 생략): {e!r}"]
 
-    hook_dst.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(
-        dir=hook_dst.parent, delete=False, suffix=".tmp"
-    ) as tmp:
-        tmp_path = pathlib.Path(tmp.name)
-        tmp_path.write_bytes(src_bytes)
-    tmp_path.chmod(0o755)
-    os.replace(tmp_path, hook_dst)  # atomic
+    output = {
+        "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": ""}
+    }
+    if warnings:
+        output["systemMessage"] = f"[{PLUGIN}] ⚠ " + "; ".join(warnings)
+    print(json.dumps(output, ensure_ascii=False))
+    sys.exit(0)  # 항상 허용 (SessionStart = fail-open)
 
 
-try:
-    setup_state = pathlib.Path.home() / ".claude/.setup-state.json"
-    is_plugin_only = not setup_state.exists()
-
-    if is_plugin_only and git_toplevel:
-        hook_dst = git_hooks_dir / "pre-commit"
-        pre_commit_src = SETUP_DIR / "pre-commit"
-
-        if not hook_dst.is_symlink() and pre_commit_src.exists():
-            src_bytes = pre_commit_src.read_bytes()
-            action = _pre_commit_action(hook_dst, src_bytes)
-            if action:
-                _write_hook(hook_dst, src_bytes)
-            if action == "update":
-                # 조용히 덮지 않는다 — 사용자 저장소의 실행 파일이 바뀐 사건이다.
-                print(
-                    f"[{PLUGIN}] pre-commit 훅을 최신본으로 갱신했습니다 "
-                    f"({hook_dst})",
-                    file=sys.stderr,
-                )
-
-except Exception as e:
-    print(
-        f"[{PLUGIN}] session-check warning (pre-commit 설치): {e}",
-        file=sys.stderr,
-    )
-
-# ── 3. 경고 출력 ──────────────────────────────────────────────────────────────
-if warnings:
-    print(f"[{PLUGIN}] ⚠ {'; '.join(warnings)}", file=sys.stderr)
-
-# ── 4. 출력 — additionalContext는 빈 문자열 (session-start.py가 rules 주입 전담) ──
-print(
-    json.dumps(
-        {
-            "hookSpecificOutput": {
-                "hookEventName": "SessionStart",
-                "additionalContext": "",
-            }
-        }
-    )
-)
-
-sys.exit(0)  # 항상 허용 (SessionStart = fail-open)
+main()

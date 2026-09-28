@@ -4,7 +4,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-HOOKS_DIR = Path(__file__).resolve().parent.parent
+HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 _spec = importlib.util.spec_from_file_location(
     "session_start", HOOKS_DIR / "session-start.py"
 )

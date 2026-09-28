@@ -1,6 +1,7 @@
 #!/bin/bash
 # hiway-kit pre-commit hook
-# Auto-installed by session-check.py
+# kit-managed-hook
+# 설치는 setup.sh 의 opt-in 경로뿐이다 (v5.0.0 부터 session-check 가 설치하지 않는다)
 
 set -e
 
