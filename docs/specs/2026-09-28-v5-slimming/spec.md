@@ -91,7 +91,7 @@ consensus-builder, impact-analyzer}. 흡수 대상에 **실제로 고유한** �
 - **B6 evals**: 없앤 에이전트의 시나리오 삭제, 기준선·커버리지 정책·`scripts/check_eval_coverage.py`(+테스트)의
   참조 정리. **eval 재실행 금지**(API 비용) — 기준선 파일은 삭제 반영으로만 갱신하고 게이트가 통과해야 한다.
 
-### C. 스킬 21 → 14, 규칙 14 → 12
+### C. 스킬 21 → 15, 규칙 14 → 12
 
 - **C1 삭제**: `skill-creator`(네이티브·공식 스킬 중복), `doc-coauthoring`(없는 자동 갱신을 서술),
   `mcp-builder`(공식 mcp-builder 스킬·SDK 문서와 중복, SDK 릴리스마다 낡는 부채).
@@ -138,7 +138,7 @@ consensus-builder, impact-analyzer}. 흡수 대상에 **실제로 고유한** �
 ## 완료 조건
 
 - `scripts/verify-done.sh` green(컨트롤이 통합 트리에서 직접), CI green
-- `scripts/build-codex-zip.py --check` rc=0, 격리 `CODEX_HOME` 설치에서 스킬 14종 인식
+- `scripts/build-codex-zip.py --check` rc=0, 격리 `CODEX_HOME` 설치에서 스킬 15종 인식
 - `python3 scripts/check_injection_budget.py` 가 실제 출력 기준으로 통과, 매 세션 주입·에이전트 설명·스킬 설명이
   위 표보다 줄어든 수치를 CHANGELOG 에 기록
 - `git grep` 으로 없앤 에이전트·스킬 이름이 배포물(`plugins/`)·README·CLAUDE.md 에 0건(CHANGELOG 이주 표·과거 기록 제외)
