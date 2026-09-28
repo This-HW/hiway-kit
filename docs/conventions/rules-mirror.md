@@ -1,5 +1,5 @@
-`plugins/common/rules/` (14) is what gets **injected every session**, so it is compressed.
-`docs/architecture/rules/` (7) is the long-form human explanation of seven of those rules,
+`plugins/common/rules/` (12) is what gets **injected every session**, so it is compressed.
+`docs/architecture/rules/` (5) is the long-form human explanation of five of those rules,
 created in W-004 — tables, worked examples, anti-patterns. The rest
 (`definition-of-done`, `feedback-loop`, `loop-engineering`, `parallel-worktree`,
 `untrusted-text`, `child-marker`, `delegation-contract`) have no mirror by design; the injected rule is the whole story for them.

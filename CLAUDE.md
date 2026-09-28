@@ -398,7 +398,7 @@ PRs welcome. Checklist:
       no reliance on the project cwd containing plugin files, no assumption a specific MCP
       server is installed, hooks fail-open when their assumptions don't hold
 - [ ] No `mcp__*` tools in any agent `tools:` allowlist (MCP lives in skills — see
-      `rules/mcp-usage.md`; absent MCP in an agent allowlist hallucinates, CC #13898)
+      `docs/architecture/rules/mcp-usage.md` §4; absent MCP in an agent allowlist hallucinates, CC #13898)
 - [ ] Agent frontmatter has `name`, `description`, `model`, `maxTurns`
 - [ ] No forbidden fields: `permissionMode`, `context_cache`, `output_schema`, `next_agents`, inline `hooks`
 - [ ] Description includes `MUST USE when:` trigger conditions
