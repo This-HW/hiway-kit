@@ -43,7 +43,10 @@ would mean standing up and hosting an MCP server only to pass the form. Opening 
   So even a Skills only upload would currently stall at the scan.
 - No OpenAI staff reply or fix date in either thread as of 2026-09-28. We filed our own support
   request (organization `org-dwKLm12IsiU3BkwZROoLdmuk`) so our org is part of the escalation —
-  **case 15960350** (Sev 4, auto-acknowledged 2026-09-28 20:32 KST; no human reply yet).
+  **case 15960350** (Sev 4, auto-acknowledged 2026-09-28 20:32 KST). On 2026-09-29 08:31 KST support asked for a
+  screen recording and screenshots (the ticket closes after a day without a reply); sent 08:49 KST — a frame-by-frame
+  recording of the browser tab (verification → Plugins → Create plugin menu showing only With MCP), three
+  screenshots, and the note that the skill safety scan passes for all 15 skills.
 
 **OpenAI's own skill safety scan: all 15 skills pass (2026-09-29, v5.0.3).** The With MCP draft's Skills tab
 accepts skill uploads and runs the real scan without submitting anything. A ZIP with the 15 skill folders at its
