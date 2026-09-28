@@ -13,7 +13,7 @@
 > listed in the shared ChatGPT/Codex "universal directory" alongside OpenAI-curated
 > plugins.
 
-## Status — 2026-09-28 (attempted, blocked on identity verification)
+## Status — 2026-09-28 (identity verified; blocked on the portal offering only "With MCP")
 
 Submission portal: OpenAI Platform → **Plugins** (`platform.openai.com/plugins`), per
 [Submit plugins](https://developers.openai.com/plugins/deploy/submission). Checked through the Aside
@@ -21,11 +21,16 @@ browser signed in as `thisyj.work@gmail.com`:
 
 | Requirement | State |
 | --- | --- |
-| Organization / role | Personal Organization · **Owner** · Apps Management **Write** ✅ |
-| Verified developer identity | **Individual: not started · Business: not started** ❌ — "Create plugin" stops with *"You need a verified developer identity before you can create or upload a plugin."* |
+| Organization / role | ThisHW Organization · **Owner** · Apps Management **Write** ✅ |
+| Verified developer identity | **Individual: Verified** ✅ (2026-09-28) |
+| Submission type | ❌ "Create plugin" offers only **With MCP** ("uses the same MCP URL for every user"). The **Skills only** path that [the Claude-plugin guide](https://developers.openai.com/plugins/guides/submit-claude-plugin) prescribes for plugins without an MCP server is **not shown** for this organization yet. hiway-kit has no MCP server, so With MCP does not apply. |
 
-**The one human step left**: Organization settings → complete **individual verification**. It is an
-identity check, so an agent must not do it. After it is done, the rest is mechanical:
+Waiting for Skills only to appear (tracked hourly). Before uploading, per the Claude-plugin guide:
+`agents/` is unsupported (convert reusable behavior to skills or expect a warning), hooks must suit the
+Codex hook runtime, and Claude-specific wording in skills should be provider-neutral. The portal converts
+`.claude-plugin/plugin.json` to `.codex-plugin/plugin.json` on a direct Claude archive upload.
+
+**Identity verification is done.** Once Skills only appears, the rest is mechanical:
 
 1. Build the package (tracked files only, one top-level folder):
    `git archive --format=zip --prefix=hiway-kit/ -o hiway-kit-codex-<ver>.zip HEAD:plugins/common`
