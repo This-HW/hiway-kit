@@ -209,8 +209,8 @@ evals/
 말한 형태로든) 이미 적혀 있는가? 그렇다면 그것은 능력 측정이 아니다.
 
 의도적으로 지시 이행을 측정하는 시나리오라면 **그렇다고 적어라** —
-`expect.json` 의 `_designNote` 에 명시한다(예:
-`evals/scenarios/optimize-logic/on-squared-duplicate-finder/expect.json`).
+`expect.json` 의 `_designNote` 에 명시한다(그런 선언을 담은 시나리오는 v5.0.0 에서
+대상 에이전트와 함께 삭제됐다 — 새로 만들 때 이 형식을 따른다).
 암묵적인 자기충족과 **선언된** 지시-이행 측정은 다르다.
 
 ## 릴리스 체크리스트 연동

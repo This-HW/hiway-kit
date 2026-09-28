@@ -251,7 +251,7 @@ def test_check_assertion_file_contains_multiline_anchor(tmp_path):
     수정 전에는 re.search에 MULTILINE이 전달되지 않아 `^`가 문자열 전체의
     시작(=파일 첫 바이트)에만 매치했다. frontmatter처럼 구분선 뒤에 오는 필드
     (`---\nname: foo\n...`)를 앵커링하는 흔한 패턴이 항상 false-fail이었다
-    (실측: generate-boilerplate/agent-md-skeleton 1차 시도, W-018 S3).
+    (실측: 에이전트 스켈레톤 생성 시나리오 1차 시도, W-018 S3 — 그 에이전트는 v5.0.0 에서 삭제).
     """
     (tmp_path / "agent.md").write_text("---\nname: format-code\ndescription: x\n---\n")
     ok, _ = runner.check_assertion(
