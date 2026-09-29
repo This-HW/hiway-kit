@@ -119,9 +119,13 @@ description: Structured task planning into a plan file. Use for any new feature,
    비결정적 산출물이 섞이면 조건을 둘로 나눈다 — 결정적 부분만 통과/실패로, 나머지는
    고정 평가셋과 임계값으로. **금지 행위 위반은 임계값이 아니라 0이다.**
 
-5. **기록** (계획 파일이 있을 때): `## 구현 계획` 과 `## 완료 조건` 을 채운다.
+5. **경계 검사** (해당할 때만): 계획이 모듈·레이어 경계나 의존 방향을 정하거나 바꾸거나, 프로젝트에
+   경계 검사 설정이 이미 있고 이번 변경이 그 설정이 다루는 패키지 사이의 import 를 건드리면
+   `references/boundary-check.md` 를 읽고 그 검사 명령을 4의 완료 조건에 반영한다. 해당하지 않으면 건너뛴다.
 
-6. T2 완료 마킹
+6. **기록** (계획 파일이 있을 때): `## 구현 계획` 과 `## 완료 조건` 을 채운다.
+
+7. T2 완료 마킹
 
 ---
 
@@ -149,4 +153,4 @@ Planning이 완료되었습니다. 바로 개발을 시작하겠습니다.
 
 이 스킬 디렉토리 기준 경로다(소비자 프로젝트 cwd 기준이 아니다):
 계획 파일 규약 `references/plan-format.md` · 요구사항 정련 절차 `references/elicitation.md` ·
-Planning 프로토콜은 규범 `planning-protocol`(세션 주입).
+경계 검사 절차 `references/boundary-check.md` · Planning 프로토콜은 규범 `planning-protocol`(세션 주입).
