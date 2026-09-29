@@ -1,0 +1,10 @@
+[importlinter]
+root_package = shop
+
+[importlinter:contract:shop-layers]
+name = shop layers (app > infra > domain)
+type = layers
+layers =
+    shop.app
+    shop.infra
+    shop.domain

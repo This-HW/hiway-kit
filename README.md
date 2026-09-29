@@ -280,6 +280,7 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 | **Native-first (zero-debt)** | 네이티브 프리미티브를 최대 활용하고 자체 중복 구현은 삭제 | 유지보수 부채 0, 네이티브가 진화해도 항상 최신 |
 | **Phase-gate discipline** | `brainstorming → plan-task → auto-dev` HARD-GATE 체인 | 모호성 100% 제거 후 구현 → 재작업·헛수고 최소화 |
 | **Verification-before-completion (DoD)** | Iron Law + `scripts/verify-done.sh` 기계 게이트 | 증거 없는 "완료" 주장을 구조적으로 차단 |
+| **경계 검사의 완료 조건화** | 프로젝트에 경계 검사 도구(import-linter·dependency-cruiser 등)가 있으면 계획의 `## 완료 조건` 으로 태운다 — [`boundary-check.md`](plugins/common/skills/plan-task/references/boundary-check.md) | 설계로 정한 모듈 경계가 다음 변경에서 조용히 깨지는 것을 명령으로 막음 (도구가 없으면 없다고 적고 도입은 사용자 결정) |
 | **Loop engineering** | 게이트(사람 멈춤) vs 루프(자율 완주) 분리 + 배치 드라이버 + 종료 가드 | P0 전까지 자율 완주, 런어웨이 방지 |
 | **Feedback learning loop** (Hermes) | validation 결함 → ledger(상한·중복제거·감쇠) → 다음 세션 `=== LESSONS ===` 주입 | 같은 실수를 반복하지 않음 |
 | **Scale-appropriate orchestration** | Small/Medium 스킬 주도 플랫, Large 네이티브 `ultracode` 위임 | 스케일별 최적, main 컨텍스트 병목 회피 |

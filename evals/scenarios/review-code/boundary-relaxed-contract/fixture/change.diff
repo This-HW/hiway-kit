@@ -1,0 +1,24 @@
+diff --git a/.importlinter b/.importlinter
+--- a/.importlinter
++++ b/.importlinter
+@@ -8,3 +8,5 @@ type = forbidden
+ source_modules =
+     shop.domain
+ forbidden_modules =
+     shop.infra
++ignore_imports =
++    shop.domain.pricing -> shop.infra.rates
+diff --git a/shop/domain/pricing.py b/shop/domain/pricing.py
+--- a/shop/domain/pricing.py
++++ b/shop/domain/pricing.py
+@@ -1,6 +1,10 @@
+ """가격 계산 규칙."""
++from shop.infra.rates import RATES
+
+
+ def final_price(total: int, tier: str) -> int:
+     """회원 등급 할인율을 적용한 최종 금액(원 단위, 소수점 이하 버림)."""
+-    raise NotImplementedError
++    if tier not in RATES:
++        raise ValueError(f"unknown tier: {tier}")
++    return int(total * (1 - RATES[tier]))
