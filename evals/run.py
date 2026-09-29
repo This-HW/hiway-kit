@@ -498,6 +498,31 @@ def load_scenario(sc_dir: Path) -> Scenario:
 # ---------------------------------------------------------------------------
 
 
+# output_not_regex 의 매칭 플래그·detail 줄 길이 — 채점과 스키마 검증이 같은 값을 쓴다
+_NOT_REGEX_FLAGS = re.MULTILINE | re.IGNORECASE
+_NOT_REGEX_LINE_CHARS = 120
+
+
+def _validate_not_regex_patterns(patterns: object, where: str) -> list[str]:
+    """`patterns` 는 비어 있지 않은 정규식 문자열 목록이어야 하고 전부 컴파일돼야 한다.
+
+    컴파일 실패를 채점 시점까지 미루면 비용을 쓴 뒤에야(또는 한 시나리오만 조용히 red 로)
+    발견된다 — 스키마 단계에서 막는다.
+    """
+    if not isinstance(patterns, list) or not patterns:
+        return [f"{where} (output_not_regex) 'patterns'는 비어있지 않은 배열이어야 함"]
+    errors: list[str] = []
+    for j, pat in enumerate(patterns):
+        if not isinstance(pat, str) or not pat:
+            errors.append(f"{where} patterns[{j}]는 비어있지 않은 문자열이어야 함")
+            continue
+        try:
+            re.compile(pat, _NOT_REGEX_FLAGS)
+        except re.error as e:
+            errors.append(f"{where} patterns[{j}] 정규식 오류: {e}")
+    return errors
+
+
 def validate_expect_schema(expect: dict, prefix: str) -> list[str]:
     errors: list[str] = []
     if not isinstance(expect, dict):
@@ -519,6 +544,12 @@ def validate_expect_schema(expect: dict, prefix: str) -> list[str]:
         for req_field in KNOWN_ASSERTION_TYPES[t]:
             if req_field not in a:
                 errors.append(f"{prefix}: assertions[{i}] ({t})에 '{req_field}' 없음")
+        if t == "output_not_regex" and "patterns" in a:
+            errors.extend(
+                _validate_not_regex_patterns(
+                    a["patterns"], f"{prefix}: assertions[{i}]"
+                )
+            )
     judge = expect.get("judge")
     if judge is not None:
         if not isinstance(judge, dict):
@@ -1068,14 +1099,34 @@ def _check_output_contains_any(
     return ok, f"output_contains_any {values}" + ("" if ok else " — 하나도 없음")
 
 
-def _check_output_not_contains(
+def _check_output_not_regex(
     a: dict, stdout: str, fx: Path, src_fx: Path | None
 ) -> tuple[bool, str]:
-    values = a.get("values", [])
-    low = _norm(stdout)
-    hit = [v for v in values if _norm(v) in low]
-    ok = not hit
-    return ok, "output_not_contains" + ("" if ok else f" — 발견됨 {hit}")
+    """금지 **형태**(줄 앵커 정규식)가 출력에 없는가 — 거짓 green 선언 가드.
+
+    부분 문자열 가드(옛 `output_not_contains`)는 6번 거짓양성을 냈다 — "여기는 괜찮다"는
+    부분 서술·수정안 주석·금지 서술·권장 조치에 같은 어구가 등장하면 정확한 출력이
+    fail 했다. 어구가 아니라 **선언의 형태**(판정 줄·명령 위치)를 잡는다: 패턴은 `^` 로
+    줄에 묶고 `re.MULTILINE | re.IGNORECASE` 로 본다. 하나라도 매치하면 fail 이고
+    detail 에 **매치된 줄**을 싣는다 — 판정자가 가드를 고칠지 에이전트를 고칠지
+    추측하지 않게(`_fail_excerpt` 가 이 줄 주변을 리포트에 남긴다).
+    """
+    haystack = unicodedata.normalize("NFC", stdout)
+    for pat in a.get("patterns", []):
+        try:
+            m = re.search(unicodedata.normalize("NFC", pat), haystack, _NOT_REGEX_FLAGS)
+        except re.error as e:
+            return False, f"output_not_regex — 정규식 오류 '{pat}': {e}"
+        if m is not None:
+            # 패턴이 어디서 시작하든 **그 줄 전체**를 보인다(잘라서)
+            start = haystack.rfind("\n", 0, m.start()) + 1
+            end = haystack.find("\n", m.end())
+            line = haystack[start : end if end != -1 else len(haystack)].strip()
+            return False, (
+                f"output_not_regex — 매치된 줄 ['{line[:_NOT_REGEX_LINE_CHARS]}']"
+                f" (패턴 '{pat}')"
+            )
+    return True, "output_not_regex"
 
 
 def _check_pytest_green(
@@ -1230,7 +1281,9 @@ def _git_checker(t: str):
 ASSERTION_REGISTRY: dict[str, tuple[set[str], object]] = {
     "output_regex": ({"pattern"}, _check_output_regex),
     "output_contains_any": ({"values"}, _check_output_contains_any),
-    "output_not_contains": ({"values"}, _check_output_not_contains),
+    # 부정 가드는 줄 앵커 정규식뿐이다. 옛 부분 문자열 타입(`output_not_contains`)은
+    # 여기서 **제거**했다 — 등록이 없으니 --validate 가 거부해 되돌아올 수 없다.
+    "output_not_regex": ({"patterns"}, _check_output_not_regex),
     "pytest_green": ({"path"}, _check_pytest_green),
     "file_contains": ({"file", "pattern"}, _check_file_contains),
     "file_unchanged": ({"file"}, _check_file_unchanged),
