@@ -47,6 +47,9 @@ would mean standing up and hosting an MCP server only to pass the form. Opening 
   screen recording and screenshots (the ticket closes after a day without a reply); sent 08:49 KST — a frame-by-frame
   recording of the browser tab (verification → Plugins → Create plugin menu showing only With MCP), three
   screenshots, and the note that the skill safety scan passes for all 15 skills.
+  09:27 KST support replied with a generic answer about ChatGPT workspace custom apps and MCP connectors (not this
+  issue); 09:45 KST replied clarifying it is the Plugins Directory portal and asking to route the case to the
+  portal team (citing the other organization's escalation).
 
 **OpenAI's own skill safety scan: all 15 skills pass (2026-09-29, v5.0.3).** The With MCP draft's Skills tab
 accepts skill uploads and runs the real scan without submitting anything. A ZIP with the 15 skill folders at its
