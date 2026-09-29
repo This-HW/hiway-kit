@@ -21,7 +21,7 @@ Submit at: https://platform.claude.com/plugins/submit
 | 게재 대상 | **Claude Code 만** (Cowork·채팅 앱 해제 — 훅·에이전트·Python 스크립트가 그 표면에서 검증된 적 없음) |
 | 데이터 처리 답 | 개인정보 읽기/저장 No · 선언 외 전송 No · 보존 없음 · 18세 미만 대상 No (근거: README "Data handling") |
 | 업데이트 | **GitHub push webhook 연결**(hook id `686731192`, ping 200) · 자동 게시 on(첫 버전은 심사자 승인 필요) |
-| 상태 | 보안 스캔 → 사람 심사 대기. 결과는 플러그인 페이지·연락 메일로 온다 |
+| 상태 | **Published — Claude Code 에 공개(2026-09-29, v5.0.3)**. 이후 버전은 Auto-publish(스캔 통과 시 자동 공개) |
 
 **정책 보류 3건과 판단** (포털 원문 요지):
 
@@ -46,6 +46,11 @@ Submit at: https://platform.claude.com/plugins/submit
 옮겼는데도 남았으므로 **그 픽스처가 원인이 아니었다**), 경고 *내려받아 바로 실행* 1건(2건→1건: `eval-forge` 가 레포 전용으로
 빠지며 사라졌고 `hooks/examples/README.md` 만 남음 — 그 문서의 `uv run`·`npm publish`·`docker push` 같은 **명령 이름 표기**
 로 보인다. 포털 안내상 문서 전용이면 조치 불요라 추측으로 문구를 바꾸지 않았다), 정보 *훅 사용*·*이미지 무검사 통과*.
+
+**공개(2026-09-29)** — v5.0.3(`59f1c06`)을 디렉토리 팀이 10:19 KST 무렵 **승인**, 10:42 KST Publish 요청 → **Published,
+Listed in Claude Code, "Live in the directory"**(포털 표기). 포털 안내상 새 목록이 디렉토리에 보이기까지 최대 1시간 —
+공개 직후 `claude.ai/directory` 검색과 `anthropics/claude-plugins-official` 카탈로그에는 아직 없었다. **설치 명령은
+소비자 쪽 카탈로그에서 실제로 확인한 뒤에만** CLAUDE.md·README 에 적는다. 이후 버전은 Auto-publish On(스캔 통과 시 자동 공개).
 
 **스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
 `https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
