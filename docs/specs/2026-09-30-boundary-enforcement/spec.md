@@ -135,3 +135,34 @@ scripts/verify-done.sh            # 기준선 재생성 전에는 §eval-coverag
 
 컨트롤 몫(병합 후): 기준선 재생성(`scripts/run-evals.sh --baseline`)·`evals/policy.json` 포인터 갱신 → `verify-done.sh` green
 → main push · `v5.1.0` 태그.
+
+---
+
+## 후속 E — `output_not_contains` 재설계 (기준선 재생성을 막은 결함, 2026-09-30 추가)
+
+### 왜
+
+병합 후 전량 `--baseline` 런(`evals/reports/20260929T171425098275Z.json`)이 25건 중 2건 fail 로 **저장 거부**됐다. 둘 다 에이전트는
+옳았고 가드가 틀렸다 `[confirmed: 리포트 output_excerpt]`:
+
+| 시나리오 | 트립 값 | 실제 출력 |
+| --- | --- | --- |
+| `plan-implementation/boundary-loyalty-points`(이번 배치 신설) | `pipx run` | *"전역 설치나 `pipx run` 같은 우회는 쓰지 않습니다"* — 금지를 **말한** 문장 |
+| `verify-code/multiply-bug-detected`(기존) | `모든 테스트 통과` | 판정은 `❌ FAIL`, 권장 조치 *"다시 실행하여 모든 테스트 통과 확인"* |
+
+`evals/policy.json` `falseGreenGuardPrecision4th` 가 이미 지시했다: *"다음 인스턴스가 나오면 값을 또 깎지 말고 output_not_contains 를
+'줄 앵커 + 종결형' 같은 형식 제약으로 재설계할 것."* 이번이 5·6번째다. feedback 원장 1위 교훈(관대한 매칭 → 줄 앵커 + 형식 제약)과
+같은 클래스.
+
+### 결정
+
+- **E1** 새 어서션 타입 `output_not_regex` — 필드 `patterns`(Python 정규식 목록), `re.MULTILINE | re.IGNORECASE`. 하나라도 매치하면 fail,
+  detail 에는 **매치된 줄**(잘라서)을 적는다 — 판정자가 원인을 바로 보게.
+- **E2** `output_not_contains` 는 `ASSERTION_REGISTRY` 에서 **제거**한다 — `--validate` 가 거부하므로 옛 타입이 돌아오지 못한다.
+  `scripts/eval-forge.py` 가 그 타입을 만들면 함께 바꾼다.
+- **E3** 11개 시나리오를 이관한다. 패턴은 **판정 형태 + 줄 앵커**만: 판정·요약·상태 줄(`판정:`·`전체 상태:`·`## 판정`·`Verdict:` 등)
+  에서 결함 부재/통과를 **선언**하는 경우, 또는 명령 위치(`^\s*(\$\s*)?npx\s`)만. 산문·권장 조치·수정안 주석·금지 서술에 등장하는
+  같은 어구는 매치하지 않아야 한다. **약화 금지** — 각 가드는 원래 잡으려던 거짓 green 선언을 계속 잡아야 한다.
+- **E4** 검증은 러너의 **실제 매처**로 양방향: (a) 위 두 오탐 출력과, 판정이 옳은데 어구가 섞인 합성 출력은 통과 (b) 시나리오별 거짓
+  green 선언 합성 출력은 fail. `evals/tests/test_runner.py` 에 되돌리면 FAIL 하는 테스트로 고정한다.
+- **E5** `evals/README.md` 의 가드 작성 지침을 새 타입 기준으로 다시 쓴다(실측 사례 목록은 보존). `evals/policy.json` 은 컨트롤 몫.
