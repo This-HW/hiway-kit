@@ -28,6 +28,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`implement-code`** — `ARCHITECTURE_LIMIT` 5번째 유형: 경계 검사를 통과시키려고 경계 설정을 완화하지 않고 멈춰
   보고한다. 완료 조건에 경계 검사가 있으면 보고 전에 실행해 명령과 rc 를 적는다.
 - **`review-code`** — 계획 `## 결정` 에 근거 없는 경계 설정 완화(허용 추가·계약 삭제·범위 축소·심각도 강등)는 HIGH.
+- **`auto-dev` T-merge 판정 기준**에 `## 완료 조건` 명령 전부 fresh run·rc 0 을 명시 — Iron Law·checklist `verify` 가
+  실행은 보장했지만 판정 목록에는 review·security 결과만 있었다. 경계 강제가 이 경로에 기대므로 판정 기준에 올린다.
 - **eval 3건** — `plan-implementation/boundary-loyalty-points`·`implement-code/boundary-tier-discount`(경계 설정·테스트
   `file_unchanged` 로 완화 = 0)·`review-code/boundary-relaxed-contract`. 기준선 재생성은 병합 후 몫이다.
 

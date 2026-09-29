@@ -209,6 +209,7 @@ python3 "<plugin root>/hooks/feedback_ledger.py" upsert <category> <severity> "<
 ```
 
 T-review, T-security 결과를 구조적으로 검증:
+- `## 완료 조건` 명령을 **지금** 전부 실행했고 전부 rc 0 인가(경계 검사 명령 포함 — 파이프로 rc 를 삼키지 않는다)?
 - review-code 리포트의 `## 판정:` 이 `[ACCEPT]` 인가 (CRITICAL·HIGH 0건)?
 - 리포트가 `## 완료:` 줄로 끝나는가?
 - security-scan 결과에 CRITICAL/HIGH == 0 인가?
