@@ -13,15 +13,13 @@
       ]
     },
     {
-      "type": "output_not_contains",
-      "values": [
-        "npx ",
-        "uvx ",
-        "pipx run"
+      "type": "output_not_regex",
+      "patterns": [
+        "^[ \\t]*(?:\\$[ \\t]*)?(?:npx|uvx|pipx[ \\t]+run)[ \\t]"
       ]
     }
   ],
-  "_designNote": "task.md 는 경계 도구·import 방향을 언급하지 않는다. fixture 에 .importlinter(layers 계약)과 pyproject dev 의존성(import-linter)만 있다 — 계획이 Glob/Grep 으로 그것을 찾아 검사 명령(lint-imports)을 완료 조건에 넣는지가 측정 대상이다. output_not_contains 는 프로젝트 밖 실행(npx·uvx·pipx run) 금지(D4)를 잡는다 — 판정 형태의 값이다.",
+  "_designNote": "task.md 는 경계 도구·import 방향을 언급하지 않는다. fixture 에 .importlinter(layers 계약)과 pyproject dev 의존성(import-linter)만 있다 — 계획이 Glob/Grep 으로 그것을 찾아 검사 명령(lint-imports)을 완료 조건에 넣는지가 측정 대상이다. output_not_regex 는 프로젝트 밖 실행(npx·uvx·pipx run) 금지(D4)를 **명령 위치**(줄 머리, 선택적 `$ `)에서만 잡는다 — 산문·완료 조건 안내문이 그 도구를 '쓰지 않는다'고 말하는 문장은 통과한다(2026-09-30 오탐 실측: `전역 설치나 `pipx run` 같은 우회는 쓰지 않습니다`).",
   "judge": {
     "enabled": false,
     "rubric": "계획이 프로젝트의 기존 경계 도구 설정(.importlinter)을 찾아 검사 명령을 완료 조건에 넣고, 새 코드가 layers 계약(app > infra > domain)을 어기지 않게 배치했는가?",

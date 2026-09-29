@@ -81,7 +81,7 @@ evals/
   "assertions": [
     { "type": "output_regex", "pattern": "off-by-one", "flags": "i" },
     { "type": "output_contains_any", "values": ["sql injection", "parameterize"] },
-    { "type": "output_not_contains", "values": ["secret-key"] },
+    { "type": "output_not_regex", "patterns": ["^(판정|verdict)[ \\t]*:[ \\t]*pass[ \\t.]*$"] },
     { "type": "pytest_green", "path": "." },
     { "type": "file_contains", "file": "stats.py", "pattern": "range\\(len" },
     { "type": "file_unchanged", "file": "test_stats.py" },
@@ -97,21 +97,48 @@ evals/
 }
 ```
 
-- `output_contains_any`/`output_not_contains`는 대소문자 무시 부분 문자열 매칭이다
-  — 동의어를 넉넉히 나열해 brittleness를 낮춘다.
-- **`output_not_contains`의 값은 '판정'이어야 하고 '일반 어구'여서는 안 된다.** 이 가드는
-  거짓 green(에이전트가 결함을 못 찾고 "깨끗하다"고 선언하는 것)을 잡으려는 것인데,
-  부분 문자열 매칭이라 **일반 어구를 넣으면 정반대 상황에서 발화한다.** 실측 3건:
-  - `analyze-dependencies/order-utils-impact` — 두 차례 거짓양성 후 어서션 제거(W-022 R3)
-  - `security-scan/shared-tmp-and-hardcoded-token` — Critical 1·High 2·Medium 2·Low 1 을
-    보고하고도 **수정안 코드 주석** `# 원자적 rename, 심볼릭 링크 문제 없음` 때문에 fail
-    (W-023). 이를 계기로 18개 시나리오에서 `문제 없음`·`문제가 없`·`이상 없음`·
-    `looks fine`·`looks good` 5종을 제거했다 — 판정이 아니라 어구다.
-  - 남긴 값은 결함 부재를 **선언**하는 형태뿐이다: `취약점 없음`류·`버그 없음`류·
-    `no vulnerabilities`·`no issues found`.
-  - 판단 기준: **그 문자열이 "여기는 괜찮다"는 부분 서술이나 수정안 설명에 등장할 수
-    있는가?** 있으면 넣지 마라. 어차피 진짜 거짓 green 은 positive 어서션이 함께 잡는다
-    (이 가드를 가진 모든 시나리오가 positive 어서션을 함께 갖고 있다).
+- `output_contains_any`는 대소문자 무시 부분 문자열 매칭이다 — 동의어를 넉넉히 나열해
+  brittleness를 낮춘다.
+- **`output_not_regex`는 거짓 green 을 잡는 유일한 부정 가드다.** `patterns`(Python 정규식
+  목록)를 `re.MULTILINE | re.IGNORECASE` 로 출력에 적용하고, 하나라도 매치하면 fail 이다.
+  detail 에 **매치된 줄**이 실린다(`매치된 줄 ['…']`) — 가드를 고칠지 에이전트를 고칠지
+  추측하지 않도록. 옛 `output_not_contains`(부분 문자열)는 **제거**됐다 — `--validate` 가
+  알 수 없는 type 으로 거부한다.
+- **가드 작성 지침 — 어구가 아니라 선언의 *형태* 를 잡아라.** 이 가드는 거짓 green(에이전트가
+  결함을 못 찾고 "깨끗하다"고 선언하는 것)을 잡으려는 것인데, 부분 문자열 매칭은 같은 어구가
+  "여기는 괜찮다"는 부분 서술·수정안 주석·금지 서술·권장 조치에 등장하는 순간 **정확한 출력을
+  fail 시킨다.** 값을 깎아 봐야 다음 인스턴스가 나온다(아래 6건). 그래서 패턴은 둘을 갖춘다:
+  1. **줄 앵커** — `^` 로 줄 머리에 묶는다. 앞에는 헤딩·인용·목록·굵게 장식(`[ \t>#*_+\-]*`)만
+     허용한다. 문장 중간의 어구는 매치하지 않는다.
+  2. **판정 형태** — (a) 판정·요약·상태 줄(`판정:`·`결론:`·`전체 상태:`·`Verdict:`…) 뒤에서
+     결함 부재/통과를 선언하거나, (b) 줄 전체가 그 선언이거나, (c) 금지 대상이 *명령*이면
+     명령 위치(`^[ \t]*(\$[ \t]*)?npx[ \t]`)여야 한다. 한국어 선언은 **종결형**(`없음`/`없습니다`/
+     `없다`)으로 `$` 앵커에 닿게 한다 — 한정절(`없지만`·`없으나`)이 이어지면 선언이 아니다.
+  - **명령 위치 가드의 한계**: 줄이 `npx ` 로 시작하는 *산문*(`npx 는 쓰지 않는다`)은 매치한다. 금지 서술은
+    도구 이름을 문장 머리에 두지 마라.
+  - `그 외`·`다른`·`기타` 같은 수식어는 선언의 수식어 목록에 **넣지 않는다** — "그 외 취약점은
+    없습니다"는 결함을 보고한 뒤의 부분 서술이다.
+  - **죽은 가드에 주의하라(거울상).** 줄 끝 앵커를 쓰는 패턴에 어간(`취약점이 없`)을 넣으면 어떤
+    출력도 매치하지 못한다. 패턴을 쓴 뒤 **거짓 green 선언 합성 출력이 fail 하는지** 러너의
+    실제 매처로 확인한다.
+  - **양방향으로 고정한다.** `evals/tests/test_runner.py` 의 `_GUARD_CASES` 표가 시나리오별로
+    (a) 통과해야 하는 정확한 출력(오탐 원문 포함)과 (b) fail 해야 하는 거짓 green 선언을
+    가진다. 가드를 가진 시나리오가 표에 없으면 테스트가 red 다. 새 가드는 표에 행을 더한다.
+  - 오탐 실측 6건(부분 문자열 시절) — 이 목록은 지우지 마라:
+    - `analyze-dependencies/order-utils-impact` — 두 차례 거짓양성 후 어서션 제거(W-022 R3)
+    - `security-scan/shared-tmp-and-hardcoded-token` — Critical 1·High 2·Medium 2·Low 1 을
+      보고하고도 **수정안 코드 주석** `# 원자적 rename, 심볼릭 링크 문제 없음` 때문에 fail
+      (W-023). 이를 계기로 18개 시나리오에서 `문제 없음`·`문제가 없`·`이상 없음`·
+      `looks fine`·`looks good` 5종을 제거했다.
+    - `security-scan/shared-tmp-and-hardcoded-token` 4번째(2026-09-20) — 기술적 한정절
+      `… 코드 실행 취약점은 없지만(안전한 파서) …` 에 `취약점은 없` 어간이 걸렸다.
+    - `plan-implementation/boundary-loyalty-points`(2026-09-29) — 금지를 **말한** 문장
+      `전역 설치나 pipx run 같은 우회는 쓰지 않습니다` 에 `pipx run` 이 걸렸다.
+    - `verify-code/multiply-bug-detected`(2026-09-29) — 판정은 `❌ FAIL` 인데 권장 조치
+      `다시 실행하여 모든 테스트 통과 확인` 에 `모든 테스트 통과` 가 걸렸다.
+  - 판단 기준: **그 문자열이 "여기는 괜찮다"는 부분 서술이나 권장 조치·수정안 설명에 등장할 수
+    있는가?** 있으면 어구로 잡지 말고 형태(줄 앵커 + 판정 줄/명령 위치)로 잡아라. 진짜 거짓
+    green 은 positive 어서션이 함께 잡는다(이 가드를 가진 모든 시나리오가 positive 어서션을 함께 갖는다).
 - `pytest_green`은 fixture의 임시 복사본에서 `python3 -m pytest <path>`를 실행해
   exit 0인지 확인한다.
 - `file_unchanged`는 실행 후 파일이 **원본 fixture와 바이트 동일**한지 본다 — 에이전트가

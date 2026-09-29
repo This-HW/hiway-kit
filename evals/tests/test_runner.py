@@ -203,14 +203,76 @@ def test_check_assertion_output_contains_any_case_insensitive():
     assert ok is True
 
 
-def test_check_assertion_output_not_contains_fails_when_present():
+def test_check_assertion_output_not_regex_fails_and_names_the_matched_line():
     ok, detail = runner.check_assertion(
-        {"type": "output_not_contains", "values": ["secret"]},
-        "the secret is here",
+        {"type": "output_not_regex", "patterns": ["^판정: 통과$"]},
+        "앞줄\n판정: 통과\n뒷줄",
         Path("."),
     )
     assert ok is False
-    assert "발견됨" in detail
+    assert "매치된 줄 ['판정: 통과']" in detail
+
+
+def test_check_assertion_output_not_regex_is_line_anchored_and_ignorecase():
+    a = {"type": "output_not_regex", "patterns": ["^verdict: pass$"]}
+    assert runner.check_assertion(a, "VERDICT: PASS", Path("."))[0] is False
+    # `^`/`$` 는 줄 경계다(MULTILINE) — 같은 어구가 문장 중간에 있으면 통과
+    assert runner.check_assertion(a, "the verdict: pass is wrong", Path("."))[0] is True
+
+
+def test_check_assertion_output_not_regex_bad_pattern_fails_closed():
+    ok, detail = runner.check_assertion(
+        {"type": "output_not_regex", "patterns": ["("]}, "x", Path(".")
+    )
+    assert ok is False
+    assert "정규식 오류" in detail
+
+
+def test_fail_excerpt_centers_on_the_line_output_not_regex_matched():
+    """detail 의 «매치된 줄» 이 `_fail_excerpt` 의 needle 이 된다 — 리포트가 원인 줄을 싣는다."""
+    stdout = "앞" * 4000 + "\n판정: 통과\n" + "뒤" * 4000
+    ok, detail = runner.check_assertion(
+        {"type": "output_not_regex", "patterns": ["^판정: 통과$"]}, stdout, Path(".")
+    )
+    assert ok is False
+    excerpt = runner._fail_excerpt(stdout, [{"ok": False, "detail": detail}])
+    assert excerpt is not None
+    assert "판정: 통과" in excerpt
+
+
+# 제거된 옛 타입 이름. 따옴표 리터럴로 쓰면 «옛 타입 사용처 0건» grep 게이트가
+# 이 테스트까지 세므로 조립한다.
+_REMOVED_TYPE = "output_not" + "_contains"
+
+
+def test_output_not_contains_is_no_longer_a_known_type():
+    """옛 부분 문자열 타입은 레지스트리에서 제거됐다 — --validate 가 되돌아옴을 막는다.
+
+    되돌려-FAIL: ASSERTION_REGISTRY 에 옛 타입을 다시 등록하면 red.
+    """
+    expect = {"assertions": [{"type": _REMOVED_TYPE, "values": ["x"]}]}
+    errors = runner.validate_expect_schema(expect, "p")
+    assert any("알 수 없는 type" in e for e in errors)
+    ok, detail = runner.check_assertion(expect["assertions"][0], "x", Path("."))
+    assert ok is False
+    assert "알 수 없는 assertion type" in detail
+
+
+@pytest.mark.parametrize(
+    "patterns",
+    [[], "^x$", [""], [3], ["("]],
+    ids=["empty", "not-a-list", "empty-string", "not-a-string", "bad-regex"],
+)
+def test_validate_expect_schema_rejects_bad_not_regex_patterns(patterns):
+    expect = {"assertions": [{"type": "output_not_regex", "patterns": patterns}]}
+    assert runner.validate_expect_schema(expect, "p")
+
+
+def test_validate_expect_schema_requires_patterns_field():
+    errors = runner.validate_expect_schema(
+        {"assertions": [{"type": "output_not_regex"}]}, "p"
+    )
+    assert any("'patterns' 없음" in e for e in errors)
 
 
 def test_validate_expect_schema_rejects_removed_delegation_signal():
@@ -463,7 +525,8 @@ def _claude_json(result, models=("claude-sonnet-5",), tokens=None, **extra):
     `tokens` 는 모델별 outputTokens(기본 1), `extra` 는 최상위 필드 덮어쓰기."""
     tokens = tokens or {}
     usage = {
-        m: {"inputTokens": 1, "outputTokens": tokens.get(m, 1), "costUSD": 0.0} for m in models
+        m: {"inputTokens": 1, "outputTokens": tokens.get(m, 1), "costUSD": 0.0}
+        for m in models
     }
     data = {
         "type": "result",
@@ -1790,7 +1853,9 @@ def test_run_scenario_records_effort_axis(tmp_path, monkeypatch, effort):
         stderr = ""
 
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
-    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]}
+    )
     res = runner.run_scenario(_effort_agent(tmp_path, effort), sc, timeout=5)
     assert res["model"] == "sonnet"
     assert res["effort"] == effort
@@ -1818,7 +1883,9 @@ def test_effort_axis_mismatch_is_a_regression(tmp_path):
 
 def test_same_effort_axis_passes(tmp_path):
     base = _baseline_file(tmp_path, _summary(models=["opus"], efforts=["max"]))
-    assert runner.compare_baseline(_summary(models=["opus"], efforts=["max"]), base) == []
+    assert (
+        runner.compare_baseline(_summary(models=["opus"], efforts=["max"]), base) == []
+    )
 
 
 def test_missing_effort_axis_in_baseline_is_notice_not_regression(tmp_path, capsys):
@@ -1850,7 +1917,9 @@ def test_judge_score_reads_only_structured_output(stdout, expected):
     assert runner._judge_score(r) == expected
 
 
-@pytest.mark.parametrize(("effort", "expected_tail"), [("high", ["--effort", "high"]), (None, None)])
+@pytest.mark.parametrize(
+    ("effort", "expected_tail"), [("high", ["--effort", "high"]), (None, None)]
+)
 def test_run_scenario_cmd_carries_agent_effort(tmp_path, effort, expected_tail):
     """배포되는 effort 그대로 측정한다 — 있으면 --effort 를 싣고, 없으면 싣지 않는다."""
     agent = runner.AgentDef(
@@ -1893,7 +1962,7 @@ def test_run_scenario_asserts_on_result_text_not_raw_json(tmp_path, monkeypatch)
     """(a) 어서션은 text 모드 stdout 과 같은 것 — `result` 텍스트 — 을 본다.
 
     JSON 키 이름(`modelUsage`)은 result 에 없으므로 raw stdout 을 채점하면
-    output_not_contains 가 fail 하고, output_regex 앵커(^…$)도 어긋난다.
+    output_not_regex 가 fail 하고, output_regex 앵커(^…$)도 어긋난다.
     되돌려-FAIL: run_scenario 의 `stdout = parsed.text` 를 지우면 red.
     """
 
@@ -1908,7 +1977,7 @@ def test_run_scenario_asserts_on_result_text_not_raw_json(tmp_path, monkeypatch)
         {
             "assertions": [
                 {"type": "output_regex", "pattern": "^수정 완료$"},
-                {"type": "output_not_contains", "values": ["modelUsage"]},
+                {"type": "output_not_regex", "patterns": ["modelUsage"]},
             ]
         },
     )
@@ -1928,7 +1997,9 @@ def test_run_scenario_records_resolved_models_sorted(tmp_path, monkeypatch):
         stderr = ""
 
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
-    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]}
+    )
     res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
     assert res["model"] == "sonnet"  # 별칭 축은 그대로 유지
     assert res["resolved_models"] == ["claude-haiku-4-5", "claude-sonnet-5"]
@@ -1941,11 +2012,15 @@ def test_run_scenario_without_model_usage_records_empty_and_says_so(
 
     class R:
         returncode = 0
-        stdout = json.dumps({"type": "result", "subtype": "success", "is_error": False, "result": "ok"})
+        stdout = json.dumps(
+            {"type": "result", "subtype": "success", "is_error": False, "result": "ok"}
+        )
         stderr = ""
 
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: R())
-    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]}
+    )
     res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
     assert res["status"] == "pass"
     assert res["resolved_models"] == []
@@ -1965,7 +2040,9 @@ def _run_with_stdout(tmp_path, monkeypatch, stdout, returncode=0, pattern="ok"):
     monkeypatch.setattr(
         runner.subprocess, "run", lambda *a, **k: _fake_completed(stdout, returncode)
     )
-    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": pattern}]})
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_regex", "pattern": pattern}]}
+    )
     return runner.run_scenario(_agent(tmp_path), sc, timeout=5)
 
 
@@ -1980,17 +2057,23 @@ def test_error_results_carry_empty_resolved_models(tmp_path, monkeypatch, path):
     exit≠0·해석 실패 경로의 stdout 에는 일부러 modelUsage 를 싣는다 — 그 경로가 출력을
     읽어 축을 채우면 "못 읽은 실행"이 측정값처럼 보인다.
     """
-    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]}
+    )
     if path == "no_assertions":
         sc = _scenario(tmp_path, {})
     elif path == "timeout":
         monkeypatch.setattr(runner.subprocess, "run", _raise_timeout)
     elif path == "exit_1":
         out = _claude_json("ok")
-        monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: _fake_completed(out, 1))
+        monkeypatch.setattr(
+            runner.subprocess, "run", lambda *a, **k: _fake_completed(out, 1)
+        )
     else:
         out = _claude_json("ok", is_error=True)
-        monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: _fake_completed(out))
+        monkeypatch.setattr(
+            runner.subprocess, "run", lambda *a, **k: _fake_completed(out)
+        )
     res = runner.run_scenario(_agent(tmp_path), sc, timeout=5)
     assert res["status"] != "pass"
     assert res["resolved_models"] == []
@@ -2010,7 +2093,12 @@ def test_normal_run_does_not_emit_missing_usage_notice(tmp_path, monkeypatch, ca
 
 def test_summarize_collects_resolved_models_unique_sorted():
     results = [
-        {"agent": "a", "status": "pass", "model": "opus", "resolved_models": ["claude-opus-5-5"]},
+        {
+            "agent": "a",
+            "status": "pass",
+            "model": "opus",
+            "resolved_models": ["claude-opus-5-5"],
+        },
         {
             "agent": "a",
             "status": "fail",
@@ -2039,10 +2127,18 @@ def test_summarize_collects_resolved_models_unique_sorted():
     "requested,tokens,expected",
     [
         # 별칭 패밀리 매치 — 보조 모델이 토큰을 더 많이 써도 요청한 쪽이 주 모델
-        ("opus", {"claude-opus-5-5": 10, "claude-haiku-4-5-20251001": 999}, ["claude-opus-5-5"]),
+        (
+            "opus",
+            {"claude-opus-5-5": 10, "claude-haiku-4-5-20251001": 999},
+            ["claude-opus-5-5"],
+        ),
         ("haiku", {"claude-haiku-4-5-20251001": 0}, ["claude-haiku-4-5-20251001"]),
         # frontmatter 가 전체 ID 를 쓰는 경우
-        ("claude-sonnet-5", {"claude-sonnet-5": 3, "claude-haiku-4-5": 9}, ["claude-sonnet-5"]),
+        (
+            "claude-sonnet-5",
+            {"claude-sonnet-5": 3, "claude-haiku-4-5": 9},
+            ["claude-sonnet-5"],
+        ),
         # 패밀리 안에서도 1개 — 두 세대가 섞이면 토큰이 큰 쪽
         ("opus", {"claude-opus-5-5": 50, "claude-opus-4-1": 5}, ["claude-opus-5-5"]),
         # 매치 없음 → outputTokens 최대 1개
@@ -2070,7 +2166,9 @@ def test_run_scenario_records_primary_models_by_alias_family(tmp_path, monkeypat
         tokens={"claude-sonnet-5": 5, "claude-haiku-4-5": 50},
     )
     monkeypatch.setattr(runner.subprocess, "run", lambda *a, **k: _fake_completed(out))
-    sc = _scenario(tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]})
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_regex", "pattern": "ok"}]}
+    )
     res = runner.run_scenario(agent, sc, timeout=5)
     assert res["resolved_models"] == ["claude-haiku-4-5", "claude-sonnet-5"]
     assert res["primary_models"] == ["claude-sonnet-5"]
@@ -2108,17 +2206,24 @@ def test_primary_model_axis_mismatch_is_a_regression(tmp_path):
 
 def test_same_primary_model_axis_passes(tmp_path, capsys):
     base = _baseline_file(tmp_path, _axes(["claude-opus-5-5"], ["claude-opus-5-5"]))
-    assert runner.compare_baseline(_axes(["claude-opus-5-5"], ["claude-opus-5-5"]), base) == []
+    assert (
+        runner.compare_baseline(_axes(["claude-opus-5-5"], ["claude-opus-5-5"]), base)
+        == []
+    )
     assert capsys.readouterr().err == ""
 
 
-def test_missing_primary_model_axis_in_baseline_is_notice_not_regression(tmp_path, capsys):
+def test_missing_primary_model_axis_in_baseline_is_notice_not_regression(
+    tmp_path, capsys
+):
     """(d) 축 도입 이전 기준선(2026-09-26 등)은 회귀가 아니라 stderr 알림이다.
 
     되돌려-FAIL: MEASUREMENT_AXES 에서 primary_models 줄을 지우면 알림이 사라져 red.
     """
     cur = _axes(["claude-opus-5-5"], ["claude-opus-5-5"])
-    out = runner.compare_baseline(cur, _baseline_file(tmp_path, _summary(models=["opus"])))
+    out = runner.compare_baseline(
+        cur, _baseline_file(tmp_path, _summary(models=["opus"]))
+    )
     assert out == [], "미지를 회귀로 올리면 상시 red 가 된다"
     assert "측정 축(primary_model)" in capsys.readouterr().err
 
@@ -2226,7 +2331,12 @@ def test_failed_execution_result_is_error_not_graded(tmp_path, monkeypatch, extr
         json.dumps(
             [
                 {"type": "system", "subtype": "init"},
-                {"type": "result", "subtype": "success", "is_error": False, "result": "옛 답"},
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "is_error": False,
+                    "result": "옛 답",
+                },
                 {"type": "assistant", "message": "…"},
                 json.loads(_claude_json("ok")),
             ]
@@ -2246,3 +2356,292 @@ def test_scenario_output_shape_tolerance(tmp_path, monkeypatch, stdout):
     res = _run_with_stdout(tmp_path, monkeypatch, stdout, pattern="^ok$")
     assert res["status"] == "pass", res["checks"]
     assert res["primary_models"] == ["claude-sonnet-5"]
+
+
+# ---------------------------------------------------------------------------
+# output_not_regex 가드 — 실물 expect.json 의 패턴을 러너의 **실제 매처**로 양방향 검증
+#
+# 부분 문자열 가드(옛 output_not_contains)는 정확한 출력을 6번 fail 시켰다(오탐 원문은
+# 아래 두 excerpt). 여기서 고정하는 것: (a) 오탐 원문·판정이 옳은데 어구가 섞인 출력은
+# **통과**, (b) 시나리오별 거짓 green 선언은 **fail**. 패턴은 테스트에 복사하지 않고
+# expect.json 에서 읽는다 — 시나리오의 실제 가드가 검증 대상이다.
+# 되돌려-FAIL: `_check_output_not_regex` 를 `any(p in stdout for p in patterns)` 같은
+# 부분 문자열 매칭으로 되돌리면 (a) 가 전부 red 다.
+# ---------------------------------------------------------------------------
+
+_SCENARIOS_ROOT = runner.SCENARIOS_ROOT
+
+# 2026-09-29 전량 --baseline 런(20260929T171425098275Z)의 fail 레코드 output_excerpt 원문.
+# 에이전트는 옳았고 옛 가드가 틀렸다.
+_FP_PLAN_PIPX = """\
+(없는 고객은 0) | `OrderRepository` 와 같은 메모리 구현 패턴이고 같은 모듈에 둡니다. 변경을 최소로 합니다. | 별도 파일 `infra/point_repository.py` (규모가 커지면 분리) | 같은 계약 |
+| 유스케이스 연결 | `checkout(repo, points, order)` 에 **필수 인자** 추가. 순서: 주문 저장 → `calculate_points` → `points.add` | 누락되면 적립이 조용히 건너뛰어지지 않게 합니다. 확인 결과 호출자는 `tests/test_checkout.py` 한 곳뿐입니다. | `points=None` 기본값 → 적립이 조용히 누락될 수 있어 기각. Protocol 포트 도입 → 지금 app이 infra 구현을 직접 import하는 패턴과 달라 과설계 | 같은 계약 |
+| 경계 | **계약 변경은 없습니다.** 새 import는 app→domain, app→infra 두 방향뿐이고 모두 허용됩니다. `domain/points.py` 는 아무것도 import하지 않습니다. | 기존 계약이 패키지 단위라 새 모듈도 자동으로 검사됩니다. | — | 도구: import-linter (확인 결과 `pyproject.toml` dev 의존성과 `.importlinter` 에 있음). 레포 안에는 이 도구를 부르는 스크립트·Makefile·CI가 **없습니다**(확인 결과). 검사 명령 `lint-imports` 는 import-linter 패키지가 설치하는 CLI이고, 레포 코드로 확인한 명령은 아닙니다. 그래서 배치 0에서 존재를 확인합니다. |
+
+### 파일 구조 계획
+```
+shop/
+├── domain/points.py        (생성) POINT_RATE_PERCENT, calculate_points
+├── infra/repository.py     (수정) PointRepository 추가
+└── app/checkout.py         (수정) points 인자 추가, 적립 호출
+tests/
+├── test_points.py          (생성) 도메인 규칙 단위 테스트
+├── test_repository.py      (생성) PointRepository 단위 테스트
+└── test_checkout.py        (수정) 새 시그니처 반영, 적립 검증 추가
+```
+
+### 구현 계획
+
+#### 📦 배치 0: 기준선 확인 (선행)
+| # | 작업 | 파일 | 복잡도 | 의존 | 설명 |
+|---|---|---|---|---|---|
+| 0.1 | dev 의존성 설치, 기준선 green 확인 | — | Low | - | `python -m pip install -e '.[dev]'` 실행 후 아래 명령을 실행합니다 |
+
+**완료 조건** (모두 exit 0):
+```
+python -m pytest -q
+lint-imports
+```
+`lint-imports` 가 없으면(command not found) 계획을 멈추고 보고합니다. 전역 설치나 `pipx run` 같은 우회는 쓰지 않습니다.
+
+#### 📦 배치 1: 도메인 규칙과 저장소 (1.1과 1.2는 병렬 가능)
+| # | 작업 | 파일 | 복잡도 | 의존 | 설명 |
+|---|---|---|---|---|---|
+| 1.1 | 적립 규칙 | `shop/domain/points.py`, `tests/test_points.py` | Low | 0 | 테스트를 먼저 씁니다. 케이스: `12000→120`, `0→0`, `99→0`, `12345→123` (**Q1 답에 따라 확정**, 반올림이면 123, 올림이면 124) |
+| 1.2 | 잔액 저장소 | `shop/infra/repository.py`, `tests/test_repository.py` | Low | 0 | 케이스: 없는 고객 잔액 0, `add` 두 번 누적, 고객 간 격리 |
+
+**완료 조건** (모두 exit 0):
+```
+python -m pytest -q tests/test_points.py tests/test_repository.py
+python -m pytest -q          # 기존 test_checkout 회귀 없음
+lint-imports
+```
+
+#### 📦 배치 2: checkout 연결 (배치 1 이후)
+| # | 작업 | 파일 | 복잡도 | 의존 | 설명 |
+|---|---|---|---|---|---|
+| 2.1 | 유스케이스 수정 | `shop/app/checkout.py` | Medium | 1.1, 1.2 | 시그니처를 `checkout(repo: OrderRepository, points: PointRepository, order: Order) -> Order` 로 바꿉니다. `repo.save(order)` 다음에 `points.add(order.customer_id, calculate_points(order.total))` 를 호출합니다. 반환값은 그대로 둡니다. |
+| 2.2 | 테스트 갱신 | `tests/test_checkout.py` | Low | 2.1 | 기존 테스트를 새 시그니처로 고칩니다. 추가 케이스: 12000원 결제 후 `get_balance("c-1") == 120`, 같은 고객이 두 번 결제하면 누적, 다른 고객 잔액은 영향 없음 |
+
+**완료 조건** (모두 exit 0):
+```
+python -m pytest -q
+lint-imports
+```
+
+#### 📦 배치 3: 중복 적립 처리 (Q2 답에 따라)
+- **Q2=(A)** 로 정해지면 다음과 같이 진행합니다.
+  - `OrderRepository` 에 `exists(order_id) -> bool` 을 추가합니다.
+  - `checkout` 은 이미 있는 주문이면 적립을 건너뜁니다.
+  - 테스트 `같은 주문으로 checkout 2회 → 잔액 120` 을 추가합니다.
+  - 파일: `shop/infra/repository.py`, `shop/app/checkout.py`, `tests/test_checkout.py`
+- **Q2=(B)**"""
+
+_FP_VERIFY_MULTIPLY = """\
+## 전체 상태: ❌ FAIL
+
+| 항목      | 상태  | 상세               |
+| --------- | ----- | ------------------ |
+| 의존성    | ✅    | pytest 설치됨      |
+| 타입 체크 | ⊖     | Python(타입 체크 미실시) |
+| 린트      | ⊖     | 린트 도구 미실시    |
+| 테스트    | ❌    | 2개 중 1개 실패     |
+| 빌드      | ⊖     | N/A (순수 Python)  |
+
+---
+
+## 실패 분석
+
+### High 심각도 에러
+
+#### test_multiply 실패
+```
+test_calc.py::test_multiply FAILED
+assert 5 == 6
+ where 5 = multiply(2, 3)
+```
+
+- **파일**: calc.py:5-6
+- **테스트**: test_calc.py::test_multiply (라인 8-9)
+- **원인**: `multiply(a, b)` 함수가 곱셈(a \u00d7 b)이 아니라 덧셈(a + b)을 반환함
+  - 호출: `multiply(2, 3)`
+  - 예상값: `6` (2 \u00d7 3)
+  - 실제값: `5` (2 + 3)
+  - 소스코드에 명시된 버그: `return a + b  # 버그: 곱셈이 아니라 덧셈`
+
+---
+
+## 테스트 결과 요약
+
+| 테스트 | 상태 | 예상 | 실제 |
+| ------ | ---- | ---- | ---- |
+| test_add | ✅ PASS | 5 | 5 |
+| test_multiply | ❌ FAIL | 6 | 5 |
+
+---
+
+## 권장 조치
+
+1. **calc.py:6번 라인 수정** — `multiply()` 함수의 반환문을 `a + b`에서 `a * b`로 변경
+2. 변경 후 `python3 -m pytest`를 다시 실행하여 모든 테스트 통과 확인
+
+---
+
+## 완료: 전체 — 2건 검토 (1건 실패, 1건 통과)"""
+
+
+# 결함 부재를 판정 줄로 선언하는 거짓 green — 결함 탐지 시나리오(8종) 공통 형태.
+_DEFECT_FALSE_GREEN = [
+    "## 판정: 취약점 없음",
+    "**결론**: 취약점이 없습니다.",
+    "검토 결과 취약점이 없습니다.",
+    "전체 상태: ✅ 취약점 없음",
+    "요약: 버그가 없다.",
+    "- 버그 없음",
+    "이 코드에는 취약점은 없습니다.",
+    "종합: 취약점이 발견되지 않았습니다.",
+    "결론적으로 취약점을 발견하지 못했습니다.",
+    "> **판정:** 버그 없음 ✅",
+    "no vulnerabilities found.",
+    "Verdict: no issues found",
+    "Summary: No vulnerabilities detected",
+]
+
+# 정확한 분석인데 같은 어구가 판정 줄이 아닌 곳에 섞인 출력 — 통과해야 한다.
+_DEFECT_ACCURATE = [
+    # 2026-09-20 4번째 오탐: 기술적 한정절
+    "`json.load` 자체는 코드 실행 취약점은 없지만(안전한 파서), H-1 과 결합하면 임의 경로 쓰기가 됩니다.",
+    # 2026-09-01 3번째 오탐: 수정안 코드 주석
+    "```python\n# 원자적 rename, 심볼릭 링크 문제 없음\nos.replace(tmp, path)\n```",
+    "| 인증 | 취약점 없음 |",
+    "### 인증/인가 — 취약점 없음",
+    "그 외 취약점은 없습니다.",
+    "- SQL 인젝션 외에는 다른 취약점이 없습니다.",
+    "판정: SQL injection 취약점 발견 (Critical). 이 함수 외 취약점 없음",
+    "판정: ❌ 취약점 2건. 다른 항목에는 취약점이 없습니다.",
+    "취약점이 없다고 가정하면 안 됩니다.",
+    "No issues found in the linter output, but the tests reveal a bug.",
+    "버그 없음 여부를 확인하려면 재현이 필요합니다.",
+]
+
+_DEFECT_SCENARIOS = [
+    "define-business-logic/point-service-rules",
+    "devils-advocate/single-instance-sync",
+    "design-user-journey/checkout-edge-cases",
+    "review-code/false-green",
+    "review-code/sql-injection",
+    "review-code/race-condition",
+    "review-code/off-by-one",
+    "security-scan/shared-tmp-and-hardcoded-token",
+]
+
+_PLAN_SCENARIO = "plan-implementation/boundary-loyalty-points"
+_PLAN_FALSE_GREEN = [
+    "npx import-linter",
+    "$ uvx --from import-linter lint-imports",
+    "  pipx run import-linter",
+    "```bash\npython -m pytest -q\nnpx lint-imports\n```",
+]
+_PLAN_ACCURATE = [
+    "전역 설치나 `pipx run` 같은 우회는 쓰지 않습니다.",
+    "`lint-imports` 가 없으면 계획을 멈춥니다. `uvx` 로 대신 실행하지 않습니다.",
+    "| 도구 | import-linter (npx 없이 프로젝트 의존성으로 실행) |",
+]
+
+_VERIFY_SCENARIO = "verify-code/multiply-bug-detected"
+_VERIFY_FALSE_GREEN = [
+    "## 전체 상태: ✅ 모든 테스트 통과",
+    "모든 테스트 통과",
+    "✅ 모든 테스트 통과했습니다",
+    "결과: 전부 통과",
+    "테스트: ✅ 모든 테스트 통과",
+    "- 모든 검증 통과",
+    "테스트 통과했습니다.",
+    "All tests passed.",
+    "Summary: all tests pass",
+    "## 전체 상태: ✅ PASS",
+    "Verdict: PASS",
+    "**최종 판정**: ✅ 통과",
+]
+_VERIFY_ACCURATE = [
+    # 2026-09-29 오탐: 판정은 FAIL, 권장 조치 문장에 어구가 들어 있다
+    "2. 변경 후 `python3 -m pytest`를 다시 실행하여 모든 테스트 통과 확인",
+    "## 전체 상태: ❌ FAIL",
+    "| test_add | ✅ PASS | 5 | 5 |",
+    "완료: 전체 — 2건 검토 (1건 실패, 1건 통과)",
+    "- 수정 후 모든 테스트 통과를 목표로 합니다",
+    "판정: FAIL (모든 테스트 통과 전까지 병합 금지)",
+    "모든 테스트 통과 여부: 아니오",
+    "test_add 는 통과했지만 test_multiply 는 실패했습니다.",
+]
+
+_GUARD_CASES: dict[str, tuple[list[str], list[str]]] = {
+    **dict.fromkeys(_DEFECT_SCENARIOS, (_DEFECT_FALSE_GREEN, _DEFECT_ACCURATE)),
+    _PLAN_SCENARIO: (_PLAN_FALSE_GREEN, _PLAN_ACCURATE),
+    _VERIFY_SCENARIO: (_VERIFY_FALSE_GREEN, _VERIFY_ACCURATE),
+}
+
+
+def _guard(sc: str) -> dict:
+    """시나리오 expect.json 의 output_not_regex 어서션(정확히 1개)."""
+    expect = json.loads((_SCENARIOS_ROOT / sc / "expect.json").read_text("utf-8"))
+    found = [a for a in expect["assertions"] if a["type"] == "output_not_regex"]
+    assert len(found) == 1, f"{sc}: output_not_regex 는 정확히 1개여야 함"
+    return found[0]
+
+
+def _guard_verdict(sc: str, text: str) -> bool:
+    return runner.check_assertion(_guard(sc), text, Path("."))[0]
+
+
+def test_no_scenario_still_uses_removed_output_not_contains():
+    """어서션 타입으로도, 값 삭제로 우회한 채로도 옛 타입이 남으면 red."""
+    offenders = [
+        str(p.relative_to(_SCENARIOS_ROOT))
+        for p in _SCENARIOS_ROOT.glob("*/*/expect.json")
+        if any(
+            a.get("type") == _REMOVED_TYPE
+            for a in json.loads(p.read_text("utf-8")).get("assertions", [])
+        )
+    ]
+    assert offenders == []
+
+
+def test_guard_cases_cover_every_scenario_that_has_a_guard():
+    """가드를 가진 시나리오가 이 표에 없으면 그 가드는 양방향 검증을 받지 못한 것이다."""
+    guarded = {
+        str(p.parent.relative_to(_SCENARIOS_ROOT))
+        for p in _SCENARIOS_ROOT.glob("*/*/expect.json")
+        if any(
+            a.get("type") == "output_not_regex"
+            for a in json.loads(p.read_text("utf-8")).get("assertions", [])
+        )
+    }
+    assert guarded == set(_GUARD_CASES)
+
+
+def test_real_false_positive_excerpts_pass_their_guards():
+    """(a) 2026-09-29 오탐 원문 — 부분 문자열 가드는 이 둘을 fail 시켰다."""
+    assert _guard_verdict(_PLAN_SCENARIO, _FP_PLAN_PIPX) is True
+    assert _guard_verdict(_VERIFY_SCENARIO, _FP_VERIFY_MULTIPLY) is True
+
+
+@pytest.mark.parametrize(
+    ("sc", "text"),
+    [(sc, t) for sc, (fg, _) in _GUARD_CASES.items() for t in fg],
+)
+def test_guard_catches_false_green_declaration(sc, text):
+    """(b) 거짓 green 선언은 fail — 약화되지 않았음의 증거."""
+    assert _guard_verdict(sc, text) is False, text
+    # 리포트 한가운데에 있어도 잡는다(줄 앵커는 문서 앞머리 앵커가 아니다)
+    report = f"## 분석\n\n발견 사항을 정리합니다.\n\n{text}\n\n끝."
+    assert _guard_verdict(sc, report) is False, report
+
+
+@pytest.mark.parametrize(
+    ("sc", "text"),
+    [(sc, t) for sc, (_, ok) in _GUARD_CASES.items() for t in ok],
+)
+def test_guard_passes_accurate_output_containing_the_phrase(sc, text):
+    """(a) 판정이 옳은데 어구가 산문·주석·권장 조치·금지 서술에 섞인 출력은 통과."""
+    assert _guard_verdict(sc, text) is True, text

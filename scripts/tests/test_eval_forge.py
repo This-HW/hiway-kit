@@ -6,6 +6,7 @@
 
 import contextlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -79,8 +80,10 @@ def test_creates_and_self_validates(tmp_path, monkeypatch):
     expect = json.loads((sc / "expect.json").read_text(encoding="utf-8"))
     types = [a["type"] for a in expect["assertions"]]
     assert "output_contains_any" in types
-    # 거짓 음성("문제 없음")을 잡는 assertion이 기본으로 들어가야 한다
-    assert "output_not_contains" in types
+    # 거짓 음성("문제 없음")을 잡는 assertion이 기본으로 들어가야 한다.
+    # 부분 문자열 타입(output_not_contains)이 아니라 줄 앵커 정규식 타입이어야 한다
+    assert "output_not_regex" in types
+    assert "output_not" + "_contains" not in types  # 제거된 옛 타입
     assert expect["judge"]["enabled"] is False
 
 
@@ -689,3 +692,82 @@ def test_staging_failure_leaves_no_empty_parent(tmp_path, monkeypatch):
     with contextlib.suppress(OSError):
         _mod.main(_args(_fixture_file(tmp_path), **{"--id": "staging-fail"}))
     assert not (root / "evals" / "scenarios" / "review-code").exists()
+
+
+# ── 금지 문구 → 선언 형태 정규식 ───────────────────────────────────
+
+
+def _declares(phrase: str, text: str) -> bool:
+    return (
+        re.search(_mod.declaration_pattern(phrase), text, re.MULTILINE | re.IGNORECASE)
+        is not None
+    )
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "문제 없음",
+        "## 판정: 문제 없음",
+        "**결론**: 문제 없음.",
+        "- 문제 없음 ✅",
+        "판정: ✅ 문제 없음",
+    ],
+)
+def test_declaration_pattern_catches_the_phrase_as_a_declaration(text):
+    assert _declares("문제 없음", text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "# 원자적 rename, 심볼릭 링크 문제 없음",  # 수정안 코드 주석
+        "| 인증 | 문제 없음 |",  # 표 셀
+        "문제 없음 여부는 재현으로 확인합니다.",  # 산문
+        "판정: 문제 있음 (그 외 문제 없음)",  # 부분 서술
+    ],
+)
+def test_declaration_pattern_ignores_the_phrase_inside_prose(text):
+    assert not _declares("문제 없음", text)
+
+
+def test_generated_guard_uses_real_matcher_both_ways(tmp_path, monkeypatch):
+    """생성물의 가드를 진짜 러너 매처로 — 기본 목록이 죽은 가드가 아님을 고정한다.
+
+    되돌려-FAIL: DEFAULT_MUST_NOT_SAY 에 어간("취약점이 없")을 되돌리면 그 값은 줄 끝
+    앵커에 걸려 어떤 출력도 못 잡으므로 아래 거짓 green 케이스가 red.
+    """
+    root = _fake_repo(tmp_path)
+    _patch_root(monkeypatch, root)
+    assert _mod.main(_args(_fixture_file(tmp_path))) == 0
+    sc = root / "evals" / "scenarios" / "review-code" / "mutable-default"
+    expect = json.loads((sc / "expect.json").read_text(encoding="utf-8"))
+    guard = next(a for a in expect["assertions"] if a["type"] == "output_not_regex")
+    sys.path.insert(0, str(root / "evals"))
+    try:
+        import run as real_runner  # 가짜 레포에 복사된 진짜 run.py
+
+        def verdict(text: str) -> bool:
+            return real_runner.check_assertion(guard, text, Path("."))[0]
+
+        for declared in DEFAULT_DECLARATIONS:
+            assert verdict(f"## 판정: {declared}") is False, declared
+        assert (
+            verdict("`json.load` 자체는 코드 실행 취약점은 없지만 H-1 과 결합하면")
+            is True
+        )
+    finally:
+        sys.path.remove(str(root / "evals"))
+        sys.modules.pop("run", None)
+
+
+DEFAULT_DECLARATIONS = [
+    "취약점 없음",
+    "취약점이 없습니다.",
+    "취약점은 없다",
+    "문제가 없습니다",
+    "버그가 없다.",
+    "no vulnerabilities",
+    "No issues found.",
+    "looks good",
+]

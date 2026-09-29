@@ -57,20 +57,50 @@ from pathlib import Path
 # 리뷰형 시나리오의 기본 "이렇게 답하면 실패" 목록.
 # eval의 핵심 실패 모드는 **거짓 음성**이다 — 에이전트가 결함을 놓치고 "문제 없음"이라
 # 답하는 것. 이 목록이 없으면 시나리오는 그 실패를 잡지 못한다.
+#
+# **값은 '완결된 선언 문구'여야 한다.** `output_not_regex` 로 바뀌면서 각 값은 줄 앵커
+# 정규식(`declaration_pattern`)의 일부가 됐다 — 줄이 그 문구로 **끝나야** 매치한다.
+# 그래서 옛 어간("취약점이 없", "문제가 없")은 여기서 **죽은 가드**가 된다(어느 출력도
+# 어간으로 줄을 끝내지 않는다). 종결형(없습니다/없다/없음)으로 적어라.
 DEFAULT_MUST_NOT_SAY = [
     "취약점 없음",
-    "취약점이 없",
-    "취약점은 없",
+    "취약점이 없습니다",
+    "취약점은 없습니다",
+    "취약점이 없다",
+    "취약점은 없다",
     "문제 없음",
-    "문제가 없",
+    "문제가 없습니다",
+    "문제가 없다",
     "버그 없음",
-    "버그가 없",
+    "버그가 없습니다",
+    "버그가 없다",
     "이상 없음",
     "no vulnerabilities",
     "no issues found",
     "looks fine",
     "looks good",
 ]
+
+# 판정 줄 라벨 — `판정: <문구>` 형태를 선언으로 본다(evals/README.md §가드 작성 지침).
+_VERDICT_LABELS = (
+    r"(?:판정|결론|요약|종합|(?:전체|최종) ?(?:상태|판정|결과)"
+    r"|verdict|conclusion|summary|overall|result|status)"
+)
+
+
+def declaration_pattern(phrase: str) -> str:
+    """금지 문구 하나를 **선언 형태** 정규식으로 만든다.
+
+    줄 머리(헤딩·인용·목록·굵게 장식 허용) → 선택적 판정 라벨(`판정:` 등) → 문구 →
+    줄 끝(마침표·장식 허용). 문구가 산문·표 셀·수정안 주석·금지 서술 **속에** 있으면
+    매치하지 않는다 — 부분 문자열 가드가 정확한 출력을 fail 시킨 이유가 그것이었다.
+    """
+    return (
+        r"^[ \t>#*_+\-✅✔☑\ufe0f]*(?:\d+[.)][ \t]+)?"
+        rf"(?:{_VERDICT_LABELS}[ \t*_]*[:\uff1a][ \t*_✅✔☑\ufe0f]*)?"
+        rf"{re.escape(phrase)}[ \t.!*_`✅✔☑\ufe0f]*$"
+    )
+
 
 # fixture로 복사하지 않을 것들.
 #
@@ -187,7 +217,12 @@ def build_expect(
         if group:
             assertions.append({"type": "output_contains_any", "values": group})
     if must_not_say:
-        assertions.append({"type": "output_not_contains", "values": must_not_say})
+        assertions.append(
+            {
+                "type": "output_not_regex",
+                "patterns": [declaration_pattern(v) for v in must_not_say],
+            }
+        )
     if pytest_path:
         assertions.append({"type": "pytest_green", "path": pytest_path})
     # --file-contains는 --must-mention과 같은 이유로 **반복 지정**을 허용한다(ledger
@@ -472,7 +507,12 @@ def main(argv: list[str]) -> int:
         help="쉼표구분 OR 묶음. 반복 지정하면 묶음끼리 AND (여러 발견을 각각 요구)",
     )
     ap.add_argument(
-        "--must-not-say", help="쉼표구분 — 등장하면 실패 (미지정 시 기본 거짓음성 목록)"
+        "--must-not-say",
+        help=(
+            "쉼표구분 — 줄 전체가 이 문구(선택적 '판정:' 라벨·장식 허용)이면 실패. "
+            "완결된 종결형 문구로 적을 것(어간은 매치하지 않는다). "
+            "미지정 시 기본 거짓음성 목록"
+        ),
     )
     ap.add_argument(
         "--no-default-negatives", action="store_true", help="기본 거짓음성 목록 미사용"
