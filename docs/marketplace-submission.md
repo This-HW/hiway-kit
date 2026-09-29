@@ -57,6 +57,9 @@ Listed in Claude Code, "Live in the directory"**(포털 표기). 포털 안내�
 `marketplace.json` 314개 중 0, 그 저장소 마지막 커밋 2026-09-28T13:14Z·관련 PR 없음. `claude plugin marketplace list --json`
 에는 claude.ai 디렉토리가 마켓플레이스로 잡히지 않는다("Anthropic Directory — browse on claude.ai" 로만 표시). 문서상 Claude
 Code 는 이 디렉토리를 `claude-plugins-official` 로 노출하므로 그 카탈로그 갱신을 기다린다. 설치 명령은 반영 확인 전까지 쓰지 않는다.
+16:43 KST(공개 후 6시간) 재확인도 같음. 포털은 이후 문서 커밋(`7335bc1`)을 Auto-publish 로 반영했다 — 자동 공개는 동작한다.
+16:46 KST 기존 티켓(#139370002) 스레드로 디렉토리 팀에 "Claude Code 전용 목록의 추가 반영 단계가 있는가, 어디서 보이는가"를
+사실만 적어 문의했다.
 
 **스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
 `https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
