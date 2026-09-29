@@ -41,7 +41,9 @@ would mean standing up and hosting an MCP server only to pass the form. Opening 
   enabled"*, no workaround). The same day, **every new skill safety scan started failing** for those
   orgs ("Activity task failed", [thread 1401299](https://community.openai.com/t/skill-safety-scan-always-ends-in-error-activity-task-failed-for-every-skill-in-my-org-including-a-one-line-say-hello-skill/1401299)).
   So even a Skills only upload would currently stall at the scan.
-- No OpenAI staff reply or fix date in either thread as of 2026-09-28. We filed our own support
+- No OpenAI staff reply or fix date in either thread as of 2026-09-29 13:50 KST (1400892: 8 posts, the latest
+  from another org that published a skills-only plugin on ~09-26 and then saw the option disappear; 1401299: 3 posts,
+  none since 2026-09-27). No support reply to our 09:45 KST clarification by the same time. We filed our own support
   request (organization `org-dwKLm12IsiU3BkwZROoLdmuk`) so our org is part of the escalation —
   **case 15960350** (Sev 4, auto-acknowledged 2026-09-28 20:32 KST). On 2026-09-29 08:31 KST support asked for a
   screen recording and screenshots (the ticket closes after a day without a reply); sent 08:49 KST — a frame-by-frame
