@@ -33,6 +33,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **eval 3건** — `plan-implementation/boundary-loyalty-points`·`implement-code/boundary-tier-discount`(경계 설정·테스트
   `file_unchanged` 로 완화 = 0)·`review-code/boundary-relaxed-contract`. 기준선 재생성은 병합 후 몫이다.
 
+### Changed — eval 부정 가드를 부분 문자열에서 줄 앵커 정규식으로 (`output_not_contains` → `output_not_regex`)
+
+5.1.0 기준선 재생성이 25건 중 2건 fail 로 저장 거부됐다 — 둘 다 에이전트는 옳고 가드가 틀렸다. 새 시나리오는 금지를 **말한**
+문장(*"`pipx run` 같은 우회는 쓰지 않습니다"*)에, `verify-code/multiply-bug-detected` 는 `❌ FAIL` 판정 뒤 권장 조치의
+*"모든 테스트 통과 확인"* 에 걸렸다. 이 가드 타입의 5·6번째 거짓양성이라 `evals/policy.json` 의 기존 지시대로 값을 깎지 않고
+**타입을 재설계**했다.
+
+- 새 타입 `output_not_regex`(`patterns`, `re.MULTILINE | re.IGNORECASE`) — 판정·요약·상태 줄의 **선언 형태**나 명령 위치만 잡는다.
+  fail 시 매치된 줄을 detail 에 싣는다. 정규식은 `--validate` 단계에서 컴파일 검사.
+- `output_not_contains` 는 레지스트리에서 **제거** — `--validate` 가 거부하므로 되돌아오지 못한다. 라이브 어서션 10개를 이관했고
+  `scripts/eval-forge.py` 도 새 타입을 만든다.
+- 러너의 실제 매처로 양방향 고정(`evals/tests/test_runner.py`): 두 오탐 원문은 통과, 시나리오별 거짓 green 선언은 fail. 매처를
+  부분 문자열로 되돌리면 테스트가 FAIL 한다.
+
 ## [5.0.3] — 2026-09-29
 
 ### Fixed — 5.0.2 의 README 설명이 정책 보류 근거를 하나 더 만든 것
