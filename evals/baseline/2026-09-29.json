@@ -1,0 +1,1090 @@
+{
+  "results": [
+    {
+      "agent": "analyze-dependencies",
+      "model": "haiku",
+      "effort": "low",
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "scenario": "order-utils-impact",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['checkout']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['report']"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '영향'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 36.77,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-uhz2zxis/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "define-business-logic",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "point-service-rules",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'CALC-'"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'VAL-'"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'STATE-'"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'POL-'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 91.88,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-0qsv3s0w/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "design-user-journey",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "checkout-edge-cases",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '품절'"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '카드'"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '상태'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 158.65,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-al_3q07g/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "devils-advocate",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "single-instance-sync",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['확률']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['완화']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex 'FAIL-'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 104.63,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-vc3ylevb/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "mutable-default-arg",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 17.04,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-i36jbmmo/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "none-handling",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 16.36,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-w41ydjsn/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "unstable-sort-key",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 14.56,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-yh9iectb/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "fix-bugs",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "off-by-one",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 15.05,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-pq3pl8r_/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "git-workflow",
+      "model": "haiku",
+      "effort": "low",
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "scenario": "merge-conflict-escalation",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['충돌', 'conflict']"
+        },
+        {
+          "type": "git_log_contains",
+          "ok": true,
+          "detail": "git_log_contains"
+        },
+        {
+          "type": "git_status_clean",
+          "ok": true,
+          "detail": "git_status_clean"
+        }
+      ],
+      "judge": null,
+      "duration_s": 18.93,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-_rw6qxzm/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "git-workflow",
+      "model": "haiku",
+      "effort": "low",
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "scenario": "feature-branch-commit",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "git_status_clean",
+          "ok": true,
+          "detail": "git_status_clean"
+        },
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "git_branch_exists",
+          "ok": true,
+          "detail": "git_branch_exists"
+        }
+      ],
+      "judge": null,
+      "duration_s": 20.97,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-kh3n7a47/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-code",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "add-function-to-module",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        }
+      ],
+      "judge": null,
+      "duration_s": 11.67,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-20l67jes/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-code",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "boundary-tier-discount",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        }
+      ],
+      "judge": null,
+      "duration_s": 21.75,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-1i3t_zym/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-code",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "lru-cache",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        }
+      ],
+      "judge": null,
+      "duration_s": 12.23,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-uk2m7vvc/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "implement-code",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "merge-intervals",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        }
+      ],
+      "judge": null,
+      "duration_s": 13.61,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-9x41q1ge/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "plan-implementation",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "remove-all-widgets-plan",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['remove_all_widgets']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['_stock']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['테스트', 'test']"
+        }
+      ],
+      "judge": null,
+      "duration_s": 63.02,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-yxhgk3qg/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "plan-implementation",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "boundary-loyalty-points",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['lint-imports']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['.importlinter']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        }
+      ],
+      "judge": null,
+      "duration_s": 106.4,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-2cajpy_x/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "boundary-relaxed-contract",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '\\[(CONDITIONAL|REJECT)\\]'"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['ignore_imports']"
+        },
+        {
+          "type": "output_regex",
+          "ok": true,
+          "detail": "output_regex '(\\[H\\]|\\bHIGH\\b)[^\\n]{0,300}(ignore_imports|\\.importlinter|경계|계약)|(ignore_imports|\\.importlinter|경계|계약)[^\\n]{0,300}(\\[H\\]|\\bHIGH\\b)'"
+        }
+      ],
+      "judge": null,
+      "duration_s": 66.91,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-bc96_zs0/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "false-green",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['returncode', 'exit code', 'exit status', '결과를 확인하지', '결과 미검증', '검증하지 않', 'false green', 'false-green', '성공을 가정', '확인 없이 성공', '무시하고', '실패해도']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['run_migration', 'deploy.py']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        }
+      ],
+      "judge": null,
+      "duration_s": 56.71,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-sjaf4at9/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "off-by-one",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['off-by-one', 'off by one', 'range(len(items) - 1)', 'range(len(items)-1)', 'len(items) - 1', '마지막 항목', '마지막 요소', 'last item', 'last element', '인덱스 범위', '경계 오류', 'boundary']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['total_count', 'inventory.py']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        }
+      ],
+      "judge": null,
+      "duration_s": 36.84,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-wvts773h/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "sql-injection",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['sql injection', 'sql-injection', 'sqli', 'injection', '인젝션', 'parameteriz', '파라미터화', 'prepared statement', '바인드 변수', 'placeholder']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['find_user', 'db.py']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        }
+      ],
+      "judge": null,
+      "duration_s": 48.0,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-io7fa8_1/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "review-code",
+      "model": "opus",
+      "effort": "high",
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "scenario": "race-condition",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['race condition', 'race-condition', 'toctou', 'check-then-act', 'check then act', '경쟁 상태', '경쟁조건', '원자적', 'atomic', '동시성', 'concurrent', '동시 실행']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['write_if_absent', 'cache.py']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        }
+      ],
+      "judge": null,
+      "duration_s": 80.67,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-v4_1ihl_/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "sync-docs",
+      "model": "haiku",
+      "effort": "low",
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "scenario": "readme-function-count-drift",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "file_contains",
+          "ok": true,
+          "detail": "file_contains"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 14.61,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-e0mjsph5/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "security-scan",
+      "model": "sonnet",
+      "effort": "high",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "shared-tmp-and-hardcoded-token",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['예측 가능', 'predictable', 'world-writable', '공유 디렉토리', '심링크', 'symlink', 'mkstemp', 'mkdtemp', '경쟁', 'race']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['하드코딩', 'hardcod', '시크릿', 'secret', 'credential', '자격증명', '환경 변수', '환경변수', 'environment variable', '비밀 관리', 'secret manager']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        }
+      ],
+      "judge": null,
+      "duration_s": 43.39,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-p5w_k_eg/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "verify-code",
+      "model": "haiku",
+      "effort": "low",
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "scenario": "multiply-bug-detected",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['multiply']"
+        },
+        {
+          "type": "output_contains_any",
+          "ok": true,
+          "detail": "output_contains_any ['fail', '실패', 'failed']"
+        },
+        {
+          "type": "output_not_regex",
+          "ok": true,
+          "detail": "output_not_regex"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 25.97,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-s233rmis/fixture",
+      "output_excerpt": null
+    },
+    {
+      "agent": "write-tests",
+      "model": "sonnet",
+      "effort": "medium",
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "scenario": "clamp-function",
+      "status": "pass",
+      "checks": [
+        {
+          "type": "pytest_green",
+          "ok": true,
+          "detail": "pytest_green"
+        },
+        {
+          "type": "file_unchanged",
+          "ok": true,
+          "detail": "file_unchanged"
+        }
+      ],
+      "judge": null,
+      "duration_s": 14.09,
+      "work_dir": "/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/ckkit-eval-dzl_hssv/fixture",
+      "output_excerpt": null
+    }
+  ],
+  "summary": {
+    "analyze-dependencies": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "efforts": [
+        "low"
+      ],
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "pass_rate": 1.0
+    },
+    "define-business-logic": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "efforts": [
+        "high"
+      ],
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "design-user-journey": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "efforts": [
+        "high"
+      ],
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "devils-advocate": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "opus"
+      ],
+      "efforts": [
+        "high"
+      ],
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "fix-bugs": {
+      "pass": 4,
+      "fail": 0,
+      "total": 4,
+      "models": [
+        "sonnet"
+      ],
+      "efforts": [
+        "medium"
+      ],
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "git-workflow": {
+      "pass": 2,
+      "fail": 0,
+      "total": 2,
+      "models": [
+        "haiku"
+      ],
+      "efforts": [
+        "low"
+      ],
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "pass_rate": 1.0
+    },
+    "implement-code": {
+      "pass": 4,
+      "fail": 0,
+      "total": 4,
+      "models": [
+        "sonnet"
+      ],
+      "efforts": [
+        "medium"
+      ],
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "plan-implementation": {
+      "pass": 2,
+      "fail": 0,
+      "total": 2,
+      "models": [
+        "opus"
+      ],
+      "efforts": [
+        "high"
+      ],
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "review-code": {
+      "pass": 5,
+      "fail": 0,
+      "total": 5,
+      "models": [
+        "opus"
+      ],
+      "efforts": [
+        "high"
+      ],
+      "resolved_models": [
+        "claude-opus-5-5"
+      ],
+      "primary_models": [
+        "claude-opus-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "sync-docs": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "efforts": [
+        "low"
+      ],
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "pass_rate": 1.0
+    },
+    "security-scan": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "efforts": [
+        "high"
+      ],
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "pass_rate": 1.0
+    },
+    "verify-code": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "haiku"
+      ],
+      "efforts": [
+        "low"
+      ],
+      "resolved_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "primary_models": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "pass_rate": 1.0
+    },
+    "write-tests": {
+      "pass": 1,
+      "fail": 0,
+      "total": 1,
+      "models": [
+        "sonnet"
+      ],
+      "efforts": [
+        "medium"
+      ],
+      "resolved_models": [
+        "claude-sonnet-5-5"
+      ],
+      "primary_models": [
+        "claude-sonnet-5-5"
+      ],
+      "pass_rate": 1.0
+    }
+  }
+}

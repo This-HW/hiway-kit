@@ -1,6 +1,6 @@
 ---
 title: "아키텍처 경계를 문서가 아니라 프로젝트 도구로 강제한다"
-status: in-progress
+status: done
 created: 2026-09-30
 size: medium
 ---
