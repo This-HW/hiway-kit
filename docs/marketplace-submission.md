@@ -52,6 +52,12 @@ Listed in Claude Code, "Live in the directory"**(포털 표기). 포털 안내�
 공개 직후 `claude.ai/directory` 검색과 `anthropics/claude-plugins-official` 카탈로그에는 아직 없었다. **설치 명령은
 소비자 쪽 카탈로그에서 실제로 확인한 뒤에만** CLAUDE.md·README 에 적는다. 이후 버전은 Auto-publish On(스캔 통과 시 자동 공개).
 
+**공개 후 소비자 쪽 반영 확인(2026-09-29 11:57·13:41 KST)** — 포털은 "Live in the directory"(최대 1시간 안내)지만 3시간이 지나도
+소비자 쪽 어디에도 없다: `claude.ai/directory` 검색(Code 모드 포함) 결과 없음, `anthropics/claude-plugins-official` 의
+`marketplace.json` 314개 중 0, 그 저장소 마지막 커밋 2026-09-28T13:14Z·관련 PR 없음. `claude plugin marketplace list --json`
+에는 claude.ai 디렉토리가 마켓플레이스로 잡히지 않는다("Anthropic Directory — browse on claude.ai" 로만 표시). 문서상 Claude
+Code 는 이 디렉토리를 `claude-plugins-official` 로 노출하므로 그 카탈로그 갱신을 기다린다. 설치 명령은 반영 확인 전까지 쓰지 않는다.
+
 **스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
 `https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
 **근거 파일·문구까지** 나온다(Review 탭은 제목만 보여 준다). 이걸로 이분 탐색했다(브랜치 16개, 끝나고 전부 삭제):
