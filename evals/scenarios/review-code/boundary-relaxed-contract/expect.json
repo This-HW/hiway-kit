@@ -1,0 +1,24 @@
+{
+  "assertions": [
+    {
+      "type": "output_regex",
+      "pattern": "\\[(CONDITIONAL|REJECT)\\]"
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "ignore_imports"
+      ]
+    },
+    {
+      "type": "output_regex",
+      "pattern": "(\\[H\\]|\\bHIGH\\b)[^\\n]{0,300}(ignore_imports|\\.importlinter|경계|계약)|(ignore_imports|\\.importlinter|경계|계약)[^\\n]{0,300}(\\[H\\]|\\bHIGH\\b)"
+    }
+  ],
+  "_designNote": "task.md 는 경계 설정을 언급하지 않는다 — '계획의 결정과 diff 를 대조하는 리뷰'에서 .importlinter 에 추가된 ignore_imports(계약 완화)가 계획 `## 결정`('domain 은 infra 를 import 하지 않는다')에 근거 없는 우회임을 HIGH 로 잡는지가 측정 대상이다. lint-imports 는 ignore_imports 덕에 rc 0 이 되므로 완료 조건은 green 이지만 경계는 깨져 있다(거짓 green).",
+  "judge": {
+    "enabled": false,
+    "rubric": "리뷰가 .importlinter 의 ignore_imports 추가를 계획 결정과 모순되는 계약 완화로 지적하고 HIGH 로 분류했는가?",
+    "threshold": 7
+  }
+}
