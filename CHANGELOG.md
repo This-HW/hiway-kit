@@ -6,6 +6,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.1.0] — 2026-09-30
+
+### Added — 아키텍처 경계를 문서가 아니라 프로젝트 도구로 강제한다
+
+계획에서 "domain 은 infra 를 import 하지 않는다"를 정해도 다음 변경에서 조용히 깨졌다 — 킷의 "완료는 명령의 출력"
+원칙이 소비자 코드의 모듈 경계에는 닿지 않았기 때문이다. 새 게이트·훅·스킬 없이, 기존 경로(계획의 `## 완료 조건` →
+`auto-dev` checklist `verify` 가 명령을 실행해 exit 0 으로만 통과)에 **경계 검사 명령을 태운다**.
+스펙: `docs/specs/2026-09-30-boundary-enforcement/spec.md`.
+
+- **`plan-task/references/boundary-check.md` 신설** — 적용 조건(경계를 정하거나 바꿀 때, 또는 기존 경계 설정이 다루는
+  패키지 사이 import 를 건드릴 때만) · 탐지 우선순위(프로젝트 진입점 → 설정 파일 + 프로젝트 로컬 실행 파일, `npx`·`uvx`·
+  `pipx run`·전역 설치 금지) · 탐지표 7행(import-linter·Tach·dependency-cruiser·ESLint 3종·golangci-lint depguard) ·
+  계획에 넣는 네 가지(결정 문장·설정 갱신·완료 조건 명령·새 계약의 양성 대조) · 도구가 없을 때(`경계 강제: 없음`,
+  도입은 P1 결정·기본값 도입 안 함) · 경계 설정 완화 금지. **표의 모든 행은 공식 자료 URL 과 위반 시 비0 종료 근거를
+  갖는다** — 확인하지 못한 ArchUnit·Go 컴파일러 규칙은 표에서 뺐다.
+- **`plan-task` Step 2** 가 해당할 때만 그 reference 를 읽고 완료 조건에 반영한다. `rules/` 는 건드리지 않았다(상시 주입
+  예산 불변).
+- **`plan-implementation`** — 경계를 정하면 프로젝트의 기존 경계 도구 설정과 진입점을 찾아 설정 갱신 배치 + 검사 명령을
+  계획에 넣고, 없으면 `경계 강제: 없음` 을 적는다. 출력 템플릿의 기술적 결정 표에 `강제 수단` 열.
+- **`implement-code`** — `ARCHITECTURE_LIMIT` 5번째 유형: 경계 검사를 통과시키려고 경계 설정을 완화하지 않고 멈춰
+  보고한다. 완료 조건에 경계 검사가 있으면 보고 전에 실행해 명령과 rc 를 적는다.
+- **`review-code`** — 계획 `## 결정` 에 근거 없는 경계 설정 완화(허용 추가·계약 삭제·범위 축소·심각도 강등)는 HIGH.
+- **eval 3건** — `plan-implementation/boundary-loyalty-points`·`implement-code/boundary-tier-discount`(경계 설정·테스트
+  `file_unchanged` 로 완화 = 0)·`review-code/boundary-relaxed-contract`. 기준선 재생성은 병합 후 몫이다.
+
 ## [5.0.3] — 2026-09-29
 
 ### Fixed — 5.0.2 의 README 설명이 정책 보류 근거를 하나 더 만든 것
