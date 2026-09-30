@@ -13,6 +13,31 @@
 > listed in the shared ChatGPT/Codex "universal directory" alongside OpenAI-curated
 > plugins.
 
+## Status — 2026-09-30: **5.2.0 submitted, In review**
+
+On 2026-09-30 the portal's entry point changed from *Create plugin → With MCP / Skills only* to a single
+**Upload plugin** (ZIP) flow, which accepts a skills-only plugin. The section below from 2026-09-28 is kept as
+history — the "Skills only missing" blocker no longer applies.
+
+| Version | Portal result (automated checks) | Fixed in |
+| --- | --- | --- |
+| 5.1.1 | Needs attention — `interface.longDescription` missing | 5.1.2 (`plugin_long_description_empty` now checked locally) |
+| 5.1.2 | Needs attention — privacy policy URL missing; *"Plugins containing hooks cannot be submitted"* | privacy: `PRIVACY.md` + `interface.privacyPolicyURL` |
+| 5.1.3-probe.1/.2 | probe drafts (not submitted): dropping only the hook declarations still failed; dropping the whole `hooks/` directory → *"No issues found"* | 5.2.0 — skill tools moved `hooks/` → `tools/`, ZIP omits `hooks/` (`docs/specs/2026-09-30-tools-dir/`) |
+| **5.2.0** | **Metadata: No issues; all 15 skills "Checks passed"** → Submitted for review 2026-09-30 ~10:45 KST | — |
+
+**Attestations ticked at submission (each checked against a fact, not assumed):** Terms and
+[Plugin Guidelines](https://developers.openai.com/plugins/plugin-guidelines) compliance (skills-only requirements:
+clear purpose, own MIT content, published privacy policy, verified developer, support contact, all skills scanned);
+applicable laws; no money/crypto/investment transfers (none — local developer tool); rights to third-party content
+and APIs (the plugin calls no API and ships only its own content); suitable for users under 18, no mature content;
+does not target children under 13.
+
+The portal now lists `hiway-kit · Not published · Version 5.2.0 · In review`. The 5.1.x and probe drafts remain in
+the list as "Needs attention" / "Not submitted"; they were never submitted. **Next:** after approval, **Publish**,
+then confirm the listing in the directory before writing an install path into README/CLAUDE.md. Each later
+release is a new ZIP upload with a higher `version`.
+
 ## Status — 2026-09-28 (identity verified; blocked by a platform-side outage of Skills only)
 
 Submission portal: OpenAI Platform → **Plugins** (`platform.openai.com/plugins`), per
