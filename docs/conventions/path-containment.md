@@ -17,5 +17,5 @@
 4. `--check` 같은 **검사 전용 모드에도 같은 봉쇄를 건다.** 2.14.1은 쓰기에만 걸어 구멍이 남았다
 
 새 코드가 설정값으로 경로를 만든다면 이 레포의 `scripts/build-targets.py`(`_resolve_in_repo`) 또는
-`plugins/common/hooks/export_harness.py`(`_resolve_target`)의 헬퍼를 **그대로 따라라.** 관례를 새로
+`plugins/common/tools/export_harness.py`(`_resolve_target`)의 헬퍼를 **그대로 따라라.** 관례를 새로
 발명하는 것이 이 결함이 반복된 이유다.

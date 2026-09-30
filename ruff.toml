@@ -74,6 +74,8 @@ ignore = [
     "S112",   # try-except-continue — 한 항목 실패가 루프 전체를 죽이지 않음
 ]
 "plugins/common/setup/*.py" = ["BLE001", "S110", "S112"]
+# 스킬이 부르는 도구(v5.2.0 에 hooks/ 에서 분리) — 같은 fail-open 계약을 그대로 진다.
+"plugins/common/tools/*.py" = ["BLE001", "S110", "S112"]
 
 [format]
 # ruff format 기본값 (black 호환). 포맷은 게이트가 강제하지 않는다 —

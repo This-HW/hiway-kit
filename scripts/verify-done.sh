@@ -306,7 +306,7 @@ done
 # 테스트 픽스처는 애초에 대상이 아니다. 오탐을 남기면 그 검사는 곧 무시당한다
 # (docs/conventions/warning-signal.md).
 # -I: 바이너리(__pycache__ 등)를 건너뛴다 — 없으면 'Binary file … matches' 가 경로로 오인된다.
-for ref in $(grep -rhoIE --exclude-dir=tests --exclude-dir=__pycache__ 'plugins/common/(skills|agents|rules|hooks)/[A-Za-z0-9_/.-]+\.(md|py|json)' plugins/common 2>/dev/null | sort -u); do
+for ref in $(grep -rhoIE --exclude-dir=tests --exclude-dir=__pycache__ 'plugins/common/(skills|agents|rules|hooks|tools)/[A-Za-z0-9_/.-]+\.(md|py|json)' plugins/common 2>/dev/null | sort -u); do
   [ -f "$ref" ] || { red "배포물 → 없는 컴포넌트 참조: $ref"; MISSING=1; }
 done
 [ "$MISSING" -eq 0 ] && green "hooks.json + rules/agents/skills 참조 대상 모두 존재"
@@ -353,7 +353,7 @@ hdr "8. Durable checklist 완료 게이트 (활성 계획)"
 # done 이라고 **확정할 수 없으면 활성으로 보고 검사한다**(조용한 skip 금지 — fail-closed).
 # status exit: 0=전항목pass 1=미완/손상 3=진짜 부재(skip). helper가 없는데 checklist는
 # 있으면 fail-closed(적대적 리뷰: helper 삭제 시 미완이 green 되던 false-green 차단).
-CL_HELPER="plugins/common/hooks/checklist.py"
+CL_HELPER="plugins/common/tools/checklist.py"
 CL_FOUND=0
 CL_DONE=0
 plan_is_done() {
@@ -565,7 +565,7 @@ hdr "11. 하네스 진입점 이식 드리프트 (W-017) — AGENTS.md · GEMINI
 # rules/ 를 고치고 AGENTS.md를 재생성하지 않으면, Codex·OpenCode 등 다른 하네스에서
 # 도는 에이전트는 **옛 규범**을 읽는다. 같은 레포에서 하네스마다 규율이 갈리는 상태를
 # 침묵으로 두지 않는다. exit 2(SKIPPED)는 소스 미탐지 — green으로 세지 않는다.
-if [ -f scripts/export-harness.sh ] && [ -f plugins/common/hooks/export_harness.py ]; then
+if [ -f scripts/export-harness.sh ] && [ -f plugins/common/tools/export_harness.py ]; then
   ./scripts/export-harness.sh --check >"$TMPD/agents_md" 2>&1
   EH_RC=$?
   if [ "$EH_RC" -eq 0 ]; then
@@ -589,7 +589,7 @@ if [ -f scripts/export-harness.sh ] && [ -f plugins/common/hooks/export_harness.
     sed 's/^/      /' "$TMPD/agents_md" | head -10
   fi
 else
-  red "export-harness 산출물 누락 (scripts/export-harness.sh 또는 hooks/export_harness.py) — W-017"
+  red "export-harness 산출물 누락 (scripts/export-harness.sh 또는 tools/export_harness.py) — W-017"
 fi
 
 hdr "14. 다중 하네스 타겟 매니페스트 드리프트 (W-019)"
@@ -635,7 +635,7 @@ hdr "15. AGENTS.md 크기 예산 (W-022 R7)"
 # 판정한다(F-023: 복제 로직은 반드시 드리프트한다). 읽지 못하면 **red** 다 — 상한을
 # 모르는 채 통과시키는 것이 이 게이트가 막으려는 false-green 이다.
 CONV_SIZE_CAP=$(python3 -c 'import importlib.util,sys
-spec=importlib.util.spec_from_file_location("eh","plugins/common/hooks/export_harness.py")
+spec=importlib.util.spec_from_file_location("eh","plugins/common/tools/export_harness.py")
 m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 print(m.ENTRYPOINT_SOFT_CAP)' 2>/dev/null || echo "")
 if [ -z "$CONV_SIZE_CAP" ]; then
@@ -648,7 +648,7 @@ if [ -f AGENTS.md ]; then
     green "AGENTS.md ${AGENTS_BYTES}B ≤ ${CONV_SIZE_CAP}B (Codex project_doc_max_bytes 32KiB의 75% 보수 상한)"
   else
     red "AGENTS.md ${AGENTS_BYTES}B > ${CONV_SIZE_CAP}B — Codex에서 전역 AGENTS.md와 병합 시 잘릴 수 있다"
-    echo "      → plugins/common/hooks/export_harness.py의 CONVENTIONS_INLINE에서 항목을 빼거나"
+    echo "      → plugins/common/tools/export_harness.py의 CONVENTIONS_INLINE에서 항목을 빼거나"
     echo "        rules/*.md 원문을 줄여라. (병합 총량 상한이므로 이 파일 혼자 다 쓰면 안 된다)"
   fi
 else

@@ -275,8 +275,9 @@ jobs:
           # examples/ 도 포함한다 — opt-in 훅이라도 켜는 순간 소비자의 python3 에서
           # 돌기 때문이다. 글롭이 hooks/*.py 뿐이던 시절 examples/ 는 3.9 검사를 한
           # 번도 받지 않았다(검사 대상이 아닌 것은 결코 red 가 되지 않는다, D-23).
+          # tools/ 도 같다 — 스킬이 소비자의 python3 로 부르는 도구다(v5.2.0 에 hooks/ 에서 분리).
           for f in plugins/common/hooks/*.py plugins/common/hooks/examples/*.py \
-                   plugins/common/setup/*.py scripts/*.py; do
+                   plugins/common/tools/*.py plugins/common/setup/*.py scripts/*.py; do
             case "$f" in */tests/*) continue ;; esac
             if python3 -c "import pathlib,runpy,sys; sys.path[0] = str(pathlib.Path(sys.argv[1]).resolve().parent); runpy.run_path(sys.argv[1], run_name='__ckkit_smoke__')" "$f"; then
               echo "✓ $f"

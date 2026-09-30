@@ -31,8 +31,8 @@ ToolSearch("select:TaskCreate,TaskUpdate,TaskList")
 > 있으므로 그쪽을 직접 부른다:
 >
 > ```bash
-> CL="${CLAUDE_PLUGIN_ROOT:-}/hooks/checklist.py"
-> [ -f "$CL" ] || CL=$(ls -1 ~/.claude/plugins/cache/*/*/*/hooks/checklist.py 2>/dev/null | sort -V | tail -1)
+> CL="${CLAUDE_PLUGIN_ROOT:-}/tools/checklist.py"
+> [ -f "$CL" ] || CL=$(ls -1 ~/.claude/plugins/cache/*/*/*/tools/checklist.py 2>/dev/null | sort -V | tail -1)
 > [ -f "$CL" ] && python3 "$CL" show <plan_dir>
 > ```
 >

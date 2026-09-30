@@ -44,7 +44,7 @@ plugin.json`)을 갖는다. 이 값(name·version·description 등)을 손으로
    `repo_root / rel_path`는 `rel_path`가 절대경로면 `repo_root`를 통째로 버리는
    pathlib의 함정이 있고, `..`나 심링크로도 트리 밖으로 나갈 수 있다 — 셋 다 실제로
    재현됐다(2026-08-27 적대적 리뷰). `_resolve_in_repo()`가 **한 번만** resolve해서
-   그 결과를 검증·기록 양쪽에 그대로 쓴다(`hooks/export_harness.py`의 `_resolve_target`
+   그 결과를 검증·기록 양쪽에 그대로 쓴다(`tools/export_harness.py`의 `_resolve_target`
    교훈 — 검사와 쓰기가 각자 resolve하면 그 사이가 TOCTOU 창이 된다). 봉쇄를
    `--write`에만 걸면 `--check`가 구멍으로 남는다(2.14.1에서 실제로 났던 실수) — 그래서
    둘 다에 같은 헬퍼를 쓴다.

@@ -4,7 +4,7 @@ v5.0.0: 규범 축이 `load_rules()` 직접 호출에서 **훅의 실제 main() 
 예전 측정은 LESSONS·ACTIVE PLANS 를 빼고 쟀고, conditional 신호를 게이트가 가상으로
 전부 켜서 main() 에 신호가 없는 규범도 멀쩡해 보였다.
 
-픽스처 `rules/` 를 쓰되 훅 스크립트(`session-start.py`·`utils.py`·`feedback_ledger.py`)는
+픽스처 `rules/` 를 쓰되 훅 스크립트(`session-start.py`·`utils.py`)와 도구(`tools/feedback_ledger.py`)는
 **실물을 복사**한다 — 측정 대상이 그 프로세스이므로 재구현하면 테스트가 실물을 건드리지
 않는다(`warning-signal.md` §측정 1).
 """
@@ -27,7 +27,8 @@ from module_loader import load_module_by_path
 CORE_BODY = "# Core Rule\ncore rule body\n"
 #: session-start.conditional_signals() 의 실제 키 — 픽스처 규범 이름은 이것과 같아야 켜진다.
 SIGNALLED = ("feedback-loop", "loop-engineering", "mcp-usage", "task-resume")
-HOOK_FILES = ("session-start.py", "utils.py", "feedback_ledger.py")
+HOOK_FILES = ("session-start.py", "utils.py")
+TOOL_FILES = ("feedback_ledger.py",)
 
 
 def _fake_plugin_root(tmp_path: Path, *, conditional_names: tuple[str, ...]) -> Path:
@@ -36,6 +37,9 @@ def _fake_plugin_root(tmp_path: Path, *, conditional_names: tuple[str, ...]) -> 
     (root / "hooks").mkdir(parents=True)
     for name in HOOK_FILES:
         shutil.copy(REPO_ROOT / "plugins" / "common" / "hooks" / name, root / "hooks" / name)
+    (root / "tools").mkdir(parents=True)
+    for name in TOOL_FILES:
+        shutil.copy(REPO_ROOT / "plugins" / "common" / "tools" / name, root / "tools" / name)
     (root / "rules" / "aa-core.md").write_text(
         f"---\ntier: core\n---\n\n{CORE_BODY}", encoding="utf-8"
     )

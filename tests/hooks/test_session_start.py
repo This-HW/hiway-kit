@@ -13,6 +13,7 @@ import pytest
 
 # session-start.py has a hyphen — use importlib to load it
 HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
+TOOLS_DIR = HOOKS_DIR.parent / "tools"
 _spec = importlib.util.spec_from_file_location(
     "session_start", HOOKS_DIR / "session-start.py"
 )
@@ -756,8 +757,12 @@ def _fixture_plugin(tmp_path, rules: dict) -> Path:
     plugin = tmp_path / "plugin"
     hooks = plugin / "hooks"
     hooks.mkdir(parents=True)
-    for name in ("session-start.py", "utils.py", "feedback_ledger.py"):
+    for name in ("session-start.py", "utils.py"):
         (hooks / name).write_bytes((HOOKS_DIR / name).read_bytes())
+    # 스킬 도구는 훅이 아니다 — 실물 배치(v5.2.0)대로 형제 `tools/` 에 둔다.
+    tools = plugin / "tools"
+    tools.mkdir()
+    (tools / "feedback_ledger.py").write_bytes((TOOLS_DIR / "feedback_ledger.py").read_bytes())
     rules_dir = plugin / "rules"
     rules_dir.mkdir()
     for name, (tier, body) in rules.items():
@@ -789,7 +794,8 @@ _A5_RULES = {
         "core",
         "절차는 `skills/plan-task/references/elicitation.md` 에, 계약은 "
         "`rules/child-marker.md` 에 있다. 레포 경로 `plugins/common/rules/child-marker.md` "
-        "와 없는 파일 `skills/nope/x.md` 는 그대로다. 문장 끝 rules/child-marker.md.",
+        "와 없는 파일 `skills/nope/x.md` 는 그대로다. 문장 끝 rules/child-marker.md. "
+        "도구는 `tools/feedback_ledger.py` 다.",
     ),
 }
 
@@ -827,6 +833,31 @@ class TestMainOutputV5:
         assert "`plugins/common/rules/child-marker.md`" in ctx  # 레포 경로 꼬리 불변
         assert "`skills/nope/x.md`" in ctx  # 실재하지 않으면 치환하지 않는다
         assert "` skills/plan-task" not in ctx
+        # v5.2.0: 스킬 도구는 `tools/` 에 산다 — 그 접두사도 절대경로로 렌더돼야 소비자
+        # cwd 에서 "실행하라"가 없는 파일을 가리키지 않는다.
+        assert f"`{plugin}/tools/feedback_ledger.py`" in ctx
+
+    def test_lessons_come_from_tools_dir(self, tmp_path):
+        """v5.2.0: 원장 도구가 `hooks/` 가 아니라 `tools/` 에 있어도 LESSONS 가 실린다.
+
+        디렉토리 제출본은 `hooks/` 를 통째로 빼므로 도구는 `tools/` 로 옮겼다. 훅이
+        그 경로를 import 경로에 넣지 않으면 `load_lessons` 는 fail-open 으로 조용히
+        비고, 학습 루프가 소비자 전원에게서 죽는다 — 원장이 있는데도 섹션이 없다.
+        """
+        plugin, project, home = self._setup(tmp_path)
+        assert not (plugin / "hooks" / "feedback_ledger.py").exists()
+        d = project / "docs" / "works" / "feedback"
+        d.mkdir(parents=True)
+        (d / "ledger.md").write_text(
+            "# Feedback Ledger\n\n"
+            "| id | category | pattern | frequency | last_seen | severity |\n"
+            "| -- | -------- | ------- | --------- | --------- | -------- |\n"
+            "| F-001 | convention | TOOLS-DIR-LESSON | 2 | 2026-09-30 | high |\n",
+            encoding="utf-8",
+        )
+        ctx = _run_main(plugin, project, home)
+        assert "=== LESSONS ===" in ctx, "tools/feedback_ledger.py 를 찾지 못해 LESSONS 가 빠졌다"
+        assert "TOOLS-DIR-LESSON" in ctx
 
     def test_stale_tasks_section_is_gone(self, tmp_path):
         """~/.claude/tasks 스캐너는 삭제됐다 — 그 디렉토리가 있어도 섹션이 없다."""

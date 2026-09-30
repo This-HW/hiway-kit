@@ -45,6 +45,7 @@ plugins/
 - `agents/` — agent `.md` files
 - `skills/` — skill `.md` files
 - `hooks/` — Python hook scripts (common only)
+- `tools/` — Python tools skills call (not hooks — see Hooks)
 - `rules/` — governance rules (common only)
 - `assets/icon.png` — plugin icon (Codex manifest `interface.logo`·`composerIcon`; directory listings)
 - `.codex-plugin/plugin.json`, `plugin.json` — **생성물**. Codex·Antigravity 타겟 매니페스트로,
@@ -247,6 +248,11 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   temporary directory for that process; it never trusts counters from the shared
   temporary root. This fallback loses cross-process marker/retry reuse.
 - `utils.py` — shared utilities
+
+### 스킬 도구는 `tools/` 에 둔다 (v5.2.0)
+
+OpenAI 디렉토리 포털은 `hooks/` 가 **있기만 해도** 거부해 제출본이 그것을 통째로 뺀다 —
+스킬이 부르는 도구(checklist·feedback_ledger·export_harness)는 `tools/` 에 둔다. 3.9 floor·fail-open 은 훅과 같다.
 
 ### git 훅은 배포되지만 자동으로 켜지지 않는다
 
