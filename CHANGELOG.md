@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.2.0] — 2026-09-30
+
+### Changed — 스킬이 부르는 도구를 `hooks/` 에서 `tools/` 로 분리
+
+OpenAI 플러그인 디렉토리가 *"Plugins containing hooks cannot be submitted"* 로 업로드를 막았다. 조사용 ZIP 두 개로 실측하니
+훅 선언(json·매니페스트 `hooks`)만 빼서는 안 되고 **`hooks/` 디렉토리의 존재 자체**가 판정 대상이었다(`setup/` 의 git 훅은 무관).
+그런데 `hooks/` 에는 진짜 훅 외에 스킬이 직접 부르는 도구가 섞여 있었다.
+
+- `checklist.py`·`feedback_ledger.py`·`export_harness.py` → **`plugins/common/tools/`**. `hooks/` 에는 진짜 훅과 그 공용
+  `utils.py`·선언·`examples/` 만 남는다. `session-start` 는 `__file__` 기준 형제 `tools/` 에서 원장을 읽는다.
+- 스킬·규칙·래퍼 스크립트·게이트·테스트·문서의 경로와 플러그인 캐시 탐색 글롭을 새 위치로.
+- OpenAI 디렉토리 제출본(`scripts/build-codex-zip.py`)은 `hooks/` 를 통째로 뺀다. 도구는 `tools/` 에 남아 스킬이 동작한다.
+  Claude Code 와 Codex 로컬 설치(마켓플레이스)는 지금처럼 훅을 받는다.
+- 되돌리면 실패하는 테스트 3종: 제출본에 `hooks/` 없음·`tools/` 있음, 검증기가 `hooks/` 항목을 거부, session-start 가 `tools/` 에서
+  LESSONS 를 읽음.
+
+**이주**: 5.2.0 미만 설치본은 도구가 `hooks/` 에 있다 — 플러그인을 업데이트하면 스킬이 새 위치를 쓴다.
+
 ## [5.1.2] — 2026-09-30
 
 ### Fixed — OpenAI 디렉토리 메타데이터 검사 2건

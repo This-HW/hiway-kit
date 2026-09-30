@@ -4,7 +4,7 @@
 > 재생성: `./scripts/export-harness.sh` (플러그인 사용자는 `/harness-export` 스킬 참조)
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:2cd169d2bbff0d88571fb0e04f38be6b89d3a933424b83b1749a021cf1dec836 -->
+<!-- kit:begin rules-v1.4.0 sha256:a15d7ff04d70bfc4a944fa24b47674481956fcc725a5314949684d2bce672bb5 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -140,7 +140,7 @@ portable_reason: 저장은 파일, 읽기는 CLI — 훅이 없는 하네스도 
 validation·review에서 반복 발견된 결함을 학습해 같은 실수를 반복하지 않는다.
 
 - **digest 확보**: 훅이 있으면 `=== LESSONS ===`로 자동 주입된다. 없으면 직접 조회한다 —
-  `python3 <킷 hooks 경로>/feedback_ledger.py digest`(API 성 호출이면 호출자가 조회해 싣는다).
+  `python3 <킷 루트>/tools/feedback_ledger.py digest`(API 성 호출이면 호출자가 조회해 싣는다).
   경로를 못 찾으면 무동작이다(fail-open).
 - **적용**: 구현·리뷰 전에 그 패턴을 우선 점검한다.
 - **누적**: 검증에서 **실제로 발견된** 결함만 `feedback_ledger.py upsert`로 넣는다(통과
@@ -215,7 +215,7 @@ portable: true
 그것을 읽고 시작한다. **완료 조건은 실행 가능한 명령**이어야 Dev 로 넘긴다.
 <!-- kit:end -->
 
-<!-- kit2:begin conventions-v1.0.0 sha256:fd5e5cca5a1c7b0ae08ee51c0950403b1663518f34ce16f0f0315216c8a0a49e -->
+<!-- kit2:begin conventions-v1.0.0 sha256:b0fa768f5194d5cfce0a77beca267dc0ff3971d5d323a407b7aafbd640ded4db -->
 
 ## hiway-kit — Project Conventions (요약 발췌)
 
@@ -246,7 +246,7 @@ portable: true
 4. `--check` 같은 **검사 전용 모드에도 같은 봉쇄를 건다.** 2.14.1은 쓰기에만 걸어 구멍이 남았다
 
 새 코드가 설정값으로 경로를 만든다면 이 레포의 `scripts/build-targets.py`(`_resolve_in_repo`) 또는
-`plugins/common/hooks/export_harness.py`(`_resolve_target`)의 헬퍼를 **그대로 따라라.** 관례를 새로
+`plugins/common/tools/export_harness.py`(`_resolve_target`)의 헬퍼를 **그대로 따라라.** 관례를 새로
 발명하는 것이 이 결함이 반복된 이유다.
 
 ### 드리프트 게이트는 여럿이고, 통합하지 않는다
