@@ -35,7 +35,10 @@ does not target children under 13.
 
 The portal now lists `hiway-kit · Not published · Version 5.2.0 · In review`. The 5.1.x and probe drafts remain in
 the list as "Needs attention" / "Not submitted"; they were never submitted. **Next:** after approval, **Publish**,
-then confirm the listing in the directory before writing an install path into README/CLAUDE.md. Each later
+then confirm the listing in the directory before writing an install path into README/CLAUDE.md.
+OpenAI confirmed receipt by email (2026-09-30 10:47 KST, "ChatGPT Plugin Submission Received" — review against the
+app guidelines, outcome by email). Support case 15960350 got one more generic reply (07:10 KST, about ChatGPT
+workspace Skills availability); the Upload plugin flow made it moot, so it was left to close on its own. Each later
 release is a new ZIP upload with a higher `version`.
 
 ## Status — 2026-09-28 (identity verified; blocked by a platform-side outage of Skills only)
