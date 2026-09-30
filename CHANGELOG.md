@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.1.1] — 2026-09-30
+
+### Fixed — OpenAI 플러그인 업로드를 막던 `interface.longDescription` 누락
+
+OpenAI 포털이 2026-09-30 "Upload plugin"(ZIP 업로드 → 자동 검사 → 심사 제출) 흐름으로 바뀌어 스킬 전용 플러그인을 올릴 수
+있게 됐다. 첫 업로드가 *"Invalid plugin package — `interface.longDescription` is required"* 로 거부됐다. Codex 매니페스트에
+긴 설명이 없었고, `scripts/build-codex-zip.py` 는 공식 오류 목록에 있는 이 코드(`plugin_long_description_empty`)를 검사하지
+않아 로컬 검사를 통과시켰다.
+
+- SSOT `packaging/targets.json` 에 `interface.longDescription`(스킬 15종·완료 판정·데이터 처리, 1,178자) 추가 →
+  `.codex-plugin/plugin.json` 재생성.
+- 검증기에 `longDescription` 필수·4,000자 상한 검사 추가, 되돌리면 실패하는 테스트 3개(없음·빈 값·공백만, 상한 초과).
+
 ## [5.1.0] — 2026-09-30
 
 ### Added — 아키텍처 경계를 문서가 아니라 프로젝트 도구로 강제한다

@@ -76,6 +76,7 @@ MAX_ENTRIES = 5000
 MAX_UNCOMPRESSED = 512 * 2**20
 MAX_DEPTH = 20
 FINAL_LISTING_LIMIT = 30  # displayName·shortDescription 최종 제출 한도
+LONG_DESCRIPTION_LIMIT = 4000  # interface.longDescription (plugin_long_description_too_long)
 SKILL_DESCRIPTION_LIMIT = 1024
 SKILL_IDENTITY_LIMIT = 64  # `<plugin>:<skill>`
 EXCLUDED_CONFIG = frozenset({".mcp.json", "mcp.json", ".app.json"})
@@ -232,6 +233,13 @@ def validate(zip_bytes: bytes) -> tuple[list[str], list[str]]:
             errors.append(
                 f"interface.{field} > {FINAL_LISTING_LIMIT} chars (final submission)"
             )
+    # 2026-09-30 실측: 포털이 이것 하나로 업로드를 거부했다("Invalid plugin package
+    # `interface.longDescription` is required …"). 오류 목록에 있던 코드인데 이 검사가 빠져 있었다.
+    long_description = iface.get("longDescription", "")
+    if not isinstance(long_description, str) or not long_description.strip():
+        errors.append("plugin_long_description_empty: interface.longDescription")
+    elif len(long_description) > LONG_DESCRIPTION_LIMIT:
+        errors.append(f"plugin_long_description_too_long (> {LONG_DESCRIPTION_LIMIT})")
     if not iface.get("developerName"):
         errors.append("plugin_developer_name_empty")
     elif iface["developerName"] != (m.get("author") or {}).get("name"):

@@ -27,6 +27,7 @@ GOOD_MANIFEST = {
     "interface": {
         "displayName": "kit",
         "shortDescription": "short",
+        "longDescription": "What the plugin does, in full.",
         "developerName": "Dev",
         "category": "Developer Tools",
         "logo": "./assets/icon.png",
@@ -128,3 +129,22 @@ def test_mcp_config_is_error(mod):
 def test_duplicate_skill_name_is_error(mod):
     errors, _ = mod.validate(_package(**{"kit/skills/b/SKILL.md": GOOD_SKILL}))
     assert any("skill_identity_duplicate" in e for e in errors)
+
+
+@pytest.mark.parametrize("value", [None, "", "   "])
+def test_missing_or_blank_long_description_is_error(mod, value):
+    """되돌려-FAIL 의 단위판 — 포털이 실제로 이것 하나로 업로드를 거부했다(2026-09-30)."""
+    manifest = json.loads(json.dumps(GOOD_MANIFEST))
+    if value is None:
+        del manifest["interface"]["longDescription"]
+    else:
+        manifest["interface"]["longDescription"] = value
+    errors, _ = mod.validate(_package(manifest))
+    assert any("plugin_long_description_empty" in e for e in errors)
+
+
+def test_long_description_over_limit_is_error(mod):
+    manifest = json.loads(json.dumps(GOOD_MANIFEST))
+    manifest["interface"]["longDescription"] = "x" * 4001
+    errors, _ = mod.validate(_package(manifest))
+    assert any("plugin_long_description_too_long" in e for e in errors)
