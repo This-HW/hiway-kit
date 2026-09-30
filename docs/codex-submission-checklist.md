@@ -38,7 +38,11 @@ the list as "Needs attention" / "Not submitted"; they were never submitted. **Ne
 then confirm the listing in the directory before writing an install path into README/CLAUDE.md.
 OpenAI confirmed receipt by email (2026-09-30 10:47 KST, "ChatGPT Plugin Submission Received" — review against the
 app guidelines, outcome by email). Support case 15960350 got one more generic reply (07:10 KST, about ChatGPT
-workspace Skills availability); the Upload plugin flow made it moot, so it was left to close on its own. Each later
+workspace Skills availability); the Upload plugin flow made it moot, so it was left to close on its own.
+Community thread 1401299 confirmed the same from another organization (2026-09-30 04:26Z): the ZIP upload flow passes
+the skill scan that kept failing in the old *With MCP* form, and a plugin created in the old form must keep its
+package name (`app-<id>`) as the manifest `name` or the upload fails with `plugin_name_mismatch`. hiway-kit was created
+through Upload plugin, so its package name is `hiway-kit`. Each later
 release is a new ZIP upload with a higher `version`.
 
 ## Status — 2026-09-28 (identity verified; blocked by a platform-side outage of Skills only)
