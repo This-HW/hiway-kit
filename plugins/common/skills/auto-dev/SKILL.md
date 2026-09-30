@@ -186,7 +186,7 @@ review-code/security-scan 결과에 **발견된 결함이 있으면(pass·fail �
 # category ∈ {lint, security, architecture, test, convention}
 # severity ∈ {critical, high, medium, low}
 # 경로는 skills/plan-task/references/task-tools-fallback.md 의 플러그인 루트 해석을 따른다
-python3 "<plugin root>/hooks/feedback_ledger.py" upsert <category> <severity> "<결함 요지>"
+python3 "<plugin root>/tools/feedback_ledger.py" upsert <category> <severity> "<결함 요지>"
 ```
 
 - 발견된 결함만 기록 (통과 시 회피 패턴은 노이즈라 기록 안 함)

@@ -5,12 +5,12 @@ import json
 from pathlib import Path
 from types import ModuleType
 
-HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
+TOOLS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "tools"
 
 
 def _load_module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
-        "checklist", HOOKS_DIR / "checklist.py"
+        "checklist", TOOLS_DIR / "checklist.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)

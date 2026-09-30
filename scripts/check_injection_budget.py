@@ -241,7 +241,7 @@ def _add_worst_ledger(repo: Path, plugin_root: Path, home: Path) -> None:
     """실물 `feedback_ledger.py upsert` 로 원장을 채운다 — 형식을 재구현하지 않는다."""
     for i in range(6):
         subprocess.run(
-            [sys.executable, str(plugin_root / "hooks" / "feedback_ledger.py"), "upsert",
+            [sys.executable, str(plugin_root / "tools" / "feedback_ledger.py"), "upsert",
              "convention", "high", f"측정용 교훈 {i} " + _WORST_CHAR * 400],
             cwd=str(repo), env=_hook_env(repo, home),
             capture_output=True, text=True, timeout=30, check=True,

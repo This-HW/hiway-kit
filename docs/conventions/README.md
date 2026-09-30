@@ -17,7 +17,7 @@ That is a narrower bar than "is this interesting" or "is this true regardless of
 of `CLAUDE.md` is genuinely host-neutral in the sense that it's *true* for any harness (e.g. the
 2-tier agent model, the delegation signal format) but doesn't change what a contributor should
 *do* — those stayed in `CLAUDE.md` as-is, or in the `AGENTS.md` block that already carries the
-portable `rules/*.md` content (see `plugins/common/hooks/export_harness.py`'s `PORTABLE` list,
+portable `rules/*.md` content (see `plugins/common/tools/export_harness.py`'s `PORTABLE` list,
 which made the same kind of judgment for rules and already covers `definition-of-done`).
 
 **Moved to `docs/conventions/` (this bar, met):**
@@ -49,7 +49,7 @@ which made the same kind of judgment for rules and already covers `definition-of
 Codex's `project_doc_max_bytes` (merged-total, silently-truncating — see
 `docs/research/2026-08-27-superpowers-distribution.md`'s appendix) means `AGENTS.md` cannot
 inline everything in this directory without risking silent truncation for consumers who also
-have a sizeable global `~/.codex/AGENTS.md`. `plugins/common/hooks/export_harness.py`'s second
+have a sizeable global `~/.codex/AGENTS.md`. `plugins/common/tools/export_harness.py`'s second
 marker block inlines only `path-containment.md` and `no-gate-integration.md` in full — the two
 most concrete, "you will repeat a real bug without this" entries — and points at this directory by
 path for the rest. See that script's `CONVENTIONS_INLINE` list for the exact set; changing what's

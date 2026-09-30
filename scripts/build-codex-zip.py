@@ -70,13 +70,18 @@ PORTAL_CATEGORIES = frozenset(
 #: 제출 ZIP 에서 빼는 플러그인 루트 기준 경로와 사유.
 EXCLUDED = {
     "plugin.json": "Antigravity 매니페스트 — version·author 가 없고 포털이 매니페스트 후보로 읽는다",
-    # 2026-09-30 실측: 포털 메타데이터 검사가 "Plugins containing hooks cannot be submitted" 로 막았다.
-    # 디렉토리 제출본은 훅 **선언**만 뺀다 — 스킬이 부르는 hooks/*.py 도구(checklist·feedback_ledger·
-    # export_harness)는 남아야 스킬이 동작한다. Codex 로컬 설치(마켓플레이스)는 훅을 그대로 받는다.
-    "hooks/hooks.json": "훅 선언 — 디렉토리 제출 금지(포털 메타데이터 검사)",
-    "hooks/hooks-codex.json": "훅 선언 — 디렉토리 제출 금지(포털 메타데이터 검사)",
 }
-#: 제출본 매니페스트에서 빼는 필드와 사유 — EXCLUDED 와 같은 이유(훅 선언).
+#: 제출 ZIP 에서 **디렉토리째** 빼는 플러그인 루트 기준 접두사와 사유.
+#:
+#: 2026-09-30 실측: 포털 메타데이터 검사가 "Plugins containing hooks cannot be submitted" 로
+#: 막았다. 훅 **선언**(json 두 개·매니페스트 `hooks`)만 빼도 막혔고, `hooks/` 디렉토리를
+#: 통째로 빼야 통과했다 — 포털은 디렉토리의 존재를 훅으로 본다. 그래서 스킬이 부르는
+#: 도구(checklist·feedback_ledger·export_harness)는 v5.2.0 에 `tools/` 로 옮겼고, 제출본은
+#: `hooks/` 를 전부 뺀다. Codex 로컬 설치(마켓플레이스)는 훅을 그대로 받는다.
+EXCLUDED_DIRS = {
+    "hooks/": "훅 디렉토리 — 디렉토리 제출 금지(포털 메타데이터 검사가 존재 자체를 거부)",
+}
+#: 제출본 매니페스트에서 빼는 필드와 사유 — EXCLUDED_DIRS 와 같은 이유(훅 선언).
 MANIFEST_DROPPED = {"hooks": "훅 선언 — 디렉토리 제출 금지"}
 
 MAX_ENTRIES = 5000
@@ -144,7 +149,7 @@ def build_zip(repo_root: Path, out: Path) -> str:
     top = manifest["name"]
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         for rel in tracked_plugin_files(repo_root, root_rel):
-            if rel in EXCLUDED:
+            if rel in EXCLUDED or rel.startswith(tuple(EXCLUDED_DIRS)):
                 continue
             if rel == ".codex-plugin/plugin.json":
                 submitted = {k: v for k, v in manifest.items() if k not in MANIFEST_DROPPED}
@@ -285,7 +290,7 @@ def validate(zip_bytes: bytes) -> tuple[list[str], list[str]]:
     for rel in files:
         if rel in EXCLUDED_CONFIG:
             errors.append(f"excluded config present: {rel}")
-        if rel in ("hooks/hooks.json", "hooks/hooks-codex.json"):
+        if rel.startswith(tuple(EXCLUDED_DIRS)):
             errors.append(f"plugin_hooks_not_allowed: {rel}")
 
     skills: set[str] = set()

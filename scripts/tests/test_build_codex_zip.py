@@ -161,6 +161,17 @@ def test_hook_declarations_are_error(mod):
     assert any("plugin_hooks_not_allowed" in e for e in errors)
 
 
+@pytest.mark.parametrize("rel", ["hooks/session-start.py", "hooks/utils.py", "hooks/examples/x.py"])
+def test_any_entry_under_hooks_dir_is_error(mod, rel):
+    """선언이 아니어도 `hooks/` 아래 항목이면 오류 — 포털은 디렉토리의 존재를 훅으로 본다(2026-09-30).
+
+    선언 두 파일만 빼던 제출본이 포털에서 막혔다. 검증기가 선언만 보면 같은 ZIP 을
+    green 으로 통과시킨다 — 로컬 검사가 포털보다 느슨하면 검사가 아니다.
+    """
+    errors, _ = mod.validate(_package(**{f"kit/{rel}": "x"}))
+    assert f"plugin_hooks_not_allowed: {rel}" in errors
+
+
 def test_missing_privacy_policy_url_is_error(mod):
     """포털 메타데이터 검사: "Make sure your privacy policy website is accessible"(2026-09-30)."""
     manifest = json.loads(json.dumps(GOOD_MANIFEST))
@@ -169,14 +180,17 @@ def test_missing_privacy_policy_url_is_error(mod):
     assert any("plugin_privacy_policy_url" in e for e in errors)
 
 
-def test_real_zip_drops_hook_declarations_but_keeps_hook_tools(mod, tmp_path):
-    """제출본은 훅 선언만 빼고, 스킬이 부르는 hooks/*.py 도구는 남긴다."""
+def test_real_zip_drops_hooks_dir_but_keeps_skill_tools(mod, tmp_path):
+    """제출본에는 `hooks/` 가 **통째로** 없고, 스킬이 부르는 `tools/` 도구는 남는다(v5.2.0).
+
+    도구가 빠지면 디렉토리로 설치한 사용자에게서 plan-task·auto-dev·harness-export 가 깨진다.
+    """
     out = tmp_path / "real.zip"
     top = mod.build_zip(REPO_ROOT, out)
     zf = zipfile.ZipFile(out)
     names = zf.namelist()
-    assert f"{top}/hooks/hooks.json" not in names
-    assert f"{top}/hooks/hooks-codex.json" not in names
-    assert f"{top}/hooks/checklist.py" in names
+    assert not [n for n in names if n.startswith(f"{top}/hooks/")], "제출본에 hooks/ 가 남았다"
+    for tool in ("checklist.py", "feedback_ledger.py", "export_harness.py"):
+        assert f"{top}/tools/{tool}" in names, f"제출본에 tools/{tool} 가 없다"
     submitted = json.loads(zf.read(f"{top}/.codex-plugin/plugin.json"))
     assert "hooks" not in submitted

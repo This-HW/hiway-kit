@@ -7,12 +7,12 @@ import stat
 from pathlib import Path
 from types import ModuleType
 
-HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
+TOOLS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "tools"
 
 
 def _load_module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
-        "feedback_ledger", HOOKS_DIR / "feedback_ledger.py"
+        "feedback_ledger", TOOLS_DIR / "feedback_ledger.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -176,7 +176,7 @@ def test_concurrent_upserts_preserve_all_entries(tmp_path):
 
     n = 8
     env = {**__import__("os").environ, "CLAUDE_PROJECT_DIR": str(tmp_path)}
-    script = str(HOOKS_DIR / "feedback_ledger.py")
+    script = str(TOOLS_DIR / "feedback_ledger.py")
     procs = [
         sp.Popen(
             [sys.executable, script, "upsert", "lint", "low", f"concurrent pattern {i}"],

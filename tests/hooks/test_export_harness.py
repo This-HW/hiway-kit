@@ -1,15 +1,15 @@
-"""Unit tests for plugins/common/hooks/export_harness.py (W-017 / Pillar 1)."""
+"""Unit tests for plugins/common/tools/export_harness.py (W-017 / Pillar 1)."""
 
 import importlib.util
 from pathlib import Path
 from types import ModuleType
 
-HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
+TOOLS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "tools"
 
 
 def _load_module() -> ModuleType:
     spec = importlib.util.spec_from_file_location(
-        "export_harness", HOOKS_DIR / "export_harness.py"
+        "export_harness", TOOLS_DIR / "export_harness.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -394,8 +394,8 @@ def test_self_location_beats_env_var(tmp_path, monkeypatch):
         "# Foreign\n", encoding="utf-8"
     )
     monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(other))
-    # 자기 위치(plugins/common/hooks/의 부모)가 1순위여야 한다
-    assert _mod._plugin_root(None) == (HOOKS_DIR.parent).resolve()
+    # 자기 위치(plugins/common/tools/의 부모)가 1순위여야 한다
+    assert _mod._plugin_root(None) == (TOOLS_DIR.parent).resolve()
 
 
 def test_headings_are_demoted_uniformly(tmp_path):
@@ -992,7 +992,7 @@ def _resolve_contract_cases():
     """
     import sys as _sys
 
-    repo_tests = HOOKS_DIR.parent.parent.parent / "scripts" / "tests"
+    repo_tests = TOOLS_DIR.parent.parent.parent / "scripts" / "tests"
     if not (repo_tests / "resolve_in_repo_contract.py").is_file():
         return None
     if str(repo_tests) not in _sys.path:
@@ -1219,7 +1219,7 @@ def _kit_copy_with_manifest_name(tmp_path: Path, name: str, homepage: str) -> Mo
     import shutil
 
     dst = tmp_path / "common"
-    shutil.copytree(HOOKS_DIR.parent, dst)
+    shutil.copytree(TOOLS_DIR.parent, dst)
     mp = dst / ".claude-plugin" / "plugin.json"
     manifest = json.loads(mp.read_text(encoding="utf-8"))
     manifest["name"] = name
@@ -1227,7 +1227,7 @@ def _kit_copy_with_manifest_name(tmp_path: Path, name: str, homepage: str) -> Mo
     mp.write_text(json.dumps(manifest), encoding="utf-8")
 
     spec = importlib.util.spec_from_file_location(
-        f"export_harness_{name}", dst / "hooks" / "export_harness.py"
+        f"export_harness_{name}", dst / "tools" / "export_harness.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -1272,10 +1272,10 @@ def test_manifest_read_failure_does_not_break_the_tool(tmp_path):
     import shutil
 
     dst = tmp_path / "common"
-    shutil.copytree(HOOKS_DIR.parent, dst)
+    shutil.copytree(TOOLS_DIR.parent, dst)
     (dst / ".claude-plugin" / "plugin.json").unlink()
     spec = importlib.util.spec_from_file_location(
-        "export_harness_nomanifest", dst / "hooks" / "export_harness.py"
+        "export_harness_nomanifest", dst / "tools" / "export_harness.py"
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -1426,9 +1426,9 @@ def test_unknown_tier_value_is_red(tmp_path):
 
 
 def test_valid_tiers_match_session_start(tmp_path):
-    """두 훅은 서로 import 하지 않는다 — 값이 갈리면 규범이 하네스마다 다르게 도달한다."""
+    """훅과 도구는 서로 import 하지 않는다 — 값이 갈리면 규범이 하네스마다 다르게 도달한다."""
     spec = importlib.util.spec_from_file_location(
-        "session_start_for_tier_parity", HOOKS_DIR / "session-start.py"
+        "session_start_for_tier_parity", TOOLS_DIR.parent / "hooks" / "session-start.py"
     )
     ss = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ss)
@@ -1463,12 +1463,12 @@ def test_reference_rules_carry_deterministic_repo_fallback():
     안내를 받지 못한다. "플러그인 설치 경로" 만으로는 그 독자가 원문을 찾을 수 없으므로
     저장소 URL + 저장소 안 경로를 결정적 폴백으로 싣는다 — **실물 규범**으로 확인한다.
     """
-    block, _ = _mod.build_block(HOOKS_DIR.parent)
+    block, _ = _mod.build_block(TOOLS_DIR.parent)
     assert _mod.KIT_HOMEPAGE, "매니페스트 homepage/repository 를 못 읽었다 — 폴백 URL 이 빈다"
     assert f"({_mod.KIT_HOMEPAGE})" in block
     assert f"`{_mod.KIT_RULES_REPO_PATH}/<이름>.md`" in block
     # 폴백 경로가 이 레포의 실제 규범 위치와 같아야 한다(배치가 바뀌면 여기서 red).
-    repo_root = HOOKS_DIR.parents[2]
+    repo_root = TOOLS_DIR.parents[2]
     assert (repo_root / _mod.KIT_RULES_REPO_PATH).resolve() == (
-        HOOKS_DIR.parent / "rules"
+        TOOLS_DIR.parent / "rules"
     ).resolve()

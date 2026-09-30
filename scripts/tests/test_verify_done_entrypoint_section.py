@@ -42,8 +42,8 @@ def _section_11() -> str:
 def _run(tmp_path: Path, rc: int) -> str:
     """스텁 `export-harness.sh` 가 `rc` 로 끝나는 환경에서 §11 블록만 실행한다."""
     (tmp_path / "scripts").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "plugins" / "common" / "hooks").mkdir(parents=True)
-    (tmp_path / "plugins" / "common" / "hooks" / "export_harness.py").write_text("")
+    (tmp_path / "plugins" / "common" / "tools").mkdir(parents=True)
+    (tmp_path / "plugins" / "common" / "tools" / "export_harness.py").write_text("")
     stub = tmp_path / "scripts" / "export-harness.sh"
     stub.write_text(f"#!/bin/sh\necho '스텁 출력 한 줄'\nexit {rc}\n", encoding="utf-8")
     stub.chmod(0o755)

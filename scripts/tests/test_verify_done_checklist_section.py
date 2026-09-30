@@ -23,6 +23,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GATE = REPO_ROOT / "scripts" / "verify-done.sh"
 HOOKS = REPO_ROOT / "plugins" / "common" / "hooks"
+TOOLS = REPO_ROOT / "plugins" / "common" / "tools"
 
 # `CL_HELPER=` 부터 §8 의 마지막 줄(`[ "$CL_FOUND" -eq 0 ] && green ...`)까지.
 _BLOCK_RE = re.compile(
@@ -63,8 +64,11 @@ def _plan(root: Path, name: str, status: str | None, passes: list[bool]) -> None
 def _run(root: Path) -> list[str]:
     hooks = root / "plugins" / "common" / "hooks"
     hooks.mkdir(parents=True)
-    for name in ("session-start.py", "checklist.py", "utils.py"):
+    for name in ("session-start.py", "utils.py"):
         shutil.copy2(HOOKS / name, hooks / name)
+    tools = root / "plugins" / "common" / "tools"
+    tools.mkdir(parents=True)
+    shutil.copy2(TOOLS / "checklist.py", tools / "checklist.py")
     tmpd = root / "tmpd"
     tmpd.mkdir()
     script = root / "run.sh"

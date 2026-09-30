@@ -8,7 +8,7 @@
 ```
 docs/plans/<YYYY-MM-DD>-<slug>/
 ├── plan.md          # 필수
-└── checklist.json   # 선택 — 실행 단계에서 hooks/checklist.py 가 만든다
+└── checklist.json   # 선택 — 실행 단계에서 tools/checklist.py 가 만든다
 ```
 
 - **식별자 = 디렉토리 이름.** 발급기가 없다. 같은 이름이 이미 있으면 `-2`, `-3` 을 붙인다.

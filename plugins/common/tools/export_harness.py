@@ -30,7 +30,7 @@ AGENTS.md는 **텍스트 규범만** 이식한다. 훅(protect-sensitive·stop-v
 "규율 문서"로 동작하지 "강제 장치"로 동작하지 않는다.
 
 사용 (레포에서는 ./scripts/export-harness.sh 래퍼를 쓴다):
-  python3 plugins/common/hooks/export_harness.py                 # 레포 루트 AGENTS.md 갱신
+  python3 plugins/common/tools/export_harness.py                 # 레포 루트 AGENTS.md 갱신
   ./scripts/export-harness.sh --check         # 드리프트 검사 (게이트용)
   ./scripts/export-harness.sh --stdout        # 블록만 출력, 파일 미기록
   ./scripts/export-harness.sh --target /path/to/project
@@ -555,7 +555,7 @@ def _plugin_root(explicit: str | None) -> Path | None:
             return False
 
     here = Path(__file__).resolve().parent
-    # **자기 위치가 1순위다.** 이 파일은 plugins/common/hooks/ 안에 살고, 플러그인
+    # **자기 위치가 1순위다.** 이 파일은 plugins/common/tools/ 안에 살고, 플러그인
     # 캐시에 설치돼도 그 상대관계는 유지된다 — 가장 신뢰도 높은 소스다.
     # `CLAUDE_PLUGIN_ROOT`를 앞에 두면, 셸에 남아 있는 **다른 플러그인의** 값이
     # 남의 rules/를 "이 킷의 규범"으로 내보내게 만든다.

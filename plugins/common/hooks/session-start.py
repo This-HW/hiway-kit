@@ -17,6 +17,11 @@ import sys
 from pathlib import Path
 
 HOOK_DIR = Path(__file__).resolve().parent
+# 스킬이 부르는 도구(`feedback_ledger` 등)는 훅이 아니라서 형제 디렉토리 `tools/` 에 산다
+# (v5.2.0 — 디렉토리 포털은 `hooks/` 의 존재를 훅으로 보고, 훅을 뺀 제출본에서도 도구는
+# 남아야 한다). `__file__` 기준이라 cwd·플러그인 캐시 위치와 무관하다.
+TOOLS_DIR = HOOK_DIR.parent / "tools"
+sys.path.insert(0, str(TOOLS_DIR))
 sys.path.insert(0, str(HOOK_DIR))
 try:
     from utils import get_project_root
@@ -212,9 +217,11 @@ def _rule_is_portable(fm: dict) -> bool | None:
     return None
 
 
-#: 규범 본문의 킷 상대경로(`skills/…`·`rules/…`·`hooks/…`). 앞 글자가 경로 문자면
+#: 규범 본문의 킷 상대경로(`skills/…`·`rules/…`·`hooks/…`·`tools/…`). 앞 글자가 경로 문자면
 #: 잡지 않는다 — `plugins/common/…` 같은 레포 경로의 꼬리를 다시 치환하지 않게.
-_PLUGIN_REL_PATH_RE = re.compile(r"(?<![\w./-])((?:skills|rules|hooks)/[\w.-]+(?:/[\w.-]+)*)")
+_PLUGIN_REL_PATH_RE = re.compile(
+    r"(?<![\w./-])((?:skills|rules|hooks|tools)/[\w.-]+(?:/[\w.-]+)*)"
+)
 
 
 def _render_plugin_paths(text: str, plugin_root: Path) -> str:

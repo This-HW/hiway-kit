@@ -12,7 +12,7 @@
 #   ./scripts/checklist.sh complete <plan_dir> <id>              # verify 실행 후 통과 시 flip
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CL="$HERE/../plugins/common/hooks/checklist.py"
+CL="$HERE/../plugins/common/tools/checklist.py"
 if [ ! -f "$CL" ]; then
   echo "[checklist.sh] checklist.py를 찾을 수 없음: $CL" >&2
   exit 3

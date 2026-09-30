@@ -65,19 +65,19 @@ NORMS="$(python3 "$EH" --stdout)"   # 캐시하고 sha 로 갱신 판단
 
 ### 소비자(플러그인 설치) 환경 — 기본 경로
 
-구현은 **플러그인 안**에 있다(`<플러그인 루트>/hooks/export_harness.py`).
+구현은 **플러그인 안**에 있다(`<플러그인 루트>/tools/export_harness.py`).
 설치한 프로젝트에는 킷 레포의 개발용 래퍼가 없으므로 이 경로를 쓴다.
 
 > **`$CLAUDE_PLUGIN_ROOT`를 그대로 신뢰하지 마라.** 이 변수는 스킬의 Bash 컨텍스트에
 > **설정돼 있지 않을 수 있다**(kit의 `feedback.sh`·`auto-dev`가 같은 이유로 의존을
-> 제거했다). 빈 값이면 `python3 "/hooks/export_harness.py"`가 되어 파일 없음으로
+> 제거했다). 빈 값이면 `python3 "/tools/export_harness.py"`가 되어 파일 없음으로
 > **종료코드 2**가 나고, exit 표상 2는 "SKIPPED"라서 **원인을 오보고**하게 된다.
 > 아래처럼 먼저 해석하라.
 
 ```bash
 # 1) 구현 위치 해석 — 변수가 비면 캐시에서 찾는다
-EH="${CLAUDE_PLUGIN_ROOT:-}/hooks/export_harness.py"
-[ -f "$EH" ] || EH=$(ls -1 ~/.claude/plugins/cache/*/*/*/hooks/export_harness.py 2>/dev/null | sort -V | tail -1)
+EH="${CLAUDE_PLUGIN_ROOT:-}/tools/export_harness.py"
+[ -f "$EH" ] || EH=$(ls -1 ~/.claude/plugins/cache/*/*/*/tools/export_harness.py 2>/dev/null | sort -V | tail -1)
 [ -f "$EH" ] || { echo "export_harness.py를 찾지 못했다 — 플러그인 설치 확인"; exit 2; }
 
 # 2) 현재 프로젝트(git 최상위)의 AGENTS.md 갱신
@@ -123,7 +123,7 @@ python3 "$EH" --target /path/to/project
    이 도구가 막겠다고 선언한 상황이 그대로 게이트를 통과한다.
 3. **요약 금지.** 이식 대상 룰은 **원문 그대로** 실린다. 규범을 요약하면 원문과
    의미가 갈리고, 갈린 규범은 규범이 아니다.
-4. **분류 누락도, 유령 엔트리도 실패.** 새 룰을 추가하면 `hooks/export_harness.py`의 `PORTABLE` 또는
+4. **분류 누락도, 유령 엔트리도 실패.** 새 룰을 추가하면 `tools/export_harness.py`의 `PORTABLE` 또는
    `NOT_PORTABLE`에 **사유와 함께** 등재해야 한다. 반대로 룰을 삭제·개명하면 그 엔트리를
    빼야 한다 — 두면 소비자 AGENTS.md가 존재하지 않는 룰을 영구히 광고한다. 양쪽 다 exit 1.
 
