@@ -19,7 +19,10 @@
     "displayName": "hiway-kit",
     "logo": "./assets/icon.png",
     "longDescription": "hiway-kit is a discipline kit for coding agents. Its 15 skills turn a request into verified, production-ready code.\n\n- Planning: plan-task writes a plan file with executable done-criteria; brainstorming handles design for large new features.\n- Execution: auto-dev runs a plan through implementation and validation; test and debug run the tests, diagnose failures and fix them.\n- Review: review runs lint, an adversarial code review and a security scan; multi-perspective-review and cross-engine-review reach an evidence-backed decision across perspectives or across agent engines.\n- Coordination: control-loop and child-session keep multi-session work safe with clear briefs, isolated branches and verification before merge.\n- Knowledge: web-research, skill-forge (turn a solved problem into a reusable skill), agent-creator, and harness-export (share the kit's rules with other coding agents through AGENTS.md).\n\nDone is judged by command output, not by claims: the skills tell the agent to run the project's own tests and checks before reporting work as finished.\n\nThe kit makes no network calls and collects no data. Skills that search the web use the tools you already have.",
-    "shortDescription": "Coding agent discipline kit"
+    "privacyPolicyURL": "https://github.com/This-HW/hiway-kit/blob/main/PRIVACY.md",
+    "shortDescription": "Coding agent discipline kit",
+    "supportURL": "https://github.com/This-HW/hiway-kit/issues",
+    "websiteURL": "https://github.com/This-HW/hiway-kit"
   },
   "keywords": [
     "agents",
@@ -34,5 +37,5 @@
   "name": "hiway-kit",
   "repository": "https://github.com/This-HW/hiway-kit",
   "skills": "./skills/",
-  "version": "5.1.1"
+  "version": "5.1.2"
 }

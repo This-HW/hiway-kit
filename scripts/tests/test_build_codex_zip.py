@@ -28,6 +28,7 @@ GOOD_MANIFEST = {
         "displayName": "kit",
         "shortDescription": "short",
         "longDescription": "What the plugin does, in full.",
+        "privacyPolicyURL": "https://example.com/privacy",
         "developerName": "Dev",
         "category": "Developer Tools",
         "logo": "./assets/icon.png",
@@ -148,3 +149,34 @@ def test_long_description_over_limit_is_error(mod):
     manifest["interface"]["longDescription"] = "x" * 4001
     errors, _ = mod.validate(_package(manifest))
     assert any("plugin_long_description_too_long" in e for e in errors)
+
+
+def test_hook_declarations_are_error(mod):
+    """포털 메타데이터 검사: "Plugins containing hooks cannot be submitted"(2026-09-30)."""
+    manifest = json.loads(json.dumps(GOOD_MANIFEST))
+    manifest["hooks"] = "./hooks/hooks-codex.json"
+    errors, _ = mod.validate(_package(manifest))
+    assert any("plugin_hooks_not_allowed" in e for e in errors)
+    errors, _ = mod.validate(_package(**{"kit/hooks/hooks.json": "{}"}))
+    assert any("plugin_hooks_not_allowed" in e for e in errors)
+
+
+def test_missing_privacy_policy_url_is_error(mod):
+    """포털 메타데이터 검사: "Make sure your privacy policy website is accessible"(2026-09-30)."""
+    manifest = json.loads(json.dumps(GOOD_MANIFEST))
+    del manifest["interface"]["privacyPolicyURL"]
+    errors, _ = mod.validate(_package(manifest))
+    assert any("plugin_privacy_policy_url" in e for e in errors)
+
+
+def test_real_zip_drops_hook_declarations_but_keeps_hook_tools(mod, tmp_path):
+    """제출본은 훅 선언만 빼고, 스킬이 부르는 hooks/*.py 도구는 남긴다."""
+    out = tmp_path / "real.zip"
+    top = mod.build_zip(REPO_ROOT, out)
+    zf = zipfile.ZipFile(out)
+    names = zf.namelist()
+    assert f"{top}/hooks/hooks.json" not in names
+    assert f"{top}/hooks/hooks-codex.json" not in names
+    assert f"{top}/hooks/checklist.py" in names
+    submitted = json.loads(zf.read(f"{top}/.codex-plugin/plugin.json"))
+    assert "hooks" not in submitted

@@ -459,6 +459,7 @@ clarify-requirements → design-user-journey → define-business-logic
 ## Data handling
 
 The plugin collects nothing and sends nothing anywhere.
+The full policy is in [PRIVACY.md](PRIVACY.md).
 
 - **No network calls.** The shipped hooks (`plugins/common/hooks/`) make no HTTP or socket
   connections. They only run local commands: `git`, the formatter/linter for the edited file

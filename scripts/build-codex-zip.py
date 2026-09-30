@@ -70,7 +70,14 @@ PORTAL_CATEGORIES = frozenset(
 #: 제출 ZIP 에서 빼는 플러그인 루트 기준 경로와 사유.
 EXCLUDED = {
     "plugin.json": "Antigravity 매니페스트 — version·author 가 없고 포털이 매니페스트 후보로 읽는다",
+    # 2026-09-30 실측: 포털 메타데이터 검사가 "Plugins containing hooks cannot be submitted" 로 막았다.
+    # 디렉토리 제출본은 훅 **선언**만 뺀다 — 스킬이 부르는 hooks/*.py 도구(checklist·feedback_ledger·
+    # export_harness)는 남아야 스킬이 동작한다. Codex 로컬 설치(마켓플레이스)는 훅을 그대로 받는다.
+    "hooks/hooks.json": "훅 선언 — 디렉토리 제출 금지(포털 메타데이터 검사)",
+    "hooks/hooks-codex.json": "훅 선언 — 디렉토리 제출 금지(포털 메타데이터 검사)",
 }
+#: 제출본 매니페스트에서 빼는 필드와 사유 — EXCLUDED 와 같은 이유(훅 선언).
+MANIFEST_DROPPED = {"hooks": "훅 선언 — 디렉토리 제출 금지"}
 
 MAX_ENTRIES = 5000
 MAX_UNCOMPRESSED = 512 * 2**20
@@ -138,6 +145,10 @@ def build_zip(repo_root: Path, out: Path) -> str:
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         for rel in tracked_plugin_files(repo_root, root_rel):
             if rel in EXCLUDED:
+                continue
+            if rel == ".codex-plugin/plugin.json":
+                submitted = {k: v for k, v in manifest.items() if k not in MANIFEST_DROPPED}
+                zf.writestr(f"{top}/{rel}", json.dumps(submitted, indent=2, ensure_ascii=False) + "\n")
                 continue
             src = root / rel
             if src.is_symlink() or not src.is_file():
@@ -223,6 +234,8 @@ def validate(zip_bytes: bytes) -> tuple[list[str], list[str]]:
         errors.append("plugin_description_too_long")
     if m.get("mcpServers") or m.get("apps"):
         errors.append("mcp_configuration_excluded/app_configuration_excluded")
+    if m.get("hooks"):
+        errors.append("plugin_hooks_not_allowed: manifest declares hooks")
 
     iface = m.get("interface") or {}
     for field in ("displayName", "shortDescription"):
@@ -240,6 +253,11 @@ def validate(zip_bytes: bytes) -> tuple[list[str], list[str]]:
         errors.append("plugin_long_description_empty: interface.longDescription")
     elif len(long_description) > LONG_DESCRIPTION_LIMIT:
         errors.append(f"plugin_long_description_too_long (> {LONG_DESCRIPTION_LIMIT})")
+    # 2026-09-30 실측: 포털 메타데이터 검사가 "Make sure your privacy policy website is accessible" 로 막았다.
+    # 여기서는 형식(https URL)만 본다 — 실제로 열리는지는 포털이 판정한다.
+    privacy = iface.get("privacyPolicyURL", "")
+    if not isinstance(privacy, str) or not privacy.startswith("https://"):
+        errors.append("plugin_privacy_policy_url: interface.privacyPolicyURL must be an https URL")
     if not iface.get("developerName"):
         errors.append("plugin_developer_name_empty")
     elif iface["developerName"] != (m.get("author") or {}).get("name"):
@@ -267,6 +285,8 @@ def validate(zip_bytes: bytes) -> tuple[list[str], list[str]]:
     for rel in files:
         if rel in EXCLUDED_CONFIG:
             errors.append(f"excluded config present: {rel}")
+        if rel in ("hooks/hooks.json", "hooks/hooks-codex.json"):
+            errors.append(f"plugin_hooks_not_allowed: {rel}")
 
     skills: set[str] = set()
     for rel, full in sorted(files.items()):

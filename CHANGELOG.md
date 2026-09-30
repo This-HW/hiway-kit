@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.1.2] — 2026-09-30
+
+### Fixed — OpenAI 디렉토리 메타데이터 검사 2건
+
+5.1.1 ZIP 은 업로드되고 **스킬 15종 모두 검사 통과**했지만, 메타데이터 검사 두 건이 제출을 막았다.
+
+- *"Plugins containing hooks cannot be submitted"* — 디렉토리 제출본(`scripts/build-codex-zip.py`)에서 **훅 선언만** 뺀다
+  (`hooks/hooks.json`·`hooks/hooks-codex.json`, 매니페스트 `hooks` 필드). 스킬이 부르는 `hooks/*.py` 도구는 남긴다.
+  Codex 로컬 설치(마켓플레이스 경로)는 지금처럼 훅을 받는다. 검증기가 훅 선언을 오류로 잡는다.
+- *"Make sure your privacy policy website is accessible"* — `PRIVACY.md` 를 추가하고 Codex 매니페스트에
+  `privacyPolicyURL`·`websiteURL`·`supportURL` 을 넣었다(SSOT `packaging/targets.json`). 검증기가 https URL 이 아니면 오류.
+- 테스트 3개 추가(훅 선언 거부, 개인정보처리방침 URL 필수, 실물 ZIP 이 선언은 빼고 도구는 남김).
+
 ## [5.1.1] — 2026-09-30
 
 ### Fixed — OpenAI 플러그인 업로드를 막던 `interface.longDescription` 누락
