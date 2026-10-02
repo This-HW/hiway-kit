@@ -6,6 +6,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.2.1] — 2026-10-02
+
+### Fixed — session-check 의 "에이전트 중복 로딩" 경고가 권장 사용에서 상시 발화
+
+`.claude/agents/` 에 `*.md` 가 **하나라도 있으면** "Plugin 동시 감지! … `setup.sh --migrate` 실행 권장" 을 냈다.
+프로젝트 로컬 에이전트는 킷이 권장하는 2-Tier 구조라 그 조건은 상시 참이었다 — 플러그인과 이름 충돌이 0건인
+두 소비자 레포(프로젝트 에이전트 8개·24개)에서 매 세션 발화했다(v5.0.0 이 stderr→`systemMessage` 로 바꾸며 드러남).
+더 나쁘게도 권고된 `--migrate` 는 `.claude/agents`·`.claude/skills` 를 **통째로** `.bak` 으로 옮겨 프로젝트 에이전트가 사라졌다.
+
+- **경고 조건 = 실제 이름 충돌.** 프로젝트 `.claude/agents/**/*.md` 의 `name:`(없으면 파일명)이 플러그인 에이전트 이름과,
+  `.claude/skills/<dir>/SKILL.md` 의 name(없으면 디렉토리명)이 플러그인 스킬과 겹칠 때만. 플러그인 루트를 못 찾으면 경고하지 않는다.
+- **메시지**: 충돌 개수 + 이름 최대 3개 + "그 파일을 지우거나 이름을 바꿔라 — 플러그인 쪽은 `hiway-kit:` 네임스페이스로 이미 로드된다".
+- **`setup.sh --migrate`**: **충돌하는 항목만** `.claude/agents.bak/`·`.claude/skills.bak/`(상대경로 보존)으로 옮기고 목록을 출력한다.
+  충돌 0이면 아무것도 옮기지 않는다. 이미 있는 `.bak` 항목은 덮어쓰지 않는다(rc 1). 판정은 훅과 같은 코드
+  (`session-check.py --conflicts`)를 쓴다 — 경고와 이주가 갈라지지 않는다.
+- 되돌리면 실패하는 테스트: 충돌 없는 프로젝트 에이전트에 경고 없음, 충돌 1개면 그 이름, 루트 미해결이면 무경고, `--migrate` 가 충돌 항목만 이동.
+
+---
+
 ## [5.2.0] — 2026-09-30
 
 ### Changed — 스킬이 부르는 도구를 `hooks/` 에서 `tools/` 로 분리
