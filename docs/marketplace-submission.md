@@ -66,6 +66,15 @@ Code 는 이 디렉토리를 `claude-plugins-official` 로 노출하므로 그 �
 hiway-kit 은 없다(314개 중 0). 이후 버전은 계속 자동 공개(현재 v5.1.x). 10:02 KST 같은 티켓 스레드에 후속 문의.
 09-30 15:04 KST 재확인도 같음 — 검색 "No results match “hiway”", 카탈로그 314개 중 0(마지막 커밋 09-29 21:28Z), 포털은 v5.2.0 까지
 자동 공개, 10:02 이후 디렉토리 팀 회신 없음. 다음 확인은 10-01 오전 10시경.
+10-02 17:50 KST 재확인 — 여전히 미노출(검색 결과 없음, 카탈로그 315개 중 0 — 마지막 커밋 09-30 20:11Z), 포털은 **v5.2.2 Live**(자동 공개 정상),
+티켓 회신 없음. **추적 공백**: 매시간 추적을 걸어 둔 세션이 10-01 02:42 KST 께 종료돼 약 40시간 추적이 멈췄다(cron 은 세션 한정) — 10-02 에
+plan-control 세션이 v2 지시문으로 다시 걸었다.
+
+**목록 정보 갱신(2026-10-02)** — 제품 사이트 https://hiway.thishw.com/ 공개(v5.2.2 에서 plugin.json homepage 교체)에 맞춰 반영을 시도했다.
+Listing 탭의 Homepage·Documentation·Support·Privacy 행은 **편집기가 아니다**(*"Nothing was kept for this detail when the submission was
+created"* — 제출 시점 `plugin.json` 값을 보여 줄 뿐, 상단 Edit 은 Settings). **아이콘만** 포털에서 올릴 수 있어 `plugins/common/assets/icon.png`
+(512×512)를 업로드했다 → *"Icon uploaded. It's waiting for review."* URL 4종(Homepage·Documentation `/docs/`·Support GitHub issues·Privacy
+`/privacy/`)은 18:04 KST 같은 티켓 스레드로 디렉토리 팀에 갱신을 요청했고, 노출 문의도 다시 적었다.
 
 **스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
 `https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
