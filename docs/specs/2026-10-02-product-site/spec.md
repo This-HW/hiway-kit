@@ -1,6 +1,6 @@
 ---
 title: "hiway-kit 제품 사이트 — hiway.thishw.com"
-status: planning
+status: done
 created: 2026-10-02
 size: large
 ---
