@@ -70,6 +70,16 @@ hiway-kit 은 없다(314개 중 0). 이후 버전은 계속 자동 공개(현재
 티켓 회신 없음. **추적 공백**: 매시간 추적을 걸어 둔 세션이 10-01 02:42 KST 께 종료돼 약 40시간 추적이 멈췄다(cron 은 세션 한정) — 10-02 에
 plan-control 세션이 v2 지시문으로 다시 걸었다.
 
+**정정 — 소비자 노출 경로(2026-10-02, 공식 문서 확인)**: 위 기록은 "Claude Code 는 이 디렉토리를 `claude-plugins-official` 로 노출"을
+전제로 그 카탈로그를 감시했는데 **틀렸다.** code.claude.com/docs/en/plugins/publish 원문: *"Anthropic's official marketplace,
+`claude-plugins-official`, doesn't take submissions through the directory portal."* · *"A person who installs your plugin from the directory on
+claude.ai has it on their account, and Claude Code loads it as `<name>@synced`."* anthropic-marketplaces 문서는 커뮤니티 마켓플레이스
+(`anthropics/claude-plugins-community`, 이름 `claude-community`)를 *"Third-party plugins that their authors submitted to Anthropic"* 로 정의하고,
+그 레포 README 는 *"synced nightly from Anthropic's internal review pipeline"* 이라 적는다. 그래서 노출 확인 대상은 ① claude.ai 디렉토리 검색
+② 커뮤니티 미러 `marketplace.json` 이다. 실측(10-02): ① 결과 없음 ② 2,283개 중 hiway-kit 0 — `marketplace.json` 의 자동 동기화 커밋은
+2026-08-13 이 마지막이고 이후는 수동 추가(08-21·08-24·10-01)뿐이다. 구 `claude-code-kit`(`292ba07e` 고정)이 아직 남아 있다(삭제 요청 미처리).
+소비자 설치 안내는 노출 확인 뒤 "claude.ai 디렉토리에서 추가 → Claude Code 에 `hiway-kit@synced`" 형태로 쓴다(CLI 설치 명령이 아니다).
+
 **목록 정보 갱신(2026-10-02)** — 제품 사이트 https://hiway.thishw.com/ 공개(v5.2.2 에서 plugin.json homepage 교체)에 맞춰 반영을 시도했다.
 Listing 탭의 Homepage·Documentation·Support·Privacy 행은 **편집기가 아니다**(*"Nothing was kept for this detail when the submission was
 created"* — 제출 시점 `plugin.json` 값을 보여 줄 뿐, 상단 Edit 은 Settings). **아이콘만** 포털에서 올릴 수 있어 `plugins/common/assets/icon.png`

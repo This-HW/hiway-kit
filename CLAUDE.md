@@ -390,13 +390,13 @@ Plugin cache is keyed by `{plugin-name}/{version}` — same version = no update 
 
 - **직접 마켓플레이스** (`This-HW/hiway-kit` → `@hiway-kit`): `/plugin marketplace update` 시
   **즉시** main HEAD 를 반영한다. 현재 **유일하게 성립하는** 경로다.
-- **Claude 디렉토리** (2026-09-25 공개된 제출 포털, Claude Code 에선 공식 마켓플레이스로 노출):
+- **Claude 디렉토리** (claude.ai 카탈로그 — Claude Code 엔 계정 동기화 `@synced` 로 온다. 공식 마켓은 포털 제출을 안 받는다):
   **포털상 Published**(2026-09-29)지만 소비자 검색·카탈로그엔 아직 없다(문의 중,
   `docs/marketplace-submission.md`). 게재 대상은 **Claude Code 만**. push webhook 으로 `main` 이 자동 스캔·게시된다.
 - **OpenAI 디렉토리**: 5.2.0 **검토 중**(2026-09-30). `build-codex-zip.py` ZIP 을 버전마다 손으로 올리고,
   승인 후 Publish 를 눌러야 공개된다(`docs/codex-submission-checklist.md`).
-- (구) **커뮤니티 카탈로그** (`@claude-community`): 상류 pin 전진 워크플로가 2026-08-13 이후 꺼져 있다
-  (`docs/research/2026-09-08-plugin-directory-status.md`). 더는 우리 배포 경로로 보지 않는다.
+- **커뮤니티 카탈로그** (`@claude-community`): 포털 승인분의 미러지만 자동 동기화가 2026-08-13 이후 멈춤 —
+  hiway-kit 없음, 전임 킷 항목 잔존(`docs/marketplace-submission.md`).
 
 `claude plugin validate` 는 §19 게이트·CI 로 계속 앞당겨 건다 — 포털 검증도 같은 검사로 시작한다.
 
