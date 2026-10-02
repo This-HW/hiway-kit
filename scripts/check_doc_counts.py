@@ -50,7 +50,7 @@ def check_claim(root: Path, rel: str, pattern: str, actual: int, label: str) -> 
     """**모든** 매치의 숫자를 실측과 대조. 주장 없음 = skip(통과).
 
     첫 매치만 보면 같은 파일에 같은 주장이 여러 번 있을 때 앞의 하나가 뒤를 가린다 —
-    실제로 `site/content/_index.md`의 설명줄이 본문 불릿을 가려, 불릿만 stale해도
+    실제로 (당시 이 레포가 갖고 있던 사이트의) `site/content/_index.md`의 설명줄이 본문 불릿을 가려, 불릿만 stale해도
     게이트가 초록이었다(2026-08-23 리뷰 후속 실측). 매직 리터럴에 커플링된 검사가
     조용히 무력해지는 F-022와 같은 계열이다.
     """
@@ -142,35 +142,11 @@ def main() -> int:
     # 배포 플러그인 README (2026-07-29 외부 검증에서 stale 발견된 파일 — 이후 상시 검사)
     ok &= check_claim(root, "plugins/common/README.md", r"(\d+) agents", a["agents"], "agents(common/README)")
     ok &= check_claim(root, "plugins/common/README.md", r"(\d+) skills", a["skills_common"], "skills(common/README)")
-    # 공개 사이트도 카운트를 주장한다. 여기 없으면 README/CLAUDE.md만 갱신되고
-    # 사이트가 조용히 stale해진다 — 게이트의 사각지대였다(2026-08-23 리뷰 지적).
-    # 한국어/영어 페이지는 **어순이 다르다**("19개 스킬" vs "스킬 **19개**"). 한 패턴만
-    # 걸면 한쪽 표기가 아예 매치되지 않아 조용히 skip(통과)된다 — 검사가 있는 척만 한다.
-    site_patterns = [
-        (r"(\d+)\s*개 전문 에이전트", "agents"),
-        (r"에이전트\s*\*\*(\d+)\s*개\*\*", "agents"),
-        (r"(\d+)\s+specialized agents", "agents"),
-        (r"\*\*(\d+)\*\*\s+agents", "agents"),
-        (r"(\d+)\s*개 스킬", "skills"),
-        (r"스킬\s*\*\*(\d+)\s*개\*\*", "skills"),
-        (r"(\d+)\s+skills", "skills"),
-        (r"\*\*(\d+)\*\*\s+skills", "skills"),
-        # 룰 카운트는 **대상 밖이었다.** agents·skills 만 걸어 두고 rules 를 빼 놓았더니
-        # 사이트 두 페이지가 13 에 멈춘 채 실제 15 와 어긋나 있었다(2026-09-10 실측).
-        # 이 파일이 위에서 두 번이나 적은 §5 형태를 이 목록 자신이 또 밟았다.
-        (r"(\d+)\s*개 거버넌스 룰", "rules"),
-        (r"거버넌스 룰\s*\*\*(\d+)\s*개\*\*", "rules"),
-        (r"(\d+)\s+governance rules", "rules"),
-        (r"\*\*(\d+)\*\*\s+governance rules", "rules"),
-    ]
-    kind_actual = {
-        "agents": a["agents"],
-        "skills": a["skills_common"],
-        "rules": a["rules"],
-    }
-    for rel in ("site/content/_index.md", "site/content/_index.en.md"):
-        for pat, kind in site_patterns:
-            ok &= check_claim(root, rel, pat, kind_actual[kind], f"{kind}({rel}: {pat[:18]}…)")
+    # 공개 사이트의 숫자는 이 레포가 소유하지 않는다 — 제품 사이트는 `thishw/hiway`
+    # (hiway.thishw.com)이고 거기는 손으로 쓴 숫자 없이 릴리스 태그에서 생성한 값만
+    # 렌더한다(스펙 docs/specs/2026-10-02-product-site/, R6·R7). 이 레포의 `site/` 는
+    # 옛 주소 리다이렉트 스텁뿐이라 개수 주장이 없다(5.2.2 에서 사이트 패턴 검사를 걷어냈다).
+    # 남아 있었다면 대상 파일이 없어 `check_claim` 이 조용히 skip 해, 검사가 있는 척만 했을 것이다.
 
     if ok:
         print(f"{OK} doc counts: {a['agents']} agents / {a['skills_common']} skills / {a['rules']} rules — 문서와 일치")

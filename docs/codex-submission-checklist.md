@@ -36,6 +36,8 @@ does not target children under 13.
 The portal now lists `hiway-kit · Not published · Version 5.2.0 · In review`. The 5.1.x and probe drafts remain in
 the list as "Needs attention" / "Not submitted"; they were never submitted. **Next:** after approval, **Publish**,
 then confirm the listing in the directory before writing an install path into README/CLAUDE.md.
+The 5.2.0 under review was uploaded with the earlier GitHub-hosted `websiteURL`/`privacyPolicyURL`; from 5.2.2 the ZIP carries the
+product-site URLs, so they reach the portal with the next upload (5.2.0 is left as submitted).
 OpenAI confirmed receipt by email (2026-09-30 10:47 KST, "ChatGPT Plugin Submission Received" — review against the
 app guidelines, outcome by email). Support case 15960350 got one more generic reply (07:10 KST, about ChatGPT
 workspace Skills availability); the Upload plugin flow made it moot, so it was left to close on its own.
@@ -144,6 +146,7 @@ Codex's own docs describe as required/expected for a plugin manifest
 | `description` | ✅ | SSOT |
 | `author` (name/email/url) | ✅ | SSOT, passed through (`packaging/targets.json` `passthroughFields`) |
 | `homepage` | ✅ | SSOT, passed through |
+| `interface.websiteURL` / `privacyPolicyURL` | ✅ | `packaging/targets.json` codex `interface` — the product site `https://hiway.thishw.com/` and `https://hiway.thishw.com/privacy/` (since 5.2.2; `supportURL` stays the GitHub issues page) |
 | `repository` | ✅ | SSOT, passed through |
 | `license` | ✅ | SSOT, passed through |
 | `keywords` | ✅ | SSOT, passed through |

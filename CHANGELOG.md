@@ -6,6 +6,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.2.2] — 2026-10-02
+
+### Changed — 제품 사이트가 `hiway.thishw.com` 으로 이사 — 링크 교체 + 옛 주소는 리다이렉트 스텁
+
+제품 사이트는 별도 레포 `thishw/hiway`(`https://hiway.thishw.com/`, 영어 기본 + `/ko/`)로 옮겨 갔다
+(`docs/specs/2026-10-02-product-site/`). 라이브 서빙(홈·docs·blog·privacy·changelog, 이관 글 4편의 영·한 경로 전부 200)을
+확인한 **뒤에** 이 레포의 URL 을 바꾼다.
+
+- **URL 교체(R10)**: `plugin.json` `homepage`, `.claude-plugin/marketplace.json` 플러그인 항목 `homepage`, Codex
+  `interface.websiteURL` → `https://hiway.thishw.com/`, `privacyPolicyURL` → `https://hiway.thishw.com/privacy/`
+  (`packaging/targets.json` → `build-targets.py --write`), README 사이트 링크. `repository`·`author.url`·`supportURL`·
+  marketplace `owner`/`source` 는 GitHub 그대로. 심사 중인 OpenAI 5.2.0 은 옛 URL 로 제출됐고 새 URL 은 다음 업로드부터
+  실린다(`docs/codex-submission-checklist.md`에 기록). Claude 목록 정보는 제출 시점 고정이라 변하지 않는다.
+- **옛 `site/` → 리다이렉트 스텁(R9)**: Hugo 원본(content·layouts·static·`hugo.toml`)을 걷어내고(`site/README.md` 는 리다이렉트 전용 설명으로 대체)
+  `site/redirects.json`(옛 경로 → 새 경로 표, **SSOT 하나**)과 생성기 `scripts/build-site-redirects.py` 로 바꿨다.
+  옛 Hugo 산출물 73개 파일 전수를 표에 실었다 — 경로별 HTML 스텁 39(`meta refresh` + `canonical` + `noindex` + 누를 링크),
+  RSS 29(리다이렉트를 따라가지 않으므로 "피드가 이사했다" 항목 하나와 새 피드 URL 을 담은 최소 RSS), `robots.txt`·`404.html`,
+  만들지 않는 4(옛 sitemap 3·CSS — 이유는 표의 `retired`). 이관 글 4편은 `/ko/blog/<slug>/`, 내린 글(landscape)·태그·카테고리는
+  `/ko/blog/`. `pages.yml` 은 Hugo 설치·빌드를 걷어내고 생성기 + 업로드만 한다(액션 SHA 핀 유지).
+- **`export_harness.py`**: AGENTS.md·GEMINI.md 헤더가 `homepage` 를 "저장소의 `plugins/common/rules/…`" 링크에도 썼다 —
+  homepage 가 사이트로 옮겨 가면 사이트가 "저장소"로 불리는 채 규범 경로를 약속하게 된다. 그 링크는 `repository` 를 따라가도록 했다
+  (진입점 재생성, 양성 대조 테스트 갱신). 첫 문장의 제품 링크만 새 사이트를 가리킨다.
+- **경로 봉쇄**: 표의 `from` 은 설정값이라 `docs/conventions/path-containment.md` 관례(`_resolve_in_repo`, 한 번만 resolve,
+  `--check`·`--write` 모두)를 따른다 — 공유 적대적 케이스 표로 검증.
+- **게이트 §26 신설 + CI 스텝**: 표 유효성·산출 경로 충돌·봉쇄(`build-site-redirects.py --check`).
+- **걷어낸 것**: `check_doc_counts.py` 의 `site/content/_index*.md` 패턴 검사(사이트 숫자의 소유가 `thishw/hiway` 로 이동 —
+  그쪽은 생성물만 렌더), `name-targets.json` 의 `site/hugo.toml`·`site/content` 파생 대상.
+
+---
+
 ## [5.2.1] — 2026-10-02
 
 ### Fixed — session-check 의 "에이전트 중복 로딩" 경고가 권장 사용에서 상시 발화

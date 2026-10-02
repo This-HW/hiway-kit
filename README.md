@@ -8,7 +8,7 @@ Validation hardening covers packaging input paths, literal hook commands, agent
 description budgets, malformed eval inputs, and private Stop-hook state. See the
 [changelog](CHANGELOG.md) for the fixes and their scope.
 
-Docs & development log: **[this-hw.github.io/hiway-kit](https://this-hw.github.io/hiway-kit/)** (한국어 · [English](https://this-hw.github.io/hiway-kit/en/))
+Docs & blog: **[hiway.thishw.com](https://hiway.thishw.com/)** (English · [한국어](https://hiway.thishw.com/ko/))
 
 A single, well-tested core plugin built on a native-first foundation, scale-appropriate orchestration, a feedback learning loop, loop engineering, and a Definition-of-Done gate. (see [CHANGELOG](CHANGELOG.md) · [docs/specs/](docs/specs/))
 

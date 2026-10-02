@@ -1224,6 +1224,7 @@ def _kit_copy_with_manifest_name(tmp_path: Path, name: str, homepage: str) -> Mo
     manifest = json.loads(mp.read_text(encoding="utf-8"))
     manifest["name"] = name
     manifest["homepage"] = homepage
+    manifest["repository"] = homepage + "/repo"
     mp.write_text(json.dumps(manifest), encoding="utf-8")
 
     spec = importlib.util.spec_from_file_location(
@@ -1248,6 +1249,8 @@ def test_kit_name_and_homepage_are_derived_from_the_manifest(tmp_path):
     block, _ = mod.build_block(mod.__dict__["_KIT_COPY_ROOT"])
     assert "## renamed-kit — 하네스 중립 규범" in block, "블록 헤더가 파생되지 않았다"
     assert "[renamed-kit](https://example.invalid/renamed-kit)" in block
+    # 저장소 경로를 약속하는 링크는 homepage 가 아니라 repository 를 따라간다.
+    assert "[renamed-kit](https://example.invalid/renamed-kit/repo) 저장소의" in block
     assert "hiway-kit" not in block, "구 이름이 생성물에 남았다"
 
 
@@ -1464,8 +1467,8 @@ def test_reference_rules_carry_deterministic_repo_fallback():
     저장소 URL + 저장소 안 경로를 결정적 폴백으로 싣는다 — **실물 규범**으로 확인한다.
     """
     block, _ = _mod.build_block(TOOLS_DIR.parent)
-    assert _mod.KIT_HOMEPAGE, "매니페스트 homepage/repository 를 못 읽었다 — 폴백 URL 이 빈다"
-    assert f"({_mod.KIT_HOMEPAGE})" in block
+    assert _mod.KIT_REPO_URL, "매니페스트 repository/homepage 를 못 읽었다 — 폴백 URL 이 빈다"
+    assert f"({_mod.KIT_REPO_URL}) 저장소의" in block
     assert f"`{_mod.KIT_RULES_REPO_PATH}/<이름>.md`" in block
     # 폴백 경로가 이 레포의 실제 규범 위치와 같아야 한다(배치가 바뀌면 여기서 red).
     repo_root = TOOLS_DIR.parents[2]

@@ -144,6 +144,9 @@ def _own_manifest() -> dict:
 _MANIFEST = _own_manifest()
 KIT_NAME = _MANIFEST.get("name") or "kit"
 KIT_HOMEPAGE = _MANIFEST.get("homepage") or _MANIFEST.get("repository") or ""
+# "저장소의 `plugins/common/rules/…`" 를 가리키는 링크는 **저장소** URL 이어야 한다. homepage 가
+# 제품 사이트로 옮겨 가면(5.2.2) 사이트 링크가 "저장소"라 불리는 채 규범 경로를 약속하게 된다.
+KIT_REPO_URL = _MANIFEST.get("repository") or _MANIFEST.get("homepage") or ""
 # 킷 저장소 안에서 규범 원문이 사는 경로. 설치 경로를 모르는 하네스(세션 시작 훅이
 # 없어 절대 경로 안내를 받지 못한다)를 위한 **결정적 폴백**이다 — 저장소 URL 과 함께
 # 쓴다. 이 레포 배치가 바뀌면 test_export_harness 가 red 로 알린다.
@@ -441,7 +444,7 @@ brainstorming  →  plan-task  →  auto-dev
 
 참조 티어라 본문을 인라인하지 않는다. 세션 시작 훅이 도는 하네스(Claude Code, 훅 신뢰를
 승인한 Codex)는 세션 시작 때 절대 경로로 안내된다. 설치 경로를 모르면 원문은
-[{kit_name}]({kit_homepage}) 저장소의 `{kit_rules_repo_path}/<이름>.md` 에 있다.
+[{kit_name}]({kit_repo_url}) 저장소의 `{kit_rules_repo_path}/<이름>.md` 에 있다.
 
 ### 이 파일이 이식하지 **못하는** 것 (정직한 한계)
 
@@ -777,6 +780,7 @@ def build_block(plugin_root: Path) -> tuple[str, str]:
     header = BLOCK_HEADER.format(
         kit_name=KIT_NAME,
         kit_homepage=KIT_HOMEPAGE,
+        kit_repo_url=KIT_REPO_URL,
         kit_rules_repo_path=KIT_RULES_REPO_PATH,
         agent_count=_agent_count(plugin_root),
         portable_rows=portable_rows, not_portable_rows=not_portable_rows,
