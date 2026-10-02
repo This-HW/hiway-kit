@@ -62,7 +62,7 @@ cd hiway-kit
 Options:
 
 - `./setup.sh --status` — Check setup state
-- `./setup.sh --migrate` — Migrate from legacy `.claude/agents/` setup
+- `./setup.sh --migrate` — Run from your project: moves only the `.claude/agents`·`.claude/skills` entries whose **name collides** with a plugin one into `*.bak/` (your own project-local agents stay put)
 - `./setup.sh --force` — Reset and re-run setup
 
 ---
