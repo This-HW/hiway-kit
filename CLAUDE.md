@@ -221,7 +221,8 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   repo** (until v5.0.0 it silently installed `setup/pre-commit` in plugin-only mode —
   installation is now `setup.sh` only). Warnings go out as `systemMessage` (a
   SessionStart hook's stderr is seen by no one) and only for real defects: python below the 3.9
-  floor, missing global setup (setup.sh users only), `.claude/agents` dual-load, and a **stale venv**
+  floor, missing global setup (setup.sh users only), a project `.claude/{agents,skills}` entry whose
+  **name collides** with a plugin one (project-local agents alone never warn), and a **stale venv**
   (`.venv`/`venv` console-script shebangs still pointing at the project's old
   path after a directory move/copy — `bin/python` keeps working while every
   script dies with `bad interpreter`, or silently runs the old site-packages)

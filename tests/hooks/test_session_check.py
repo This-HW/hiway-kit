@@ -26,7 +26,7 @@ def _warning(captured) -> str:
     return json.loads(captured.out).get("systemMessage", "")
 
 
-def _run_isolated(tmp_path, monkeypatch):
+def _run_isolated(tmp_path, monkeypatch, script=SCRIPT):
     """격리 환경(HOME·cwd 모두 tmp)에서 스크립트 top-level을 실행한다.
 
     HOME이 tmp면 `.setup-state.json` 부재 → plugin-only 모드로 판정되어 setup.sh
@@ -35,8 +35,43 @@ def _run_isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit) as exc:
-        runpy.run_path(str(SCRIPT), run_name="__ckkit_test__")
+        runpy.run_path(str(script), run_name="__ckkit_test__")
     return exc.value.code
+
+
+def _fake_plugin(root, agents=(), skills=()):
+    """`<root>/setup/session-check.py` 사본 + 지정한 에이전트·스킬 정의를 가진 가짜 플러그인.
+
+    훅은 **자기 파일 위치**에서 플러그인 루트를 찾는다 — 사본을 어디에 두느냐가
+    곧 "루트를 찾았는가"다. 이름 충돌 테스트는 실제 킷의 에이전트 이름에 묶이지 않게
+    이 가짜 루트를 쓴다.
+    """
+    (root / "setup").mkdir(parents=True)
+    script = root / "setup" / "session-check.py"
+    script.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
+    for name in agents:
+        f = root / "agents" / "dev" / f"{name}.md"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+    for name in skills:
+        f = root / "skills" / name / "SKILL.md"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
+    return script
+
+
+def _project_agent(project, rel, name=None):
+    f = project / ".claude" / "agents" / rel
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(f"---\nname: {name}\n---\n" if name else "# no frontmatter\n")
+    return f
+
+
+def _project_skill(project, dirname, name=None):
+    f = project / ".claude" / "skills" / dirname / "SKILL.md"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(f"---\nname: {name}\n---\n" if name else "# no frontmatter\n")
+    return f
 
 
 def test_exits_zero_with_valid_sessionstart_json(tmp_path, monkeypatch, capsys):
@@ -98,9 +133,9 @@ def _make_venv(root, interp, name=".venv"):
     return root / name
 
 
-def _run_in_repo(tmp_path, monkeypatch):
+def _run_in_repo(tmp_path, monkeypatch, script=SCRIPT):
     _init_repo(tmp_path)
-    return _run_isolated(tmp_path, monkeypatch)
+    return _run_isolated(tmp_path, monkeypatch, script)
 
 
 def test_warns_when_venv_shebang_points_outside_project(tmp_path, monkeypatch, capsys):
@@ -145,15 +180,14 @@ def test_malformed_shebang_does_not_abort_later_checks(tmp_path, monkeypatch, ca
     NUL이 박힌 경로는 `os.path.realpath`에서 OSError가 아니라 **ValueError**를 낸다.
     """
     _make_venv(tmp_path, "/old/\x00path/python")
-    agents = tmp_path / ".claude/agents"
-    agents.mkdir(parents=True)
-    (agents / "x.md").write_text("---\nname: x\n---\n")
-    assert _run_in_repo(tmp_path, monkeypatch) == 0
+    _project_agent(tmp_path, "reviewer.md", "reviewer")
+    script = _fake_plugin(tmp_path / "plugin", agents=["reviewer"])
+    assert _run_in_repo(tmp_path, monkeypatch, script) == 0
     captured = capsys.readouterr()
     # 판정 불가한 shebang은 조용히 건너뛴다 — 예외가 새어나온 흔적이 없어야 한다.
     assert "null" not in _warning(captured)
-    # 그리고 뒤따르는 검사(dual-load)는 정상적으로 도달해야 한다.
-    assert "동시 감지" in _warning(captured)
+    # 그리고 뒤따르는 검사(이름 충돌)는 정상적으로 도달해야 한다.
+    assert "이름이 겹칩니다" in _warning(captured)
     assert (
         json.loads(captured.out)["hookSpecificOutput"]["hookEventName"]
         == "SessionStart"
@@ -283,3 +317,156 @@ def test_no_system_message_when_clean(tmp_path, monkeypatch, capsys):
     _init_repo(tmp_path)
     assert _run_isolated(tmp_path, monkeypatch) == 0
     assert "systemMessage" not in json.loads(capsys.readouterr().out)
+
+
+# ── 에이전트 이중 로드 경고 = 실제 이름 충돌 (v5.2.1) ───────────────────────
+#
+# 옛 조건은 "`.claude/agents/` 에 `*.md` 가 하나라도 있으면"이었다. 프로젝트 로컬
+# 에이전트는 킷이 권장하는 2-Tier 구조라 그 조건은 권장 사용에서 **상시 참**이었고,
+# 두 소비자 레포(이름 충돌 0건)에서 매 세션 발화했다. 게다가 권고한 `setup.sh --migrate`
+# 는 디렉토리를 통째로 치워 프로젝트 에이전트를 사라지게 했다.
+
+
+def test_no_warning_for_project_agents_without_name_conflict(
+    tmp_path, monkeypatch, capsys
+):
+    """① 되돌려-FAIL: 옛 조건(`any(rglob)`)이면 여기서 경고가 나 FAIL 한다."""
+    _project_agent(tmp_path, "mine.md", "mine")
+    _project_agent(tmp_path, "sub/also-mine.md")  # frontmatter 없음 → 파일명 stem
+    _project_skill(tmp_path, "my-skill", "my-skill")
+    script = _fake_plugin(tmp_path / "plugin", agents=["fix-bugs"], skills=["debug"])
+    assert _run_in_repo(tmp_path, monkeypatch, script) == 0
+    assert "systemMessage" not in json.loads(capsys.readouterr().out)
+
+
+def test_warns_with_name_when_project_agent_collides(tmp_path, monkeypatch, capsys):
+    """② 충돌 1개면 경고에 그 이름이 들어가고, 디렉토리 통째 이동을 권하지 않는다."""
+    _project_agent(tmp_path, "mine.md", "mine")
+    _project_agent(tmp_path, "fix-bugs.md", "fix-bugs")
+    script = _fake_plugin(tmp_path / "plugin", agents=["fix-bugs", "other"])
+    assert _run_in_repo(tmp_path, monkeypatch, script) == 0
+    msg = _warning(capsys.readouterr())
+    assert "fix-bugs" in msg
+    assert "mine" not in msg
+    assert "1개" in msg
+    assert "네임스페이스" in msg
+    assert "--migrate" not in msg
+
+
+def test_collision_by_filename_stem_and_by_skill(tmp_path, monkeypatch, capsys):
+    """frontmatter 가 없으면 파일명이, 스킬은 디렉토리명이 이름이다."""
+    _project_agent(tmp_path, "nested/fix-bugs.md")  # name 없음 → stem
+    _project_skill(tmp_path, "debug")  # name 없음 → 디렉토리명
+    script = _fake_plugin(tmp_path / "plugin", agents=["fix-bugs"], skills=["debug"])
+    assert _run_in_repo(tmp_path, monkeypatch, script) == 0
+    msg = _warning(capsys.readouterr())
+    assert "2개" in msg
+    assert "agent fix-bugs" in msg
+    assert "skill debug" in msg
+
+
+def test_warning_lists_at_most_three_names(tmp_path, monkeypatch, capsys):
+    names = ["a1", "a2", "a3", "a4", "a5"]
+    for n in names:
+        _project_agent(tmp_path, f"{n}.md", n)
+    script = _fake_plugin(tmp_path / "plugin", agents=names)
+    assert _run_in_repo(tmp_path, monkeypatch, script) == 0
+    msg = _warning(capsys.readouterr())
+    assert "5개" in msg
+    assert "a1" in msg and "a3" in msg
+    assert "a4" not in msg and "a5" not in msg
+    assert "외 2건" in msg
+
+
+def test_no_warning_when_plugin_root_unresolved(tmp_path, monkeypatch, capsys):
+    """③ 플러그인 루트를 못 찾으면(agents/·skills/ 없음) 비교 근거가 없다 → 경고하지 않는다."""
+    _project_agent(tmp_path, "fix-bugs.md", "fix-bugs")
+    script = _fake_plugin(tmp_path / "bare-plugin")  # 정의가 하나도 없는 루트
+    assert _run_in_repo(tmp_path, monkeypatch, script) == 0
+    assert "systemMessage" not in json.loads(capsys.readouterr().out)
+
+
+def test_conflict_warning_escapes_control_chars(tmp_path, monkeypatch, capsys):
+    """이름은 파일에서 읽은 값 — 터미널 이스케이프를 그대로 내보내지 않는다."""
+    evil = "x\x1b[2Jy"
+    _project_agent(tmp_path, "e.md", evil)
+    script = _fake_plugin(tmp_path / "plugin", agents=[evil])
+    assert _run_in_repo(tmp_path, monkeypatch, script) == 0
+    msg = _warning(capsys.readouterr())
+    assert "이름이 겹칩니다" in msg
+    assert "\x1b" not in msg
+
+
+# ── setup.sh --migrate: 충돌 항목만 옮긴다 (D3) ─────────────────────────────
+
+SETUP_SH = Path(__file__).resolve().parents[2] / "setup.sh"
+PLUGIN_ROOT = Path(__file__).resolve().parents[2] / "plugins" / "common"
+
+
+def _real_agent_name():
+    return min((PLUGIN_ROOT / "agents").rglob("*.md")).stem
+
+
+def _run_migrate(project, home):
+    return subprocess.run(
+        ["bash", str(SETUP_SH), "--migrate"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=str(project),
+        env={
+            "HOME": str(home),
+            "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+        },
+        check=False,
+    )
+
+
+def test_migrate_moves_only_conflicting_items(tmp_path):
+    """④ 충돌 항목만 `.bak` 으로(상대경로 보존), 프로젝트 고유 항목은 그대로."""
+    project = tmp_path / "proj"
+    project.mkdir()
+    clash = _real_agent_name()
+    _project_agent(project, "mine.md", "mine")
+    _project_agent(project, f"team/{clash}.md", clash)
+    skill = min(p.parent.name for p in (PLUGIN_ROOT / "skills").glob("*/SKILL.md"))
+    _project_skill(project, skill, skill)
+    _project_skill(project, "my-skill", "my-skill")
+
+    r = _run_migrate(project, tmp_path / "home")
+    assert r.returncode == 0, r.stderr
+    claude = project / ".claude"
+    assert (claude / "agents" / "mine.md").is_file()
+    assert (claude / "skills" / "my-skill" / "SKILL.md").is_file()
+    assert not (claude / "agents" / "team" / f"{clash}.md").exists()
+    assert (claude / "agents.bak" / "team" / f"{clash}.md").is_file()
+    assert not (claude / "skills" / skill).exists()
+    assert (claude / "skills.bak" / skill / "SKILL.md").is_file()
+    assert not (claude / "agents.bak" / "mine.md").exists()
+    assert clash in r.stdout and skill in r.stdout
+    assert "mine" not in r.stdout.replace("my-skill", "")
+
+
+def test_migrate_with_no_conflicts_moves_nothing(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    _project_agent(project, "mine.md", "mine")
+    r = _run_migrate(project, tmp_path / "home")
+    assert r.returncode == 0, r.stderr
+    assert (project / ".claude" / "agents" / "mine.md").is_file()
+    assert not (project / ".claude" / "agents.bak").exists()
+    assert "옮긴 것 없음" in r.stdout
+
+
+def test_migrate_does_not_overwrite_existing_backup(tmp_path):
+    project = tmp_path / "proj"
+    project.mkdir()
+    clash = _real_agent_name()
+    src = _project_agent(project, f"{clash}.md", clash)
+    old = project / ".claude" / "agents.bak" / f"{clash}.md"
+    old.parent.mkdir(parents=True)
+    old.write_text("previous backup")
+    r = _run_migrate(project, tmp_path / "home")
+    assert r.returncode == 1
+    assert src.is_file()
+    assert old.read_text() == "previous backup"

@@ -10,11 +10,18 @@
 사용자도 보지 못한다. 대상은 **정상 운영에서 거짓인 조건**뿐이다
 (`docs/conventions/warning-signal.md`): 파이썬 하한·낡은 venv·에이전트 이중 로드,
 그리고 setup.sh 를 실행한 사용자에게만 해당하는 전역 설정 누락.
+
+`--conflicts <프로젝트 루트>` 로 부르면 훅이 아니라 이름 충돌 목록(JSON)만 출력한다 —
+`setup.sh --migrate` 가 같은 판정을 쓰도록 한 곳에 둔다(판정이 둘로 갈라지면 경고는
+A 를 말하고 이주는 B 를 옮긴다).
 """
+
+from __future__ import annotations
 
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -94,6 +101,113 @@ def stale_venv_interp(venv_dir):
     return None
 
 
+def _frontmatter_name(path: pathlib.Path):
+    """파일 첫 frontmatter 블록의 `name:` 값. 없거나 읽을 수 없으면 None.
+
+    yaml 의존 없이 앞 8KB 만 줄 단위로 본다 — 세션 시작 지연을 막고, 깨진 파일 하나가
+    검사 전체를 죽이지 않게 한다.
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(8192).decode("utf-8", "replace")
+    except OSError:
+        return None
+    lines = head.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        m = re.match(r"name:\s*(.+?)\s*$", line)
+        if m:
+            return m.group(1).strip("'\"") or None
+    return None
+
+
+_SCAN_LIMIT = 500  # 파일 수 상한 — 거대한 에이전트 디렉토리가 세션 시작을 붙들지 않게
+
+
+def _agent_files(root: pathlib.Path) -> list:
+    if not root.is_dir():
+        return []
+    return sorted(root.rglob("*.md"))[:_SCAN_LIMIT]
+
+
+def _skill_dirs(root: pathlib.Path) -> list:
+    """`<root>/<dir>/SKILL.md` 를 가진 디렉토리."""
+    if not root.is_dir():
+        return []
+    return sorted(d for d in root.iterdir() if (d / "SKILL.md").is_file())[:_SCAN_LIMIT]
+
+
+def find_name_conflicts(
+    project_claude: pathlib.Path, plugin_root: pathlib.Path
+) -> list:
+    """프로젝트 `.claude/{agents,skills}` 항목 중 플러그인과 **이름이 겹치는 것**.
+
+    반환: `{"kind": "agent"|"skill", "name": 이름, "path": project_claude 기준 상대경로}`
+    목록. 스킬의 path 는 SKILL.md 가 아니라 **스킬 디렉토리**다(옮길 단위).
+    이름 = frontmatter `name:`, 없으면 파일명 stem(스킬은 디렉토리명). 플러그인 쪽은
+    `name:` 이 있는 정의만 센다(README 같은 비정의 파일이 프로젝트의 같은 파일명과
+    겹쳐 오탐하지 않게).
+
+    플러그인 루트에 `agents/`·`skills/` 가 모두 없으면(루트를 못 찾은 것) 빈 목록 —
+    판정 근거가 없으면 경고하지 않는다(fail-open).
+    """
+    plugin_agents = plugin_root / "agents"
+    plugin_skills = plugin_root / "skills"
+    if not (plugin_agents.is_dir() or plugin_skills.is_dir()):
+        return []
+
+    agent_names = {n for n in map(_frontmatter_name, _agent_files(plugin_agents)) if n}
+    skill_names = {
+        _frontmatter_name(d / "SKILL.md") or d.name for d in _skill_dirs(plugin_skills)
+    }
+
+    conflicts = []
+    agents_dir = project_claude / "agents"
+    for f in _agent_files(agents_dir):
+        name = _frontmatter_name(f) or f.stem
+        if name in agent_names:
+            conflicts.append(
+                {
+                    "kind": "agent",
+                    "name": name,
+                    "path": f.relative_to(project_claude).as_posix(),
+                }
+            )
+    for d in _skill_dirs(project_claude / "skills"):
+        name = _frontmatter_name(d / "SKILL.md") or d.name
+        if name in skill_names:
+            conflicts.append(
+                {
+                    "kind": "skill",
+                    "name": name,
+                    "path": d.relative_to(project_claude).as_posix(),
+                }
+            )
+    return conflicts
+
+
+def _printable(name: str) -> str:
+    """파일에서 읽은 이름은 터미널 이스케이프가 섞일 수 있다 — 제어문자를 걷고 길이를 줄인다."""
+    return "".join(c for c in name if c.isprintable())[:60]
+
+
+def _conflict_warning(conflicts: list) -> str:
+    shown = []
+    for c in conflicts:
+        label = f"{c['kind']} {_printable(c['name'])}"
+        if label not in shown:
+            shown.append(label)
+    head = ", ".join(shown[:3]) + (f" 외 {len(shown) - 3}건" if len(shown) > 3 else "")
+    return (
+        f".claude/ 의 프로젝트 정의 {len(conflicts)}개가 플러그인과 이름이 겹칩니다 ({head}) — "
+        f"그 파일을 지우거나 이름을 바꾸세요. 플러그인 쪽은 `{PLUGIN}:` 네임스페이스로 "
+        "이미 로드됩니다"
+    )
+
+
 def _run_git(args: list) -> subprocess.CompletedProcess:
     return subprocess.run(
         ["git", *args], capture_output=True, text=True, timeout=5, check=False
@@ -151,17 +265,22 @@ def collect_warnings() -> list:
             )
             break
 
-    # dual-load — 프로젝트 `.claude/agents/` 에 에이전트 정의가 있을 때만 (CR-07)
-    claude_agents = repo_root / ".claude/agents"
-    if claude_agents.exists() and any(claude_agents.rglob("*.md")):
-        warnings.append(
-            ".claude/agents/ + Plugin 동시 감지! 에이전트 중복 로딩 위험. "
-            "'setup.sh --migrate' 실행 권장"
-        )
+    # dual-load — 프로젝트 `.claude/{agents,skills}` 의 정의가 플러그인 정의와 **이름이
+    # 겹칠 때만**. 이 검사가 도는 조건: 플러그인 루트(이 파일의 부모)에 agents/ 또는 skills/
+    # 가 있고, 프로젝트 정의의 name 이 그 집합과 교집합이 있을 때 — 프로젝트 로컬 에이전트는
+    # 킷이 권장하는 2-Tier 구조라 "에이전트가 있다"는 상시 참이고, 그 조건으로 경고하면 죽는다.
+    conflicts = find_name_conflicts(repo_root / ".claude", SETUP_DIR.parent)
+    if conflicts:
+        warnings.append(_conflict_warning(conflicts))
     return warnings
 
 
 def main() -> None:
+    if sys.argv[1:2] == ["--conflicts"]:
+        # setup.sh --migrate 용 — 훅 출력 계약(항상 exit 0)과 무관한 CLI 모드.
+        project = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else ".")
+        print(json.dumps(find_name_conflicts(project / ".claude", SETUP_DIR.parent)))
+        sys.exit(0)
     try:
         warnings = collect_warnings()
     except Exception as e:

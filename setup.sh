@@ -58,10 +58,44 @@ PYEOF
     exit 0
 fi
 
-if $OPT_MIGRATE; then # D-015: dual-load 해소
-    [ -d .claude/agents ] && mv .claude/agents .claude/agents.bak && echo "✓ .claude/agents → .claude/agents.bak"
-    [ -d .claude/skills ] && mv .claude/skills .claude/skills.bak && echo "✓ .claude/skills → .claude/skills.bak"
-    exit 0
+if $OPT_MIGRATE; then # D-015: dual-load 해소 — 플러그인과 **이름이 겹치는 항목만** 옮긴다
+    # 프로젝트 로컬 에이전트·스킬은 킷이 권장하는 2-Tier 구조라 디렉토리째 옮기면 안 된다.
+    # 판정은 session-check.py(경고와 같은 코드)가 한다 — 플러그인 이름 집합은 이 체크아웃의
+    # plugins/common/ 에서 읽는다. 실행 위치(cwd)는 이주할 프로젝트다.
+    CHECK_PY="$SCRIPT_DIR/plugins/common/setup/session-check.py"
+    if [ ! -f "$CHECK_PY" ]; then
+        echo "✗ $CHECK_PY 없음 — hiway-kit 체크아웃의 setup.sh 로 실행하세요" >&2
+        exit 1
+    fi
+    CONFLICTS_JSON="$(python3 "$CHECK_PY" --conflicts "$PWD")"
+    python3 - "$PWD/.claude" "$CONFLICTS_JSON" <<'PYEOF'
+import json, os, pathlib, shutil, sys
+claude = pathlib.Path(sys.argv[1])
+conflicts = json.loads(sys.argv[2])
+if not conflicts:
+    print("✓ 플러그인과 이름이 겹치는 .claude/agents·.claude/skills 항목 없음 — 옮긴 것 없음")
+    sys.exit(0)
+failed = 0
+for c in conflicts:
+    kind_dir, _, rel = c["path"].partition("/")  # agents/dev/x.md → agents, dev/x.md
+    src = claude / kind_dir / rel
+    dst_root = claude / (kind_dir + ".bak")
+    dst = dst_root / rel
+    # 상대경로가 .bak 밖으로 새지 않는지 한 번 확인한다(path-containment).
+    if os.path.commonpath([dst_root.resolve(), dst.resolve().parent]) != str(dst_root.resolve()):
+        print(f"✗ {c['path']}: 경로가 .bak 밖을 가리켜 건너뜁니다", file=sys.stderr)
+        failed += 1
+        continue
+    if dst.exists() or dst.is_symlink():
+        print(f"✗ {c['path']}: {dst.relative_to(claude)} 가 이미 있어 건너뜁니다", file=sys.stderr)
+        failed += 1
+        continue
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dst))
+    print(f"✓ .claude/{c['path']} → .claude/{kind_dir}.bak/{rel}  ({c['kind']} {c['name']})")
+sys.exit(1 if failed else 0)
+PYEOF
+    exit $?
 fi
 
 if $OPT_FORCE; then rm -f "$STATE_FILE"; echo "State reset."; fi
