@@ -76,7 +76,7 @@ verified one at a time against `codex`/`agy`, not assumed from documentation alo
 `targets.json` (above) generates *manifests* — pure, never-hand-edited artifacts, so
 full byte-for-byte regeneration is safe. `name-targets.json` +
 `../scripts/derive-name.py` solve a related but different problem: `README.md`,
-`plugins/common/README.md`, `CLAUDE.md`, and everything under `site/content/` are
+`plugins/common/README.md`, and `CLAUDE.md` are
 prose that people edit by hand. Regenerating them wholesale from a template would
 create a second copy of nearly all their content — the exact SSOT-duplication failure
 this repo's gates exist to catch.

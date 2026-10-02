@@ -83,6 +83,8 @@ hiway-kit 은 없다(314개 중 0). 이후 버전은 계속 자동 공개(현재
 *"Newer versions don't update them here"*, 문서가 *"name and short description follow the live version"* 이므로 지금
 키를 더해도 이 제출의 목록은 바뀌지 않는다. 게다가 Claude Code 매니페스트 스키마에 없는 키라 `claude plugin validate`
 가 경고하고 로드 시 제거한다. **그래서 넣지 않았다** — 공개 후 목록 편집 수단이 생기면 그때 채운다.
+5.2.2 에서 `homepage` 를 제품 사이트(`https://hiway.thishw.com/`)로 바꿨지만 이 목록 정보는 위 이유로 **제출 시점 값 그대로**다 —
+새 홈페이지는 직접 마켓플레이스·Codex 매니페스트(다음 업로드부터)에 반영된다.
 
 **전임 킷 정리(2026-09-28)**: 관리 화면에 `claude-code-kit` 제출 2건(`597867fb-…` needs changes,
 `bc35fcf0-…` 검사 통과·미공개)이 남아 있었다. 포털엔 셀프 삭제가 없어(메뉴는 "Contact Anthropic" =

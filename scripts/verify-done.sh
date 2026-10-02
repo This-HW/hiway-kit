@@ -675,7 +675,7 @@ fi
 
 hdr "18. 이름 SSOT 파생 드리프트 (D-3 / W-027 27-2)"
 # plugins/common/.claude-plugin/plugin.json 의 name(SSOT)에서 README·plugins/common/
-# README·CLAUDE.md·site/content/**를 파생시키는 scripts/derive-name.py 의 드리프트
+# README·CLAUDE.md 등을 파생시키는 scripts/derive-name.py 의 드리프트
 # 검사. §17은 D-22(상호 참조 실재 게이트, 25-16)의 몫으로 예약돼 있으므로 다음 빈
 # 번호(§18)를 쓴다 — 섹션 번호 규약(재사용·재배치 금지)은 위 §36-49 주석 참고.
 if [ -f packaging/name-targets.json ] && [ -f scripts/derive-name.py ]; then
@@ -830,6 +830,17 @@ if python3 scripts/check_skill_frontmatter.py; then
   green "스킬 전부 model/effort 미선언 (check_skill_frontmatter.py — CI와 단일 소스)"
 else
   red "model/effort 를 선언한 스킬 — 세션 설정을 덮어쓴다 (상세는 위 출력)"
+fi
+
+hdr "26. 옛 사이트 리다이렉트 표 유효 + 산출 경로 봉쇄 (site/redirects.json)"
+# 옛 주소(this-hw.github.io/hiway-kit/)는 site/redirects.json **표 하나**에서 만든 정적
+# 스텁이 서빙한다(.github/workflows/pages.yml). 표가 깨지면(중복 경로·절대경로·`..`·
+# 다른 호스트로 가는 to) 배포가 조용히 틀린 스텁을 낸다. 판정은
+# scripts/build-site-redirects.py --check 가 단일 소스 — CI(validate.yml)와 동일 스크립트.
+if python3 scripts/build-site-redirects.py --check; then
+  green "리다이렉트 표 유효 (build-site-redirects.py — CI와 단일 소스)"
+else
+  red "site/redirects.json 검증 실패 — 상세는 위 출력"
 fi
 
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"

@@ -6,14 +6,14 @@
 구 이름 grep 은 문서·사이트 전역에서 수십 개 파일을 찾는다.
 개명 비용이 그 파일 수에 비례하는 것 자체가 부채다(설계 SSOT §1.3). `build-targets.py`
 는 이미 매니페스트 3종을 `plugins/common/.claude-plugin/plugin.json` 의 `name` 에서
-파생시킨다 — 이 스크립트는 같은 SSOT를 문서(`README.md`·`CLAUDE.md`)와 사이트 콘텐츠
-(`site/content/`)에도 적용한다.
+파생시킨다 — 이 스크립트는 같은 SSOT를 문서(`README.md`·`CLAUDE.md` 등)에도 적용한다
+(5.2.2 전까지는 사이트 콘텐츠 `site/content/` 도 대상이었다 — 사이트가 `thishw/hiway` 로 옮겨 갔다).
 
 `build-targets.py` 와 다른 점 (의도적)
 --------------------------------------
 `build-targets.py` 의 산출물은 사람이 손으로 편집하지 않는 순수 생성물(JSON 매니페스트)
 이라 SSOT + 정책만으로 **바이트 단위 전체 재생성**이 안전하다. 이 스크립트의 대상
-(`README.md`·`CLAUDE.md`·`site/content/**`)은 반대로 사람이 상시 편집하는 산문이다.
+(`README.md`·`CLAUDE.md` 등)은 반대로 사람이 상시 편집하는 산문이다.
 전체를 템플릿에서 재생성하면 이름과 무관한 편집마다 템플릿도 같이 고쳐야 하는 **이중
 SSOT**가 생긴다 — 이 킷이 반복해서 잡아온 결함 클래스 그 자체다(`docs/conventions/`).
 
