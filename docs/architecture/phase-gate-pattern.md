@@ -7,6 +7,12 @@ as_of: 2026-10-05
 
 > **중요**: 이 패턴은 Anthropic 공식 기능이 아닌 커뮤니티 베스트 프랙티스입니다.
 > zhsama/claude-sub-agent, wshobson/agents 등의 구현을 참고한 권장 패턴입니다.
+>
+> **이 문서는 해설이다.** 단계별 출구 조건의 정본은 `plugins/common/rules/agent-system.md`
+> "Phase Gate" 이고, 작업 크기별로 무엇이 필요한지는 `plan-task` 의
+> `references/elicitation.md §6` 이 소유한다. 아래 기준은 그 둘을 풀어 쓴 것이며,
+> 값이 갈리면 정본이 맞다. **어떤 훅도 Phase Gate 를 자동 판정하지 않는다** — 단계 전환은
+> 해당 스킬(`plan-task`·`auto-dev`)과 메인 세션의 판단이 수행한다.
 
 ---
 
@@ -56,14 +62,14 @@ Planning → Gap 발견 → Planning 내에서 해결 → 충분히 완료 → D
 **Development Phase:**
 
 - 요구사항이 모두 구현되었는가?
-- 핵심 로직에 테스트가 있는가?
-- 빌드가 성공하는가?
+- 바꾼 동작의 테스트가 통과하는가?
+- 빌드·린트·타입 검사가 통과하는가?
 
 **Validation Phase:**
 
-- 코드 리뷰가 완료되었는가?
-- 보안 검사를 통과했는가?
-- 통합 테스트가 통과하는가?
+- 코드 리뷰에서 막는 결함이 없는가?
+- 보안 검사에 Critical 이 없는가?
+- 완료 조건 명령이 통과하는가?
 
 ---
 
@@ -140,14 +146,12 @@ Planning → Gap 발견 → Planning 내에서 해결 → 충분히 완료 → D
 
 ---
 
-## Stop Hook에 의한 자동 품질 검증
+## Stop 훅은 Phase Gate 가 아니다
 
-Claude Code의 `Stop` hook(prompt type)을 활용하여 Phase Gate 판단을 자동화합니다.
-Claude가 작업을 멈추려 할 때 자동으로 품질 기준을 체크합니다.
-
-**구현:** `plugins/common/hooks/hooks.json`의 Stop hook 참조
-
-이 방식으로 **명시적 스킬 호출 없이** Phase Gate 조건이 자동 적용됩니다.
+킷의 `Stop` 훅(`stop-validator.py`, `type: command`)은 **안전망**이다 — 이 세션에서 수정된
+`.py` 를 ruff 로 린트하고, 이 세션이 고친 테스트 파일만 pytest 로 돌려 실패하면 계속 작업하게
+한다. 단계 전환·기획 완결성·리뷰 통과 여부는 **판정하지 않는다.** Phase Gate 는 스킬을
+호출해야 돈다.
 
 ---
 
@@ -164,19 +168,22 @@ Claude가 작업을 멈추려 할 때 자동으로 품질 기준을 체크합니
 
 ### Development Phase Exit Criteria
 
-| 항목   | 판단 질문                     | 목표 |
-| ------ | ----------------------------- | ---- |
-| 구현   | 요구사항이 모두 구현되었는가? | 100% |
-| 테스트 | 핵심 로직에 테스트가 있는가?  | 80%+ |
-| 품질   | 빌드/린트가 통과하는가?       | 통과 |
+| 항목   | 판단 질문                         | 목표 |
+| ------ | --------------------------------- | ---- |
+| 구현   | 요구사항이 모두 구현되었는가?     | 100% |
+| 테스트 | 바꾼 동작의 테스트가 통과하는가?  | 통과 |
+| 품질   | 빌드/린트/타입 검사가 통과하는가? | 통과 |
 
 ### Validation Phase Exit Criteria
 
-| 항목 | 판단 질문                 | 목표 |
-| ---- | ------------------------- | ---- |
-| 리뷰 | 코드 리뷰가 완료되었는가? | 완료 |
-| 보안 | Critical 이슈가 없는가?   | 0개  |
-| 통합 | 통합 테스트가 통과하는가? | 통과 |
+| 항목 | 판단 질문                         | 목표 |
+| ---- | --------------------------------- | ---- |
+| 리뷰 | 리뷰가 막는 결함을 냈는가?        | 0개  |
+| 보안 | Critical 이슈가 없는가?           | 0개  |
+| 완료 | 완료 조건 명령이 통과하는가?      | 통과 |
+
+리뷰 판정 등급(`review-code` 의 REJECT/CONDITIONAL/ACCEPT·심각도)과 정확한 통과선은
+정본(`rules/agent-system.md`, `auto-dev` 의 T-merge)을 따른다.
 
 ---
 
@@ -206,7 +213,7 @@ Planning 70% 완료 → "일단 시작하자" → Dev 시작
 → 구현 복잡도 높음, 실제 효과 제한적
 ```
 
-올바른 방법: 메인 Claude의 주관적 판단 + Stop hook 자동 검증
+올바른 방법: 메인 Claude의 판단 + 완료 조건 명령의 출력(`definition-of-done`)
 
 ---
 
@@ -246,7 +253,7 @@ Dev 중 Planning Gap 발견:
 
 ```
 1. Phase Gate = 메인 Claude의 판단 기준 (자동 시스템 아님)
-2. Stop hook이 자동 품질 검증 담당 (명시적 호출 불필요)
+2. Stop 훅은 린트·수정 테스트 안전망일 뿐 — Phase Gate 는 스킬 호출로 돈다
 3. Planning → 최대한 완전하게 → Dev 시작
 4. Dev 중 Planning Gap 발견 = 현실적으로 발생 가능
 5. 역위임 최소화가 목표 (완전 금지 아님)
@@ -265,4 +272,4 @@ Dev 중 Planning Gap 발견:
 **관련 파일:**
 
 - `plugins/common/rules/agent-system.md` — Phase Gate 판단 기준
-- `plugins/common/hooks/hooks.json` — Stop hook 구현
+- `plugins/common/hooks/stop-validator.py` — Stop 훅(안전망, Phase Gate 아님)

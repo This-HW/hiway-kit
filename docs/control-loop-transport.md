@@ -155,8 +155,8 @@ find "$X" -path '*sessions/*' -name 'rollout-*.jsonl' \
 worker <id>: CC 2.1.283 · main claude-opus-5-5 high×3 → medium×47 · subagents claude-sonnet-5 max×32
 ```
 
-**필수 기록처는 병합 커밋 메시지다** — 트래킹되어 레포에 남는 유일한 자리다. Work progress/decisions는
-gitignore될 수 있어 보조로만 쓴다. 로그를 찾지 못하거나 필드가 없으면 `[미확인]`으로 적고
+**필수 기록처는 병합 커밋 메시지다** — 트래킹되어 레포에 남는 유일한 자리다. plan.md `## 검증 결과`·
+`docs/plans/` 의 진행 기록은 보조로만 쓴다. 로그를 찾지 못하거나 필드가 없으면 `[미확인]`으로 적고
 별칭·요청값으로 추측해 채우지 않는다. 로그의 프롬프트 본문은 어디에도 옮기지 않는다.
 
 접수된 성공/실패 보고 뒤에는 즉시 후속 작업으로 재사용하거나, 사용자 요청으로 retain하거나,
