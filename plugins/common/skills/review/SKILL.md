@@ -10,35 +10,68 @@ description: Review current changes or specified files - ruff lint for Python fi
 ## 파이프라인 구조
 
 ```
-리뷰 대상 파악 (이 세션, ruff) → review-code → security-scan (보안 관련 파일이 있을 때만)
+대상 확정 (0단계) → 정적 분석 ruff (0.2) → 복잡도 flag (0.5) → 입력 준비 (1) → 범위 판단 (1.5)
+  → review-code (2) → security-scan (3, 보안 관련 파일이 있을 때만) → 요약 (4)
 ```
 
 ---
 
-## 0단계: 정적 분석 (Python 파일 포함 시)
+## 0단계: 리뷰 대상 확정 [가장 먼저]
 
-**리뷰 대상에 `.py` 파일이 포함되어 있으면 ruff check를 먼저 실행합니다.**
+**대상이 정해지기 전에 정적 분석을 돌리지 않는다** — 대상 없이 도는 ruff 는 아무것도 검사하지 않고도
+"통과"로 보고된다.
+
+$ARGUMENTS에 파일/디렉토리가 있으면 그것이 대상이다. 없으면 git 변경분이 대상이다:
 
 ```bash
-# 특정 파일 지정 시
-ruff check [대상 파일 또는 디렉토리]
-
-# git diff 대상 시 (변경된 .py 파일 추출 후)
-git diff HEAD --name-only | grep '\.py$' | xargs ruff check 2>/dev/null
+# 비교 기준: 작업 트리(스테이징 포함)에 변경이 있으면 HEAD, 없으면 마지막 커밋(HEAD~1)
+BASE=HEAD
+[ -z "$(git diff HEAD --name-only)" ] && BASE=HEAD~1
+git diff "$BASE" --name-only --diff-filter=d     # 읽을 대상 (삭제된 파일 제외)
+git diff "$BASE" --name-only --diff-filter=D     # 삭제된 파일 — 읽을 수 없으니 diff 로만 본다
 ```
 
-**결과 처리:**
+`--diff-filter=d` 는 삭제된 파일을 목록에서 뺀다(없는 파일을 ruff·Read 에 넘기지 않기 위해).
+`2>/dev/null` 로 stderr 를 숨기지 않는다 — git 오류(저장소 아님, `HEAD~1` 없음)가 "대상 없음"으로
+둔갑한다. 두 목록이 모두 비면 **"리뷰 대상 없음"을 출력하고 멈춘다**(통과가 아니다).
 
-- ruff check 출력이 있으면: 리뷰 컨텍스트에 포함하여 review-code 에이전트에 전달
-- ruff check 통과 시: "정적 분석: 통과" 메시지만 출력
+**형식:**
+
+```
+## 0단계: 리뷰 대상
+- 기준: [인자 지정 | git diff HEAD | git diff HEAD~1 (작업 트리 변경 없음)]
+- 대상: [N]개 ([.py N개 …])  삭제: [N]개
+```
+
+---
+
+## 0.2단계: 정적 분석 (Python 파일 포함 시)
+
+**0단계 대상에 `.py` 파일이 있으면 그 목록으로 ruff check를 실행합니다.**
+
+```bash
+# 0단계 목록의 .py 만. ruff 종료코드를 그대로 읽는다 — xargs 로 이으면 1 이 123 으로 바뀐다.
+# 목록은 `sh -c` 로 넘긴다: 호스트의 쉘이 zsh 면 따옴표 없는 $PYS 가 단어 분리되지 않아
+# 줄바꿈 낀 한 인자가 되고, ruff 가 "No such file" 을 낸다(실측). 공백 낀 경로는 파일을 하나씩 넘긴다.
+PYS=$(git diff "$BASE" --name-only --diff-filter=d -- '*.py')   # 인자를 지정했으면 그 대상 중 .py
+if [ -z "$PYS" ]; then echo "Python 파일 없음"
+elif ! command -v ruff >/dev/null; then echo "스킵됨 (ruff 미설치)"
+else PYS="$PYS" sh -c 'ruff check $PYS'; echo "ruff rc=$?"; fi
+```
+
+**결과 처리** (ruff 종료코드 그대로 판독한다: 0 통과 · 1 발견 · 2 ruff 자체 오류):
+
+- 1: 출력을 리뷰 컨텍스트에 포함하여 review-code 에이전트에 전달
+- 0: "정적 분석: 통과" 메시지만 출력
+- 2: "ruff 오류 — 정적 분석 미수행"과 stderr 를 그대로 보고한다(통과로 쓰지 않는다)
 - ruff가 설치되지 않은 경우: "스킵됨 (ruff 미설치)" 메시지 출력
 
 **형식:**
 
 ```
-## 0단계: 정적 분석 (ruff)
+## 0.2단계: 정적 분석 (ruff)
 - 대상: [파일 목록 또는 "없음 (Python 파일 없음)"]
-- 결과: [통과 | N건 발견]
+- 결과: [통과 | N건 발견 | 오류(미수행) | 스킵(ruff 미설치)]
 - 발견된 이슈: [있을 때만 출력]
 ```
 
@@ -51,7 +84,7 @@ git diff HEAD --name-only | grep '\.py$' | xargs ruff check 2>/dev/null
 
 ```bash
 # mccabe 복잡도 flag (ruff 내장, 기본 임계 10)
-ruff check --select C901 [0단계와 동일한 대상 파일]
+ruff check --select C901 [0.2단계와 동일한 대상 파일]
 ```
 
 **결과 처리:**
@@ -77,16 +110,12 @@ ruff check --select C901 [0단계와 동일한 대상 파일]
 
 ---
 
-## 1단계: 리뷰 대상 파악
+## 1단계: 리뷰 입력 준비
 
-$ARGUMENTS가 있으면:
+0단계에서 확정한 대상의 **내용**을 모은다:
 
-- 해당 파일/디렉토리를 읽어서 리뷰
-
-$ARGUMENTS가 없으면:
-
-- `git diff HEAD`로 변경사항 확인
-- 변경사항이 없으면 `git diff HEAD~1`로 마지막 커밋 확인
+- $ARGUMENTS가 있으면: 해당 파일/디렉토리를 읽는다
+- $ARGUMENTS가 없으면: 0단계의 `BASE` 로 `git diff "$BASE"` 를 뽑는다(삭제된 파일은 이 diff 로만 보인다)
 
 ---
 
@@ -113,7 +142,10 @@ $ARGUMENTS에 `--quick`이 포함되어 있으면:
 
 - `**/auth/**`, `**/security/**`, `**/payment/**`
 - `**/middleware/**`, `**/*secret*`, `**/*token*`
-- `hooks/*.py`, `**/config.py`
+- `**/config.py`
+
+프로젝트에 보안 경로 규약이 따로 있으면(AGENTS.md·CLAUDE.md 등) 그 경로도 이 목록에 더한다 — 이
+스킬은 소비자 프로젝트에도 설치되므로 특정 레포의 디렉토리 이름을 박아 두지 않는다.
 
 → **scope = 'adversarial', security_scan_needed = true**
 
@@ -128,9 +160,7 @@ $ARGUMENTS에 `--quick`이 포함되어 있으면:
 
 #### 기본 (일반 코드)
 
-위 두 조건에 해당하지 않으면:
-
-- `src/**`, `agents/**`, `skills/**`, `scripts/**`
+위 두 조건에 해당하지 않으면(소스·스크립트·에이전트/스킬 정의 등 모든 코드):
 
 → **scope = 'adversarial', security_scan_needed = false**
 
@@ -192,7 +222,7 @@ Evaluate: 상위에서 처리됨 — 중복 불필요
 형식·완료 선언)이다. 쓸 수 있는 수단을 호스트에 확인하고 위에서부터 한 칸씩 내려간다:
 **① 네이티브 서브에이전트**(블록 그대로) → **② 호스트의 다른 격리 위임 수단**(에이전트 정의
 본문 `<플러그인 루트>/agents/<이름>.md` 를 **요약 없이** 넘기고 뒤에 `prompt:` 를
-붙인다 — `$CLAUDE_PLUGIN_ROOT` 가 비면 플러그인 캐시에서 찾는다. 회신 요약이 아니라 계약
+붙인다 — 플러그인 루트 탐색은 `skills/plan-task/references/task-tools-fallback.md` §A. 회신 요약이 아니라 계약
 산출물로 판정한다) → **③ 이 세션에서 같은 계약을 직접 수행.** 수단이 없다고 단계를 건너뛰거나
 하지 않은 위임을 했다고 보고하지 않는다. ③은 격리가 없다 — 직접 수행한 리뷰는 강등된 리뷰이므로 리포트에 `## Scope Used: [adversarial | quick] (직접 수행 — 격리 없음)` 을 적고, `## 완료:` 종료 선언은 그대로 요구된다.
 
@@ -229,8 +259,8 @@ prompt: |
   다음 코드를 리뷰해주세요:
   [1단계에서 확인한 코드/diff]
 
-  **정적 분석 결과 (0단계):**
-  [0단계 ruff check 결과 - 있으면 포함, 없으면 "정적 분석 통과" 또는 "Python 파일 없음"]
+  **정적 분석 결과 (0.2단계):**
+  [0.2단계 ruff check 결과 - 있으면 포함, 없으면 "정적 분석 통과" 또는 "Python 파일 없음"]
 
   **Auto-Scope 설정:**
   - scope: [1.5단계에서 결정된 scope]
@@ -283,16 +313,22 @@ prompt: |
 
 리뷰 결과를 사용자에게 요약 보고
 
+`review-code` 가 내는 형식 그대로 옮긴다(자체 등급 체계를 새로 만들지 않는다 — 판정·등급 정의는
+`agents/review-code.md` 의 "판정 기준"이 소유한다):
+
 ### 리뷰 결과
 
-| 항목       | 결과        |
-| ---------- | ----------- |
-| 전체 평가  | [A/B/C/D/F] |
-| Critical   | [N개]       |
-| Warning    | [N개]       |
-| Suggestion | [N개]       |
-| 보안 이슈  | [N개]       |
+| 항목      | 결과                                     |
+| --------- | ---------------------------------------- |
+| 판정      | [REJECT / CONDITIONAL / ACCEPT]          |
+| Scope     | [adversarial / quick] (직접 수행이면 그렇게 표기) |
+| CRITICAL  | [N개]                                    |
+| HIGH      | [N개]                                    |
+| MEDIUM    | [N개] (quick 에서는 0)                   |
+| LOW       | [N개] (quick 에서는 0)                   |
+| 완료 선언 | [`## 완료: 전체` / `부분` / 없음(잘림)]  |
+| 보안 이슈 | [N개 / 스캔 안 함]                       |
 
 ### 수정 필요 사항
 
-[Critical/Warning 항목 목록]
+[CRITICAL/HIGH 항목 목록 — 필요하면 MEDIUM 까지]

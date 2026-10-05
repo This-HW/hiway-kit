@@ -16,13 +16,14 @@ description: Structured task planning into a plan file. Use for any new feature,
 ## Phase Gate
 
 `brainstorming`(설계 승인)은 **설계가 필요한 Large 새 기능**에만 선행한다 — 크기 기준은
-아래 Step 1-1 과 같다. 그런 작업인데 `docs/specs/`에 관련 스펙이 없으면 먼저 `brainstorming`
-을 invoke 한다. 버그 수정·Small·Medium 은 바로 진행한다(건너뛴 사실만 한 줄 적는다).
+`skills/plan-task/references/elicitation.md` §6 이 소유한다. 그런 작업인데 `docs/specs/`에 관련
+스펙이 없으면 먼저 `brainstorming` 을 invoke 한다. 버그 수정·Small·Medium 은 바로 진행한다(건너뛴
+사실만 한 줄 적는다).
 
 ---
 
 요구사항을 명확히 하고 구현 계획을 세운다. Medium/Large 면 결과를 **계획 파일**에 남긴다 —
-규약(위치·frontmatter·절 순서) SSOT: `references/plan-format.md`.
+규약(위치·frontmatter·절 순서) SSOT: `skills/plan-task/references/plan-format.md`.
 
 **영속 상태는 `plan.md`(와 실행 단계의 checklist)다.** 호스트 태스크 도구는 진행 추적에만
 쓴다 — 세션 스코프이거나(Claude Code) 아예 없는(Codex 등) 하네스가 있어서 세션을 넘지 못한다.
@@ -34,9 +35,10 @@ description: Structured task planning into a plan file. Use for any new feature,
 1. 호스트 태스크 도구가 있으면 로드한다(Claude Code: `ToolSearch("select:TaskCreate,TaskUpdate,TaskList")`).
 
    > **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
-   > 의 대체 경로로 추적한다.
+   > §B 가 소유한다. `[Planning]` 단계의 대체는 **대화창 진행표 + `plan.md`** 다 — checklist 에는
+   > 걸지 않는다(걸 `verify` 명령이 없다).
 
-   이미 `[Planning]` Task 가 있으면 생성을 건너뛴다. 없으면:
+   이미 `[Planning]` Task 가 있으면 생성을 건너뛴다. 없으면(도구가 있을 때만):
 
    ```
    T1: [Planning] 요구사항 명확화
@@ -54,16 +56,16 @@ description: Structured task planning into a plan file. Use for any new feature,
 
 `clarify-requirements` 에이전트에 위임하거나 직접 진행.
 
-> **절차 SSOT: `references/elicitation.md`** — 규모가 Medium 이상이면 **읽고 시작한다.**
+> **절차 SSOT: `skills/plan-task/references/elicitation.md`** — 규모가 Medium 이상이면 **읽고 시작한다.**
 > 등급 체계만으로는 *"딱히 모호한 게 없었다"* 로 끝나고, 못 찾은 모호함은 사라지지 않고
 > 구현 중 추측으로 메워진다.
 
-1. **규모 판단** (`references/elicitation.md` §6 이 기준을 소유한다):
-   Small 1모듈·1-3파일 / Medium 2-3모듈·4-10파일 / Large 4모듈+·10파일+.
+1. **규모 판단** — 기준(Small/Medium/Large 임계값)과 규모별 완료 조건은
+   `skills/plan-task/references/elicitation.md` §6 이 소유한다. 여기에 옮겨 적지 않는다.
 
    **Medium/Large 면 지금 계획 파일을 만든다**: `docs/plans/<오늘 YYYY-MM-DD>-<slug>/plan.md`
    (이름이 있으면 `-2`, `-3`). frontmatter 는 `status: planning` 과 판정한 `size`,
-   본문은 `plan-format.md` 의 절 머리만 둔다(`## 검증 결과` 제외). **Small 은 파일 없이** 진행한다.
+   본문은 `skills/plan-task/references/plan-format.md` 의 절 머리만 둔다(`## 검증 결과` 제외). **Small 은 파일 없이** 진행한다.
 
 2. **자격 인벤토리** (Large 필수 · Medium 권장 — `elicitation.md` §0):
    확보된 권한을 세고 그 경계를 **이번 범위선**으로 삼는다. 미확보 항목은 기다리지 말고
@@ -93,7 +95,7 @@ description: Structured task planning into a plan file. Use for any new feature,
 6. **기록** (계획 파일이 있을 때): 결과를 `## 요구사항`, P0 결정을 `## 결정` 에 쓴다.
    brainstorming 스펙(`docs/specs/…`)이 있으면 `## 요구사항` 첫 줄에 그 경로를 적는다.
 
-7. T1 완료 마킹(호스트 태스크 도구가 있으면 `TaskUpdate(T1, status="completed")`)
+7. T1 완료 마킹 — 도구가 있으면 `TaskUpdate(T1, status="completed")`, 없으면 진행표의 근거 칸을 채운다
 
 ---
 
@@ -102,12 +104,12 @@ description: Structured task planning into a plan file. Use for any new feature,
 `plan-implementation` 에이전트에 위임하거나 직접 진행:
 
 1. T1 결과(`## 요구사항`·`## 결정`) 기반으로 구현 계획 작성
-2. 규모별 추가 단계 (`references/elicitation.md` §6):
+2. 규모별 추가 단계 (`skills/plan-task/references/elicitation.md` §6):
    - Medium+: 사용자 여정 설계 포함
    - Large+: 비즈니스 로직 정의 포함
 3. 구현 순서, 의존성, 예상 범위 명시
 
-4. **완료 조건을 실행 가능한 명령으로 쓴다** [건너뛰기 금지] (`references/elicitation.md` §5):
+4. **완료 조건을 실행 가능한 명령으로 쓴다** [건너뛰기 금지] (`skills/plan-task/references/elicitation.md` §5):
    각 단계의 완료 조건은 **종료코드로 판정되는 명령**이어야 한다.
 
    ```
@@ -121,27 +123,33 @@ description: Structured task planning into a plan file. Use for any new feature,
 
 5. **경계 검사** (해당할 때만): 계획이 모듈·레이어 경계나 의존 방향을 정하거나 바꾸거나, 프로젝트에
    경계 검사 설정이 이미 있고 이번 변경이 그 설정이 다루는 패키지 사이의 import 를 건드리면
-   `references/boundary-check.md` 를 읽고 그 검사 명령을 4의 완료 조건에 반영한다. 해당하지 않으면 건너뛴다.
+   `skills/plan-task/references/boundary-check.md` 를 읽고 그 검사 명령을 4의 완료 조건에 반영한다. 해당하지 않으면 건너뛴다.
 
 6. **기록** (계획 파일이 있을 때): `## 구현 계획` 과 `## 완료 조건` 을 채운다.
 
-7. T2 완료 마킹
+7. T2 완료 마킹 (T1 과 같다 — 도구가 있으면 `TaskUpdate`, 없으면 진행표)
 
 ---
 
 ## Step 3: Planning 완료 처리
 
 0. **[건너뛰기 금지]** auto-dev invoke(핸드오프) **전에** 이 계획의 `[Planning]`/`[Brainstorm]` 중
-   "끝났는데 마킹 안 된" 태스크를 completed로 정리한다
-   (규율 SSOT: `rules/definition-of-done.md#task-마감-규율`).
+   "끝났는데 마킹 안 된" 태스크를 completed로 정리한다 — 호스트 태스크 도구가 있을 때만
+   (규율 SSOT: `rules/definition-of-done.md#task-마감-규율`). 도구가 없으면 진행표를 마지막 상태로
+   한 번 더 출력하는 것이 이 단계다.
 1. 계획 파일이 있으면 네 절이 채워졌는지 확인하고 frontmatter `status: in-progress` 로 바꾼다.
    Small 이면 요구사항·계획·완료 조건을 대화창에 출력한다.
 2. 다음 단계:
 
 Planning이 완료되었습니다. 바로 개발을 시작하겠습니다.
 
-`auto-dev` 스킬을 즉시 invoke합니다 — 계획 디렉토리를 인자로 넘긴다(Small 은 인자 없이,
-대화창의 계획으로). 사용자가 "나중에" 또는 "직접 실행"을 원하면 아래 명령을 안내하고 invoke를 건너뜁니다.
+`auto-dev` 스킬을 즉시 invoke합니다 — 계획 디렉토리를 인자로 넘긴다. 사용자가 "나중에" 또는
+"직접 실행"을 원하면 아래 명령을 안내하고 invoke를 건너뜁니다.
+
+**Small 은 계획 파일이 없다.** Small 경로의 정본은 `elicitation.md` §6 이고(바로 구현 + 완료 조건
+명령으로 검증), plan-task 가 Small 로 판정하면 대화창의 계획을 인자 없이 `auto-dev` 에 넘겨 그
+Step 4(가벼운 경로)로 실행하거나, 사용자가 원하면 `auto-dev` 없이 직접 구현한다. 어느 쪽이든
+Medium 이상의 절차(계획 파일·checklist·Validation 3단계)를 Small 에 씌우지 않는다.
 
 ```
 /auto-dev docs/plans/<YYYY-MM-DD>-<slug>
@@ -151,6 +159,9 @@ Planning이 완료되었습니다. 바로 개발을 시작하겠습니다.
 
 ## 참고 문서
 
-이 스킬 디렉토리 기준 경로다(소비자 프로젝트 cwd 기준이 아니다):
-계획 파일 규약 `references/plan-format.md` · 요구사항 정련 절차 `references/elicitation.md` ·
-경계 검사 절차 `references/boundary-check.md` · Planning 프로토콜은 규범 `planning-protocol`(세션 주입).
+플러그인 루트 기준 경로다(소비자 프로젝트 cwd 기준이 아니다):
+계획 파일 규약 `skills/plan-task/references/plan-format.md` · 요구사항 정련 절차
+`skills/plan-task/references/elicitation.md` · 경계 검사 절차
+`skills/plan-task/references/boundary-check.md` · Task 도구 폴백·킷 도구 탐색
+`skills/plan-task/references/task-tools-fallback.md` · Planning 프로토콜은 규범
+`planning-protocol`(세션 주입).
