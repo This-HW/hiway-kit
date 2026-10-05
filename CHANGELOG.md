@@ -6,6 +6,199 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.4.0] — 2026-10-05
+
+### 전수 감사 후속 — 하네스·규범·스킬·문서·게이트 정합 (`docs/specs/2026-10-05-audit-remediation/`)
+
+2026-10-05 전수 감사(A 하네스 실측 · B 문서 · C 외부 동향 · D 콜드 리딩 — 보고 4건은 같은 폴더 `audit/`)가 낸 발견을
+워커 5개로 나눠 고쳤다. 아래 발견 ID(`A-P0-2`·`B-P1-12`·`C-M4`·`D-1` …)는 그 보고를 가리킨다. 사용자 결정 3건은
+기본값으로 확정했다 — Codex `protect-sensitive` 이식은 **보류**(문서만 정정), `SubagentStart` 주입은 **하지 않음**,
+AGENTS.md 이중 도달은 **문서만 정정**(억제 훅 없음). 규범 블록 sha256(재생성된 `AGENTS.md` 마커): `354f3da0b3f8ff1a083439eb5eb78eb7cd18ddc30847477d5b82f1e6be6ade67`
+
+### Added — Codex 스킬 메타데이터 `agents/openai.yaml` 파생 (C-X1)
+
+- `scripts/build-targets.py` 가 각 스킬의 `SKILL.md` frontmatter 에서 `skills/<name>/agents/openai.yaml` 을
+  생성한다 — `interface.display_name`(=`name`)·`interface.short_description`(=`description` 첫 문장), 그리고
+  `disable-model-invocation: true` 인 스킬(`harness-export`·`skill-forge`·`using-hiway-kit`)에만
+  `policy.allow_implicit_invocation: false`. 그 키가 없는 스킬에는 `policy` 를 쓰지 않는다.
+  이전에는 Claude Code 에서 자동 발동하지 않는 이 세 스킬이 **Codex 에서는 암묵 호출됐다**.
+- 위치·필드·필수 여부는 공식 문서를 2026-10-05 에 다시 읽어 확인했다(learn.chatgpt.com/docs/build-skills,
+  submission-errors `skill_agent_interface_missing`) — 근거는 `packaging/targets.json` `codex.skillInterface`.
+- 생성물은 `build-targets.py --check` 의 드리프트·미생성 판정을 받는다(지우면 red). 디렉토리 ZIP 에 15개 모두 실린다.
+  Claude Code 는 이 파일을 무시한다(`claude plugin validate --strict` rc 0, `plugin details` Skills 15·Agents 15 불변).
+
+### Changed — 규범 3건 (`rules/` — CHECKSUMS 재생성)
+
+- `definition-of-done` «Task 마감 규율»: Task 도구가 **있는 세션에서만** 적용하고, 없으면
+  `skills/plan-task/references/task-tools-fallback.md` 의 대체 경로를 가리킨다(C-F3).
+- `agent-system` Phase Gate: Validation→Done 을 auto-dev T-merge 와 같은 기준(완료 조건 rc 0 · review-code
+  `[ACCEPT]` · security CRITICAL/HIGH 0)으로 맞추고, 정의된 적 없는 "Must Fix" 와 auto-dev 가 부르지 않는
+  "verify-code PASS" 를 지웠다(B-P1-10). Planning→Dev 는 P0 = 0 만 공통이고 나머지는 `elicitation.md` §6 의
+  규모별 기준에 위임한다(B-P1-11).
+- `child-marker`: `base_commit` 이 HEAD 의 **조상이 아닐 때** 경고한다(코드와 일치). 문자 그대로의 "불일치면 경고"는
+  첫 작업 커밋부터 상시 참이 되는 경고였다(B-P1-22).
+
+### Fixed — 해설본 미러 5종 내용 동기 (`docs/architecture/rules/` — MIRROR.sha256 재생성)
+
+- `mcp-usage`: 존재하지 않는 `db-tunnel.sh start` 지시 삭제(B-P0-4). "배포 에이전트엔 MCP 미배선"을 정본 원칙이 아니라
+  CLAUDE.md Contributing 이 소유하는 **저작 규칙**으로 정정, 낡은 예산 숫자(10,240B·여유 77B·1,425B) 삭제 — 숫자는
+  게이트 출력이 소유한다(B-P1-19).
+- `planning-protocol`: 소유자 §6 에 없는 시간 열(~10시간/20~50시간/50시간+)과 §6 과 다른 필요 산출물 열 삭제,
+  `MISSING_SPEC` 처리를 규범 문구("명세에 추가")로(B-P1-20).
+- `agent-delegation-chain`: 정본은 `tier: reference` 라 본문이 주입되지 않는다고 정정(B-P1-21). 승인 문단이 컨텍스트에
+  있어야 위임이 일어난다는 A/B 근거와 현재 구조의 간극은 **미결**로 명시했다.
+- `agent-system` §9: Phase Gate 정렬의 이유. `task-resume`: checklist 예시를 실제 스키마(`acceptance`·`verify` 필수)로.
+- 5종 모두 문서 지위 frontmatter(`status: current`, `as_of`) 추가(D0-2).
+
+### Fixed — 하네스 사실 정정 (`harness-export`·`child-session`·생성물 원본)
+
+- **Codex 는 PreToolUse 차단을 지원한다**(codex-cli 0.159.3 실측 — exit 2 와 `permissionDecision:"deny"` 모두, 양성 대조
+  포함). "차단이 유지되지 않는다"는 0.153.4 기록이었다. `export_harness.py` 의 생성물 문구·`child-session` 파리티 절을
+  "Codex 도 차단은 되지만 킷은 Codex 에 차단 훅을 싣지 않는다(페이로드 파서 없음)"로 고쳤다(A-P0-2). 이식 여부는 별도 결정.
+- `harness-export` SKILL: Antigravity 는 플러그인 설치로 **스킬만** 받는다 — 규범은 진입점 파일로만(A-P0-1). 전달 형태 표에
+  Antigravity 행(AGENTS.md·GEMINI.md 둘 다 읽음, A-P2-5)과 Codex 디렉토리 ZIP 설치(훅 없음) 구분. 같은 규범이 두 번 들어가는
+  곳 3개(Codex 훅+AGENTS.md · Antigravity 두 파일 · **Claude Code 2.1.277+ 가 CLAUDE.md 없는 프로젝트에서 AGENTS.md 를 직접
+  읽음**)를 표로(C-F5, A-P1-8). exit code 표를 지우고 `--help` 를 가리킨다 — 복제본은 명시 `--plugin-root` 실패를 exit 2 로,
+  exit 3 을 누락, 사라진 `PORTABLE`/`NOT_PORTABLE` 딕셔너리를 현행으로 적고 있었다(B-P0-2·P0-3). 킷 도구 경로 해석은
+  `task-tools-fallback.md` 의 탐색 규약을 가리킨다(A-P1-6, D10).
+- `export_harness.py`: `--help` 가 모듈 docstring 의 종료코드 절을 보여 준다(종료코드 SSOT). 생성물 하네스 목록에
+  Antigravity·Gemini CLI 명시(A-P1-7), "이식하지 못하는 것" 표에 Antigravity·Gemini CLI **주입 없음 — 정적 파일만**과
+  Antigravity 이중 로드 행(A-P1-8·P2-4). conventions 인라인 시 문서 지위 frontmatter 를 벗긴다(닫히지 않으면 exit 1).
+  **AGENTS.md·GEMINI.md 는 재생성 필요**(컨트롤).
+
+### Changed — 하네스 실측 기록 갱신 (`packaging/targets.json`)
+
+- 옛 관측 키는 지우지 않고 `[superseded by 2026-10-05]` 를 붙였다. 새 관측은 `_observations20261005`(codex·antigravity).
+- Codex 0.159.3: 스킬 15/15, PreToolUse 차단 가능, 훅 페이로드 `Bash`/`apply_patch` + `tool_input.command`, 모델 셸 환경에
+  `CLAUDE_PLUGIN_ROOT` 없음, ZIP 설치는 규범 미도착. `hooks._omitted` 사유를 "차단 불가" → "차단 가능 확인, 이식은 별도 결정"
+  으로(옛 원문은 `_supersedes`).
+- agy 1.2.17: 진입점 두 파일 모두 도달·이중 로드, 스킬 인식, plugin `rules/` 런타임 미도착(공식 문서와 충돌), 에이전트 미인식
+  원인은 레이아웃이 아니라 `model:` 값, `validate` 는 개수만 센다, 낡은 "33개·카테고리" 서술 삭제(A-P1-3·P1-4·P1-5).
+  `agy -p` 는 타임아웃해도 **rc 0 에 `status:"SUCCESS"`·빈 응답**(재측정 — status 필드로도 절단을 못 가린다, C-A5·F9).
+  `$schema` URL 404 기록, `plugin@marketplace`·`import` CLI(A-P2-2·C-A6). Gemini CLI 런타임은 미측정(키 무효).
+
+### 스킬 로직·폴백·경로 규약 (W3 — 스펙 D10·D11·D12)
+
+- **킷 도구 탐색 규약 신설** — `skills/plan-task/references/task-tools-fallback.md` §A 가 SSOT.
+  순서 ① `$CLAUDE_PLUGIN_ROOT` ② SKILL.md 기준 `../../` ③ `~/.claude/plugins/cache/*/hiway-kit/*/`
+  ④ `~/.codex/plugins/cache/*/hiway-kit/*/` ⑤ 실패 시 사용자에게 루트 경로를 묻고 직접 지정(`--plugin-root`).
+  쉘 함수 `kit_root` 한 토막만 두고 auto-dev(ledger·stop-validator 마커)·plan-task·skill-forge·
+  test/debug/review 의 `~/.claude/plugins/cache/*/*/*/` 글롭을 그 절 참조로 교체(B-P2-9, A-P1-6).
+  ③ 은 마켓플레이스 디렉토리가 아니라 **버전 디렉토리 이름**으로 정렬한다 — 경로 전체를 `sort -V` 하면
+  실측에서 `anthropic-plugin-directory/…/5.3.0` 대신 `hiway-kit/…/5.2.2` 가 이겼다.
+- **Task 도구 폴백을 실행 가능하게 고침** (B-P1-12) — `checklist.py` 의 `_REQUIRED_FIELDS` 는 항목마다
+  비어 있지 않은 `verify` 를 요구하고 `blockedBy` 필드가 없다. 그래서 `[Planning]`·`[Brainstorm]`·
+  `[Validation]` 은 checklist 가 아니라 **대화창 진행표 + `plan.md`**(`## 검증 결과`)로, `[Dev]` 만
+  checklist(`## 완료 조건` 명령 = `verify`, 선행은 id 순서 + `description` 의 `(선행: …)`)로 추적한다.
+  auto-dev 의 `TaskUpdate(failed)`·`TaskList` 잔존 확인은 "도구가 있으면" 으로 가드. Task 도구 없는
+  하네스에서 plan-task → auto-dev 를 처음부터 끝까지 한 번 실제로 따라가며 검증.
+- **Small 경로·크기 기준 정본을 `elicitation.md §6` 한 곳으로** (B-P1-11) — plan-task·brainstorming·
+  using-hiway-kit 의 임계값 복제를 참조로 교체. plan-task 는 Small 이면 계획 파일·checklist·Validation
+  3단계를 씌우지 않는다.
+- **brainstorming** 의 "대기 태스크가 다음 세션에 잔존한다 — 정상" 오서술을 정정하고 존재하지 않는
+  `task-resume` 참조를 제거(B-P1-23).
+- **test/debug**: `fix-bugs`(worktree 격리) 결과를 이 세션에 **반영한 뒤** 재실행·검증하는 단계와
+  재시도 상한(최대 3회 · 무진전 2회) 추가, debug 진단 전용 호출의 격리 이득 없음 명시(B-P1-24).
+- **auto-dev T-review** 가 `review-code` 호출 규칙(diff 인라인·6파일 배치·`## 완료:` 줄)을
+  `review` 스킬 2단계 참조로 가리킨다 — 빈 리뷰가 "결함 0건"으로 읽혀 T-merge 를 통과하던 경로(B-P1-25).
+- **review**: 0단계를 **대상 확정**으로 앞당기고 ruff 는 그 목록으로 실행(대상 없는 "통과" 제거),
+  `--diff-filter=d`, stderr 비은닉, ruff 종료코드 판독(0/1/2), 4단계 표를 `review-code` 실제 출력
+  (REJECT/CONDITIONAL/ACCEPT · CRITICAL/HIGH/MEDIUM/LOW)으로, 보안 파일 패턴·기본 범위의 킷 전용
+  경로(`hooks/*.py`·`agents/**`) 제거(B-P1-26, B-P2-9). 시뮬레이션에서 zsh 가 따옴표 없는 목록 변수를
+  단어 분리하지 않아 `ruff check $PYS` 가 깨지는 것을 발견 → `sh -c` 로 전달.
+- **skill-forge**: 재현성 미충족 강등 경로를 feedback ledger 가 아닌 "완료 보고에만 기록"으로(B-P1-27).
+- **cross-engine-review**: 우편함 기본값을 트리 상대경로에서 **모든 워크트리가 공유하는
+  `git-common-dir` 아래 절대경로**로, 쓰기 확인·결론 보존 방법 추가(B-P1-28).
+- **multi-perspective-review**: (C-M4) **관점별 근거 필수**(근거 없는 주장은 집계 제외·리포트 "집계 제외"
+  절에 보존) + Round 2 말미 **명시적 반대 라운드**(반대자가 근거를 내야 합의 통과, 미반박 반대는 Round 3
+  충돌로, 시도 기록 없는 "반대 없음"은 무효) — 병렬·순차(서브에이전트 없는 하네스) 경로 모두 적용.
+  3중 복제 정리(SKILL 은 개요+링크, 리포트 구조는 `deliberation-pattern.md` 로), 실행 시간 합계
+  26-41 → 26-39(행 상한 합) 정정(B-P2-10). web-research 의 MCP 선택 3중 반복을 가이드 표 하나로,
+  Context7 예시에 버전 명시(B-P2-10).
+- 경로 기준을 `skills/<name>/references/…`(플러그인 루트 기준)로 통일(plan-task, B-P2-9).
+- 스킬 `description` 은 불변(발동률 회귀 방지 — W5 파일럿 측정 전까지).
+
+### Changed — 문서 지위가 frontmatter 로 선언된다
+
+- `docs/**/*.md` 전부(룰 미러 제외 — W2)에 `status: current|historical|proposal|superseded`·`as_of` 를 단다. 시점 고정 조사·완료 스펙은 `historical`, 대체된 스펙은 `superseded` + `superseded_by`. 시점 고정 문서 머리에는 배너를, 바뀐 사실에는 «정정»을 인라인했다 (B 총평 A·B-P1-31·P2-13·P3-6, A-P2-1)
+- `docs/research/README.md`·`docs/specs/README.md` 색인 신설, `docs/conventions/README.md` 색인을 전부 채움 — 무엇을 `CLAUDE.md` 가 import 하는지 정정 (B-P1-18, B (c))
+- `docs/pipeline-reinforcement-plan-v2.md` 삭제 — 폐기된 마커 레시피와 구버전 Stop 훅 스케치가 현재형 명세로 남아 있었다. 판정은 `docs/architecture/delegation-signal-retirement.md` 가 소유 (B-P0-6)
+
+### Changed — `CLAUDE.md` 를 줄이면서 고쳤다 (프로젝트 지침 CLAUDE.md + @import 42,971B → 38,603B, `check_injection_budget.py` 측정)
+
+- 릴리스 절을 `docs/conventions/release-process.md` 포인터로 — 버전은 `scripts/bump-version.sh` 로만 올린다(수동 편집 예시 삭제). release-process 에 `AGENTS.md` 재생성·행동 eval·태그 경위를 모아 정본화 (B-P1-1, D-4, D-5, B-P2-12)
+- CI 단계·드리프트 게이트 열거 삭제 — `validate.yml`·`verify-done.sh` 가 소유 (B-P1-15, B-P1-16)
+- maxTurns 는 각 에이전트 frontmatter 가 소유, Phase 1 은 "P0 ambiguity = 0", Phase 3 에 spec compliance 선행 (B-P1-13, B-P1-14, B-P3-3)
+- 플러그인 캐시 경로를 `<marketplace>/hiway-kit/<version>[-<sha>]` 로 일반화 (B-P1-2)
+- `/agent-creator` 는 소비자 프로젝트 에이전트용이라고 명시, 킷 에이전트 추가 절차에 로스터·eval tier·시나리오 의무 추가 (D-1, D-3)
+- leaf 에이전트 중첩 금지는 네이티브 기본(3단계)과 다른 의도적 선택임을 명시, 워크플로 opt-in 서술을 현행으로 (C-F10, C-F4)
+- frontmatter 템플릿에 `ExitWorktree`, 오케스트레이션 표 단위를 "병렬 청크 수" 로 (B-P2-8). 첫 줄에 지원 범위(D-7), Full Mode 는 직접 마켓플레이스를 설치한다고 명시(B-P0-1). 풀리지 않는 작업 ID 제거 (B-P3-4)
+
+### Changed — 배포 상태의 정본은 하나
+
+- `docs/marketplace-submission.md` 상단에 채널별 상태 요약표(채널 / 상태 / 확인일 / 다음 행동) 신설. 아래 절은 `(역사)`·`(기록)` 으로 접고, 머리 Note·개명 절의 모순, 전임 킷 pin(v2.12.3) vs 최종본(v2.21.0) 서술을 통일 (B-P1-3, B-P1-4)
+- listing 키에 대한 "validate 가 경고하고 제거" 근거를 낡음으로 정정 — Claude Code 2.1.281+ 는 경고하지 않는다 (C-F6)
+- `docs/codex-submission-checklist.md` 는 절차·기록만. 제출 전 단계·트래커 서술을 역사로, `§14` 를 `verify-done.sh` 것으로 명시 (B-P1-5)
+
+### Changed — README 의 하네스 서술을 실측에 맞췄다
+
+- Codex 자동 차단: 0.153.4 에선 막히지 않았고 **0.159.3 에선 막힌다**(2026-10-05 감사 A 실측, 기록 `packaging/targets.json`). `protect-sensitive` 이식은 별도 결정 (A-P0-2)
+- Codex 마켓플레이스 설치 vs OpenAI 디렉토리 ZIP 비교표 — ZIP 은 훅이 없어 `/harness-export` 가 필요 (A-P1-1)
+- Antigravity 에이전트 미인식의 원인은 레이아웃이 아니라 `model:` frontmatter, `agy plugin validate` 는 개수만 센다 (A-P1-3, B-P1-9)
+- Gemini CLI 절 신설 — `GEMINI.md` 만 제공, 런타임 미측정, 정식 타겟 아님 (A-P1-7). `~/.agents/skills` 공용 경로 안내와 네임스페이스·중복 로드 경고 (A #9)
+- 이력 서사(3.34.x 릴리스 노트) 삭제, OpenAI 상태는 요약표 포인터, Feature Development 체인·Multi-perspective 흐름을 스킬 링크로 축소, Project Structure 에 `tools/`·`setup/`, 기여 체크리스트의 "plugin.json 등록" 을 메타데이터 확인으로 (B-P1-7, B-P1-8, B-P1-29, D-6, B-P3-2)
+- `plugins/common/README.md`: 두 설치 경로, 평탄 `agents/` 역할 표, 차단 훅은 Claude Code 동작임을 명시 (B-P1-29, B-P2-11, D-9). `packaging/README.md`: 작업 ID 제거, 비활성 타겟 열거 삭제 (B-P2-11)
+
+### Changed — 해설·규약 문서 정정
+
+- `docs/architecture/phase-gate-pattern.md`: Stop 훅은 Phase Gate 를 판정하지 않는다(린트·수정 테스트 안전망), 출구 조건은 `rules/agent-system.md` 가 정본 — "80%+"·"통합 테스트" 삭제 (B-P0-5, B-P1-6, D-2)
+- `docs/native-absorption.md`: 감사 C §8 반영 — `Agent Evals` → `adopt(pilot)`, SubagentStart·AGENTS.md 이중 도달 → `decide`, 서브에이전트 결과 헤더 → `absorbed(partial)`, 워크플로 배포는 `watch`(미채택), 신규 7행, 상태 3종 정의. `/agents` 마법사 제거·Task 도구 기본 비활성 정정, 에이전트 33→15·Codex 훅 현재 사실, 셀 파이프 이스케이프, 작업 ID → 스펙 경로, 검토 기록 최신순·4.0~5.3 항목 (C-F1, C-F2, C-F7, C-F8, B-P1-9, B-P2-1, B-P2-2)
+- `docs/conventions/`: path-containment 헬퍼 이름 `_resolve_in_repo`·반복 횟수 네 번(B-P1-17), no-gate-integration 개수·열거 삭제(B-P1-16), reference-vs-judgment 깨진 `[Unreleased]` 링크(B-P2-4), warning-signal "여섯"·현존 예시(B-P2-6), rules-mirror tier 별 주입 서술(B-P2-7), measurement-traps 문장(B-P3-5)
+- `docs/architecture/delegation-signal-retirement.md`: 검증 불가 "decision-log 47곳" 삭제, 작업 ID → 버전·스펙 경로 (B-P2-5, B-P3-4). `docs/control-loop-transport.md`: Work 잔재 (B-P1-30)
+
+### Added — 문서 정합 게이트 3종 (전수 감사 A·B·C 후속, 스펙 D13)
+
+- **`scripts/check_doc_refs.py` (`verify-done.sh §27` + CI)** — 문서가 가리키는 대상이 **실제로 있는가**.
+  마크다운 링크·`@import`·슬래시 든 백틱 경로·백틱 `*.sh`/`*.py` 이름·`snake_case()`/`def` 함수명을
+  추적 파일 트리와 코드 정의에 대조한다. 감사가 33/0 green 인 채로 낸 P0 급 사실 오류(B-P0-4 지워진
+  `db-tunnel.sh`, 옮겨진 `hooks/checklist.py` 계열 …)가 전부 이 구멍이었다. 펜스 코드블록도 **이 레포
+  소유로 보이는 경로·`.sh` 이름**은 본다(트리 그림 안의 죽은 스크립트 — `docs/architecture/rules/mcp-usage.md`).
+  제외는 대상을 나열하지 않고 **제외를 나열**한다: `status: historical|superseded`·CHANGELOG·eval 픽스처·
+  자리표시자·소비자 쪽 경로·gitignore 산출 디렉토리·줄 단위 `doc-ref-ok`·(파일, 참조) 쌍 `ALLOWED_REFS`
+  (이유 필수, 안 쓰이면 노랑으로 알린다).
+- **`scripts/check_doc_status.py` (`verify-done.sh §28` + CI)** — ① 모든 `docs/**/*.md` 의 frontmatter 가
+  `status`(`current|historical|proposal|superseded`)·`as_of`(`YYYY-MM-DD`)·(`superseded` 면)
+  `superseded_by`(추적 파일, 레포 안) 스키마를 따르는가(스펙 D0-2). ② `current` 문서와 `docs/` 밖 살아있는
+  문서에 **제거된 이름**(`agents/(dev|meta|planning)/`·`hooks/(checklist|feedback_ledger|export_harness)`·
+  `docs/works`·`work.sh`·`W-0xx`·구 플러그인 이름)이 없고, **GFM 표의 열 수**가 헤더와 같은가
+  (이스케이프하지 않은 `|` 는 코드 스팬 안에서도 구분자다 — 감사 B-P2-1).
+- **`check_injection_budget.py` 다섯째 축 (§16, CI 이미 호출)** — 하네스가 파일째 읽는 진입점
+  (`AGENTS.md`·`GEMINI.md`)이 `export_harness.ENTRYPOINT_SOFT_CAP`(24 KiB) 안인가. 목록과 상한 모두
+  `export_harness.py` 가 소유하고 게이트는 그것을 읽는다. `§15` 는 `AGENTS.md` 만 봤다 — `GEMINI.md`
+  는 "내용이 같으니 크기도 같을 것"이라는 가정이었다(감사 C-M2).
+- 세 게이트 모두 red 메시지에 **고치는 법 한 줄**(→)을 싣는다(감사 C-M3), 각 위반 종류마다 의도적 위반
+  픽스처 → red / 고친 픽스처 → green 테스트를 `scripts/tests/` 에 둔다.
+
+### Fixed — 구 이름 검사가 CHANGELOG 머리말을 가렸다 (감사 B-P2-3)
+
+- `packaging/name-targets.json` 의 `oldNameScanExclude` 가 `CHANGELOG.md` 를 **통째로** 빼서, 머리말
+  3행("All notable changes to <구 이름>")이 현재형으로 구 이름을 말해도 `§20` 이 못 잡았다. 이제 새 키
+  `oldNameScanExcludeFrom` 으로 **첫 항목(`## [`) 앞의 머리말은 검사하고 항목 본문만** 제외한다.
+  마커가 파일에 없으면 파일 전체를 검사한다. (`scripts/check_old_names.py` 가 키를 읽는다.)
+
+### Changed — 낡은 주석 정정 (감사 B-P3-8)
+
+- `verify-done.sh` §18 주석의 "§17 은 D-22 몫으로 예약"(§17 은 이미 사용 중)과 `sync-rule-mirror.sh` 의
+  "(9개)"(실제와 다름 — 개수는 `MIRROR.sha256` 이 소유한다)를 고쳤다.
+
+### 외부 동향 흡수 — `claude plugin eval` 파일럿 (D15)
+
+- **스킬 발동 eval 신설** (C-C1): `plugins/common/evals/` 에 케이스 5개 — `plan-task-fires`·`debug-fires`·`review-fires`·`brainstorming-fires`·`small-bug-no-skill`(음성). 결정적 그레이더(`tool_used: Skill`, 음성은 `min: 0, max: 0`·`regex`)가 주, `llm` 은 보조. 레포 `evals/`(에이전트 행동·기준선)와 겹치지 않는 공백(스킬 발동률·description 회귀)을 메운다
+- **Codex 제출 ZIP 은 `evals/` 를 뺀다**: `scripts/build-codex-zip.py` `EXCLUDED_DIRS` 에 1줄 — 심사 표면·크기 보호
+- `evals/README.md` 에 «두 개의 eval» 구분 절(레포 `evals/` vs 플러그인 `evals/`)
+
+---
+
 ## [5.3.0] — 2026-10-05
 
 ### Changed — 에이전트를 `agents/` 최상위로 평탄화 (**에이전트 ID 변경**)
