@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-04-21
+---
+
 # Claude Code Kit Upgrade Implementation Plan — ✅ COMPLETED 2026-04-22
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.

@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-07
+---
+
 # T2 — 에이전트 축 전수 문서 감사
 
 > 감사 워커. 읽기 전용. 스코프: `plugins/common/agents/**` 33개 파일.

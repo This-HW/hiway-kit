@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # docs/conventions/ — host-neutral project conventions (W-022 R7)
 
 This directory is the **single source** for the parts of this repo's engineering discipline that

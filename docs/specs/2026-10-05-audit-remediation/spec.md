@@ -1,8 +1,9 @@
 ---
 title: "전수 감사 후속 — 문서 싱크·하네스 연계·스킬 로직·게이트·외부 동향 흡수"
-status: in-progress
 created: 2026-10-05
 size: large
+status: proposal
+as_of: 2026-10-05
 ---
 
 # 전수 감사 후속 (v5.4.0)

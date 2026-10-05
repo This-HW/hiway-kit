@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # 이 프로젝트의 협업 수단
 
 hiway-kit 저장소에서 별도 worker를 사용하는 감독형 협업은 Orca로 관리한다.

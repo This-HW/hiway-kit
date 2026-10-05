@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-07
+---
+
 # T5 — 배포·프로젝트 문서 축 감사 결과
 
 > 감사자: T5 워커 (읽기 전용) · 대상 커밋: 워크트리 HEAD `dd63b44`(로컬 `main`)
@@ -44,7 +49,7 @@
 | 12 | `docs/conventions/shell-lint.md` | OK | `scripts/lint-shell.sh` 관례 서술이 현재와 일치 |
 | 13 | `docs/marketplace-submission.md` | OK | v2.7.0 시점 기록임을 스스로 명시("현재 버전은 CHANGELOG 참조") — 역사 기록으로 보존 적절 |
 | 14 | `docs/native-absorption.md` | OK | 마지막 전수 검토 2026-08-26, 현재(2026-09-07)까지 12일 — watch 2행 모두 아직 유효, 자체 신선도 경고 문구 보유 |
-| 15 | `docs/pipeline-reinforcement-plan-v2.md` | OK | Track 2 폐기 이력·Track 1 구현 상태 모두 최신 판정으로 갱신돼 있음(2026-08-27) |
+| 15 | `docs/pipeline-reinforcement-plan-v2.md`(5.4.0 에서 삭제 → `docs/architecture/delegation-signal-retirement.md`) | OK | Track 2 폐기 이력·Track 1 구현 상태 모두 최신 판정으로 갱신돼 있음(2026-08-27) |
 | 16 | `docs/research/2026-07-harness-loop-engineering.md` | OK | 리서치 노트, 날짜·범위 명시, 이후 batch(W-011) 반영 여부까지 자체 기록 |
 | 17 | `docs/research/2026-07-long-running-loop-agents.md` | OK | 리서치 노트, kit 통합 권고가 이후 구현(§8 durable-executor)과 일관 |
 | 18 | `docs/research/2026-08-27-superpowers-distribution.md` | OK | 조사일 명시, 부록 1~5 전부 `[confirmed]` 태그, 이후 스펙들의 근거로 정확히 인용됨 |

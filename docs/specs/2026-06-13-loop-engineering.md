@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-06-13
+---
+
 # Loop Engineering 설계 (Spec 5)
 
 **Goal:** 승인된 계획을 P0 의사결정이나 완료 조건 도달 전까지 자율로 완주하는 "실행 루프" 레이어를 추가하여, 매 단계마다 멈추는 문제를 해소한다. Harness Engineering(어디서·무엇으로)의 상보 개념인 Loop Engineering(얼마나 오래·끈질기게)을 toolkit에 명문화한다.

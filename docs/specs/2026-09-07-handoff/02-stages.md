@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-07
+---
+
 # 02 — Stage 분해 (층 3): 구현 LLM 지시서
 
 > 기준 커밋 **`3f85f47`**. 값은 `01-policy.json`, 게이트 명령은 `03-gate-spec.md`,

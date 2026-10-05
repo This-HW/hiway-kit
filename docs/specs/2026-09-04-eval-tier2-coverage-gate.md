@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-04
+---
+
 # W-024 — 티어2 커버리지 갭 봉쇄 + `consensus-builder` eval 신설
 
 - 작성: 2026-09-04, 컨트롤 세션(torpedo-b5)

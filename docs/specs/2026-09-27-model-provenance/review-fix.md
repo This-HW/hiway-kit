@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-27
+---
+
 # W-045 리뷰 반영 — 공통 전제와 트랙 (2026-09-27)
 
 `/hiway-kit:review`(3.39.1 후보, 51b3f25..50a1274) 결과: 코드 배치 [CONDITIONAL] H1·M3·L5, 규범 배치 [CONDITIONAL]

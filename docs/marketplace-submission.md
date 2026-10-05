@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # Marketplace Submission & Community Listing
 
 Submit at: https://platform.claude.com/plugins/submit

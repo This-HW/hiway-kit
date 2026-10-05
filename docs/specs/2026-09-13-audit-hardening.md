@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-13
+---
+
 # Audit hardening
 
 Goal: repair the five defects reproduced in the project audit without widening the toolkit's runtime responsibilities.

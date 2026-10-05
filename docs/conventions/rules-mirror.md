@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 `plugins/common/rules/` (12) is what gets **injected every session**, so it is compressed.
 `docs/architecture/rules/` (5) is the long-form human explanation of five of those rules,
 created in W-004 — tables, worked examples, anti-patterns. The rest

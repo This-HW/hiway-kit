@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-25
+---
+
 # Prompt Audit — hiway-kit (2026-09-24)
 
 ## 가정 (Step 0)

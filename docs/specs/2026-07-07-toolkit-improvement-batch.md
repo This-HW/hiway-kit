@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-07-07
+---
+
 # Toolkit 개선 배치 — 등재 반영 · Evals · Native Watch · Self-Improve · Portfolio
 
 **Goal:** 커뮤니티 카탈로그 등재를 문서에 반영하고, kit의 두 구조적 갭(에이전트 행동 평가 부재, 네이티브 흡수 대응 비정기화)을 메운 뒤, evals를 안전장치로 하는 self-improve 루프와 포트폴리오 영문 포지셔닝까지 완성한다.

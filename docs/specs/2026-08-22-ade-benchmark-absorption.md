@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-08-22
+---
+
 # Spec — ADE 벤치마킹 흡수 배치 (Orca · Paseo · Hermes)
 
 - **작성일**: 2026-08-22

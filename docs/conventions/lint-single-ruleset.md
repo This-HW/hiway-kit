@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 `ruff.toml` at the repo root is the **single source** for both the rule set and
 the lint scope; `ruff check .` is the only command (CI, `verify-done.sh §3`, and
 the `auto-format` hook all resolve to it). Two traps it exists to close:

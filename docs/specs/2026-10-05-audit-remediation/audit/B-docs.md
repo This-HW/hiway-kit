@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-10-05
+---
+
 # 감사 B — 설계·기획·규약 문서의 싱크와 로직
 
 - 기준 커밋 `e7181cbbfb6c8c3bc38b7ae4e979da09fa30a618` (v5.3.0). `merge-base --is-ancestor` 통과, HEAD 와 동일.

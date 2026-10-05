@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 When a reference project (e.g. `obra/superpowers`) does something a particular way, that's
 evidence of a working pattern — not evidence that this repo needs the same thing. Before porting
 a tool or convention from a reference, check whether **this repo's own structure has the problem

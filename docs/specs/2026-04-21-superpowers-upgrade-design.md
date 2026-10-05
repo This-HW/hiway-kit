@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-04-21
+---
+
 # Claude Code Kit — Upgrade & Official Plugin Registry Design
 
 **Date**: 2026-04-21  

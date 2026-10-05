@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-10-05
+---
+
 # 감사 D — 콜드 리딩 보고서
 
 기준 커밋: `e7181cbbfb6c8c3bc38b7ae4e979da09fa30a618` — 현재 HEAD와 일치했고 `git merge-base --is-ancestor … HEAD`도 성공했다. 보고 기준일은 2026-10-05이다. 감사 동안 저장소 파일은 수정하지 않았으며, 검증 후 `git status --short --branch`에는 브랜치 이름만 나왔다.

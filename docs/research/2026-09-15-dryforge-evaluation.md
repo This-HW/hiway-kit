@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-15
+---
+
 # dryforge 채택 검토 — 전언 검증과 실체 조사 (2026-09-15)
 
 > **왜 조사했나.** 사용자가 *"superpowers 를 없애고 `prekuter/dryforge` 를 쓸까 고민중이다.

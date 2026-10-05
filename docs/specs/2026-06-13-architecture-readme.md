@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-06-13
+---
+
 # Architecture README 설계 (Spec 4)
 
 **Goal:** README에 "claude-code-kit이 어떤 로직·개념을 어떻게 융합하는가"를 설명하는 아키텍처 섹션을 추가하여, 사용자/기여자가 프로젝트의 설계 철학과 구성 원리를 한눈에 이해하게 한다.

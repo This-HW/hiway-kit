@@ -1,3 +1,9 @@
+---
+status: superseded
+as_of: 2026-08-27
+superseded_by: docs/architecture/delegation-signal-retirement.md
+---
+
 # Spec 초안 — DELEGATION_SIGNAL 계약 실효성 검토 (W-021)
 
 - **작성일**: 2026-08-27 · **상태**: **착수 전 (제안)** · **선행**: W-018 (커버리지 확장)이 이 사실을 드러냈다
@@ -59,7 +65,7 @@ W-018이 처음으로 그것을 쟀고, 답은 "대부분 안 한다"였다.
 
 1. `auto-dev` 등 스킬이 DELEGATION_SIGNAL을 **실제로 파싱하는지** 코드·문서에서 확인 (파싱 지점이 없으면 B)
 2. 파싱 지점이 있으면, 신호 부재 시 무슨 일이 일어나는지 실측 (조용히 무시 / 폴백 / 실패)
-3. `docs/pipeline-reinforcement-plan-v2.md` Track 2("Delegation Signal JSON화")가 **왜 보류됐는지**와 대조 —
+3. `docs/pipeline-reinforcement-plan-v2.md`(5.4.0 에서 삭제 → `docs/architecture/delegation-signal-retirement.md`) Track 2("Delegation Signal JSON화")가 **왜 보류됐는지**와 대조 —
    "실제 파싱 실패 사례 없음"이 보류 사유였다. 그 자체가 B의 방증일 수 있다
 
 ## 4. 비목표

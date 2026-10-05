@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-07-03
+---
+
 # Durable Executor Checklist & Machine Gate 설계 (v2 — 적대적 리뷰 반영)
 
 > v1(네이티브 Task 재사용 + 규율)은 3건 적대적 리뷰로 폐기. 근거: 네이티브 Task는

@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-08-27
+---
+
 # 레퍼런스 조사 — superpowers의 다중 플랫폼 배포 (obra/superpowers)
 
 - 조사일 2026-08-27 · 조사자: 기획 세션 · 방법: 로컬 설치본 해부 + `gh api` 로 원본 저장소 직접 조회

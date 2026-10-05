@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # Native Absorption Ledger — 네이티브 흡수 대조표 (SSOT)
 
 > **목적**: "기술부채의 최대 원천은 Claude Code가 네이티브로 하는 일을 자체 구현으로

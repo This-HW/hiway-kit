@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 This repo's completion gate has **three** checks that ask "does the generated artifact match its
 source of truth?" — `AGENTS.md` marker block vs `rules/` (sha256), eval scenarios vs baseline (set
 comparison + tier coverage), and target manifests vs the plugin SSOT (existence + content diff).

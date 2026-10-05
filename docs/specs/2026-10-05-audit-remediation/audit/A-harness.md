@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-10-05
+---
+
 # 감사 A — 하네스 연계(Claude · Codex · Antigravity · Gemini)
 
 - 기준 커밋: `e7181cbbfb6c8c3bc38b7ae4e979da09fa30a618` (`git merge-base --is-ancestor` 통과, HEAD 와 동일)

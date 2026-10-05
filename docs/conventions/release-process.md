@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 **Every commit that changes plugin behavior MUST bump the version** in
 `plugins/common/.claude-plugin/plugin.json` — that manifest is the single source of truth
 every target manifest (Codex, Antigravity, ...) is generated from.

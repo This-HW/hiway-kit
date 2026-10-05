@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # Codex Public Directory Submission Checklist (W-019)
 
 > **This is a human action, not something an agent can execute.** Public submission
