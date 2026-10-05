@@ -44,7 +44,7 @@ plugin.json`)을 갖는다. 이 값(name·version·description 등)을 손으로
    `repo_root / rel_path`는 `rel_path`가 절대경로면 `repo_root`를 통째로 버리는
    pathlib의 함정이 있고, `..`나 심링크로도 트리 밖으로 나갈 수 있다 — 셋 다 실제로
    재현됐다(2026-08-27 적대적 리뷰). `_resolve_in_repo()`가 **한 번만** resolve해서
-   그 결과를 검증·기록 양쪽에 그대로 쓴다(`tools/export_harness.py`의 `_resolve_target`
+   그 결과를 검증·기록 양쪽에 그대로 쓴다(`tools/export_harness.py`의 `_resolve_in_repo`
    교훈 — 검사와 쓰기가 각자 resolve하면 그 사이가 TOCTOU 창이 된다). 봉쇄를
    `--write`에만 걸면 `--check`가 구멍으로 남는다(2.14.1에서 실제로 났던 실수) — 그래서
    둘 다에 같은 헬퍼를 쓴다.
@@ -55,9 +55,17 @@ plugin.json`)을 갖는다. 이 값(name·version·description 등)을 손으로
   python3 scripts/build-targets.py --write               # 전체 enabled 타겟 기록
   python3 scripts/build-targets.py --write --only codex # 하나만 기록
 
+스킬별 Codex 메타데이터 (5.4.0)
+-------------------------------
+타겟 정책에 `skillInterface` 가 있으면 각 스킬(`skills/<name>/SKILL.md`)의 frontmatter 에서
+`skills/<name>/<path>`(Codex: `agents/openai.yaml`)를 **파생**한다. 매니페스트와 같은
+생성물이므로 `--check` 의 드리프트·미생성 판정을 그대로 받는다. frontmatter 는 한 줄
+`key: value` 만 읽는다 — 블록 스칼라(`|`·`>`)나 읽을 수 없는 형태는 추측하지 않고 exit 1.
+
 exit code:
   0 = 성공 (또는 --check 드리프트 없음)
-  1 = --check 드리프트(미생성 포함) / SSOT 부재 / 알 수 없는 --only id / 정책 파싱 실패
+  1 = --check 드리프트(미생성 포함) / SSOT 부재 / 알 수 없는 --only id / 정책 파싱 실패 /
+      스킬 frontmatter 를 읽지 못함
 """
 
 from __future__ import annotations
@@ -294,6 +302,86 @@ def _context_limit(target_id: str, event: str, entry: dict) -> int | None:
     return value
 
 
+_FM_LINE_RE = re.compile(r"^([A-Za-z0-9_-]+):[ \t]*(.*?)[ \t]*$")
+_SENTENCE_END_RE = re.compile(r"(?<=[.!?])\s+")
+
+
+def read_skill_frontmatter(skill_md: Path) -> dict[str, str]:
+    """SKILL.md 의 YAML frontmatter 를 **한 줄 `key: value`** 로만 읽는다.
+
+    stdlib only 라 YAML 파서가 없다. 킷 스킬의 frontmatter 는 전부 한 줄 평문이므로
+    그 형태만 받아들이고, 블록 스칼라·여러 줄 값처럼 읽지 못하는 형태는 **추측하지 않고**
+    PolicyError 로 거부한다 — 잘못 읽은 값을 생성물에 싣는 것보다 멈추는 편이 낫다.
+    """
+    try:
+        text = skill_md.read_text(encoding="utf-8")
+    except OSError as err:
+        raise PolicyError(f"스킬 파일을 읽지 못했다: {skill_md} ({err})") from err
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise PolicyError(f"frontmatter 가 없다: {skill_md}")
+    out: dict[str, str] = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return out
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        m = _FM_LINE_RE.match(line)
+        if m is None or m.group(2) in ("|", ">", "|-", ">-", ""):
+            raise PolicyError(
+                f"frontmatter 를 한 줄 `key: value` 로 읽지 못했다: {skill_md}\n"
+                f"  줄: {line!r} — 블록 스칼라·여러 줄 값은 지원하지 않는다"
+            )
+        value = m.group(2)
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        out[m.group(1)] = value
+    raise PolicyError(f"frontmatter 가 닫히지 않았다: {skill_md}")
+
+
+def build_skill_interface(frontmatter: dict[str, str], spec: dict, skill: str) -> dict:
+    """스킬 하나의 Codex 메타데이터(`agents/openai.yaml`) 내용. 매핑은 정책(`spec`)이 정한다.
+
+    `implicitInvocationOffWhen` 키가 frontmatter 에서 `true` 일 때만 `policy` 를 싣는다 —
+    키가 없는 스킬에 기본값(true)을 적으면 SSOT 에 없는 결정이 생성물에 생긴다.
+    """
+    first = set(spec.get("firstSentence", []))
+    interface: dict = {}
+    for field, src in spec["interfaceFrom"].items():
+        value = frontmatter.get(src, "").strip()
+        if field in first:
+            value = _SENTENCE_END_RE.split(value, maxsplit=1)[0].strip()
+        if not value:
+            # 제출 검사(skill_agent_interface_missing)가 빈 값을 거부한다.
+            raise PolicyError(
+                f"스킬 '{skill}': interface.{field} 의 원천 frontmatter `{src}` 가 비어 있다"
+            )
+        interface[field] = value
+    out: dict = {"interface": interface}
+    off_key = spec.get("implicitInvocationOffWhen")
+    if off_key and frontmatter.get(off_key, "").lower() == "true":
+        out["policy"] = {"allow_implicit_invocation": False}
+    return out
+
+
+def _yaml_scalar(value: object) -> str:
+    """JSON 문자열은 YAML 큰따옴표 스칼라로도 유효하다 — 이스케이프를 직접 짜지 않는다."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _dumps_yaml(d: dict) -> str:
+    """2단 매핑만 쓰는 결정론적 YAML. 키 순서는 내용 dict 의 순서(정책 순서) 그대로."""
+    lines = ["# 자동 생성 — scripts/build-targets.py (packaging/targets.json skillInterface).",
+             "# 손으로 고치지 말 것: SKILL.md frontmatter 를 고치고 --write 로 재생성한다."]
+    for section, body in d.items():
+        lines.append(f"{section}:")
+        for key, value in body.items():
+            lines.append(f"  {key}: {_yaml_scalar(value)}")
+    return "\n".join(lines) + "\n"
+
+
 def _dumps(d: dict) -> str:
     """결정론적 직렬화 — 키 정렬 + 고정 개행. `--check`의 바이트 비교 전제."""
     return json.dumps(d, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
@@ -352,13 +440,19 @@ class Artifact:
     """
 
     def __init__(
-        self, target_id: str, kind: str, rel_path: str, content: dict, repo_root: Path
+        self,
+        target_id: str,
+        kind: str,
+        rel_path: str,
+        content: dict,
+        repo_root: Path,
+        text: str | None = None,
     ):
         self.target_id = target_id
-        self.kind = kind  # "manifest" | "hooks" | "marketplace"
+        self.kind = kind  # "manifest" | "hooks" | "marketplace" | "skill-interface"
         self.rel_path = rel_path
         self.content = content
-        self.text = _dumps(content)
+        self.text = _dumps(content) if text is None else text
         self.resolved_path, self.escape_error = _resolve_in_repo(repo_root, rel_path)
 
 
@@ -384,6 +478,26 @@ def artifacts_for(
             out.append(
                 Artifact(
                     target["id"], "hooks", target["hooks"]["path"], hooks, repo_root
+                )
+            )
+    spec = target.get("skillInterface")
+    if spec and "skills" in present:
+        skills_dir = _policy_path(plugin_root, "skills", "source.componentDirs")
+        root_real = repo_root.resolve()
+        for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
+            skill = skill_md.parent.name
+            content = build_skill_interface(
+                read_skill_frontmatter(skill_md), spec, skill
+            )
+            out_path = _policy_path(skill_md.parent, spec["path"], "skillInterface.path")
+            out.append(
+                Artifact(
+                    target["id"],
+                    "skill-interface",
+                    out_path.relative_to(root_real).as_posix(),
+                    content,
+                    repo_root,
+                    text=_dumps_yaml(content),
                 )
             )
     mk = build_marketplace(

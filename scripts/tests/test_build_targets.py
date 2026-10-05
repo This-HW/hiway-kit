@@ -832,3 +832,122 @@ def test_context_limit_invalid_is_exit_1(tmp_path, capsys):
         assert "additionalContextLimit" in err and "'alpha'" in err, err
         assert "SessionStart" in err and repr(bad) in err, err
         assert not (root / "plugins" / "common" / "hooks" / "hooks-delta.json").exists()
+
+
+# ── 스킬별 Codex 메타데이터 (agents/openai.yaml, 5.4.0 · C-X1) ────────────────────
+
+_SKILL_IFACE = {
+    "path": "agents/openai.yaml",
+    "interfaceFrom": {"display_name": "name", "short_description": "description"},
+    "firstSentence": ["short_description"],
+    "implicitInvocationOffWhen": "disable-model-invocation",
+}
+
+
+def _skill_repo(tmp_path: Path, skills: dict) -> Path:
+    """alpha 타겟에 skillInterface 를 붙이고 `skills` = {이름: frontmatter 본문} 을 만든다."""
+    root = _fake_repo(tmp_path)
+    path = root / "packaging" / "targets.json"
+    policy = json.loads(path.read_text(encoding="utf-8"))
+    policy["targets"][0]["skillInterface"] = _SKILL_IFACE
+    path.write_text(json.dumps(policy), encoding="utf-8")
+    for name, fm in skills.items():
+        d = root / "plugins" / "common" / "skills" / name
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text(f"---\n{fm}\n---\n\n# {name}\n", encoding="utf-8")
+    return root
+
+
+def _iface(root: Path, name: str) -> str:
+    return (
+        root / "plugins" / "common" / "skills" / name / "agents" / "openai.yaml"
+    ).read_text(encoding="utf-8")
+
+
+_TWO_SKILLS = {
+    "plain": "name: plain\ndescription: Do the plain thing. Use when plain.",
+    "manual": (
+        "name: manual\ndescription: Manual only skill. Use when asked.\n"
+        "disable-model-invocation: true"
+    ),
+}
+
+
+def test_skill_interface_policy_only_when_model_invocation_disabled(tmp_path):
+    root = _skill_repo(tmp_path, _TWO_SKILLS)
+    assert _run(root, "--write") == 0
+    plain = _iface(root, "plain")
+    assert 'display_name: "plain"' in plain
+    assert 'short_description: "Do the plain thing."' in plain  # 첫 문장만
+    # 키가 없는 스킬에는 기본값조차 적지 않는다 — SSOT 에 없는 결정이 생긴다.
+    assert "allow_implicit_invocation" not in plain
+    assert "policy:" not in plain
+    manual = _iface(root, "manual")
+    assert "policy:\n  allow_implicit_invocation: false\n" in manual
+    assert _run(root, "--check") == 0
+
+
+def test_skill_interface_deletion_and_edit_are_drift(tmp_path):
+    """되돌려-FAIL: 생성물을 지우거나 고치면 --check 가 red 다."""
+    root = _skill_repo(tmp_path, _TWO_SKILLS)
+    assert _run(root, "--write") == 0
+    target = root / "plugins/common/skills/manual/agents/openai.yaml"
+    original = target.read_text(encoding="utf-8")
+    target.unlink()
+    assert _run(root, "--check") == 1
+    target.write_text(original.replace("false", "true"), encoding="utf-8")
+    assert _run(root, "--check") == 1
+    target.write_text(original, encoding="utf-8")
+    assert _run(root, "--check") == 0
+
+
+def test_skill_interface_follows_frontmatter_change(tmp_path):
+    root = _skill_repo(tmp_path, _TWO_SKILLS)
+    assert _run(root, "--write") == 0
+    md = root / "plugins/common/skills/plain/SKILL.md"
+    md.write_text(
+        md.read_text(encoding="utf-8").replace(
+            "Use when plain.", "Use when plain.\ndisable-model-invocation: true"
+        ),
+        encoding="utf-8",
+    )
+    assert _run(root, "--check") == 1  # SSOT 가 바뀌었는데 생성물은 그대로 → 드리프트
+
+
+@pytest.mark.parametrize(
+    "fm",
+    [
+        "name: bad\ndescription: |\n  multi line",  # 블록 스칼라 — 추측하지 않는다
+        "name: bad\ndescription:",  # 빈 값
+        "name: bad",  # description 없음 → short_description 비어 제출 검사 실패
+    ],
+)
+def test_skill_interface_unreadable_frontmatter_is_exit_1(tmp_path, capsys, fm):
+    root = _skill_repo(tmp_path, {"bad": fm})
+    assert _run(root, "--write") == 1
+    assert not (root / "plugins/common/skills/bad/agents/openai.yaml").exists()
+
+
+def test_skill_interface_yaml_quotes_special_characters(tmp_path):
+    root = _skill_repo(
+        tmp_path,
+        {"q": 'name: q\ndescription: Say "hi": a #tag — done. Next.'},
+    )
+    assert _run(root, "--write") == 0
+    assert 'short_description: "Say \\"hi\\": a #tag — done."' in _iface(root, "q")
+
+
+def test_real_repo_skill_interfaces_match_frontmatter():
+    """실제 레포: 모든 스킬에 생성물이 있고, `disable-model-invocation: true` 인 스킬만
+    `allow_implicit_invocation` 키를 갖는다(읽기 전용 — 실제 트리를 쓰지 않는다)."""
+    skills = SCRIPTS_DIR.parent / "plugins" / "common" / "skills"
+    assert skills.is_dir()
+    seen = 0
+    for md in sorted(skills.glob("*/SKILL.md")):
+        fm = _mod.read_skill_frontmatter(md)
+        text = (md.parent / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        off = fm.get("disable-model-invocation", "").lower() == "true"
+        assert ("allow_implicit_invocation: false" in text) is off, md.parent.name
+        assert ("allow_implicit_invocation" in text) is off, md.parent.name
+        seen += 1
+    assert seen > 0
