@@ -50,7 +50,7 @@ def _fake_plugin(root, agents=(), skills=()):
     script = root / "setup" / "session-check.py"
     script.write_text(SCRIPT.read_text(encoding="utf-8"), encoding="utf-8")
     for name in agents:
-        f = root / "agents" / "dev" / f"{name}.md"
+        f = root / "agents" / f"{name}.md"
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_text(f"---\nname: {name}\n---\n", encoding="utf-8")
     for name in skills:

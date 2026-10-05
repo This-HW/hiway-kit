@@ -208,7 +208,7 @@ evals/
 ## 시나리오 추가 가이드
 
 1. `evals/scenarios/<agent-name>/<scenario-id>/` 디렉토리 생성.
-   `<agent-name>`은 `plugins/common/agents/**/<name>.md`에 실재해야 한다.
+   `<agent-name>`은 `plugins/common/agents/<name>.md`에 실재해야 한다.
 2. `fixture/`에 대상 코드를 둔다 — review-code는 버그가 심긴 코드, fix-bugs는
    버그 코드 + 실패하는 pytest 테스트, implement-code는 `TODO`/`NotImplementedError`
    상태의 코드 + red 상태 pytest 테스트.

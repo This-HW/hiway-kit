@@ -304,13 +304,14 @@ def check_tier2(root: Path, policy: dict) -> tuple[bool, list[str]]:
 
 
 def _discover_all_agents(root: Path) -> set[str]:
-    """`plugins/common/agents/**/*.md` 파일명(확장자 제외)에서 전체 에이전트
-    목록을 얻는다 — 하드코딩 금지, 하위 카테고리(backend/dev/meta/planning 등)
-    재귀 포함."""
+    """`plugins/common/agents/*.md` 파일명(확장자 제외)에서 전체 에이전트
+    목록을 얻는다 — 하드코딩 금지. 하위 디렉토리는 보지 않는다: Claude Code 가
+    하위 폴더 에이전트를 표시하지 않아 평탄 배치가 규약이고 `check_doc_counts.py`
+    가 하위 디렉토리를 red 로 막는다."""
     agents_dir = root / "plugins" / "common" / "agents"
     if not agents_dir.is_dir():
         return set()
-    return {p.stem for p in agents_dir.rglob("*.md")}
+    return {p.stem for p in agents_dir.glob("*.md")}
 
 
 def check_classification_complete(root: Path, policy: dict) -> tuple[bool, list[str]]:

@@ -1300,7 +1300,7 @@ def _plugin_root_with_agents(tmp_path, count: int):
     (root / "rules" / "sample.md").write_text(
         "---\ntier: core\nportable: true\n---\n\n# Sample\n\nbody\n", encoding="utf-8"
     )
-    agents = root / "agents" / "dev"
+    agents = root / "agents"
     agents.mkdir(parents=True)
     for i in range(count):
         (agents / f"a{i}.md").write_text("---\nname: a\n---\n", encoding="utf-8")
@@ -1315,7 +1315,7 @@ def test_agent_count_in_block_is_counted_not_literal(tmp_path):
     block, _ = eh.build_block(root)
     assert "서브에이전트 정의 (7종)" in block
 
-    (root / "agents" / "dev" / "extra.md").write_text("---\nname: b\n---\n", encoding="utf-8")
+    (root / "agents" / "extra.md").write_text("---\nname: b\n---\n", encoding="utf-8")
     block2, _ = eh.build_block(root)
     assert "서브에이전트 정의 (8종)" in block2
 

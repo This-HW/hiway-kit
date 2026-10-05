@@ -138,7 +138,7 @@ def test_unparseable_agent_is_red_not_silently_skipped(tmp_path):
     정반대로 뒤집혀 사각지대가 전부 노랑이 된다.
     """
     root = _fake_plugin_root(tmp_path, conditional_names=("cond-one",))
-    agents = root / "agents" / "dev"
+    agents = root / "agents"
     agents.mkdir(parents=True)
     (agents / "good.md").write_text(
         "---\nname: good\ndescription: 정상 에이전트\n---\n\n본문\n", encoding="utf-8"

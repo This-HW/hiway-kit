@@ -77,7 +77,7 @@ if not conflicts:
     sys.exit(0)
 failed = 0
 for c in conflicts:
-    kind_dir, _, rel = c["path"].partition("/")  # agents/dev/x.md → agents, dev/x.md
+    kind_dir, _, rel = c["path"].partition("/")  # agents/x.md → agents, x.md
     src = claude / kind_dir / rel
     dst_root = claude / (kind_dir + ".bak")
     dst = dst_root / rel
