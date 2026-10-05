@@ -1,0 +1,32 @@
+schema_version: "1.1"
+name: debug-fires
+description: A pasted traceback should fire the debug skill.
+tags: [skill-trigger, debug]
+expected_outcome: Skill hiway-kit:debug is invoked to diagnose the error.
+max_turns: 8
+timeout_seconds: 240
+allowed_tools: [Read, Glob, Grep, Skill]
+execution:
+  prompt: |
+    My service crashes on startup with this error. Can you figure out what is wrong?
+
+    Traceback (most recent call last):
+      File "app/main.py", line 42, in <module>
+        settings = load_settings()
+      File "app/config.py", line 17, in load_settings
+        return Settings(db_url=os.environ["DATABASE_URL"], debug=os.environ["DEBUG"] == "1")
+      File "/usr/lib/python3.11/os.py", line 679, in __getitem__
+        raise KeyError(key) from None
+    KeyError: 'DEBUG'
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?debug"'
+  - name: criteria
+    type: llm
+    criteria: >-
+      PASS if the response names the root cause (the DEBUG environment variable
+      is not set and is read with os.environ[...] instead of .get with a
+      default) and proposes a concrete fix. FAIL if it blames something else,
+      or lists generic debugging tips without identifying the cause.

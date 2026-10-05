@@ -1,0 +1,26 @@
+schema_version: "1.1"
+name: brainstorming-fires
+description: A Large design-heavy request should fire the brainstorming skill.
+tags: [skill-trigger, brainstorming]
+expected_outcome: Skill hiway-kit:brainstorming is invoked before planning or coding.
+max_turns: 8
+timeout_seconds: 240
+allowed_tools: [Read, Glob, Grep, Skill]
+execution:
+  prompt: >-
+    We want to replace our email-only notifications with a multi-channel
+    platform (email, push, SMS, in-app) with per-user preferences, templating,
+    retries and delivery guarantees. Nothing is designed yet. Help me get this
+    off the ground.
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?brainstorming"'
+  - name: criteria
+    type: llm
+    criteria: >-
+      PASS if the response explores requirements or proposes alternative
+      approaches and asks for design approval before any implementation. FAIL if
+      it starts writing code, or hands back a finished design with no
+      exploration of options.

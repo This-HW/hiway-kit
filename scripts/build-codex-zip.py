@@ -80,6 +80,7 @@ EXCLUDED = {
 #: `hooks/` 를 전부 뺀다. Codex 로컬 설치(마켓플레이스)는 훅을 그대로 받는다.
 EXCLUDED_DIRS = {
     "hooks/": "훅 디렉토리 — 디렉토리 제출 금지(포털 메타데이터 검사가 존재 자체를 거부)",
+    "evals/": "`claude plugin eval` 스위트(Claude Code 전용) — 제출본 크기·심사 표면에 싣지 않는다",
 }
 #: 제출본 매니페스트에서 빼는 필드와 사유 — EXCLUDED_DIRS 와 같은 이유(훅 선언).
 MANIFEST_DROPPED = {"hooks": "훅 선언 — 디렉토리 제출 금지"}
