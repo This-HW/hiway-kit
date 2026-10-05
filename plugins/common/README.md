@@ -4,11 +4,18 @@
 
 ## Install
 
+Pick **one** (installing both loads every skill and hook twice):
+
 ```bash
-# Direct marketplace (marketplace name: hiway-kit)
+# Anthropic's directory — built into Claude Code
+/plugin install hiway-kit@anthropic-plugin-directory
+# or: this repository as a marketplace (marketplace name: hiway-kit)
 /plugin marketplace add This-HW/hiway-kit
 /plugin install hiway-kit@hiway-kit
 ```
+
+Other harnesses (Codex, Antigravity, Gemini CLI) and what each one supports:
+[repository README](https://github.com/This-HW/hiway-kit#other-harnesses-codex--antigravity--gemini-cli).
 
 > The published plugin is **`hiway-kit`** (15 agents + 15 skills + 12 rules + hooks).
 > Project-specific extensions live in a user's own `project-local/` tier, not as separate
@@ -27,19 +34,22 @@ A selection below — 15 skills total, auto-discovered from `skills/` (not hand-
 | `/test`                     | Run tests and fix failures                               |
 | `/multi-perspective-review` | Multi-perspective deliberation, consensus-driven         |
 | `/web-research`             | Research with the search/docs/browser tools you have     |
-| `/agent-creator`            | Create a project agent with valid frontmatter            |
+| `/agent-creator`            | Create a project agent (`.claude/agents/`) with valid frontmatter |
 
 ## Agents
 
-15 agents across planning, development, review, and meta categories.
+15 agents in one flat `agents/` folder, grouped here by role:
 
-| Category   | Count | Examples                                                          |
-| ---------- | ----- | ----------------------------------------------------------------- |
-| Planning   | 3     | `clarify-requirements`, `define-business-logic`, `design-user-journey` |
-| Dev        | 11    | `implement-code`, `fix-bugs`, `review-code`, `security-scan`      |
-| Meta       | 1     | `devils-advocate`                                                 |
+| Role       | Examples                                                               |
+| ---------- | ---------------------------------------------------------------------- |
+| Planning   | `clarify-requirements`, `define-business-logic`, `design-user-journey` |
+| Development and review | `implement-code`, `fix-bugs`, `review-code`, `security-scan` |
+| Meta       | `devils-advocate`                                                      |
 
-## Hooks (auto-registered)
+## Hooks (auto-registered in Claude Code)
+
+The blocking and Stop hooks below are Claude Code behavior; on Codex only session-start and auto-format ship.
+
 
 - **SessionStart** — Injects governance rules, recurring review lessons, and open plan files
 - **PreToolUse** — Blocks reads and edits of sensitive files such as `.env`, SSH/cloud credential directories and key files (`protect-sensitive.py`). It only matches the *path* the agent is about to open and refuses it — it never opens, reads or transmits those files, and it makes no network calls. Credential paths appear in its source because they are the blocklist.

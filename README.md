@@ -4,9 +4,8 @@
 
 A focused, single-plugin AI agent system built for Claude Code. Covers the full software development lifecycle: planning, implementation, review, testing, and meta-tooling. (Not a TUI component library or a scaffolding installer — this is the agents + skills plugin.)
 
-Validation hardening covers packaging input paths, literal hook commands, agent
-description budgets, malformed eval inputs, and private Stop-hook state. See the
-[changelog](CHANGELOG.md) for the fixes and their scope.
+**Claude Code is the full-feature baseline; Codex, Antigravity and Gemini CLI get the partial support
+listed in the [capability table](#other-harnesses-codex--antigravity--gemini-cli).**
 
 Docs & blog: **[hiway.thishw.com](https://hiway.thishw.com/)** (English · [한국어](https://hiway.thishw.com/ko/))
 
@@ -52,7 +51,11 @@ ship the same skills both register, silently, because the dedup key is
 `<plugin name>:<skill name>` (measured — `docs/specs/2026-09-07-rename-probe.md`). Never run
 two kits that carry the same skills at once.
 
-## Full Mode (Security Hooks + Auto-format)
+## Full Mode (+ pre-commit and global setup)
+
+`setup.sh` installs the plugin through **path B** (this repository as a marketplace) and then the
+pre-commit hook and global setup. If you already installed path A, uninstall it first
+(`/plugin uninstall hiway-kit@anthropic-plugin-directory`) — otherwise both load.
 
 ```bash
 git clone https://github.com/This-HW/hiway-kit
@@ -93,55 +96,58 @@ This exists because it actually happened: on 2026-09-08 a private project name r
 design documents and the repo's gitleaks rule caught **none** of them (its regex only matched
 a `_suffix` form). Measured precision of that rule across full history: 4%.
 
-## Other Harnesses (Codex · Antigravity)
+## Other Harnesses (Codex · Antigravity · Gemini CLI)
 
-kit's plugin root (`plugins/common/`) also ships **native plugin manifests** for
-Codex and Antigravity, generated from the same source of truth as the Claude Code
-manifest (`packaging/targets.json` + `scripts/build-targets.py` — see
-[`packaging/README.md`](packaging/README.md)). What actually ships per platform
-differs by platform capability, verified against the real CLIs (not assumed):
+**Claude Code is the full-feature baseline.** The kit's plugin root (`plugins/common/`) also ships
+**native plugin manifests** for Codex and Antigravity, generated from the same source of truth as
+the Claude Code manifest (`packaging/targets.json` + `scripts/build-targets.py` — see
+[`packaging/README.md`](packaging/README.md)). What reaches each harness differs by platform
+capability. The cells below cite the measurement they rest on; the dated records live in
+`packaging/targets.json` and `docs/specs/2026-10-05-audit-remediation/audit/A-harness.md`
+(codex 0.159.3, agy 1.2.17, measured 2026-10-05).
 
 | Component | Codex | Antigravity |
 | --- | --- | --- |
-| Skills (15) | ✅ `"skills": "./skills/"` | ✅ recognized (real skills install and run correctly) |
-| Rules (12) | ⚠ no dedicated field → carried via `AGENTS.md`/`GEMINI.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **not recognized** — `agy plugin validate` output is byte-identical with and without `rules/`; it counts only skills·agents·commands·mcpServers·hooks. Norms reach Antigravity **only** through the entrypoint file |
-| Agents (15) | ⚠ no dedicated field | ❌ **not supported** — `agy plugin validate` did not recurse into the former `agents/` category subdirectories (`dev`/`meta`/`planning`, up to 5.2.x); it miscounted the category folders as agent entries and found none of the real agents. The agents moved to a flat `agents/<name>.md` layout in 5.3.0 (for Claude Code's agent listing); Antigravity support was **not re-verified** against the flat layout, so the manifest still omits agents |
-| Hooks | ⚠ shipped (`session-start`, `auto-format`) but **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is deliberately **not** shipped: hooks fired but the command still ran, so the block does not hold | ❌ not shipped this batch — format unverified |
+| Skills | ✅ `"skills": "./skills/"` — all recognized (measured 2026-10-05) | ✅ recognized by the model (measured 2026-10-05); running a skill end-to-end is unmeasured |
+| Rules | ⚠ no dedicated field → hook injection (marketplace install) or `AGENTS.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **plugin `rules/` does not arrive** (a token planted in `rules/` never reached the model, measured 2026-10-05 — although Google's plugin docs list `rules/`). Norms reach Antigravity **only** through the entrypoint file |
+| Agents | ⚠ no plugin field — files ship but are not exposed as subagents | ❌ **not recognized** — even after the 5.3.0 flat layout, `agy agents` lists none of them. The cause is the `model: haiku\|sonnet\|opus` frontmatter (an agent with `model: inherit` or no `model` is recognized — bisected 2026-10-05), not the folder layout. `agy plugin validate` counts files only (an empty `junk.txt` counts as an agent), so its green "agents processed" line is not evidence of recognition |
+| Hooks | ⚠ `session-start` and `auto-format` ship, **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is not shipped (see *Automatic blocking*) | ❌ not shipped — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
 
-**Parity contract**: rules and skills (norms and procedures) work on every harness.
-How they arrive differs, and the difference is measured, not assumed:
+**Parity contract**: rules and skills (norms and procedures) work on every harness — but how the
+norms arrive differs, and on some paths they arrive only if you export them:
 
 | | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |
-| Rules | hook injection | **hook injection** (measured) — `AGENTS.md` is the fallback. Before 3.34.1 Codex cut the hook output at 2,500 tokens and the **middle rules were lost**; see the note below | `AGENTS.md`/`GEMINI.md` only |
-| Ledger digest (memory) | hook injection | **hook injection** (measured); rules also tell the agent to fetch it itself | self-fetch per the rule |
-| Skills | native | **all 15 recognized** (measured, v5.0.0) | recognized |
-| Subagents | 15 agents | **not exposed** — skills degrade to in-session execution | not supported (nested layout) |
-| Agent `model` / `effort` frontmatter | ✅ applied per agent | ❌ **not applied** — agents are shipped in the package but not exposed as subagents (measured: the files land in the installed plugin cache, but the Codex manifest has no agent field — `packaging/targets.json` `omit.agents`), so everything runs on the model/effort in the user's Codex config | ❌ not applied — agents are not recognized (see above) |
-| Automatic blocking | `PreToolUse` veto | **no** — no blocking hook is shipped: in measurement a `PreToolUse` block did not stop the command, so `protect-sensitive` is left out (see *Hooks* above) | no |
+| Rules | hook injection | hook injection (marketplace install, after hook trust) — `AGENTS.md` is the fallback | `AGENTS.md` / `GEMINI.md` only — Antigravity reads **both**, so identical copies load twice |
+| Ledger digest (memory) | hook injection | hook injection; rules also tell the agent to fetch it itself | self-fetch per the rule (unmeasured) |
+| Skills | native | recognized | recognized |
+| Subagents | ✅ | **not exposed** — skills degrade to in-session execution | not recognized (`model:` frontmatter, see above) |
+| Agent `model` / `effort` frontmatter | ✅ applied per agent | ❌ not applied — everything runs on the model/effort in your Codex config | ❌ not applied |
+| Automatic blocking | `PreToolUse` veto | **none shipped.** On codex 0.153.4 a `PreToolUse` block did not stop the command; **on codex 0.159.3 it does** (2026-10-05 감사 A 실측(codex 0.159.3), 기록 `packaging/targets.json`(W2 갱신 예정)). Porting `protect-sensitive` is a separate decision — its payload differs (`Bash`/`apply_patch`) | none |
 
-**Codex hook output limit (fixed in 3.34.1).** Codex trims any hook's `additionalContext`
-above 2,500 tokens (≈ bytes / 4) down to a head + tail preview, and the kit's output was
-over that — in a measured session 16,622 B went in and 10,028 B reached the model; three
-rules in the middle (Feedback Loop, Loop Engineering, Parallel Worktree) never arrived.
-The earlier "memory arrives intact" result was wrong: that probe only checked the *first*
-LESSONS line, which survives a middle cut every time. The generated Codex hook now sets
-`additionalContextLimit: 0` (no trimming), so the kit's own injection budget gate is the
-only limit. **Codex will ask you to trust the hook once more** after this update, because
-the trust hash covers the whole handler config.
+The generated Codex hook sets `additionalContextLimit: 0` (no trimming — Codex otherwise trims hook
+output above 2,500 tokens), so the kit's own injection budget gate is the only limit. Codex asks you
+to trust a hook once per handler-config hash, so it asks again whenever that config changes.
 
-Put plainly: **what a non-Claude-Code harness loses is dedicated executors (subagents)
-and automatic blocking.** Injection is no longer on that list for Codex. Everything else
-keeps working, because it depends only on git and external processes, not on any
-harness-specific runtime:
-discipline (rules), procedure (skills), state (child session markers under
-`gitdir/kit/child.json`), and the registry `describe` seam all carry over unchanged.
-One caveat: behavioral evals (`evals/`) currently drive only Claude Code — the harness
-call is centralized behind one seam (`evals/run.py`'s `Harness` protocol) but a
-Codex/Antigravity implementation hasn't been built yet.
+Put plainly: **what a non-Claude-Code harness loses is dedicated executors (subagents), automatic
+blocking, and — on Antigravity, Gemini CLI, and the Codex directory ZIP — automatic injection**
+(there you run `/harness-export`). Everything else keeps working, because it depends only on git and
+external processes: discipline (rules), procedure (skills), state (child session markers under
+`gitdir/kit/child.json`), and the registry `describe` seam. One caveat: behavioral evals (`evals/`)
+currently drive only Claude Code — the harness call sits behind one seam (`evals/run.py`'s
+`Harness` protocol) but no Codex/Antigravity implementation exists yet.
 
 ### Codex
+
+Two install paths deliver **different things** — pick deliberately:
+
+| | Marketplace install (below) | OpenAI directory ZIP |
+| --- | --- | --- |
+| Skills | all | all (same bytes) |
+| Hooks | `session-start` + `auto-format` (after trust) | **none** — the portal rejects plugins containing hooks, so the ZIP drops `hooks/` |
+| How norms arrive | `SessionStart` injection; `AGENTS.md` fallback | **only** `AGENTS.md` — run `/harness-export` in your project, or nothing is injected (measured 2026-10-05, n=1) |
+| Status | works today | see the channel table in [`docs/marketplace-submission.md`](docs/marketplace-submission.md) |
 
 ```bash
 # Add this repo (or your installed copy) as a plugin marketplace
@@ -157,6 +163,9 @@ codex plugin list   # shows hiway-kit@hiway-kit-marketplace
 codex plugin remove hiway-kit@hiway-kit-marketplace
 codex plugin marketplace remove hiway-kit-marketplace
 ```
+
+Codex also reads the repo's existing `.claude-plugin/marketplace.json` as a legacy path, alongside
+the generated `.agents/plugins/marketplace.json`.
 
 #### Trusting Codex hooks (do this once, or the norms never arrive)
 
@@ -181,9 +190,9 @@ without trust is automatic delivery, not the discipline.
 
 #### Skills that name a sub-agent: read them as a contract, not a transport
 
-Codex loads all 15 skills, but it exposes **no sub-agents**. Skills that dispatch an agent
+Codex loads every skill, but it exposes **no sub-agents**. Skills that dispatch an agent
 (`debug`, `review`, `test`, `auto-dev`, `multi-perspective-review`) name the agent as a contract.
-Each of those skills now carries an explicit degradation path: the delegation is one
+Each of those skills carries an explicit degradation path: the delegation is one
 **transport**, and the invariant is the **contract** inside the block — persona, checks,
 output format, completion declaration. On a harness with no delegation, perform the same
 contract in the session itself and produce the same output. **Do not skip the step, and
@@ -192,15 +201,10 @@ performing it inline shares the session's context, so the blind-spot separation 
 separate agent would give you is gone — which matters most for `review`'s adversarial
 pass, where the isolation is part of the value.
 
-Codex also reads the repo's existing `.claude-plugin/marketplace.json` as a legacy
-path, alongside the generated `.agents/plugins/marketplace.json`. Public listing in
-the shared ChatGPT/Codex plugin directory requires OpenAI's submission review —
-not done; install via a local/Git marketplace as above works today.
-
 ### Antigravity
 
 ```bash
-# Validate first (checks the manifest and component dirs)
+# Validate (checks the manifest and component dirs — it counts files, it does not prove recognition)
 agy plugin validate /path/to/hiway-kit/plugins/common
 
 # Install
@@ -213,8 +217,29 @@ agy plugin list   # shows hiway-kit
 agy plugin uninstall hiway-kit
 ```
 
-**No official public registry is confirmed for Antigravity** — Google's docs
-describe only local/workspace installation, so that's the only supported path here.
+Norms reach Antigravity only through `AGENTS.md`/`GEMINI.md` — run `/harness-export` in your
+project. Antigravity reads **both** files, so the identical copies the export writes are loaded
+twice (measured 2026-10-05).
+
+**No official public registry is confirmed for Antigravity.** `agy plugin` also offers
+`install <plugin>@<marketplace>`, `link`, and `import [gemini|claude]`; none of these is verified
+with this kit, so the local path above is the only one documented here.
+
+### Gemini CLI
+
+The kit provides **only `GEMINI.md`** for Gemini CLI (written by `/harness-export`; Gemini CLI reads
+`GEMINI.md` by default, not `AGENTS.md`). There is no Gemini extension package, and no skills, hooks,
+or agents are shipped for it. Its runtime has **not been measured** with this kit (the test machine
+had no working API key). Gemini CLI is not a supported target beyond that file; this will be
+reconsidered once it can be measured.
+
+### Sharing skills across harnesses (`~/.agents/skills`)
+
+Several harnesses also read a user-level skills folder — Codex and Gemini CLI read
+`~/.agents/skills`, Antigravity a workspace `.agents/skills`. Symlinking the kit's skill folders
+there makes them visible to those harnesses without a plugin install. Two costs: the skills lose
+the `hiway-kit:` namespace (they appear under their bare names), and if the same harness **also**
+has the plugin installed, every skill loads twice — the same "never run two copies" rule as above.
 
 ---
 
@@ -254,7 +279,7 @@ hiway-kit이 무엇을 어떻게 융합하는지 — 한눈에 보는 설계 원
 ```
  [설계 게이트 — 사람 승인]              [실행 루프 — 자율 완주]
  brainstorming → plan-task    ──승인──▶  auto-dev 배치 드라이버
- (무엇을 만들지 HARD-GATE)               (TaskList 폴링 + 종료 가드)
+ (무엇을 만들지 HARD-GATE)               (checklist 진행 + 종료 가드)
                                               │
         ┌─────────────────────────────────────┤ 스케일별 오케스트레이션
         ▼                                     ▼
@@ -279,7 +304,7 @@ kit에 녹아 있는 개념과 그 장점 — *어떻게* 구현되는지와 함
 | 개념 / 로직 | kit에서 어떻게 | 장점 |
 | --- | --- | --- |
 | **Native-first (zero-debt)** | 네이티브 프리미티브를 최대 활용하고 자체 중복 구현은 삭제 | 유지보수 부채 0, 네이티브가 진화해도 항상 최신 |
-| **Phase-gate discipline** | `brainstorming → plan-task → auto-dev` HARD-GATE 체인 | 모호성 100% 제거 후 구현 → 재작업·헛수고 최소화 |
+| **Phase-gate discipline** | `brainstorming → plan-task → auto-dev` HARD-GATE 체인 | P0 모호성을 0 으로 만든 뒤 구현 → 재작업·헛수고 최소화 |
 | **Verification-before-completion (DoD)** | Iron Law + `scripts/verify-done.sh` 기계 게이트 | 증거 없는 "완료" 주장을 구조적으로 차단 |
 | **경계 검사의 완료 조건화** | 프로젝트에 경계 검사 도구(import-linter·dependency-cruiser 등)가 있으면 계획의 `## 완료 조건` 으로 태운다 — [`boundary-check.md`](plugins/common/skills/plan-task/references/boundary-check.md) | 설계로 정한 모듈 경계가 다음 변경에서 조용히 깨지는 것을 명령으로 막음 (도구가 없으면 없다고 적고 도입은 사용자 결정) |
 | **Loop engineering** | 게이트(사람 멈춤) vs 루프(자율 완주) 분리 + 배치 드라이버 + 종료 가드 | P0 전까지 자율 완주, 런어웨이 방지 |
@@ -347,7 +372,7 @@ Phase 3 (Validation)   → Review + security scan
 Agents used to end every response with a structured `---DELEGATION_SIGNAL---` block so that
 main Claude could read `TYPE`/`TARGET` and auto-invoke the next agent. **That contract is gone.**
 Nothing parsed it, and sequencing already came from the invoking skill. Full rationale:
-`docs/specs/2026-08-27-delegation-signal-contract-review.md`.
+[`docs/architecture/delegation-signal-retirement.md`](docs/architecture/delegation-signal-retirement.md).
 
 ### Model Selection
 
@@ -389,7 +414,7 @@ Merge-back rules (verify-then-exit, sequential merge, conflict escalation to
 | `skill-forge`              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft                  |
 | `using-hiway-kit`          | (injected at session start) | Workflow chain and plan file rules                                         |
 
-### Planning Agents (3 — Opus)
+### Planning Agents (Opus)
 
 Used in Phase 1. They return analysis; the caller writes any files.
 
@@ -399,13 +424,13 @@ Used in Phase 1. They return analysis; the caller writes any files.
 | `define-business-logic` | Defines policies, rules, calculations, state transitions (CALC/VAL/STATE/POL) |
 | `design-user-journey`   | User flows, screens, onboarding, state transitions                            |
 
-### Meta Agent (1 — Opus)
+### Meta Agent (Opus)
 
 | Agent             | Description                                                                                         |
 | ----------------- | --------------------------------------------------------------------------------------------------- |
 | `devils-advocate` | Failure scenario analysis via 4 attack personas (scalability / dependency / maintainability / cost) |
 
-### Dev Agents (11)
+### Dev Agents
 
 | Agent                  | Model  | Description                                                                |
 | ---------------------- | ------ | -------------------------------------------------------------------------- |
@@ -425,29 +450,12 @@ Used in Phase 1. They return analysis; the caller writes any files.
 
 ## Typical Workflows
 
-### Feature Development
-
-```
-clarify-requirements → design-user-journey → define-business-logic
-  → plan-implementation → implement-code → write-tests → verify-code
-  → review-code + security-scan (parallel) → fix-bugs → sync-docs
-```
-
-### Multi-perspective Review
-
-```
-/multi-perspective-review
-  → the main session picks the perspectives
-  → Round 1: perspective reviews in parallel (devils-advocate among them)
-  → Round 2: the main session consolidates and resolves conflicts
-```
-
-### Debug
-
-```
-/debug
-  → diagnose → fix-bugs → verify-code → (loop until green)
-```
+The workflow chain by task size (Large: `brainstorming → plan-task → auto-dev`; Medium:
+`plan-task → auto-dev`; Small/bug: implement directly and verify with the completion commands) is
+owned by the skills themselves — read [`plan-task`](plugins/common/skills/plan-task/SKILL.md),
+[`auto-dev`](plugins/common/skills/auto-dev/SKILL.md),
+[`multi-perspective-review`](plugins/common/skills/multi-perspective-review/SKILL.md) and
+[`debug`](plugins/common/skills/debug/SKILL.md). Agents are invoked by those skills, not chained by hand.
 
 ---
 
@@ -486,11 +494,16 @@ plugins/
 
 The plugin contains:
 
-- `.claude-plugin/plugin.json` — plugin manifest
-- `agents/` — agent `.md` files with YAML frontmatter
-- `skills/` — skill `.md` files
-- `hooks/` — Python hook scripts
-- `rules/` — governance rules
+- `.claude-plugin/plugin.json` — plugin manifest (no agent/skill registry — both are auto-discovered)
+- `agents/` — agent `.md` files with YAML frontmatter (flat, no subfolders)
+- `skills/<name>/SKILL.md` — skills, each with optional `references/`
+- `hooks/` — Python session hooks
+- `tools/` — Python tools the skills call (kept out of `hooks/` because the OpenAI directory rejects `hooks/`)
+- `rules/` — governance rules injected by tier
+- `setup/` — git hooks (`pre-commit`, opt-in `git-hooks/`) and the setup-time session check
+- `.codex-plugin/plugin.json`, `plugin.json` — generated Codex/Antigravity manifests (don't hand-edit)
+
+Contributor details (frontmatter, adding an agent or skill, release) are in [CLAUDE.md](CLAUDE.md).
 
 ---
 
@@ -506,8 +519,9 @@ PRs welcome. Checklist:
 - [ ] File-modifying agents have `isolation: worktree`
 - [ ] Regular agents have `disallowedTools: [Task]`
 - [ ] Skill `description` field is in English
-- [ ] Registered in `plugin.json` (with `homepage`, `repository`, `license`, `author.email`)
-- [ ] CI passes (JSON valid, frontmatter complete, no forbidden fields, pytest green, no secrets)
+- [ ] Plugin metadata in `plugin.json` is filled (`homepage`, `repository`, `license`, `author.email`) — components are **not** registered there; agents and skills are auto-discovered from their directories
+- [ ] Version bumped with `scripts/bump-version.sh` + matching `CHANGELOG.md` entry ([release process](docs/conventions/release-process.md))
+- [ ] `scripts/verify-done.sh` green locally and CI green
 
 ---
 

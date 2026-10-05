@@ -1,4 +1,4 @@
-# packaging/ — multi-harness target manifests (W-019)
+# packaging/ — multi-harness target manifests
 
 `targets.json` is the **single source of truth** for the plugin manifests kit ships
 to non-Claude-Code harnesses (currently Codex and Antigravity). `../scripts/build-targets.py`
@@ -63,15 +63,17 @@ does.
 A target entry in `targets.json` needs, at minimum: `id`, `enabled`, `manifestPath`,
 and `requiredFields`. See the `codex` and `antigravity` entries for the full field
 vocabulary (`componentFields`, `passthroughFields`, `schemaUrl`, `interface`,
-`marketplace`). Disabled targets (`cursor`, `opencode`, `copilot`) carry a
+`marketplace`). Disabled targets carry a
 `_disabledReason` explaining why they're not live yet — keep that convention so the
 next person doesn't have to re-derive the reasoning from scratch.
 
 **Before flipping a target to `enabled:true`**, verify against the real CLI — this
-repo's history (S1–S4 of W-019) is a generator built ahead of two targets that were
-verified one at a time against `codex`/`agy`, not assumed from documentation alone.
+repo's history (`docs/specs/2026-08-26-multi-harness-packaging.md`) is a generator built
+ahead of two targets that were verified one at a time against `codex`/`agy`, not assumed
+from documentation alone. Record each runtime measurement in `targets.json` with its date
+and CLI version — a measurement is only as current as the CLI it was taken on.
 
-## `name-targets.json` — deriving the product name into prose docs (D-3)
+## `name-targets.json` — deriving the product name into prose docs
 
 `targets.json` (above) generates *manifests* — pure, never-hand-edited artifacts, so
 full byte-for-byte regeneration is safe. `name-targets.json` +
