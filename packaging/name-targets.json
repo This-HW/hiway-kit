@@ -6,7 +6,7 @@
     "directories_note": "directories 는 재귀적으로 *.md 전체를 실측 스캔한다 — 대상 파일을 손으로 나열하지 않는다(D-23 원칙: 검사 대상이 아닌 것은 결코 red 가 되지 않는다). 현재 대상 디렉토리는 없다 — 사이트 콘텐츠(site/content)는 5.2.2 에서 thishw/hiway 로 옮겨 갔고 이 레포의 site/ 는 리다이렉트 스텁뿐이다(제품명 산문이 없다). 산문 디렉토리가 다시 생기면 여기에 한 줄만 더하면 그 아래 새 문서가 자동으로 대상이 된다.",
     "old_name_scan": "scripts/check_old_names.py 가 previousNames 를 읽어 '구 이름이 살아있는 표면에 실렸는가'를 검사한다(verify-done.sh §20 + CI 동일 스크립트). §18 파생 정책은 files/directories 의 산문만 보므로 plugins/·site/·setup.sh 는 대상이 아니었고, 그 구멍으로 구 이름이 배포물 14건·설치 스크립트·사이트 브랜드에 남았다 — 그중 셋은 기능 결함이었다(스킬의 캐시 fallback glob 2건이 구 이름 디렉토리를 찾아 영영 매치되지 않았고, setup.sh 가 전임 플러그인을 설치했다). oldNameScanExclude 는 '구 이름이 사실로서 등장해야 하는 곳'만 담는다 — 역사 기록(docs/·CHANGELOG)과 정책 자신이다. 목록에 없는 것은 전부 검사 대상이다(D-23: 검사 대상이 아닌 것은 결코 red 가 되지 않는다).",
     "abbreviation_note": "previousNames 는 정식 이름·약칭·경로 이름 셋을 모두 담는다 — 개명 잔재는 이 세 형태로 남는다. 실측: 정규식 \\bCCK\\b 는 한글 조사가 붙은 'CCK의' 를 놓쳤고(4건), 소문자 'cck' 는 자식 마커·레지스트리의 **디렉토리 이름**으로 남아 있었다. 리터럴 부분문자열 검사가 단어 경계 검사보다 강한 이유다. 그 경로는 v3.9.0 에서 'kit' 으로 옮겼다 — 제품명을 경로에 박은 것이 애초 결함이므로 다음 개명에 깨지지 않는 이름을 골랐다.",
-    "exclude_note": "제외는 **구 이름이 사실로서 등장해야 하는 곳**만이다. 처음엔 `docs/` 를 통째로 뺐는데 그건 너무 넓었다 — 살아있는 문서 6종(프로토콜 명세·제출 체크리스트·룰 해설 미러 2종 등)이 그 아래 있어 구 이름을 계속 쓰고 있었고, 그중 하나는 **소비 측이 지금 구현할 계약 명세**였다. 역사 서브트리(docs/specs·research·works·CHANGELOG-archive)와 전임 킷 등재 기록을 실측 근거로 인용하는 marketplace-submission.md 만 남긴다. warning-signal.md §검토 절차 5: 제외는 정당화할 수 있는 만큼만 좁게."
+    "exclude_note": "제외는 **구 이름이 사실로서 등장해야 하는 곳**만이다. 처음엔 `docs/` 를 통째로 뺐는데 그건 너무 넓었다 — 살아있는 문서 6종(프로토콜 명세·제출 체크리스트·룰 해설 미러 2종 등)이 그 아래 있어 구 이름을 계속 쓰고 있었고, 그중 하나는 **소비 측이 지금 구현할 계약 명세**였다. 역사 서브트리(docs/specs·research·works·CHANGELOG-archive)와 전임 킷 등재 기록을 실측 근거로 인용하는 marketplace-submission.md 만 남긴다. warning-signal.md §검토 절차 5: 제외는 정당화할 수 있는 만큼만 좁게. CHANGELOG.md 는 접두사 제외가 아니라 oldNameScanExcludeFrom 으로 **첫 항목(## [) 앞의 머리말은 검사하고 항목 본문만** 뺀다 — 머리말 3행이 구 이름을 현재형으로 말했는데(감사 B-P2-3) 파일 통째 제외가 그것을 가렸다. 마커가 파일에 없으면 파일 전체를 검사한다."
   },
   "source": {
     "manifest": "plugins/common/.claude-plugin/plugin.json",
@@ -34,7 +34,9 @@
     "docs/research/",
     "docs/CHANGELOG-archive.md",
     "docs/marketplace-submission.md",
-    "CHANGELOG.md",
     "packaging/name-targets.json"
-  ]
+  ],
+  "oldNameScanExcludeFrom": {
+    "CHANGELOG.md": "## ["
+  }
 }

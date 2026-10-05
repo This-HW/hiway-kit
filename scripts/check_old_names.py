@@ -24,8 +24,9 @@
 **`oldNameScanExclude` 에 없는 git-tracked 파일에 `previousNames` 문자열이 하나라도
 있으면 fail.** 분기가 없다 — 항상 돈다(`docs/conventions/warning-signal.md` §검토 절차 4).
 
-제외는 **구 이름이 사실로서 등장해야 하는 곳**만이다: 역사 기록(`docs/`·`CHANGELOG.md`)과
-이 정책 파일 자신. 나머지는 전부 대상이다 — 처음에 `plugins/` 만 봤다면 `site/` 의 브랜드
+제외는 **구 이름이 사실로서 등장해야 하는 곳**만이다: 역사 기록(`oldNameScanExclude` 의 접두사
+들)과 이 정책 파일 자신. `CHANGELOG.md` 는 파일 통째가 아니라 **첫 항목(`## [`) 앞의 머리말은
+검사하고 항목 본문만** 제외한다(`oldNameScanExcludeFrom`). 나머지는 전부 대상이다 — 처음에 `plugins/` 만 봤다면 `site/` 의 브랜드
 문자열과 `setup.sh` 의 **전임 플러그인 설치 명령**을 놓쳤을 것이다(실측).
 
 구 이름은 매직 리터럴로 박지 않고 이름 정책에서 읽는다(F-022: 게이트를 매직 리터럴에
@@ -58,7 +59,9 @@ from git_tracked import SkipTally, tracked_files
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 POLICY = REPO_ROOT / "packaging" / "name-targets.json"
-DEFAULT_EXCLUDE = ("docs/", "CHANGELOG.md", "packaging/name-targets.json")
+DEFAULT_EXCLUDE = ("docs/", "packaging/name-targets.json")
+#: 정책 키 `oldNameScanExcludeFrom` 이 없을 때의 기본값 — 변경 이력은 **항목 본문**만 제외한다.
+DEFAULT_EXCLUDE_FROM = {"CHANGELOG.md": "## ["}
 
 # 줄 단위 예외 표기. **파일 단위 제외를 쓰지 않는 이유**가 여기 있다 — 파일을 통째로
 # 빼면 그 파일의 *미래* 잔재까지 영영 안 잡힌다(warning-signal.md §검토 절차 5의
@@ -99,6 +102,24 @@ def load_exclude() -> tuple[str, ...]:
     return tuple(x for x in raw if isinstance(x, str) and x.strip())
 
 
+def load_exclude_from() -> dict[str, str]:
+    """`{파일: 마커}` — 그 파일에서 **마커로 시작하는 첫 줄부터** 구 이름 검사를 멈춘다.
+
+    변경 이력은 항목 본문에서 구 이름이 사실로서 등장해야 하지만, **제목·머리말은 현재형 문장**이다
+    (`CHANGELOG.md:3` 이 "All notable changes to <구 이름>" 이었는데 파일 통째 제외가 그걸 가렸다 —
+    감사 B-P2-3). 마커가 파일에 없으면 **파일 전체를 검사한다** — 마커가 사라진 채 조용히 전량
+    제외되는 쪽이 위험하다.
+    """
+    try:
+        policy = json.loads(POLICY.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return dict(DEFAULT_EXCLUDE_FROM)
+    raw = policy.get("oldNameScanExcludeFrom")
+    if not isinstance(raw, dict):
+        return dict(DEFAULT_EXCLUDE_FROM)
+    return {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and v}
+
+
 def scan_targets(exclude: tuple[str, ...]) -> list[str]:
     """추적 파일 중 제외 접두사에 걸리지 않는 것 — 생성물·캐시의 우연한 매치를 배제한다."""
     return [
@@ -108,7 +129,9 @@ def scan_targets(exclude: tuple[str, ...]) -> list[str]:
 
 
 def find_hits(
-    names: list[str], exclude: tuple[str, ...]
+    names: list[str],
+    exclude: tuple[str, ...],
+    exclude_from: dict[str, str] | None = None,
 ) -> tuple[list[tuple[str, str]], SkipTally]:
     """(파일, 걸린 이름) 목록과 **못 읽은 파일 집계**를 함께 반환한다.
 
@@ -127,7 +150,10 @@ def find_hits(
         except UnicodeDecodeError:
             skipped.add(rel, "비-UTF-8", "바이너리 — 줄 단위 텍스트 검사 대상 아님")
             continue
+        stop_marker = (exclude_from or {}).get(rel)
         for lineno, line in enumerate(text.splitlines(), 1):
+            if stop_marker is not None and line.startswith(stop_marker):
+                break  # 이 줄부터는 항목 본문 — 역사 기록이다
             if LINE_OPT_OUT in line:
                 continue
             for name in names:
@@ -147,7 +173,7 @@ def main() -> int:
         )
         return 1
     exclude = load_exclude()
-    hits, skipped = find_hits(names, exclude)
+    hits, skipped = find_hits(names, exclude, load_exclude_from())
     rc = skipped.report(NONFATAL_SKIP_REASONS)
     if hits:
         print(f"[{LABEL}] ✗ 구 이름 {len(hits)}건 — 살아있는 표면에 개명 잔재")

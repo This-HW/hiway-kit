@@ -287,7 +287,7 @@ for s in $(grep -oE '\$\{CLAUDE_PLUGIN_ROOT\}/[A-Za-z0-9_./-]+\.py' plugins/comm
   [ -f "$s" ] || { red "hooks.json → 없는 스크립트: $s"; MISSING=1; }
 done
 # rules/agents/skills 산문이 가리키는 ./scripts/<name>.sh 가 실재하는지 검증 —
-# always-injected 룰의 죽은 스크립트 참조(예: 존재하지 않는 db-tunnel.sh)가 매 세션
+# always-injected 룰의 죽은 스크립트 참조(예: 지워진 DB 터널 스크립트를 가리키던 룰)가 매 세션
 # 주입되던 문제 방지.
 #
 # **skills/ 가 원래 빠져 있었다**(2026-09-09 추가). 그 사이로 죽은 참조가 실제로 샜다 —
@@ -616,7 +616,9 @@ hdr "16. 상시 주입 예산 — 규범+WORKFLOW · 에이전트 설명 (W-025 
 # 판정 로직은 scripts/check_injection_budget.py 가 단일 소스 — CI(validate.yml)와 동일
 # 스크립트를 호출한다. 원래 이 게이트는 여기 인라인이었고 **CI 에 없었다** — 발화 조건이
 # "누가 로컬에서 verify-done.sh 를 돌릴 때만"이었다는 뜻이다(F-023 + §18 이 같은 구멍을
-# 겪었다). 상한 도출·축 분리 근거는 그 스크립트의 독스트링에 있다.
+# 겪었다). 상한 도출·축 분리 근거는 그 스크립트의 독스트링에 있다. 축에는 훅 주입 외에
+# 하네스가 파일째 읽는 진입점(AGENTS.md·GEMINI.md) 크기도 있다 — §15 는 AGENTS.md 만 보지만
+# 이 축은 export_harness.ENTRYPOINTS 전체를 본다.
 if python3 scripts/check_injection_budget.py; then
   green "상시 주입 예산 통과 (check_injection_budget.py — CI와 단일 소스)"
 else
@@ -676,8 +678,9 @@ fi
 hdr "18. 이름 SSOT 파생 드리프트 (D-3 / W-027 27-2)"
 # plugins/common/.claude-plugin/plugin.json 의 name(SSOT)에서 README·plugins/common/
 # README·CLAUDE.md 등을 파생시키는 scripts/derive-name.py 의 드리프트
-# 검사. §17은 D-22(상호 참조 실재 게이트, 25-16)의 몫으로 예약돼 있으므로 다음 빈
-# 번호(§18)를 쓴다 — 섹션 번호 규약(재사용·재배치 금지)은 위 §36-49 주석 참고.
+# 검사. §17 은 이미 배포물 안 오케스트레이션 도구 이름 게이트가 쓰고 있다(예약이 아니라
+# 사용 중) — 이 섹션은 그 다음 빈 번호(§18)를 받았다. 섹션 번호 규약(재사용·재배치 금지)은
+# 파일 위쪽 "섹션 번호 규약" 주석 참고.
 if [ -f packaging/name-targets.json ] && [ -f scripts/derive-name.py ]; then
   python3 scripts/derive-name.py --check >"$TMPD/name_derive" 2>&1
   ND_RC=$?
@@ -841,6 +844,29 @@ if python3 scripts/build-site-redirects.py --check; then
   green "리다이렉트 표 유효 (build-site-redirects.py — CI와 단일 소스)"
 else
   red "site/redirects.json 검증 실패 — 상세는 위 출력"
+fi
+
+hdr "27. 문서 참조 실재 — 링크·@import·백틱 경로·파일명·함수명"
+# 문서가 가리키는 대상이 사라져도 아무 게이트도 보지 않던 구멍을 막는다 — 전수 감사가 33/0
+# green 인 채로 P0 급 사실 오류 9건(지워진 터널 스크립트, 옮겨진 훅 스크립트 경로 …)을 냈다.
+# 판정은 scripts/check_doc_refs.py 가 단일 소스 — CI(validate.yml)와 동일 스크립트. 시점 고정
+# 기록은 frontmatter `status: historical|superseded` 로 제외한다(스펙 D0-2). 이 검사가 도는 조건:
+# 제외를 뺀 모든 추적 마크다운에 대해 항상(분기 없음).
+if python3 scripts/check_doc_refs.py; then
+  green "문서 참조 전부 실재 (check_doc_refs.py — CI와 단일 소스)"
+else
+  red "문서가 가리키는 대상이 없다 — 참조를 고치거나 시점 고정 기록이면 status: historical (상세는 위 출력)"
+fi
+
+hdr "28. 문서 지위 스키마 + 살아있는 문서의 낡은 토큰·표 열 수"
+# docs/**/*.md 는 frontmatter 에 status(current|historical|proposal|superseded)·as_of 가 있어야
+# 하고, current 문서와 docs/ 밖 살아있는 문서는 제거된 이름(docs/works·work.sh·W-0xx·구 경로·구
+# 플러그인 이름)과 GFM 표 열 수 불일치가 없어야 한다. 판정은 scripts/check_doc_status.py 가 단일
+# 소스 — CI(validate.yml)와 동일 스크립트. 이 검사가 도는 조건: 항상(분기 없음).
+if python3 scripts/check_doc_status.py; then
+  green "문서 지위·토큰·표 열 수 통과 (check_doc_status.py — CI와 단일 소스)"
+else
+  red "문서 지위 스키마 위반 또는 낡은 토큰·깨진 표 — 고치는 법은 위 출력의 → 줄"
 fi
 
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
