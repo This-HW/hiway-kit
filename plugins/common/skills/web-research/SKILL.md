@@ -15,57 +15,15 @@ MCP 서버가 설치돼 있으면 우선 활용하고, **없거나 실패하면 
 > 대체합니다. (배포 에이전트 allowlist에 MCP를 하드코딩하면 미설치 시 환각이 발생하므로,
 > MCP 리서치는 이 스킬에서만 수행합니다 — CC #13898.)
 
-## 사용 가능한 MCP
-
-### 1. Context7 - 라이브러리 문서
-
-공식 문서 기반 정확한 API 정보:
-
-```
-/web-research context7: React 19 Server Components
-/web-research context7: Next.js 15 App Router
-/web-research context7: FastAPI authentication
-```
-
-### 2. Exa - AI 시맨틱 검색
-
-코드 예제 및 구현 패턴:
-
-```
-/web-research exa: Python async best practices
-/web-research exa: TypeScript type guards examples
-/web-research exa: React performance optimization
-```
-
-### 3. Tavily - 종합 리서치
-
-기술 비교, 트렌드 조사:
-
-```
-/web-research tavily: Next.js vs Remix comparison 2026
-/web-research tavily: AI coding assistant market trends
-/web-research tavily: microservices vs monolith decision
-```
-
 ## 사용법
 
-### 라이브러리 조사
-
 ```
-/web-research [라이브러리명] [버전] [기능]
-```
-
-### 기술 비교
-
-```
+/web-research [라이브러리명] [버전] [기능]      # 예: /web-research fastapi 0.115 OAuth2 password flow
 /web-research compare [A] vs [B]
-```
-
-### 베스트 프랙티스
-
-```
 /web-research best practices for [주제]
 ```
+
+라이브러리 문서를 조사할 때는 **버전을 명시**한다(Context7 조회 규칙). 어떤 MCP 를 먼저 쓸지는 아래 "MCP 선택 가이드" 한 곳이 소유한다 — 여기서 다시 적지 않는다.
 
 ## 로그인된 브라우저가 필요한 웹 작업
 
@@ -94,11 +52,7 @@ MCP 서버가 설치돼 있으면 우선 활용하고, **없거나 실패하면 
 
 ## 워크플로우
 
-1. **MCP 선택**
-   - 라이브러리 문서 → Context7
-   - 코드 예제 → Exa
-   - 비교/트렌드 → Tavily
-
+1. **소스 선택** — 아래 "MCP 선택 가이드"의 1순위부터. 설치돼 있지 않으면 즉시 다음 순위, 끝내 없으면 WebSearch/WebFetch
 2. **조사 실행**
    - MCP로 정보 수집
    - 복수 소스 교차 검증
@@ -110,6 +64,8 @@ MCP 서버가 설치돼 있으면 우선 활용하고, **없거나 실패하면 
    - 출처 명시
 
 ## MCP 선택 가이드
+
+Context7 = 라이브러리 공식 문서, Exa = AI 시맨틱 검색(코드 예제·구현 패턴), Tavily = 종합 리서치(기술 비교·트렌드).
 
 | 작업            | 1순위    | 2순위    |
 | --------------- | -------- | -------- |

@@ -13,7 +13,9 @@ description: Automated development pipeline. Runs a completed plan file through 
 /auto-dev docs/plans/2026-09-28-login-lockout/plan.md  # 또는 그 plan.md
 ```
 
-**진행 추적**: 호스트 태스크 도구(있으면) + checklist(`verify` 명령 exit 0 으로만 통과).
+**진행 추적**: 호스트 태스크 도구(있으면) + checklist(`verify` 명령 exit 0 으로만 통과). 태스크 도구가
+없으면 `[Dev]` 는 checklist, Validation 은 대화창 진행표 + `plan.md` `## 검증 결과`로 추적한다 —
+대체 경로 SSOT: `skills/plan-task/references/task-tools-fallback.md` §B.
 **영속 상태**: `plan.md` 의 `status`·`## 검증 결과` 와 `checklist.json` — 태스크 도구는 세션을 넘지 못한다.
 
 ---
@@ -36,8 +38,9 @@ description: Automated development pipeline. Runs a completed plan file through 
 1. 호스트 태스크 도구가 있으면 로드한다(Claude Code: `ToolSearch("select:TaskCreate,TaskUpdate,TaskList")`).
 
 > **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
-> 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
-2. `TaskList` 로 이 계획의 `[Dev]`/`[Validation]` Task 가 있으면 상태 확인 후 재개 (재생성 스킵)
+> §B: `[Dev]` 는 durable checklist, `[Validation]` 은 대화창 진행표 + `plan.md` (킷 도구 탐색은 §A).
+2. **도구가 있으면** `TaskList` 로 이 계획의 `[Dev]`/`[Validation]` Task 가 있는지 보고 상태 확인 후
+   재개 (재생성 스킵). **도구가 없으면** 위 "재개 위치"대로 `checklist.json` 과 `plan.md` 에서 읽는다.
 3. 없으면 → Step 1
 
 ---
@@ -50,12 +53,13 @@ description: Automated development pipeline. Runs a completed plan file through 
 2. 코드베이스 직접 탐색 (에이전트 위임 아님):
    - 이미 구현된 파일/함수 확인
    - 해당 항목은 ✅ 완료로 마킹 (Task 생성 스킵)
-3. 미완료 항목만 TaskCreate:
+3. 미완료 항목만 Task 로 만든다(도구가 있으면 TaskCreate, 없으면 아래 checklist 항목):
 
 **분리 기준:**
 
 - 독립적으로 구현 가능한 항목 → 별도 Task (병렬 실행)
-- 다른 항목에 의존하는 항목 → `addBlockedBy` 설정
+- 다른 항목에 의존하는 항목 → `addBlockedBy` 설정 (도구가 없으면 id 순서 + `description` 의
+  `(선행: …)` — 규약은 fallback §B)
 
 **Task 네이밍:** `[Dev] {구현 항목명}`
 
@@ -69,8 +73,9 @@ T-dev-4: [Dev] 테스트 작성            ← blockedBy: T-dev-2, T-dev-3
 ```
 
 **checklist 생성** (계획 파일이 있을 때): `## 완료 조건` 의 명령을 항목의 `verify` 로 삼아
-계획 디렉토리에 `init` 한다(호출 경로: `skills/plan-task/references/task-tools-fallback.md`).
-`verify` 는 계획에서 **파생**한다 — 실행자가 새로 지어내지 않는다.
+계획 디렉토리에 `init` 한다(호출·도구 탐색: `skills/plan-task/references/task-tools-fallback.md` §A·§B).
+`verify` 는 계획에서 **파생**한다 — 실행자가 새로 지어내지 않는다. 걸 명령이 없는 항목은
+checklist 에 넣지 않는다(가짜 verify 금지).
 
 ---
 
@@ -108,7 +113,8 @@ ours/theirs/manual 선택지를 호스트 수단으로 묻는다)은 규범 `par
 **Task 완료 시 매번 의무:**
 
 1. 대응 checklist 항목이 있으면 `complete <id>` — verify exit 0 일 때만 통과
-2. 완료 마킹(호스트 태스크 도구가 있으면 `TaskUpdate(id, status="completed")`)
+2. 완료 마킹(호스트 태스크 도구가 **있으면** `TaskUpdate(id, status="completed")` — 없으면 1의
+   `complete` 가 곧 마킹이다)
 3. unblocked Task 확인 → 즉시 실행
 
 **Durable executor 규율 (장기·다세션 실행):**
@@ -116,7 +122,7 @@ ours/theirs/manual 선택지를 호스트 수단으로 묻는다)은 규범 `par
 - **미완 1항목/iteration**: 한 iteration은 checklist 미완 항목 **하나**만 목표로 한다
   (한 번에 다수 항목을 "완료"로 몰아 찍지 않는다 — 검증 없는 일괄 통과 방지).
 - **verify 통과 전 passes 금지**: `checklist.json`의 `passes:true`는 오직
-  checklist `complete <id>`(경로는 `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석)가
+  checklist `complete <id>`(경로는 `skills/plan-task/references/task-tools-fallback.md` §A 의 `kit_root`)가
   항목의 `verify` 명령을 **실제 실행해 exit 0**일 때만 전환된다.
   모델 판단으로 completed를 self-mark하지 않는다.
 - **상태 쓰기는 메인 세션 소유**: `checklist.json`·`plan.md` 쓰기는 **메인 세션**만
@@ -143,7 +149,7 @@ T-merge  (결과 통합)
 
 ### T-spec: 스펙 준수 확인 (선행 실행)
 
-Task 생성:
+Task 생성(도구가 있을 때 — 없으면 대화창 진행표의 한 행):
 ```
 T-spec: [Validation/C] 스펙 준수 확인   — blockedBy: 모든 Dev Tasks
 ```
@@ -160,7 +166,7 @@ T-spec: [Validation/C] 스펙 준수 확인   — blockedBy: 모든 Dev Tasks
 3. 추가 Dev Task 완료 후 T-spec 재실행
 4. **최대 2회 재시도** — 초과 시 사용자에게 판단 요청 후 파이프라인 중단
 
-T-spec 통과 후 아래 T-review, T-security를 동시 생성 후 **병렬 실행**:
+T-spec 통과 후 아래 T-review, T-security를 동시 생성(도구가 없으면 진행표에 두 행 추가) 후 **병렬 실행**:
 
 ```
 T-review:   [Validation/A] 코드 리뷰   — blockedBy: T-spec
@@ -169,10 +175,14 @@ T-security: [Validation/B] 보안 스캔   — blockedBy: T-spec
 
 **병렬 실행:**
 
-- `T-review` → `review-code` 에이전트
-- `T-security` → `security-scan` 에이전트
+- `T-review` → `review-code` 에이전트. **호출 규칙은 `skills/review/SKILL.md` 2단계가 소유한다**
+  (`review-code` 에는 Bash 가 없어 diff 를 프롬프트에 **인라인으로 붙이거나** 읽을 파일 경로를
+  명시해야 하고, 대상이 **6개를 넘으면 배치로 쪼개며**, 리포트가 `## 완료:` 줄로 끝나지 않으면
+  잘린 것으로 취급해 더 작게 다시 부른다). 여기에 복제하지 않는다 — 안 지키면 빈 리뷰가 "결함 0건"
+  으로 읽혀 T-merge 를 통과한다.
+- `T-security` → `security-scan` 에이전트 (Bash 가 있어 위 제약이 없다)
 
-두 Task 모두 완료 후 결과 통합 Task 생성:
+두 Task 모두 완료 후 결과 통합 Task 생성(도구가 없으면 진행표에 행 추가):
 
 ```
 T-merge: [Validation] 결과 통합   — blockedBy: T-review, T-security
@@ -185,8 +195,8 @@ review-code/security-scan 결과에 **발견된 결함이 있으면(pass·fail �
 ```bash
 # category ∈ {lint, security, architecture, test, convention}
 # severity ∈ {critical, high, medium, low}
-# 경로는 skills/plan-task/references/task-tools-fallback.md 의 플러그인 루트 해석을 따른다
-python3 "<plugin root>/tools/feedback_ledger.py" upsert <category> <severity> "<결함 요지>"
+# kit_root: skills/plan-task/references/task-tools-fallback.md §A (못 찾으면 "ledger 건너뜀"을 보고에 적는다)
+KR=$(kit_root) && python3 "$KR/tools/feedback_ledger.py" upsert <category> <severity> "<결함 요지>"
 ```
 
 - 발견된 결함만 기록 (통과 시 회피 패턴은 노이즈라 기록 안 함)
@@ -219,14 +229,12 @@ T-review, T-security 결과를 구조적으로 검증:
 
 `T-merge` 실행:
 
-0. **[Guard]** 판정 기준 미충족 시: 미충족 항목 + 이슈 목록 + 권고사항을 사용자에게 보고하고 파이프라인을 중단한다. `TaskUpdate(T-merge, status="failed")`. 아래 단계를 실행하지 않는다.
+0. **[Guard]** 판정 기준 미충족 시: 미충족 항목 + 이슈 목록 + 권고사항을 사용자에게 보고하고 파이프라인을 중단한다. 태스크 도구가 있으면 `TaskUpdate(T-merge, status="failed")`, 없으면 진행표의 T-merge 행에 실패와 사유를 적는다. 아래 단계를 실행하지 않는다.
 1. **검증 마커 생성** — Stop hook 이중 검증 방지 (Claude Code 전용 — 이 훅이 없는 하네스는 건너뛴다).
    지문·마커 경로 계산은 `stop-validator.py` 모듈이 단일 소스다. 경로는
-   `skills/plan-task/references/task-tools-fallback.md` 의 플러그인 루트 해석과 같게 찾는다
-   (`CLAUDE_PLUGIN_ROOT` 가 비어도 깨지지 않게):
+   `skills/plan-task/references/task-tools-fallback.md` §A 의 `kit_root` 로 찾는다:
    ```bash
-   SV="${CLAUDE_PLUGIN_ROOT:-}/hooks/stop-validator.py"
-   [ -f "$SV" ] || SV=$(ls -1 ~/.claude/plugins/cache/*/*/*/hooks/stop-validator.py 2>/dev/null | sort -V | tail -1)
+   SV=""; KR=$(kit_root) && SV="$KR/hooks/stop-validator.py"
    [ -f "$SV" ] && SV="$SV" python3 - <<'PY'
    import importlib.util, os, tempfile
    spec = importlib.util.spec_from_file_location("stop_validator", os.environ["SV"])
@@ -247,8 +255,9 @@ T-review, T-security 결과를 구조적으로 검증:
 2. T-review, T-security 결과와 `## 완료 조건` 명령의 실행 결과(명령·rc)를 `plan.md` 끝의
    `## 검증 결과` 절에 추가하고 frontmatter `status: done` 으로 바꾼다
    (Small 이면 대화창에 출력)
-3. `TaskUpdate(T-merge, status="completed")` + `TaskList`로 이번 계획의 잔존
-   in_progress/pending 태스크가 없는지 확인해 정리한다.
+3. **태스크 도구가 있으면** `TaskUpdate(T-merge, status="completed")` + `TaskList`로 이번 계획의 잔존
+   in_progress/pending 태스크가 없는지 확인해 정리한다. **없으면** 진행표를 마지막 상태(전 행 done +
+   근거)로 한 번 출력하는 것이 이 단계다 — `TaskList` 확인은 해당 없다.
    (T-merge = 검증 **결과 통합** 태스크 — 브랜치 머지가 아니다. 머지 여부는 옵션
    선택의 몫이다 — 계획 `status` 와 무관하다.)
    **반드시 사용자 보고(다음 단계)보다 먼저** — 단발 실행에선 보고 후 턴이 사용자
@@ -271,7 +280,8 @@ T-review, T-security 결과를 구조적으로 검증:
 
 ## Step 4: Small — 계획 파일 없이
 
-plan-task 가 Small 로 판정해 계획 파일이 없는 경우, 태스크·상태 파일·위임 없이 가볍게 실행한다:
+plan-task 가 Small 로 판정해 계획 파일이 없는 경우, 태스크·상태 파일·위임 없이 가볍게 실행한다
+(Small 의 기준·완료 조건 정본: `skills/plan-task/references/elicitation.md` §6):
 
 1. **구현**: 대화창의 계획대로 직접 코드 작성 (위임은 선택 — 별도 컨텍스트가 이득일 때만)
 2. **테스트**: 동작이 바뀌었으면 테스트를 추가·수정한다

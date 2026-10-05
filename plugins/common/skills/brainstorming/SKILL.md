@@ -7,8 +7,8 @@ description: Design and spec a Large new feature or system change before plannin
 
 ## 크기 게이트 — 먼저 판정한다
 
-이 스킬은 **설계가 필요한 Large 새 기능·시스템 변경**에만 쓴다(Large = 4개+ 모듈·10파일+,
-기준 SSOT `skills/plan-task/references/elicitation.md` §6).
+이 스킬은 **설계가 필요한 Large 새 기능·시스템 변경**에만 쓴다(Large 의 기준 SSOT:
+`skills/plan-task/references/elicitation.md` §6).
 
 - **버그 수정 · Small · Medium** → 이 스킬을 건너뛴다. Medium 은 바로 `plan-task`, Small 은
   그냥 구현한다. 건너뛴 사실을 한 줄 적고 진행한다 — 사용자에게 설계 승인을 받으려고 멈추지 않는다.
@@ -23,15 +23,16 @@ description: Design and spec a Large new feature or system change before plannin
 ## 체크리스트
 
 진입 즉시 ToolSearch("select:TaskCreate,TaskUpdate,TaskList")로 Task 도구를 로드한 후,
-
-> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
-> 의 durable checklist(플러그인 루트 해석 포함)로 추적한다.
 아래 항목 각각에 대해 TaskCreate를 실행하세요.
 
+> **Task 도구가 없으면 멈추지 말고 대체 경로로 간다** — `skills/plan-task/references/task-tools-fallback.md`
+> §B: `[Brainstorm]` 단계는 걸 `verify` 명령이 없으므로 checklist 가 아니라 **대화창 진행표**로
+> 추적한다(산출물은 `docs/specs/…` 스펙 파일). 아래 항목을 진행표의 행으로 쓴다.
+
 **Task 네이밍 규약:** `[Brainstorm] {항목명}` (plan-task의 `[Planning]` Task와 구분)
-**완료 마킹 규약 [건너뛰기 금지]:** 각 항목을 마치면 **즉시** `TaskUpdate(status="completed")`,
-마지막 항목(plan-task invoke)은 **invoke 직전에** 마킹 (규율 SSOT:
-`rules/definition-of-done.md#task-마감-규율`).
+**완료 마킹 규약 [건너뛰기 금지]:** 각 항목을 마치면 **즉시** `TaskUpdate(status="completed")`
+(도구가 없으면 진행표의 근거 칸을 채운다), 마지막 항목(plan-task invoke)은 **invoke 직전에**
+마킹 (규율 SSOT: `rules/definition-of-done.md#task-마감-규율`).
 
 1. 프로젝트 컨텍스트 파악 (파일, 최근 커밋, docs)
 2. 명확화 질문 (한 번에 하나씩)
@@ -96,8 +97,9 @@ description: Design and spec a Large new feature or system change before plannin
 
 ### 7단계: 사용자 검토 대기
 
-> 세션 경계 주의: 이 단계에서 세션이 끝나면 대기 태스크가 다음 세션에 잔존한다 —
-> 정상이다. 재개 판단 기준은 `docs/specs/`의 스펙 파일 (rules/task-resume.md 참고).
+> 세션 경계 주의: 태스크 도구의 태스크는 세션을 넘지 못한다 — 이 단계에서 세션이 끝나면 대기
+> 태스크는 사라진다. 재개 여부는 `docs/specs/` 스펙 파일이 있는지로 판단한다(스펙이 있고
+> 승인이 기록돼 있으면 8단계부터, 없으면 이 단계부터 다시).
 
 ```
 스펙을 `{path}`에 저장했습니다. 검토 후 수정 사항이 있으면 말씀해 주세요.
