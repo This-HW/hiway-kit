@@ -22,21 +22,22 @@ A single, well-tested core plugin built on a native-first foundation, scale-appr
 The hooks run on your machine's `python3` and need **3.9+** (macOS system Python
 qualifies); older interpreters make the hooks no-ops and the session warns you once.
 
-**Install** (marketplace name: `hiway-kit`):
+**Install** — pick **one** of the two (installing both loads every skill and hook twice):
 
 ```bash
+# A. Anthropic's directory — built into Claude Code, no marketplace to add
+/plugin install hiway-kit@anthropic-plugin-directory
+
+# B. This repository as a marketplace — tracks main the moment you update it
 /plugin marketplace add This-HW/hiway-kit
 /plugin install hiway-kit@hiway-kit
-
-# Updating: refresh the marketplace, then the new version is picked up
-/plugin marketplace update hiway-kit
+/plugin marketplace update hiway-kit   # later, to pick up a new version
 ```
 
-> **Registry status — read this before looking for it in the catalog.** `hiway-kit` is
-> **not yet in Anthropic's community catalog**. Listing is a one-time web submission and
-> ours is pending, so **the command above is currently the only install path**. This note
-> stays until the listing is live — an unverified claim of registry presence is exactly the
-> "promise ≠ reality" defect this kit's gates exist to catch.
+Path A is the reviewed listing: each version reaches it after Anthropic's directory scan, so it can
+trail `main` briefly. Both paths were verified on a clean Claude Code config (no claude.ai sign-in)
+on 2026-10-05. The listing does not yet show up in claude.ai's web directory search; the install
+command above works regardless.
 
 ## Installing changes the whole machine, not just this project
 

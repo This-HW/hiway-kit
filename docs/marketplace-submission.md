@@ -86,6 +86,15 @@ created"* — 제출 시점 `plugin.json` 값을 보여 줄 뿐, 상단 Edit 은
 (512×512)를 업로드했다 → *"Icon uploaded. It's waiting for review."* URL 4종(Homepage·Documentation `/docs/`·Support GitHub issues·Privacy
 `/privacy/`)은 18:04 KST 같은 티켓 스레드로 디렉토리 팀에 갱신을 요청했고, 노출 문의도 다시 적었다.
 
+**결론 — 이미 설치된다(2026-10-05 실측)**: Claude Code 에는 문서에 이름이 없는 **내장 마켓플레이스 `anthropic-plugin-directory`**
+(`claude plugin marketplace list` → *"Source: Built in (Anthropic Directory)"*)가 있고, `claude plugin install hiway-kit@anthropic-plugin-directory`
+가 **성공**한다 — 임시 폴더 local 범위, 그리고 **claude.ai 로그인 없는 빈 `CLAUDE_CONFIG_DIR`** 에서도. 음성 대조(`no-such-plugin-zz9@…`)는
+`not_found` 로 실패해 판별력이 있다. 설치본은 v5.2.2(`5.2.2-79cbfe860780` = 그날 main HEAD — 자동 공개 정상). 검사용 설치는 즉시 제거.
+그동안 "미노출"로 본 것은 **틀린 곳을 본 것**이다: 공식 카탈로그(포털 제출을 안 받음)·커뮤니티 미러(동기화 정지)·claude.ai 웹 검색(아직 안 보임)
+만 확인했다. README·CLAUDE.md 설치 안내에 이 경로를 추가했다(직접 마켓플레이스와 **둘 중 하나만** — 둘 다 설치하면 스킬·훅이 두 번 로드).
+참고: `claude plugin details` 는 두 설치 모두 *Agents (0)* 로 표시하지만 캐시엔 `agents/{dev,meta,planning}/` 15개가 있고 세션에서 로드된다
+— 하위 폴더를 세지 않는 표시 문제로 본다.
+
 **10-05 재확인** — 여전히 미노출(claude.ai 디렉토리·claude.com/marketplace 검색 결과 없음, 커뮤니티 미러 2,283개 중 0·`marketplace.json`
 마지막 커밋 10-01 수동 추가), 포털 v5.2.2 Live, 10-02 18:04 이후 디렉토리 팀 회신 없음. 10-02 에 올린 아이콘은 *"This icon wasn't
 reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(Anthropic 쪽 심사 정체로 보임). 같은 파일로 Replace 재업로드

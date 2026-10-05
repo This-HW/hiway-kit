@@ -20,7 +20,9 @@ otherwise). Guidance lives in skills, never in agent `tools:` allowlists.
 ## Installation
 
 ```bash
-# Basic — direct marketplace (현재 **유일하게 성립하는** 설치 경로)
+# Anthropic 디렉토리 — Claude Code 내장 마켓플레이스(추가 불필요). 아래 직접 경로와 **둘 중 하나만**
+/plugin install hiway-kit@anthropic-plugin-directory
+# 직접 마켓플레이스 — main HEAD 즉시 반영
 /plugin marketplace add This-HW/hiway-kit
 /plugin install hiway-kit@hiway-kit
 
@@ -28,8 +30,7 @@ otherwise). Guidance lives in skills, never in agent `tools:` allowlists.
 git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 ```
 
-> **디렉토리 경로는 아직 성립하지 않는다**(상태는 아래 Distribution 절). **소비자 환경에서 설치를
-> 확인하기 전까지 디렉토리 설치 명령을 문서에 적지 않는다** — "약속 ≠ 실물" 결함이다.
+> 디렉토리 경로는 **로그인 없는 빈 설정에서 실측**한 뒤 적었다(2026-10-05) — 확인 전 명령을 적는 것은 "약속 ≠ 실물" 결함이다.
 
 ## Structure
 
@@ -389,10 +390,10 @@ Plugin cache is keyed by `{plugin-name}/{version}` — same version = no update 
 두 설치 경로가 pushed `main` 을 다르게 전파한다 — 사용자가 어느 쪽인지 알고 안내해야 한다.
 
 - **직접 마켓플레이스** (`This-HW/hiway-kit` → `@hiway-kit`): `/plugin marketplace update` 시
-  **즉시** main HEAD 를 반영한다. 현재 **유일하게 성립하는** 경로다.
-- **Claude 디렉토리** (claude.ai 카탈로그 — Claude Code 엔 계정 동기화 `@synced` 로 온다. 공식 마켓은 포털 제출을 안 받는다):
-  **포털상 Published**(2026-09-29)지만 소비자 검색·카탈로그엔 아직 없다(문의 중,
-  `docs/marketplace-submission.md`). 게재 대상은 **Claude Code 만**. push webhook 으로 `main` 이 자동 스캔·게시된다.
+  **즉시** main HEAD 를 반영한다.
+- **Claude 디렉토리**: Claude Code **내장 마켓플레이스 `anthropic-plugin-directory`** 로 설치된다(공식 문서엔 이름이
+  없다 — 실측). 공식 마켓·커뮤니티 미러엔 안 실리고 claude.ai 웹 검색엔 아직 안 보인다(`docs/marketplace-submission.md`).
+  게재 대상은 **Claude Code 만**. push webhook 으로 `main` 이 자동 스캔·게시된다.
 - **OpenAI 디렉토리**: 5.2.0 **검토 중**(2026-09-30). `build-codex-zip.py` ZIP 을 버전마다 손으로 올리고,
   승인 후 Publish 를 눌러야 공개된다(`docs/codex-submission-checklist.md`).
 - **커뮤니티 카탈로그** (`@claude-community`): 포털 승인분의 미러지만 자동 동기화가 2026-08-13 이후 멈춤 —
@@ -400,8 +401,7 @@ Plugin cache is keyed by `{plugin-name}/{version}` — same version = no update 
 
 `claude plugin validate` 는 §19 게이트·CI 로 계속 앞당겨 건다 — 포털 검증도 같은 검사로 시작한다.
 
-**함의**: 디렉토리 설치를 소비자 환경에서 확인하기 전까지 릴리스 안내는 직접 마켓플레이스 경로만 적는다. 공개 후에도 전파 시간을
-약속하지 말고 "push 후 스캔을 통과하면 반영"이라고만 쓴다.
+**함의**: 디렉토리 경로의 전파 시간은 약속하지 말고 "push 후 스캔을 통과하면 반영"이라고만 쓴다.
 
 ## Contributing
 
