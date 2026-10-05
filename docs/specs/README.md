@@ -75,4 +75,6 @@ as_of: 2026-10-05
 | [`2026-10-05-audit-remediation/audit/B-docs.md`](2026-10-05-audit-remediation/audit/B-docs.md) | 감사 B — 설계·기획·규약 문서의 싱크와 로직 | `historical` |
 | [`2026-10-05-audit-remediation/audit/C-research.md`](2026-10-05-audit-remediation/audit/C-research.md) | 감사 C — 외부 동향 조사: 킷에 접목할 것 | `historical` |
 | [`2026-10-05-audit-remediation/audit/D-coldread.md`](2026-10-05-audit-remediation/audit/D-coldread.md) | 감사 D — 콜드 리딩 보고서 | `historical` |
+| [`2026-10-05-audit-remediation/changelog-W1.md`](2026-10-05-audit-remediation/changelog-W1.md) | CHANGELOG 조각 — W1 docs (5.4.0 조립용) | `proposal` |
+| [`2026-10-05-audit-remediation/report-W1.md`](2026-10-05-audit-remediation/report-W1.md) | W1 docs — 완료 보고 | `historical` |
 | [`2026-10-05-audit-remediation/spec.md`](2026-10-05-audit-remediation/spec.md) | 전수 감사 후속 (v5.4.0) | `proposal` |
