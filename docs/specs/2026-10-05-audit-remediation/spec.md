@@ -2,7 +2,7 @@
 title: "전수 감사 후속 — 문서 싱크·하네스 연계·스킬 로직·게이트·외부 동향 흡수"
 created: 2026-10-05
 size: large
-status: proposal
+status: historical
 as_of: 2026-10-05
 ---
 
@@ -99,3 +99,26 @@ EOF
 ## 범위 외
 
 Codex `protect-sensitive` 이식 · SubagentStart 주입 · AGENTS.md 이중 도달 억제 훅 · Gemini extension 타겟 · Antigravity 전용 생성 루트(`model` 제거본) · 플러그인 `workflows/` 파일럿 · 얇은 GEMINI.md(`@./AGENTS.md`) 전환(Gemini 런타임 실측 전) · 스킬 description 변경.
+
+## 검증 결과 (컨트롤, 2026-10-05)
+
+병합 순서 W2 → W3 → W1 → W4 → W5(전부 `--no-ff`, 충돌 0). W4 신설 게이트가 병합 트리에서 잡은 잔재(구 이름 1·죽은 참조 15·낡은 토큰 9)는
+컨트롤이 정정했다(`bafa381`). 릴리스 커밋 `d40846b`(5.4.0) 이후 사전 Validate 에서 eval 픽스처의 `DATABASE_URL` 이 hold 근거로
+잡혀 `LOG_LEVEL` 로 바꿨다(`13ed522`, 기록은 `docs/marketplace-submission.md`).
+
+| 조건 | 결과 |
+| --- | --- |
+| `scripts/verify-done.sh` | 35 pass / 0 fail (이 절을 쓴 뒤 fresh run — 아래 릴리스 커밋) |
+| `check_doc_refs.py && check_doc_status.py` | rc 0 (이 스펙을 `historical` 로 닫은 뒤) |
+| `build-targets.py --check` | rc 0 — 생성물 19개 일치(openai.yaml 15 포함) |
+| `export-harness.sh --check` | rc 0 — 재생성 후, conventions frontmatter 누출 0 |
+| `pipeline-reinforcement-plan-v2.md` 부재 | rc 0 |
+| 낡은 문구 grep | hit 0 (`\b` 는 macOS `git grep -E` 에서 무동작 — `-P` 로 실행) |
+| `docs/**/*.md` 지위 frontmatter | 추적 파일 누락 0 (gitignore 된 `docs/personal/` 은 대상 아님 — 게이트도 `git ls-files` 기준) |
+| 행동 eval 전량 | 25/25 pass, 2026-09-29 대비 후퇴 0 → 기준선 `evals/baseline/2026-10-05.json`, 포인터 갱신 |
+| W5 파일럿 | 케이스 5개 실행 성공(발동률 brainstorming 6/6 · review 6/6 · debug 3/6 · plan-task 2/6 · 음성 6/6) — `report`: W5 보고 |
+| 콜드 리딩 재검 | 미실시 — 비결정적 조건이라 다음 라운드(릴리스 후 별도 세션)로 넘긴다 |
+
+미결(범위 외로 넘긴 것은 §범위 외와 같다) + 이번에 새로 드러난 후속 후보: `setup/pre-commit`·`validate.yml` 의 «agent frontmatter» 검사가
+`plugins/**/*.md` 를 전부 에이전트로 보는 범위 문제(W5 보고) · `plugins/common/rules/VERSION` 승격 기준 미정(W1 보고) ·
+`agent-delegation-chain` 승인 문단이 주입되지 않는 구조 간극(W2 보고, 미결로 명시).
