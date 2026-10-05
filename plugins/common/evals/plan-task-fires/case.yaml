@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: plan-task-fires
+description: Medium new-feature request should fire the plan-task skill.
+tags: [skill-trigger, plan-task]
+expected_outcome: Skill hiway-kit:plan-task is invoked before any implementation.
+max_turns: 8
+timeout_seconds: 240
+allowed_tools: [Read, Glob, Grep, Skill]
+execution:
+  prompt: >-
+    I want to add a CSV export button to the reports page of our web app, plus a
+    weekly scheduled email that attaches the same CSV for subscribed users.
+    Where do we start?
+graders:
+  - name: skill-fired
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?plan-task"'
+  - name: criteria
+    type: llm
+    criteria: >-
+      PASS if the response breaks the feature into ordered tasks (export,
+      scheduling, email, tests) with completion conditions or a plan file,
+      instead of jumping straight into code. FAIL if it only writes code, or
+      answers with a vague paragraph and no task breakdown.

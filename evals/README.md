@@ -6,6 +6,20 @@
 
 `plugins/` 밖(레포 루트)에 둔다 — 플러그인 설치 용량에 영향을 주지 않기 위함.
 
+## 두 개의 eval — 이름이 같아 헷갈린다
+
+| | 레포 `evals/` (이 디렉토리) | 플러그인 `plugins/common/evals/` |
+| --- | --- | --- |
+| 무엇을 재나 | **에이전트 행동** — `review-code`·`fix-bugs` 등이 과제를 올바르게 푸는가 | **스킬 발동** — 프롬프트에 올바른 스킬이 뜨는가(음성 케이스 포함) |
+| 러너 | `evals/run.py` (`scripts/run-evals.sh`) | 네이티브 `claude plugin eval` (Claude Code 전용) |
+| 채점 | 결정적 assertion + pytest, judge 는 advisory | `tool_used: Skill` 등 결정적 그레이더 + 보조 `llm`, **무플러그인 baseline 대비 Δ** |
+| 기준선·게이트 | `evals/baseline/` + `--compare`, `verify-done.sh` §10 (`--validate` 만) | 없음 — 파일럿(릴리스 전 수동 실행) |
+| 배포물 | 레포 루트라 실리지 않는다 | 플러그인 루트 아래라 마켓플레이스 설치본에는 실린다. **Codex ZIP 은 `build-codex-zip.py` 가 `evals/` 를 뺀다** |
+
+두 스위트는 서로를 대체하지 않는다 — 스킬 발동률·description 회귀는 후자만 재고, 에이전트 행동 후퇴·기준선은 전자만 잰다.
+플러그인 쪽 실행은 비용이 든다: `cd plugins/common && claude plugin eval . --runs 3 --model <고정 모델> --max-cost-usd 3 --no-publish`
+(결과는 `plugins/common/evals/results/` 에 쌓이며 그 디렉토리의 `.gitignore` 가 막는다).
+
 ## 철학
 
 - **Deterministic-first.** 채점은 규칙(정규식/파일 검사/pytest 실행)으로 하며,
