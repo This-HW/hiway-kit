@@ -5,6 +5,8 @@ as_of: 2026-07-03
 
 # 장기 실행·루프 AI 코딩 에이전트 — 하네스 설계 딥리서치
 
+> **작성 시점 고정 문서다(frontmatter `as_of`).** 이후 바뀐 사실은 해당 줄에 «정정»으로 인라인했다. 현재 판단은 정본을 본다 — Work 시스템은 4.0.0 에서 제거됐고 계획 파일 규약(`docs/plans/<날짜>-<slug>/plan.md` + `checklist.json`)으로 바뀌었다.
+
 > 2026-07-03 · claude-code-kit 리서치 노트 (2차)
 > 5개 병렬 리서치 에이전트(Initializer-Executor / 상태 영속화 / 루프 내 검증 / 인접 구현체 / 실패모드) 결과를 교차검증해 종합.
 > 목적: Initializer-Executor식 durable environment를 kit의 Work 시스템 위에 얹는 설계 근거.
@@ -113,23 +115,23 @@ claude-code-kit은 이미 이 지형의 상당 부분을 **네이티브-우선**
 
 | 연구가 말하는 것 | kit의 대응물 |
 |---|---|
-| append-only progress 핸드오프 | Work 시스템 `progress.md` (`docs/works/`) |
+| append-only progress 핸드오프 | Work 시스템 `progress.md` (`docs/works/`) — 정정: 4.0.0 에서 제거, 지금은 plan.md `## 검증 결과` |
 | AGENTS.md 절차적 기억(gotchas 누적) | `feedback_ledger.py` → session-start `=== LESSONS ===` 주입 |
-| 매 세션 sources of truth 결정론적 재적재 | `session-start.py`(rules+Work 상태+ledger digest 주입) |
+| 매 세션 sources of truth 결정론적 재적재 | `session-start.py`(rules+Work 상태+ledger digest 주입) — 정정: Work 상태 대신 활성 계획 파일 |
 | DoD=기계 검증 계약, cascading gate | `scripts/verify-done.sh` + `rules/definition-of-done.md` |
 | stop-hook 게이트 + `stop_hook_active` 가드 | `stop-validator.py` (연구가 "필수"라 한 가드 이미 구현) |
 | Author≠Verifier / 세션 분리 | `review-code`(별도 에이전트, `disallowedTools:[Task]`) + `isolation:worktree` |
 | Ralph loop / 배치 자율 완주 | `auto-dev` 배치 드라이버 + `rules/loop-engineering.md` |
 | worktree/PR 격리 | `rules/parallel-worktree.md` (W-011) |
 
-### 없음 (추가 후보 — 이번 로드맵)
+### 없음 (추가 후보 — 작성 당시 로드맵)
 
-1. **JSON 테스트게이트 체크리스트 (`passes` 플래그)** — 가장 큰 갭. 현재 계획은 서술형 `planning-results.md`뿐. 연구 컨센서스는 "JSON>MD for state". plan-task가 durable하게 `features.json`(항목별 `passes:false`+acceptance criteria)를 생성 = **initializer 역할**. (kit의 Task 시스템과 겹침 여부는 설계 시 판단 — 중복 회피.)
+1. **JSON 테스트게이트 체크리스트 (`passes` 플래그)** — 가장 큰 갭. (정정: 구현됨 — `checklist.json` + `plugins/common/tools/checklist.py`, 항목마다 `verify` 명령 필수) 현재 계획은 서술형 `planning-results.md`뿐. 연구 컨센서스는 "JSON>MD for state". plan-task가 durable하게 `features.json`(항목별 `passes:false`+acceptance criteria)를 생성 = **initializer 역할**. (kit의 Task 시스템과 겹침 여부는 설계 시 판단 — 중복 회피.)
 2. **Executor 루프 규율 명문화** — "1 세션 1 feature + SPEC 원본 재앵커(요약 아님) + E2E 검증 통과 전 `passes:true` 금지". auto-dev/rules에 반영.
 3. **Fresh-context evaluator 분리 명시** — review-code가 작성 세션과 분리된 컨텍스트(가능하면 다른 model family)에서 돎을 규칙화. self-preference bias 문헌 근거.
 4. **Loop guard 강화** — `stop_hook_active` 위에 hash(tool+args) no-progress 감지 + idle(최근 N iteration 새 커밋 0) 종료. loop-engineering 종료 가드 보강.
 5. **Anti-pollution 규율** — progress bounded/append-only, plan은 scaffolding(repo에서 재생성), git-clean 완료 게이트.
-6. **(소) Bash 편집 .py 검증 커버리지** — stop-validator 세션 스코프가 Edit/Write만 감지 → 루프에서 Bash로 쓴 .py 우회. (W-012 잔여, 루프 관점서 유효.)
+6. **(소) Bash 편집 .py 검증 커버리지** (정정: 구현됨 — `stop-validator` 가 auto-format 이 못 본 파일에 ruff 를 돈다) — stop-validator 세션 스코프가 Edit/Write만 감지 → 루프에서 Bash로 쓴 .py 우회. (W-012 잔여, 루프 관점서 유효.)
 
 ### 피해야 할 안티패턴 (연구가 경고, kit이 이미 회피 중이거나 주의)
 

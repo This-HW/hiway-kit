@@ -290,7 +290,9 @@ red 가 된다.
   §3·§5 의 파일 발자국은 SKILL.md 텍스트 기준이다.
 - `[미확인]` Claude Code 가 `disable-model-invocation: true` 스킬의 description 을 세션 시작
   로스터에 적재하는지 — 적재하면 1.4 KB, 아니면 0 에 가깝다. §3.2 수치는 **상한**이다.
+  **→ 해소(2026-09-28)**: 공식 skills 문서가 «description 이 컨텍스트에 없다»고 명시(`docs/native-absorption.md`).
 - `[미확인]` 개명 커밋이 기존 설치본에 전파되는지(마켓플레이스 재-add 동작 미검증).
+  **→ 해소**: `docs/specs/2026-09-07-rename-probe.md` 가 실측했다(`enabledPlugins` 이행은 수동).
 - `[미확인]` 세 플러그인 **동시 설치 실측** — §5 는 정적 문서·구조 대조다. 유일한 실행 증거는
   킷 ↔ superpowers 동시 로드(§5.2).
 
