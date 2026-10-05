@@ -3,7 +3,7 @@
 # 주입 룰을 고쳤는데 이 값이 그대로면 verify-done §7이 FAIL — 해설본 확인 후 재생성:
 #   scripts/sync-rule-mirror.sh --regenerate
 99a1d9fb4870c9d6e692663756aeb0138216b3e35cd9f128706c7f69d7384822  agent-delegation-chain.md
-c6a8f41d1c4ab2a6315d8e04e0c89f8d2eb2709723b470c6313c74a4e993a3fa  agent-system.md
+c00b307b9e7239e83ea992946ee0ac3f645379879a924e64959d9263d1699af4  agent-system.md
 15c84eba445afc5f87aa74f9ade252ac14f12218b81bc982cfb54988f6fa3bc8  mcp-usage.md
 84c29c321f90a07dc6dace5f7e7e4a1db66fd255f33655ef14cf3551d6962ae9  planning-protocol.md
 ed1d35201148a3ed228f90cd392e97f90bd3a8c0852465728466b46bb44c6a4c  task-resume.md

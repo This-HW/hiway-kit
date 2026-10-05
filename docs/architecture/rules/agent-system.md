@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # 에이전트 시스템 아키텍처
 
 > 정본은 `plugins/common/rules/agent-system.md` 다. 이 문서는 **왜** 그렇게 정했는지를
@@ -111,6 +116,17 @@ v5 에서 `define-business-logic`·`design-user-journey` 를 **읽기 전용 분
 v4 정본의 *"핵심 로직 테스트 ≥ 80%"* 는 v5 에서 지웠다. 킷의 어떤 게이트도 커버리지를 재지
 않았고, 소비자 프로젝트마다 커버리지 도구·기준이 다르다 — **아무도 재지 않는 숫자는 게이트가
 아니다.** 대신 "변경된 동작의 테스트가 통과한다"로 적었다.
+
+5.4.0 에서 두 출구를 다시 맞췄다(감사 B-P1-10·11).
+
+- **Validation → Done** 은 auto-dev 의 T-merge 와 **같은 기준**이다 — 완료 조건 명령 fresh
+  run 전부 rc 0, review-code 판정 `[ACCEPT]`(CRITICAL·HIGH 0), security-scan CRITICAL/HIGH 0.
+  예전 정본의 *"Must Fix = 0"* 은 review-code 가 내지 않는 등급이었고(실제 출력은
+  REJECT/CONDITIONAL/ACCEPT 와 C/H/M/L), *"verify-code PASS"* 는 auto-dev 가 부르지 않는
+  단계였다. 규칙과 파이프라인이 다른 막대를 들고 있으면 둘 중 하나는 아무도 지키지 않는다.
+- **Planning → Dev** 는 P0 모호함 0 만 공통이고, 나머지(업무 규칙·데이터 모델·사용자 흐름)를
+  요구할지는 **규모가 정한다** — 기준은 `skills/plan-task/references/elicitation.md` §6 이
+  소유한다. Small 버그 수정에 데이터 모델을 요구하던 옛 문구는 그 §6 과 충돌했다.
 
 ---
 

@@ -61,12 +61,15 @@ ALWAYS complete each phase before proceeding to the next.
 
 Phase 1 → Phase 2 (Planning → Dev):
 
-- P0 ambiguity = 0, business rules defined, data model defined, user flows clear
+- P0 ambiguity = 0. What else Planning must produce depends on task size — the size
+  criteria and per-size Planning exit live in `skills/plan-task/references/elicitation.md` §6
 
 Phase 2 → Phase 3 (Dev → Validation):
 
 - Build passes, tests for the changed behavior pass, lint/type checks pass
 
-Phase 3 → Complete (Validation → Done):
+Phase 3 → Complete (Validation → Done) — same bar as auto-dev's T-merge:
 
-- review-code Must Fix = 0, Critical security issues = 0, verify-code PASS
+- Every completion-condition command run fresh, all rc 0
+- review-code verdict `[ACCEPT]` (0 CRITICAL, 0 HIGH)
+- security-scan CRITICAL/HIGH = 0
