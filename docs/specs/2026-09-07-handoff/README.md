@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-07
+---
+
 # 실행 인계 문서 세트 — 2026-09-07
 
 `../2026-09-07-hiway-program-design.md`(D-1~D-33)를 **LLM 인계 가능한 수준**으로 구체화한

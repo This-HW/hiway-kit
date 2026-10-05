@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 The completion gate (`verify-done.sh`) and the installer (`setup.sh`) *are* shell —
 linting Python rigorously while leaving them unchecked means the code that decides
 "done" is the code nobody checks. `scripts/lint-shell.sh` is the single command

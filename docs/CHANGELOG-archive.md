@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-09
+---
+
 # CHANGELOG archive — v3.7.0 이전
 
 이 저장소의 git 히스토리는 v3.8.0 에서 **단일 커밋으로 재시작**됐다. 그 이전 릴리스의

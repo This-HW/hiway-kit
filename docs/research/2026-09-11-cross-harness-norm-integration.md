@@ -1,4 +1,11 @@
+---
+status: historical
+as_of: 2026-09-11
+---
+
 # 조사 — 하네스 간 규범·룰 통합 패턴 비교
+
+> **작성 시점 고정 문서다(frontmatter `as_of`).** 이후 바뀐 사실은 해당 줄에 «정정»으로 인라인했다. 현재 판단은 정본을 본다 — 규범 배포는 `plugins/common/skills/harness-export/SKILL.md`, 하네스별 지원은 README «Other Harnesses», 버전 갱신은 `docs/conventions/release-process.md`. 하단 «컨트롤 검토»가 병합 시점의 정정이다.
 
 **조사일**: 2026-09-11  
 **대상**: Hermes Agent, Cursor, Continue, aider, OpenHands, Copilot 및 AGENTS.md 표준  
@@ -16,7 +23,7 @@
 
 ## 1. 우리 접근 방식 (hiway-kit) — 기준선
 
-`[confirmed: 레포 CLAUDE.md, plugins/common/hooks/export_harness.py, scripts/verify-done.sh]`
+`[confirmed: 레포 CLAUDE.md, plugins/common/hooks/export_harness.py, scripts/verify-done.sh]` (정정: 5.2.0 부터 `plugins/common/tools/export_harness.py`)
 
 | 항목 | 구현 |
 | --- | --- |
@@ -48,7 +55,7 @@
 
 ## 3. 다른 도구들의 접근
 
-### 3.1 superpowers (Anthropic 공식 플러그인)
+### 3.1 superpowers (`obra/superpowers` — 정정: Anthropic 공식 플러그인이 아니다)
 
 `[confirmed: github.com/obra/superpowers + docs/research/2026-08-27-superpowers-distribution.md]`
 
@@ -59,7 +66,7 @@
 | **버전 관리** | `scripts/build-targets.py` 에 재생성 바인딩 | `.version-bump.json` + `scripts/bump-version.sh` — **버전을 올리면 모든 타겟 매니페스트로 자동 전파** |
 | **훅 형식** | Codex 용 exec form (omitted for now) | Claude Code: exec form, **Codex는 별도 문자열 형식** (`hooks/hooks-cursor.json` 타겟별 파일) |
 | **컨텍스트 파일 전략** | 하네스별 개별 AGENTS.md·GEMINI.md 생성 | 심링크(`AGENTS.md` → `CLAUDE.md`) + 얇은 별도 파일(`GEMINI.md` 92B 부트스트랩) |
-| **마켓플레이스 배포** | (비활성) | Codex PR 자동화(`sync-to-codex-plugin.sh` → poitne-radiant-inc 포크 PR) |
+| **마켓플레이스 배포** | (비활성) | Codex PR 자동화(`sync-to-codex-plugin.sh` → prime-radiant-inc 포크 PR) |
 
 **시사점** (우리가 배울 점):
 - v2.15.0에서 우리가 밟은 버전 미동기화 문제를 superpowers는 `bump-version.json` 으로 예방한다.
@@ -231,13 +238,13 @@ superpowers evals는 "스킬 행동"을 tmux 세션에서 실제 돌려 검증�
 
 ### 배워올 만한 점
 
-1. **버전 팬아웃** (superpowers에서)
+1. **버전 팬아웃** (superpowers에서) — **정정: 이미 구현됨**(`scripts/bump-version.sh`, 하단 «컨트롤 검토»)
    - 대안: `.version` SSOT 도입, 모든 `plugin.json` 이 그것을 참조
    - 비용: 낮음 (생성기 수정)
    - 가치: v2.15.0 재발 방지
 
-2. **버전 라우팅 자동화** (superpowers에서)
-   - 현재: 수동으로 `./scripts/build-targets.py --write` 호출
+2. **버전 라우팅 자동화** (superpowers에서) — **정정: 이미 구현됨**(`scripts/bump-version.sh` 가 재생성까지 묶는다)
+   - 현재(작성 당시 서술, 사실과 다름): 수동으로 `./scripts/build-targets.py --write` 호출
    - 더 나은: 버전 파일 변경 시 자동 재생성 (git hook 또는 CI)
    - 비용: 중간
    - 가치: 실수 방지

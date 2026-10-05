@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-07-02
+---
+
 # 하네스 엔지니어링 & 루프 엔지니어링 — 2026 중반 지형도
 
 > 2026-07-02 · claude-code-kit 리서치 노트
@@ -169,7 +174,7 @@ Dynamic Workflows(계획이 코드로, 재개 가능).
   순차 병합, 파일 소유권, git-workflow 충돌 에스컬레이션) + 파일 수정 에이전트
   8개 정비.
 
-### 로드맵 후보 (별도 Work)
+### 로드맵 후보 (작성 당시 — Work 시스템은 4.0.0 에서 제거됨)
 
 - **Initializer-Executor 패턴**: plan-task 완료 시 durable environment 생성 단계 —
   Ralph Loop형 장기 자율 실행의 기반.

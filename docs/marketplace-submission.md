@@ -1,13 +1,31 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # Marketplace Submission & Community Listing
 
-Submit at: https://platform.claude.com/plugins/submit
+## 현재 상태 — 채널별 요약 (배포 상태의 정본)
 
-> Note: 외부 제출의 도착지는 **community 카탈로그**(`anthropics/claude-plugins-community`)다.
-> 위 웹 폼으로 제출하면 스크리닝 후 community 카탈로그에 등재된다.
-> `anthropics/claude-plugins-official`은 Anthropic 자체 큐레이션 전용으로 외부
-> PR/신청 경로가 없다 — 이 문서의 "제출"은 전부 community 등재를 향한다.
+**이 표가 배포 채널 상태의 단일 정본이다.** `CLAUDE.md`·README·`docs/codex-submission-checklist.md`
+는 이 표를 가리키기만 한다. 상태가 바뀌면 이 표를 먼저 고치고, 근거는 아래 기록 절에 날짜와 함께 남긴다.
+디렉토리 경로의 전파 시간은 약속하지 않는다 — "push 후 스캔을 통과하면 반영"이라고만 쓴다.
 
-## 2026-09-28 — `hiway-kit` 을 Claude 디렉토리 포털에 제출 (현재 상태)
+| 채널 | 상태 | 확인일 | 다음 행동 |
+| --- | --- | --- | --- |
+| Claude Code 직접 마켓플레이스 (`This-HW/hiway-kit` → `hiway-kit@hiway-kit`) | 동작. `/plugin marketplace update` 시 `main` HEAD 를 즉시 반영. `setup.sh` 가 설치하는 경로 | 2026-10-05 | 없음 |
+| Claude 디렉토리 (Claude Code 내장 마켓플레이스 `anthropic-plugin-directory`) | **Published**(2026-09-29, v5.0.3), 이후 Auto-publish — push webhook 으로 스캔 통과 시 자동 공개(v5.2.2 Live 확인). `claude plugin install hiway-kit@anthropic-plugin-directory` 가 로그인 없이 성공(실측). 게재 대상은 Claude Code 만. claude.ai 웹 검색에는 아직 안 보임 | 2026-10-05 | 디렉토리 팀 티켓 회신 대기(웹 노출·목록 URL 갱신·아이콘 재심사) |
+| OpenAI 디렉토리 (Codex) | 5.2.0 **In review**(2026-09-30 제출, 자동 검사 통과). ZIP 은 `hooks/` 를 빼므로 이 경로 설치자는 규범 자동 주입이 없다 | 2026-09-30 | 승인 후 Publish → 디렉토리 노출 확인 → README 설치 절 갱신. 이후 버전마다 ZIP 재업로드(`docs/codex-submission-checklist.md`) |
+| Codex 직접 마켓플레이스 (`codex plugin marketplace add This-HW/hiway-kit`) | 동작 — 스킬 인식 + 훅 신뢰 승인 후 SessionStart 주입(2026-10-05 감사 A 실측, codex 0.159.3) | 2026-10-05 | 없음 |
+| 커뮤니티 카탈로그 (`claude-community`, `anthropics/claude-plugins-community`) | 자동 동기화가 2026-08-13 이후 멈춤. hiway-kit 없음. 전임 `claude-code-kit` 항목이 v2.12.3(`292ba07e`) pin 으로 남아 있음 | 2026-10-05 | 조치 없음(읽기 전용 미러). 2026-09-28 보낸 구 항목 삭제 요청의 결과 대기 |
+| Antigravity | 공개 레지스트리 미확인 — 로컬/워크스페이스 설치만 안내(README) | 2026-10-05 | 없음 |
+
+Claude 디렉토리 제출 포털: claude.ai → Directory → Submissions(개인 저자는 `platform.claude.com/plugins/submit`).
+
+## (기록) 2026-09-28 ~ 10-05 — `hiway-kit` 을 Claude 디렉토리 포털에 제출한 경과
+
+> 아래 절들은 시점별 기록이다. 현재 상태는 위 요약표가 정본이다. 2026-09-25 이전의 "외부 제출 =
+> community 카탈로그 등재" 전제는 포털 공개로 대체됐다.
 
 2026-09-25 Anthropic 이 디렉토리 제출 포털을 공개했다
 ([공지](https://claude.com/blog/build-plugins-for-claude) · [문서](https://claude.com/docs/plugins/submit)).
@@ -115,8 +133,9 @@ reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(
 **목록 정보는 제출 시점에 고정된다.** Listing 탭이 각 행의 출처를 `plugin.json key:` 로 밝힌다 — `icon`,
 `documentationUrl`, `supportUrl`, `privacyPolicyUrl` 이 비어 있어 아이콘은 GitHub 아바타로 대체됐다. 그러나 포털 원문이
 *"Newer versions don't update them here"*, 문서가 *"name and short description follow the live version"* 이므로 지금
-키를 더해도 이 제출의 목록은 바뀌지 않는다. 게다가 Claude Code 매니페스트 스키마에 없는 키라 `claude plugin validate`
-가 경고하고 로드 시 제거한다. **그래서 넣지 않았다** — 공개 후 목록 편집 수단이 생기면 그때 채운다.
+키를 더해도 이 제출의 목록은 바뀌지 않는다. **그래서 넣지 않았다** — 공개 후 목록 편집 수단이 생기면 그때 채운다.
+(당시 두 번째 근거였던 "스키마에 없는 키라 `claude plugin validate` 가 경고하고 로드 시 제거한다"는 낡았다 — Claude Code
+2.1.281(2026-09-23)부터 listing 키를 경고하지 않고, 로컬 2.1.289 `validate --strict` 가 rc=0 이다(2026-10-05 감사 C). 첫 근거는 유효하다.)
 5.2.2 에서 `homepage` 를 제품 사이트(`https://hiway.thishw.com/`)로 바꿨지만 이 목록 정보는 위 이유로 **제출 시점 값 그대로**다 —
 새 홈페이지는 직접 마켓플레이스·Codex 매니페스트(다음 업로드부터)에 반영된다.
 
@@ -129,7 +148,7 @@ reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(
 "Runs code locally: 5 hooks" 로 훅을 선언된 로컬 실행으로 표시하므로, 선언되지 않은 실행·유출에 관한
 진술로 판단하고 확인했다(배포 훅 네트워크 호출 0 — grep 확인).
 
-## Status (구 커뮤니티 카탈로그 — 전임 킷 기록)
+## (역사) Status — 구 커뮤니티 카탈로그, 전임 킷 기록
 
 - **v2.7.0** tagged and ready — 2026-06-14 (core-only consolidation + native foundation + git-subdir distribution)
 - Recovery point before consolidation: tag `v2.6.0-with-domains`
@@ -148,7 +167,7 @@ reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(
 > 확인 방법: 아래 raw 카탈로그에서 `claude-code-kit` 검색.
 > https://raw.githubusercontent.com/anthropics/claude-plugins-community/main/.claude-plugin/marketplace.json
 
-## 2026-09-08 재실측 — pin 자동 전진을 **신뢰할 수 없다**
+## (역사) 2026-09-08 재실측 — pin 자동 전진을 **신뢰할 수 없다**
 
 위 2026-07 관측(매일 배치, 재제출 불필요)은 **더 이상 성립하지 않는다.** 전임 킷
 `claude-code-kit` 항목을 기준으로 실측했다:
@@ -188,9 +207,9 @@ reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(
 **뜻밖의 부수 관측**: 전임 킷의 pin 이 크게 뒤처져 있던 덕에, 2026-09-07 그 레포의 플러그인
 이름이 일시적으로 `hiway-kit` 이었던 구간이 **카탈로그 사용자에게 노출되지 않았다.**
 등재명과 실물이 어긋난 상태였는데 아무도 그것을 받지 못했다 — **운이지 설계가 아니다.**
-D-54 의 레포 분리는 이 운에 기대지 않기 위한 결정이다.
+레포 분리(`docs/specs/2026-09-07-hiway-program-design.md`)는 이 운에 기대지 않기 위한 결정이다.
 
-## Submission Info — 전임 킷 `claude-code-kit` 의 등재 기록
+## (역사) Submission Info — 전임 킷 `claude-code-kit` 의 등재 기록
 
 > 아래 표는 **2026-06-14 제출 당시의 고정 기록**이다. 현재 킷(`hiway-kit`)의 제출은
 > 맨 아래 "개명 — 재제출" 절이 다룬다. 두 항목은 카탈로그에서 별개 리스팅이다.
@@ -217,15 +236,19 @@ D-54 의 레포 분리는 이 운에 기대지 않기 위한 결정이다.
 `@` 뒤는 마켓플레이스 `name` 필드다(repo 이름이 아니다 — community 카탈로그의 name 은
 `claude-community` 로 실측 확인, 2026-07-07).
 
-**현재 킷 `hiway-kit` — 직접 마켓플레이스만 성립한다** (카탈로그 재제출 대기 중):
+**현재 킷 `hiway-kit`** — 두 경로 중 **하나만** 쓴다(둘 다 설치하면 스킬·훅이 두 번 로드된다):
 
 ```bash
+# Claude 디렉토리 (내장 마켓플레이스 — 추가 불필요)
+/plugin install hiway-kit@anthropic-plugin-directory
+# 또는 직접 마켓플레이스
 /plugin marketplace add This-HW/hiway-kit
 /plugin install hiway-kit@hiway-kit
 /plugin marketplace update hiway-kit
 ```
 
-**전임 킷 `claude-code-kit` — 등재돼 있고 v2.21.0 에서 멈춘다** (기록용):
+**전임 킷 `claude-code-kit`** (기록용) — 카탈로그 pin 이 v2.12.3(`292ba07e`)에 멈춰 있다. 전임 레포의 최종본은
+v2.21.0 이지만 카탈로그는 그것을 서빙하지 않는다:
 
 ```bash
 /plugin marketplace add anthropics/claude-plugins-community
@@ -236,7 +259,7 @@ D-54 의 레포 분리는 이 운에 기대지 않기 위한 결정이다.
 
 `plugins/common` 서브디렉토리 (git-subdir로 sparse-clone):
 
-- **agents** — planning, dev, backend, meta, review 카테고리 (`plugins/common/agents/`)
+- **agents** — `plugins/common/agents/*.md` (5.3.0 부터 최상위 평탄 — 카테고리 폴더 없음)
 - **skills** — `plugins/common/skills/` (디렉토리에서 자동 발견 — 매니페스트에 등록부 없음)
 - **rules** — `plugins/common/rules/` (session-start 가 티어에 따라 주입)
 - **Hooks** (4 events): SessionStart, PreToolUse, PostToolUse, Stop (`hooks/hooks.json`)
@@ -249,7 +272,7 @@ D-54 의 레포 분리는 이 운에 기대지 않기 위한 결정이다.
 > 단일 core 플러그인. 도메인 플러그인(frontend/infra/ops/data/integration)은 2.7.0에서
 > 제거됨 (테스트 0·동결). 필요 시 `v2.6.0-with-domains` 태그에서 복원 가능.
 
-## v2.7.0 Registry Compliance Checklist
+## (역사) v2.7.0 Registry Compliance Checklist
 
 - [x] `homepage`, `repository`, `license`, `author.email` in plugin.json
 - [x] No forbidden frontmatter fields in any agent
@@ -263,7 +286,7 @@ D-54 의 레포 분리는 이 운에 기대지 않기 위한 결정이다.
 - [x] `marketplace.json` source = `git-subdir` (remote/versioned distribution)
 - [x] `scripts/verify-done.sh` green (definition-of-done gate)
 
-## 개명 — **재제출이 필요하다** (27-6)
+## (역사) 개명 — 재제출이 필요했다 (2026-09-08 판단, 09-28 제출로 해소)
 
 > 위 "재제출 불필요"는 **버전 갱신**에 대한 것이다. **이름 변경은 다르다.**
 
@@ -284,20 +307,21 @@ D-54 의 레포 분리는 이 운에 기대지 않기 위한 결정이다.
    *"리뷰 파이프라인이 제출마다 같은 검사를 돌린다"* 고 명시한다. 우리는 게이트 §19 가
    `--strict` 로 항상 돌리므로 이미 충족돼 있다.
 
-   `hiway-kit` 으로 **신규 제출**한다:
+   `hiway-kit` 으로 **신규 제출**한다 (→ 2026-09-28 포털로 제출, 09-29 공개 — 위 요약표):
    - 저장소: `This-HW/hiway-kit` (**새 레포다** — 전임 킷은 `This-HW/claude-code-kit` 에 그대로 남는다)
    - 플러그인 이름: `hiway-kit`
    - 경로: `plugins/common`
-2. 구 항목(`claude-code-kit`)은 **지우지 않는다.** 전임 레포에 v2.21.0 최종본이
-   그대로 있고 등재명과 플러그인 이름이 일치하므로, 그 리스팅은 계속 유효하다.
+2. 구 항목(`claude-code-kit`)은 **지우지 않는다** — 이 판단은 2026-09-28 에 바뀌었다: 포털 제출과 함께
+   디렉토리 팀에 구 항목 삭제를 요청했다(위 "전임 킷 정리"). 당시 근거는 전임 레포에 v2.21.0 최종본이 있고
+   등재명이 일치한다는 것이었으나, 카탈로그 pin 은 v2.12.3 이라 그 최종본이 서빙되지도 않는다.
    (카탈로그는 읽기 전용 미러라 어차피 직접 PR 로 지울 수 없다 — 직접 PR 은 자동 close 된다.)
 
-### 그때까지의 상태 (정직하게)
+### 그때까지의 상태 (2026-09-08 기준)
 
 - **직접 마켓플레이스**(`This-HW/hiway-kit` → `@hiway-kit`)는 **즉시** 동작한다.
   `main` HEAD 를 반영하므로 재설치하면 v3.0.0 이 온다.
-- **커뮤니티 카탈로그**는 구 이름 `claude-code-kit` 을 계속 서빙한다 — 이제 전임 레포의
-  **v2.21.0 최종본**이다(껍데기가 아니라 게이트 green 인 유지보수 완료본).
+- **커뮤니티 카탈로그**는 구 이름 `claude-code-kit` 을 계속 서빙한다 — pin 은 v2.12.3(`292ba07e`)이다.
+  전임 레포의 최종본은 **v2.21.0**(게이트 green 인 유지보수 완료본)이지만 pin 이 전진하지 않아 카탈로그 사용자에게는 닿지 않는다.
   v2.21.0 은 **버그 하나만** 담은 최종 패치다 — 훅이 최초 설치 판에서 영구 동결되던
   결함(이 킷 v3.8.0 과 같은 것)의 수정. `.private-names` 비공개 이름 가드는
   **이식되지 않았다** — 그건 후속 킷 기능이고 전임 킷은 버그 수정만으로 닫혔다.
@@ -308,5 +332,5 @@ D-54 의 레포 분리는 이 운에 기대지 않기 위한 결정이다.
 
 ### 왜 별칭을 두지 않았나
 
-D-52 참조. 프로브 실측: 구·신 이름이 공존하면 스킬이 **경고 없이 중복 로드**된다.
+`docs/specs/2026-09-07-hiway-program-design.md`·`docs/specs/2026-09-07-rename-probe.md` 참조. 프로브 실측: 구·신 이름이 공존하면 스킬이 **경고 없이 중복 로드**된다.
 "기한 있는 폐기 별칭"은 그 중복을 기간만큼 보장하는 것이므로 설계로 성립하지 않는다.

@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-06-13
+---
+
 # Definition of Done — 완료 게이트 (Spec 6)
 
 **Goal:** 거짓 "완료" 주장을 구조적으로 불가능하게 만든다. "완료"를 판단이 아니라

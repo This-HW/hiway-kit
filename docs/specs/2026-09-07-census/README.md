@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-07
+---
+
 # 전수 감사 원본 리포트 — 2026-09-07
 
 `../2026-09-07-hiway-program-design.md` §10 의 근거 자료다. orca 오케스트레이션

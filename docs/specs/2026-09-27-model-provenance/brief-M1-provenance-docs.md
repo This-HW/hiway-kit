@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-27
+---
+
 # 브리프 M1 — provenance-docs (W-045)
 
 - **부모**: plan-control 컨트롤 세션 (Orca Run — 디스패치 spec 에 Run id)

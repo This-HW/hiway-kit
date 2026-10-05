@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-08-26
+---
+
 # Spec — 다중 하네스 공식 패키지 런칭 (Codex · Antigravity) (W-019)
 
 - **작성일**: 2026-08-26

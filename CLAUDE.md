@@ -1,6 +1,7 @@
 # hiway-kit
 
-> Universal Claude Code toolkit — agents and skills for software development
+> Universal Claude Code toolkit — agents and skills for software development.
+> Claude Code is the full-feature baseline; other harnesses get the partial support in README's capability table.
 
 ## Who this is for (design north-star)
 
@@ -26,7 +27,7 @@ otherwise). Guidance lives in skills, never in agent `tools:` allowlists.
 /plugin marketplace add This-HW/hiway-kit
 /plugin install hiway-kit@hiway-kit
 
-# Full (with security hooks + auto-format + pre-commit)
+# Full (+ pre-commit) — setup.sh installs the DIRECT path; uninstall the directory one first
 git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 ```
 
@@ -58,12 +59,14 @@ plugins/
 | ------------------------ | --------------------------- | ----------------------------------------------- |
 | plan-task                | `/plan-task`                | Structured task planning                        |
 | auto-dev                 | `/auto-dev`                 | Automated development pipeline                  |
-| web-research             | `/web-research`             | MCP-powered research                            |
+| web-research             | `/web-research`             | Multi-source research (MCP if installed, else built-in) |
 | review                   | `/review`                   | Code review: ruff + review-code + security-scan |
 | multi-perspective-review | `/multi-perspective-review` | 3-Round Deliberation with 10 perspectives       |
 | debug                    | `/debug`                    | 4-Phase debug pipeline                          |
 | test                     | `/test`                     | Run tests and auto-fix failures                 |
-| agent-creator            | `/agent-creator`            | Generate plugin agents                          |
+| agent-creator            | `/agent-creator`            | Create a **project/user** agent (`.claude/agents/`) — not kit agents (see Adding a New Agent) |
+| brainstorming            | `/brainstorming`            | Design a Large feature before plan-task          |
+| using-hiway-kit          | (injected, manual-only)     | Workflow chain by task size                     |
 | control-loop              | `/control-loop`             | Multi-session control discipline — investigate/decide/dispatch/verify/merge |
 | child-session              | (loaded, not invoked)       | Discipline a dispatched worker session loads at start |
 | native-watch             | `/native-watch`             | **Repo-only** (`.claude/skills/`) — audit native-feature absorption vs the kit (SSOT: docs/native-absorption.md) |
@@ -94,12 +97,13 @@ description: | # Korean + English trigger conditions
   OUTPUT: result format
 model: sonnet # opus | sonnet | haiku
 effort: medium # low | medium | high | max
-maxTurns: 20 # 20 for implementation agents, 10 for exploration/review
-isolation: worktree # optional: run in isolated git worktree
+maxTurns: 20 # value is owned by each agent's frontmatter
+isolation: worktree # optional: file-modifying agents only
 tools:
   - Read
   - Edit
   - Bash
+  - ExitWorktree # required with isolation: worktree
 disallowedTools:
   - Task # regular agents cannot spawn sub-agents
 ---
@@ -123,7 +127,7 @@ Apply to agents that **modify files** — prevents filesystem conflicts:
 Merge-back protocol (exit conditions, sequential merge, conflict escalation) is
 governed by `plugins/common/rules/parallel-worktree.md`.
 
-### Delegation Signal — 폐기됨 (2026-08-27, W-022 R1)
+### Delegation Signal — 폐기됨 (2026-08-27)
 
 에이전트 출력 끝에 붙던 `---DELEGATION_SIGNAL---` 블록은 **폐기됐다.** 파싱하는 결정론적
 코드가 어디에도 없었고(유일한 소비 지점이 «신호를 스캔해 다음 에이전트를 호출하라»는
@@ -133,14 +137,14 @@ governed by `plugins/common/rules/parallel-worktree.md`.
 산문의 `DELEGATE_TO: X` 같은 **에스컬레이션 의도 서술**은 기계 계약이 아니므로 유지한다.
 폐기 경위·근거·걷어낸 범위(에이전트 33종·스킬 4종·주입 규칙 2종·게이트 §12·eval 체크 타입)는
 `docs/architecture/delegation-signal-retirement.md` 가 소유한다 — **§12 번호는 재사용하지
-않고 비워 둔다**(스펙·decision-log 47곳 이상이 섹션 번호로 게이트를 참조한다).
+않고 비워 둔다**(스펙·CHANGELOG 가 섹션 번호로 게이트를 참조한다).
 
 ## Development Conventions
 
 ### Editing an agent/skill does NOT affect the current session
 
 Agents and skills are loaded from the **installed plugin cache**
-(`~/.claude/plugins/cache/hiway-kit/hiway-kit/<version>/`), not from this
+(`~/.claude/plugins/cache/<marketplace>/hiway-kit/<version>[-<sha>]/`), not from this
 repo's working tree. So editing `plugins/common/agents/*.md` and immediately dispatching
 that agent runs the **old** definition — the change is invisible until the version is
 bumped, pushed, and the plugin updated.
@@ -151,8 +155,7 @@ fix could not be verified in the same session. Two consequences:
 
 - **Never conclude "the definition change worked" from in-session behavior.** Verify by
   reading the file, or by a machine check (`verify-done.sh` § checks against the working
-  tree; note that `§12`, the check this incident originally motivated, was retired in
-  W-022 R1 — see the Delegation Signal section above).
+  tree; `§12`, the check this incident motivated, is retired — see Delegation Signal above).
 - To actually exercise a definition change, bump the version and reinstall
   (`/plugin marketplace update` → `/plugin install`), or point a scratch install at the
   working tree.
@@ -168,6 +171,9 @@ cache), but `scripts/`, `evals/` and `tests/` (hook tests live in `tests/hooks/`
 3. Write Korean description with `MUST USE when:` trigger conditions
 4. No manifest edit needed — agents are auto-discovered from the directory
    (plugin.json has no agent/skill registry)
+5. Add it to the roster in `plugins/common/rules/agent-system.md` (CHECKSUMS + mirror), classify it
+   in `evals/policy.json` `tiers`, and add the scenario + baseline its tier requires
+   (`scripts/check_eval_coverage.py` is the gate). `/agent-creator` is for consumer agents, not this
 
 ### Adding a New Skill
 
@@ -185,9 +191,10 @@ cache), but `scripts/`, `evals/` and `tests/` (hook tests live in `tests/hooks/`
 
 - Regular agents: `disallowedTools: [Task]` — cannot spawn sub-agents
 - Meta agent (`devils-advocate` — the only one since v5.0.0; the multi-perspective-review roles it used to share with 4 others are now skill steps): `disallowedTools: [Bash]`
-- Skills (auto-dev, etc.) drive delegation; leaf agents stay flat.
+- Skills (auto-dev, etc.) drive delegation; leaf agents stay flat — a deliberate choice: native
+  subagents may nest up to three levels by default.
 
-### Orchestration Model — Scale-Appropriate Primitives (Spec 2 / W-006)
+### Orchestration Model — Scale-Appropriate Primitives
 
 오케스트레이션은 전통이 아니라 **스케일별로 올바른 프리미티브**를 쓴다. leaf 에이전트가
 Task를 갖지 않는 이유는 "main만 조율" 도그마가 아니라, 우리 스케일에서 에이전트 중첩이
@@ -195,22 +202,20 @@ Task를 갖지 않는 이유는 "main만 조율" 도그마가 아니라, 우리 
 
 킷이 **소비자에게** 제공하는 모델이다(이 레포 자체의 협업 수단은 `coordination.md`).
 
-| 작업 규모 | 오케스트레이션 |
+| 병렬 청크 수(파일 수 아님) | 오케스트레이션 |
 | --------- | -------------- |
-| Small / Medium | 스킬 주도 플랫 위임 (main이 Agent 병렬 dispatch → 결과 수집). 예측가능·검증된 경로 |
-| Large (10~100+) | 네이티브 `ultracode`(dynamic workflow)를 **사용자가 수동 트리거** — 백그라운드 오케스트레이션. auto-dev는 Large 작업을 청크로 분할해 안내 |
+| 수 개 | 스킬 주도 플랫 위임 (main이 Agent 병렬 dispatch → 결과 수집). 예측가능·검증된 경로 |
+| 10~100+ | 네이티브 workflow(`ultracode` 등)를 **사용자가 opt-in** — auto-dev는 청크로 분할해 안내 |
 
-> 네이티브 dynamic workflow / `/goal`은 대화형 전용이라 스킬에서 프로그래밍 트리거가
-> 불가하다(2026.6 기준). 따라서 자동 위임은 검증된 Task 시스템 + 스킬 루프로 하고,
-> 대규모 병렬은 사용자가 `ultracode`로 트리거한다. 실험적 자체 조율(구 agent-teams)은
-> 이 네이티브 경로로 대체됐다.
+> 워크플로는 사용자 opt-in(키워드·이름 호출·allow 규칙)이 있어야 돈다 — 스킬이 스스로 켜지 않는다
+> (판정·근거: `docs/native-absorption.md`). 작업 크기(Small/Medium/Large) 기준은 `plan-task` 의 `elicitation.md §6`.
 
 ### Phase Gate Pattern
 
 ```
-Phase 1 (Planning)    → 100% ambiguity removed via planning agents
+Phase 1 (Planning)    → P0 ambiguity = 0 (criteria: rules/agent-system.md Phase Gate)
 Phase 2 (Development) → implement based on Phase 1 artifacts
-Phase 3 (Validation)  → review + security scan (parallel)
+Phase 3 (Validation)  → spec compliance, then review + security scan (auto-dev T-*)
 ```
 
 ## Hooks
@@ -232,7 +237,7 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
 - `protect-sensitive.py` — `PreToolUse` on Edit/Write/MultiEdit/NotebookEdit/Read:
   blocks access to **sensitive file paths** (`.env`, keys, `.pem`) by path. env
   templates (`.env.example`/`.sample`/`.template`/`.dist`) are exempt; writes to
-  them get a best-effort high-confidence secret-format content scan (W-016). It
+  them get a best-effort high-confidence secret-format content scan. It
   does **not** otherwise scan file *content* or intercept `Bash`/`git commit` —
   secret scanning is gitleaks at push time — CI, and `verify-done.sh` §24 locally over
   unpushed commits. `setup/pre-commit` does **not** run gitleaks.
@@ -281,7 +286,7 @@ actually loads every hook under 3.9). Four hooks were silently dead on 3.9 until
 
 > Subagent lifecycle tracking is delegated to native OpenTelemetry
 > (`agent_id` / `parent_agent_id` spans, `/usage` breakdown) — the kit no longer
-> ships a custom `agent-lifecycle.py` (removed in the 2.6.0 batch, Spec 1 / W-005).
+> ships a custom `agent-lifecycle.py` (removed in 2.6.0).
 
 ### 설정값으로 경로를 만들면 반드시 봉쇄한다 (2026-08-27 확정)
 
@@ -297,45 +302,14 @@ actually loads every hook under 3.9). Four hooks were silently dead on 3.9 until
 
 ## CI/CD
 
-`.github/workflows/validate.yml` runs on push to `main` (and PRs):
+`.github/workflows/validate.yml` runs on push to `main` (and PRs) and **owns its step list** — read it;
+most steps call the same scripts as `verify-done.sh`.
 
-1. Validates JSON syntax (`plugin.json`, `marketplace.json`)
-2. Checks agent frontmatter completeness (`name`, `description` required)
-3. Lints with `ruff check .` and runs pytest
-4. Lints shell via `scripts/lint-shell.sh` (same script as the local gate §3b)
-5. Verifies doc counts via `scripts/check_doc_counts.py` (same script as the local gate)
-6. Runs gitleaks over every commit in the range (not `--first-parent` — side branches count)
-7. `python39-compat` job: loads every hook under Python 3.9 (consumer floor)
+### 드리프트 게이트는 통합하지 않는다
 
-### 드리프트 게이트는 통합하지 않는다 (2026-08-27 판정 · 2026-09-10 재검토)
-
-`verify-done.sh` 에는 "생성물·사본이 SSOT와 일치하는가"를 묻는 게이트가 여럿 있다
-(진입점 마커 · 타겟 매니페스트 · 이름 파생 · eval 기준선 · 룰 체크섬 · 버전 sync ·
-설치된 훅). **몇 개인지 여기 적지 않는다** — 이유는 아래에 있다.
-
-**같은 질문처럼 보이지만 입력·판정 기준·실패 메시지가 전부 다르다.** 어떤 것은 입력의
-sha256 을 기록해 두고 대조하고, 어떤 것은 재생성해서 내용을 비교하고, 어떤 것은 집합
-양방향 대조다. 공통 프리미티브로 묶으면 추상이 모든 케이스를 감당하지 못해 분기
-파라미터가 늘고, **게이트 코드가 어려워진다.** 게이트는 읽기 쉬워야 신뢰된다 —
-아무도 이해하지 못하는 게이트는 red 가 떴을 때 무시된다(`no-gate-integration.md`).
-
-**그래서 통합하지 않는다.** 중복은 코드가 아니라 **규약**으로 줄인다(위 경로 봉쇄
-관례가 그 예다).
-
-**재검토(2026-09-10) — 원래 약속은 "네 번째가 필요해지면 재검토한다"였다.**
-그 시점은 조용히 지났고, 실제로는 넷째·다섯째·여섯째·일곱째까지 늘어난 뒤에야
-이 문단을 다시 읽었다. 통합 판정은 위와 같은 이유로 **유지** 한다. 바뀐 것은 서술
-방식이다:
-
-이 문단은 게이트를 **표로 열거** 하고 있었고, 게이트가 늘어날 때마다 아무도 고치지
-않아 **셋으로 멈춘 채 낡았다.** 이 레포는 바로 이 실패를 두 곳에 이미 적어 두었다 —
-`rules/definition-of-done.md` 의 *"기계 검사 목록은 게이트가 소유한다 — 열거하면 검사를
-더할 때마다 낡는다(실제로 그랬다)"*, `docs/conventions/warning-signal.md` §5 의
-*"대상을 나열하지 말고 제외를 나열한다"*. 자기 규약을 자기 문서가 어긴 것이다.
-
-**그래서 목록을 지웠다.** 무엇이 드리프트 게이트인지는 `scripts/verify-done.sh` 가
-소유한다 — 알고 싶으면 그것을 읽어라. 이 문단이 남기는 것은 **판정과 그 근거** 뿐이고,
-그 둘은 게이트가 몇 개든 변하지 않는다.
+생성물·사본이 SSOT 와 일치하는지 묻는 게이트가 여럿이지만 입력·판정·실패 메시지가 전부 달라
+**통합하지 않는다** — 게이트는 읽기 쉬워야 red 가 떴을 때 믿고 고친다. 무엇이 드리프트 게이트인지는
+`scripts/verify-done.sh` 가 소유한다(여기 열거하지 않는다). 판정·근거·재검토 경위: `docs/conventions/no-gate-integration.md`.
 
 ### Lint is one ruleset, everywhere
 
@@ -355,54 +329,10 @@ sha256 을 기록해 두고 대조하고, 어떤 것은 재생성해서 내용�
 
 ## Release Checklist
 
-**CRITICAL: Every commit that changes plugin behavior MUST bump the version in `plugins/common/.claude-plugin/plugin.json`.**
-
-Plugin cache is keyed by `{plugin-name}/{version}` — same version = no update fetched = users never get the fix.
-
-- Patch bump (2.x.y) for bug fixes and hook changes
-- Minor bump (2.x.0) for new agents, skills, or features
-- Add a matching `## [x.y.z]` entry to `CHANGELOG.md` (verify-done.sh §6 fails if
-  the plugin.json version and the CHANGELOG top entry diverge)
-- Keep README/docs version-agnostic (link to CHANGELOG) so they can't drift
-- **버전을 올렸으면 타겟 매니페스트를 재생성한다**: `python3 scripts/build-targets.py --write`.
-  `.claude-plugin/plugin.json` 만 올리고 이것을 빠뜨리면 Codex·Antigravity 패키지에 **옛 버전이
-  실린 채** 나간다. v2.15.0 릴리스에서 실제로 밟았고 `verify-done.sh` §14가 잡았다 —
-  게이트가 없었다면 그대로 배포됐을 실수다
-- Rules `.md` 변경 시 CHECKSUMS 재생성: `(cd plugins/common/rules && shasum -a 256 *.md | grep -v CHECKSUMS > CHECKSUMS.sha256)` — 이 매니페스트는 보안 경계가 아니라 우발적 드리프트 감지기다 (verify-done §7이 집합 동등성까지 강제)
-- 그 룰에 **해설본 미러**가 있으면(아래 참조) 해설본도 함께 손보고 `scripts/sync-rule-mirror.sh --regenerate`
-- Tag **the commit you push as the release**: `git tag -a vX.Y.Z <commit> -m "vX.Y.Z"`,
-  then `git push --tags`. Later commits that leave the version untouched (docs, repo
-  tooling) are not a new release and do not move the tag. `verify-done.sh §6` fails when
-  any past CHANGELOG release lacks a tag — the practice lapsed silently once (20 untagged
-  releases between 2.10.4 and 2.12.3), so it is a machine check now, not a convention.
-  Two caveats on existing tags: the 2026-08-17 backfill could not recover which commit was
-  actually pushed as each old release, so it used the closest approximation — the last
-  commit carrying that version; and tags predating v2.11.0 were placed ad hoc and follow
-  no single rule. Every tag does point at a commit whose `plugin.json` matches it.
-- Run `scripts/verify-done.sh` (green) before claiming a release ready (definition-of-done)
-
-```bash
-# Before git commit — update version field:
-# plugins/common/.claude-plugin/plugin.json  → "version": "x.y.z"
-```
-
-### Distribution & catalog propagation
-
-두 설치 경로가 pushed `main` 을 다르게 전파한다 — 사용자가 어느 쪽인지 알고 안내해야 한다.
-
-- **직접 마켓플레이스** (`This-HW/hiway-kit` → `@hiway-kit`): `/plugin marketplace update` 시
-  **즉시** main HEAD 를 반영한다.
-- **Claude 디렉토리**: Claude Code **내장 마켓플레이스 `anthropic-plugin-directory`** 로 설치된다(공식 문서엔 이름이
-  없다 — 실측). 공식 마켓·커뮤니티 미러엔 안 실리고 claude.ai 웹 검색엔 아직 안 보인다(`docs/marketplace-submission.md`).
-  게재 대상은 **Claude Code 만**. push webhook 으로 `main` 이 자동 스캔·게시된다.
-- **OpenAI 디렉토리**: 5.2.0 **검토 중**(2026-09-30). `build-codex-zip.py` ZIP 을 버전마다 손으로 올리고,
-  승인 후 Publish 를 눌러야 공개된다(`docs/codex-submission-checklist.md`).
-- **커뮤니티 카탈로그** (`@claude-community`): 포털 승인분의 미러지만 자동 동기화가 2026-08-13 이후 멈춤 —
-  hiway-kit 없음, 전임 킷 항목 잔존(`docs/marketplace-submission.md`).
-
-`claude plugin validate` 는 §19 게이트·CI 로 계속 앞당겨 건다 — 포털 검증도 같은 검사로 시작한다.
-
-**함의**: 디렉토리 경로의 전파 시간은 약속하지 말고 "push 후 스캔을 통과하면 반영"이라고만 쓴다.
+**CRITICAL: Every commit that changes plugin behavior MUST bump the version** — via
+`scripts/bump-version.sh <ver>`, never by hand. Plugin cache is keyed by version: same version = users never get the fix.
+절차(CHANGELOG·타겟 재생성·`AGENTS.md` 재생성·룰 sha·CHECKSUMS·미러·행동 eval·태그·게이트)의 정본은
+`docs/conventions/release-process.md` 다. 배포 채널별 상태는 `docs/marketplace-submission.md` 상단 요약표가 소유한다.
 
 ## Contributing
 
@@ -419,9 +349,9 @@ PRs welcome. Checklist:
 - [ ] File-modifying agents have `isolation: worktree`
 - [ ] Regular agents have `disallowedTools: [Task]`
 - [ ] Skill `description` field is in English
-- [ ] Version bumped in `plugins/common/.claude-plugin/plugin.json` + matching `CHANGELOG.md` entry
+- [ ] Version bumped with `scripts/bump-version.sh` + matching `CHANGELOG.md` entry
       (the manifest has **no** agent/skill registry — both are auto-discovered from their
       directories; the only thing a new component must touch there is the version)
-- [ ] CI passes (JSON valid, frontmatter complete, no forbidden fields, pytest green, no secrets)
+- [ ] `scripts/verify-done.sh` green locally and CI green
 
 @docs/conventions/coordination.md

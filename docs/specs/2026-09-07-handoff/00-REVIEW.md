@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-07
+---
+
 # 00 — 적대적 검수: `2026-09-07-hiway-program-design.md` (D-1~D-33)
 
 > 검수 기준 커밋 **`3f85f47be4997e54d275218bf64ac2c81324c2bd`** (`git rev-parse HEAD` 일치 확인).

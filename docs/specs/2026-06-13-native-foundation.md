@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-06-13
+---
+
 # Native Foundation 설계 (Spec 1)
 
 **Goal:** Claude Code 네이티브 프리미티브를 최대 활용하고 중복되는 자체 재구현을 제거하여, 기술부채 없이 더 높은 성능의 토대를 만든다.

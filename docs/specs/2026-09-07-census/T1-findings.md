@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-07
+---
+
 # T1 — 규범 축 전수 문서 감사
 
 읽기 전용 감사. 스코프 26개 파일. 정렬 대상: `docs/specs/2026-09-07-hiway-program-design.md`

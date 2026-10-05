@@ -1,8 +1,9 @@
 ---
 title: "아키텍처 경계를 문서가 아니라 프로젝트 도구로 강제한다"
-status: done
 created: 2026-09-30
 size: medium
+status: historical
+as_of: 2026-09-30
 ---
 
 # 아키텍처 경계를 문서가 아니라 프로젝트 도구로 강제한다
@@ -113,6 +114,8 @@ size: medium
   태그·push 는 컨트롤.
 
 ## 완료 조건
+
+> **당시 기준(5.1.0)** — 아래 경로 `agents/dev/*.md` 는 5.3.0 평탄화 이전 배치다. 지금은 `plugins/common/agents/<name>.md` 이므로 이 블록은 그대로 실행되지 않는다.
 
 결정적 (전부 exit 0):
 

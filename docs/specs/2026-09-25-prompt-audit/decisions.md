@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-25
+---
+
 # Decisions: prompt-audit 적용 — 정의 파일 cruft 제거
 
 > Work ID: W-044

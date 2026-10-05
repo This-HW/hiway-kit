@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-09-27
+---
+
 # 브리프 R1 — evals 리뷰 반영 (W-045)
 
 - 부모: plan-control 컨트롤 (Orca Run). 역할: `evals/run.py`·`evals/tests/test_runner.py` 의 리뷰 지적 반영

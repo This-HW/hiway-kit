@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-10-05
+---
+
 # 감사 C — 외부 동향 조사: 킷에 접목할 것
 
 - 기준 커밋 `e7181cbbfb6c8c3bc38b7ae4e979da09fa30a618` (HEAD 와 일치, `git merge-base --is-ancestor` 통과). 조사일 2026-10-05.

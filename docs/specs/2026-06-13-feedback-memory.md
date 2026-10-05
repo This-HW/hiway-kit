@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-06-13
+---
+
 # Feedback Memory Loop 설계 (Spec 3)
 
 **Goal:** validation/review에서 반복적으로 잡히는 결함 패턴을 구조화해 축적하고, 이후 구현 컨텍스트에 자동 주입하여, 같은 실수를 반복하지 않는 학습 루프를 만든다. (Hermes 통찰: 피드백 루프는 부가기능이 아니라 코어)

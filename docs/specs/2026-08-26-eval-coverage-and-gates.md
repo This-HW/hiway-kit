@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-08-26
+---
+
 # Spec — 내부 결함 배치: eval 커버리지·기준선 게이트·학습루프 (W-018)
 
 - **작성일**: 2026-08-26
@@ -38,7 +43,7 @@
   게이트 19종 중 어느 것도 이것을 잡지 못했다. 이 배치가 놓친 것과 **정확히 같은 종류**의 드리프트다.
 - **P2-a 학습 루프 입력 공백.** `docs/works/feedback/ledger.md` 가 존재하지 않는다. ledger→LESSONS→
   self-improve / eval-forge 경로가 설계상 존재하지만 **입력이 0건**이라 한 번도 돌지 않았다.
-- **P3 낡은 판단 방치.** `docs/pipeline-reinforcement-plan-v2.md`(2026-05)의 Track 2가 "보류" 상태로
+- **P3 낡은 판단 방치.** `docs/pipeline-reinforcement-plan-v2.md`(5.4.0 에서 삭제 → `docs/architecture/delegation-signal-retirement.md`)(2026-05)의 Track 2가 "보류" 상태로
   15개월 방치됐다. 보류인지 폐기인지 문서가 답하지 않는다.
 
 ## 3. 성공 기준 (측정 가능)
@@ -50,7 +55,7 @@
 | S3 | 전체 스위트가 기준선 대비 **회귀 0건** | 신규 기준선 생성 시 기존 12건 status 전부 pass 유지 |
 | S4 | `verify-done.sh` **전 항목 green** | 명령 출력 |
 | S5 | ledger에 실제 결함 항목이 **1건 이상** 존재하고 그 경로가 문서화됨 | `docs/works/feedback/ledger.md` + README 갱신 |
-| S6 | Track 2 보류 건이 **판정**된다 (진행/폐기 중 하나, 근거와 함께) | `docs/pipeline-reinforcement-plan-v2.md` 갱신 or 폐기 표시 |
+| S6 | Track 2 보류 건이 **판정**된다 (진행/폐기 중 하나, 근거와 함께) | `docs/pipeline-reinforcement-plan-v2.md`(5.4.0 에서 삭제 → `docs/architecture/delegation-signal-retirement.md`) 갱신 or 폐기 표시 |
 
 ## 4. 티어 정의 (이 배치의 범위선)
 
