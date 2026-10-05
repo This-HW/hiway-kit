@@ -130,6 +130,13 @@ reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(
   포털 안내("무관하면 제출에 밝혀라")에 따라 2026-09-29 00:40 KST `directory@anthropic.com` 에 근거와 함께 설명 메일.
 - *검증기가 따라가지 못한 스크립트*(정책 보류) = Python 훅 5개. 포털 안내상 심사자가 읽는 항목.
 
+**v5.4.0 사전 검증(2026-10-05, `probe-v540`)** — 플러그인 루트에 `evals/`(`claude plugin eval` 케이스 5개)가 처음 실리는
+릴리스라 Validate 를 먼저 돌렸다. 1차(`d40846b`): *자격증명 사용* 보류의 근거가 **`evals/debug-fires/case.yaml` 의
+트레이스백 픽스처 문자열 `os.environ["DATABASE_URL"]`** 로 옮겨 가 있었다 — 피할 수 있는 근거라 `LOG_LEVEL` 로 바꿨다(`13ed522`).
+2차: 근거가 종전 바닥(`protect-sensitive` 의 `printenv/env/export -p/set` 탐지 패턴)으로 돌아왔고 그 외 변화 없음 —
+*검증기가 따라가지 못한 스크립트*(훅 5개)·노트 2건(아이콘 무검사·기존 제출 존재)은 종전과 같다. `evals/` 자체는 아무
+발견도 내지 않았다. 교훈: **픽스처 문자열도 스캔 표면이다** — 자격증명처럼 보이는 환경변수 이름은 배포물 안 픽스처에 넣지 않는다.
+
 **목록 정보는 제출 시점에 고정된다.** Listing 탭이 각 행의 출처를 `plugin.json key:` 로 밝힌다 — `icon`,
 `documentationUrl`, `supportUrl`, `privacyPolicyUrl` 이 비어 있어 아이콘은 GitHub 아바타로 대체됐다. 그러나 포털 원문이
 *"Newer versions don't update them here"*, 문서가 *"name and short description follow the live version"* 이므로 지금
