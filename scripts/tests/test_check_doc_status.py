@@ -310,3 +310,14 @@ def test_unreadable_document_is_tallied_and_red(tmp_path, capsys):
     rc, out = _run(root, capsys)
     assert rc == 1
     assert "검사하지 못한 파일" in out
+
+
+def test_real_policy_exempts_marketplace_submission_from_the_old_name_token():
+    """전임 킷 등재 기록을 실측 근거로 인용하는 current 문서는 구 이름 토큰에서 빠져야 한다.
+
+    예외의 소유자는 §20(`check_old_names.py`)과 같은 정책 파일이다 — 여기 따로 목록을 두지 않는다.
+    """
+    mod = load_module_by_path(SCRIPTS_DIR / "check_doc_status.py", "check_doc_status_real")
+    names, exclude = mod.load_old_name_policy()
+    assert names
+    assert "docs/marketplace-submission.md".startswith(exclude)

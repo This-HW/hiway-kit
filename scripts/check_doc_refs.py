@@ -13,7 +13,7 @@ fail.** 분기가 없다 — 항상 돈다(`docs/conventions/warning-signal.md` 
 
 `verify-done.sh` 가 33/0 green 인 상태에서 P0 급 사실 오류가 9건 나왔다(감사
 `docs/specs/2026-10-05-audit-remediation/audit/B-docs.md`). 전부 **문서가 가리키는 대상이
-이미 사라진 것**이었다 — 4.0.0 에서 지운 `db-tunnel.sh`, 5.2.0 에서 옮긴 `hooks/checklist.py`,
+이미 사라진 것**이었다 — 4.0.0 에서 지운 DB 터널 스크립트, 5.2.0 에서 옮긴 `hooks/checklist.py`,
 5.3.0 에서 평탄화한 `agents/<분류>/`. 게이트가 문서의 참조 실재성을 보지 않았다.
 
 ## 무엇을 보는가 — 다섯 종류
@@ -376,7 +376,7 @@ def _check_fence_line(doc: str, line: str, index: Index) -> list[Ref]:
     """펜스 안은 예시·출력·트리 그림이라 **이 레포 소유로 보이는 것만** 본다.
 
     소비자 프로젝트 예시(`src/`·`app.py`)까지 걸면 상시 참인 경고가 된다. 그렇다고 펜스를 통째로
-    빼면 트리 그림 안의 죽은 스크립트(`db-tunnel.sh start`)가 영영 안 잡힌다(B-P0-4 실측).
+    빼면 트리 그림 안의 죽은 스크립트(`dead-tunnel.sh start` 꼴)가 영영 안 잡힌다(B-P0-4 실측).
     그래서 ① 첫 조각이 이 레포·플러그인 루트의 실제 항목인 경로 ② 이 레포의 `.sh` 이름만 본다.
     """
     out: list[Ref] = []

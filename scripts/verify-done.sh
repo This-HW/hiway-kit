@@ -287,7 +287,7 @@ for s in $(grep -oE '\$\{CLAUDE_PLUGIN_ROOT\}/[A-Za-z0-9_./-]+\.py' plugins/comm
   [ -f "$s" ] || { red "hooks.json → 없는 스크립트: $s"; MISSING=1; }
 done
 # rules/agents/skills 산문이 가리키는 ./scripts/<name>.sh 가 실재하는지 검증 —
-# always-injected 룰의 죽은 스크립트 참조(예: 존재하지 않는 db-tunnel.sh)가 매 세션
+# always-injected 룰의 죽은 스크립트 참조(예: 지워진 DB 터널 스크립트를 가리키던 룰)가 매 세션
 # 주입되던 문제 방지.
 #
 # **skills/ 가 원래 빠져 있었다**(2026-09-09 추가). 그 사이로 죽은 참조가 실제로 샜다 —
@@ -848,7 +848,7 @@ fi
 
 hdr "27. 문서 참조 실재 — 링크·@import·백틱 경로·파일명·함수명"
 # 문서가 가리키는 대상이 사라져도 아무 게이트도 보지 않던 구멍을 막는다 — 전수 감사가 33/0
-# green 인 채로 P0 급 사실 오류 9건(지워진 db-tunnel.sh, 옮겨진 hooks/checklist.py …)을 냈다.
+# green 인 채로 P0 급 사실 오류 9건(지워진 터널 스크립트, 옮겨진 훅 스크립트 경로 …)을 냈다.
 # 판정은 scripts/check_doc_refs.py 가 단일 소스 — CI(validate.yml)와 동일 스크립트. 시점 고정
 # 기록은 frontmatter `status: historical|superseded` 로 제외한다(스펙 D0-2). 이 검사가 도는 조건:
 # 제외를 뺀 모든 추적 마크다운에 대해 항상(분기 없음).

@@ -76,20 +76,20 @@ def test_missing_backtick_path_is_red(tmp_path, capsys):
 
 
 def test_missing_bare_filename_is_red(tmp_path, capsys):
-    root = _repo(tmp_path, {**BASE, "docs/a.md": "run `db-tunnel.sh` first\n"})
+    root = _repo(tmp_path, {**BASE, "docs/a.md": "run `dead-tunnel.sh` first\n"})
     rc, out = _run(root, capsys)
     assert rc == 1
-    assert "[파일명] db-tunnel.sh" in out
+    assert "[파일명] dead-tunnel.sh" in out
 
 
 def test_missing_function_is_red_and_existing_is_green(tmp_path, capsys):
     root = _repo(
         tmp_path,
-        {**BASE, "docs/a.md": "call `_resolve_target()` and `real_helper()`\n"},
+        {**BASE, "docs/a.md": "call `_vanished_helper()` and `real_helper()`\n"},
     )
     rc, out = _run(root, capsys)
     assert rc == 1
-    assert "[함수] _resolve_target()" in out
+    assert "[함수] _vanished_helper()" in out
     assert "[함수] real_helper" not in out  # 존재하는 쪽은 안 걸린다
 
 
@@ -111,14 +111,14 @@ def test_dead_script_inside_fence_is_red_but_consumer_example_is_not(tmp_path, c
     """B-P0-4: 트리 그림 안의 죽은 스크립트는 잡혀야 한다. 소비자 예시(`src/`·`docs/api/`)는 아니다."""
     doc = (
         "```\n"
-        "(반드시 db-tunnel.sh start 먼저)\n"
+        "(반드시 dead-tunnel.sh start 먼저)\n"
         "edit src/app/main.py and docs/api/users.md\n"
         "```\n"
     )
     root = _repo(tmp_path, {**BASE, "docs/a.md": doc})
     rc, out = _run(root, capsys)
     assert rc == 1
-    assert "db-tunnel.sh" in out
+    assert "dead-tunnel.sh" in out
     assert "src/app" not in out
     assert "docs/api" not in out
 
