@@ -73,6 +73,20 @@ Claude Code 는 SessionStart 주입을 자르지 않으므로(2.1.268 실측) �
 훅을 싣는 새 호스트가 생기면 그 호스트의 한도 모델을 `HOST_HOOK_LIMITS` 에 **조사해서**
 등재해야 한다 — 등재 전에는 red 다.
 
+## 왜 다섯째 축인가 — 진입점 파일 크기 (2026-10-05, 감사 C-M2)
+
+앞의 넷은 **훅이 주입하는** 바이트다. `AGENTS.md`·`GEMINI.md` 는 훅 없이 **하네스가 파일째
+읽는** 경로(Codex·Antigravity·Gemini CLI)라 위 어느 축에도 안 잡힌다. Codex 는 전역 →
+git-root → cwd 의 `AGENTS.md` 를 **합쳐서** `project_doc_max_bytes`(기본 32 KiB)까지만 읽고, 넘으면
+cwd 쪽부터 조용히 자른다(경고 없음). 이 레포 몫은 그 75% = 24 KiB 다 — 나머지는 사용자의 전역
+파일 몫이다. 상한의 SSOT 는 배포되는 코드(`export_harness.py::ENTRYPOINT_SOFT_CAP`)이고
+대상 파일 목록도 그 코드의 `ENTRYPOINTS` 에서 읽는다 — 여기 다시 적으면 둘이 갈린다.
+
+`verify-done.sh §15` 는 같은 상한을 `AGENTS.md` 에만 걸었다. `GEMINI.md` 는 내용이 같아 크기도 거의
+같지만 **같을 것이라는 가정**이었고, 생성기가 한쪽만 부풀리면 못 잡는다 — 그래서 목록 전체를 본다.
+검사 조건 한 문장: **`ENTRYPOINTS` 의 어느 파일이든 `ENTRYPOINT_SOFT_CAP` 을 넘거나 없으면 fail.**
+Codex 의 32 KiB 는 이 상한보다 크므로 따로 경고를 두지 않는다(24 KiB 가 먼저 red 다).
+
 ## 상한 도출
 
 **먼저 깎고 나서 숫자를 정한다(D-46)** — 반대로 하면 예산이 압력을 잃고 장식이 된다.
@@ -95,6 +109,7 @@ parallel-worktree reference), STALE TASKS 삭제, 에이전트 32→15 를 **한
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import math
 import os
@@ -466,6 +481,54 @@ def check_host_delivery(policy_path: Path, worst_bytes: int) -> int:
     return rc
 
 
+def load_entrypoint_policy(tools_dir: Path) -> tuple[int, tuple[str, ...]]:
+    """`export_harness.py` 에서 (진입점 상한, 진입점 파일 목록). 못 읽으면 예외(green 위장 금지)."""
+    spec = importlib.util.spec_from_file_location(
+        "_budget_export_harness", tools_dir / "export_harness.py"
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"export_harness.py 를 로드할 수 없다: {tools_dir}")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # @dataclass 가 소속 모듈을 sys.modules 에서 찾는다
+    try:
+        spec.loader.exec_module(mod)
+    finally:
+        sys.modules.pop(spec.name, None)
+    cap, entrypoints = mod.ENTRYPOINT_SOFT_CAP, tuple(mod.ENTRYPOINTS)
+    if not isinstance(cap, int) or cap <= 0 or not entrypoints:
+        raise RuntimeError(f"진입점 상한·목록이 비정상이다: cap={cap!r} entrypoints={entrypoints!r}")
+    return cap, entrypoints
+
+
+def check_entrypoint_sizes(repo_root: Path, tools_dir: Path) -> int:
+    """다섯째 축. 하네스가 파일째 읽는 진입점이 이 레포 몫의 상한 안인가(없으면 red)."""
+    try:
+        cap, entrypoints = load_entrypoint_policy(tools_dir)
+    except Exception as err:  # noqa: BLE001 — 상한을 모르는 채 통과시키지 않는다
+        print(f"[injection-budget] ✗ 진입점 파일 상한을 읽지 못했다: {err}")
+        return 1
+    rc = 0
+    for name in entrypoints:
+        path = repo_root / name
+        try:
+            size = len(path.read_bytes())
+        except OSError:
+            print(
+                f"[injection-budget] ✗ 진입점 {name} 가 없다 — "
+                "`./scripts/export-harness.sh` 로 먼저 생성하라"
+            )
+            rc = 1
+            continue
+        rc |= _report(
+            f"진입점 파일 {name}",
+            size,
+            cap,
+            "`export_harness.py` 의 CONVENTIONS_INLINE 에서 항목을 빼거나 rules/*.md 원문을 줄여라 — "
+            "Codex 는 전역 AGENTS.md 와 합쳐 32 KiB 에서 조용히 자른다",
+        )
+    return rc
+
+
 def _report(label: str, used: int, cap: int, hint: str) -> int:
     if used <= cap:
         print(f"[injection-budget] ✓ {label} {used:,}B ≤ {cap:,}B")
@@ -525,6 +588,7 @@ def main() -> int:
         "conditional 규범·LESSONS·ACTIVE PLANS 상한을 줄이거나 신호 조건을 좁혀라",
     )
     rc |= check_host_delivery(TARGETS_POLICY, INJECTION_PEAK_CAP)
+    rc |= check_entrypoint_sizes(REPO_ROOT, PLUGIN_ROOT / "tools")
 
     try:
         proj, proj_parts = project_doc_bytes()

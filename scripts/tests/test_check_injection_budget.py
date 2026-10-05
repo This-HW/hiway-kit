@@ -386,3 +386,100 @@ def test_project_doc_over_cap_reports_fail(tmp_path):
     _fake_project(tmp_path, "# Kit", {"docs/a.md": "x" * (mod.PROJECT_DOC_CAP + 1)})
     total, _ = mod.project_doc_bytes()
     assert mod._report("proj", total, mod.PROJECT_DOC_CAP, "move evidence out") == 1
+
+
+# ── 다섯째 축: 진입점 파일(AGENTS.md·GEMINI.md) 크기 ──────────────────────────
+
+
+def _fake_tools(
+    tmp_path: Path, cap: int = 100, entrypoints=("AGENTS.md", "GEMINI.md")
+) -> Path:
+    tools = tmp_path / "tools"
+    tools.mkdir(parents=True, exist_ok=True)
+    (tools / "export_harness.py").write_text(
+        f"ENTRYPOINT_SOFT_CAP = {cap}\nENTRYPOINTS = {tuple(entrypoints)!r}\n",
+        encoding="utf-8",
+    )
+    return tools
+
+
+def _entry_check(tmp_path: Path, capsys, sizes: dict[str, int | None], **tools_kw):
+    repo = tmp_path / "repo"
+    repo.mkdir(parents=True, exist_ok=True)
+    for name, size in sizes.items():
+        if size is not None:
+            (repo / name).write_text("x" * size, encoding="utf-8")
+    rc = _real_module().check_entrypoint_sizes(repo, _fake_tools(tmp_path, **tools_kw))
+    return rc, capsys.readouterr().out
+
+
+def test_entrypoints_within_cap_are_green(tmp_path, capsys):
+    rc, out = _entry_check(tmp_path, capsys, {"AGENTS.md": 100, "GEMINI.md": 40})
+    assert rc == 0, out
+    assert "진입점 파일 AGENTS.md 100B ≤ 100B" in out
+
+
+def test_gemini_over_cap_is_red_even_when_agents_is_fine(tmp_path, capsys):
+    """§15 는 AGENTS.md 만 봤다 — 한쪽만 부푸는 생성기 결함이 GEMINI.md 에서 잡혀야 한다."""
+    rc, out = _entry_check(tmp_path, capsys, {"AGENTS.md": 50, "GEMINI.md": 101})
+    assert rc == 1
+    assert "진입점 파일 GEMINI.md 101B > 100B" in out
+    assert "AGENTS.md 50B ≤" in out
+    assert "→" in out  # 고치는 법
+
+
+def test_missing_entrypoint_is_red_not_skipped(tmp_path, capsys):
+    rc, out = _entry_check(tmp_path, capsys, {"AGENTS.md": 10, "GEMINI.md": None})
+    assert rc == 1
+    assert "GEMINI.md 가 없다" in out
+
+
+def test_entrypoint_list_comes_from_the_policy_not_a_literal(tmp_path, capsys):
+    rc, out = _entry_check(
+        tmp_path,
+        capsys,
+        {"AGENTS.md": 10, "GEMINI.md": 10, "NEW.md": 999},
+        entrypoints=("AGENTS.md", "GEMINI.md", "NEW.md"),
+    )
+    assert rc == 1
+    assert "NEW.md 999B > 100B" in out
+
+
+def test_unreadable_entrypoint_policy_is_red_not_green(tmp_path, capsys):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    empty_tools = tmp_path / "no-tools"
+    empty_tools.mkdir()
+    rc = _real_module().check_entrypoint_sizes(repo, empty_tools)
+    assert rc == 1
+    assert "상한을 읽지 못했다" in capsys.readouterr().out
+
+
+def test_real_entrypoints_are_within_the_real_cap(capsys):
+    mod = _real_module()
+    assert mod.check_entrypoint_sizes(mod.REPO_ROOT, mod.PLUGIN_ROOT / "tools") == 0, (
+        capsys.readouterr().out
+    )
+
+
+def test_main_runs_the_entrypoint_axis(monkeypatch):
+    """배선 고정 — 함수가 있어도 `main()` 이 안 부르면 상시 green 이다(검사가 도는 조건)."""
+    mod = _real_module()
+    calls: list[tuple] = []
+    monkeypatch.setattr(
+        mod,
+        "measure_scenarios",
+        lambda: dict.fromkeys(("empty", "ledger", "plan", "worktree", "peak"), "x"),
+    )
+    monkeypatch.setattr(mod, "check_conditional_coverage", lambda outputs: [])
+    monkeypatch.setattr(mod, "check_host_delivery", lambda *a: 0)
+    monkeypatch.setattr(mod, "project_doc_bytes", lambda: (1, []))
+    monkeypatch.setattr(mod, "agent_entries", lambda: ([(1, "a")], mod.SkipTally("t")))
+
+    def fake_entry(repo_root, tools_dir):
+        calls.append((repo_root, tools_dir))
+        return 1
+
+    monkeypatch.setattr(mod, "check_entrypoint_sizes", fake_entry)
+    assert mod.main() == 1
+    assert calls and calls[0][1].name == "tools"

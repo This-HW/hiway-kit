@@ -2,8 +2,8 @@
 #
 # sync-rule-mirror.sh — 룰 해설본 미러의 동기화 검사/재생성 **단일 소스**
 #
-# `docs/architecture/rules/`(9개)는 `plugins/common/rules/`(주입 룰)의 **장문 해설본**이다
-# (W-004에서 신설). 주입 룰은 세션마다 주입되므로 압축돼 있고, 해설본은 표·예시로 푼다.
+# `docs/architecture/rules/` 는 `plugins/common/rules/`(주입 룰) 중 일부의 **장문 해설본**이다
+# (미러 대상 목록·개수는 MIRROR.sha256 이 소유한다 — 여기 적으면 낡는다). 주입 룰은 세션마다 주입되므로 압축돼 있고, 해설본은 표·예시로 푼다.
 #
 # 문제: 둘을 잇는 장치가 없어서 조용히 어긋난다. 실제로 2026-08-17 감사에서 3건이
 # 드리프트해 있었고, 그중 planning-check 해설본은 "Notion/Figma MCP를 순서대로 검색"이라

@@ -100,3 +100,61 @@ def test_unreadable_file_is_tallied_and_red(tmp_path, capsys):
     assert "gone.md" in out
     assert "%" in out  # 비율이 사람에게 보여야 한다
     assert "사각지대" in out
+
+
+# ── D14: 변경 이력은 항목 본문만 제외한다 (감사 B-P2-3) ───────────────────────────
+
+
+def _policy_with_exclude_from(root: Path, marker: str = "## [") -> None:
+    (root / "packaging" / "name-targets.json").write_text(
+        json.dumps(
+            {
+                "previousNames": [OLD_NAME],
+                "oldNameScanExclude": ["docs/", "packaging/name-targets.json"],
+                "oldNameScanExcludeFrom": {"CHANGELOG.md": marker},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_changelog_header_is_scanned_but_entry_bodies_are_not(tmp_path, capsys):
+    """되돌려-FAIL: 머리말의 구 이름은 red, 같은 이름이 항목 본문에 있으면 green."""
+    root = _init_repo(tmp_path)
+    _policy_with_exclude_from(root)
+    (root / "CHANGELOG.md").write_text(
+        f"# Changelog\n\nAll notable changes to {OLD_NAME}.\n\n## [1.0.0]\n- renamed from {OLD_NAME}\n",
+        encoding="utf-8",
+    )
+    _commit_all(root)
+    assert _load(root).main() == 1
+    out = capsys.readouterr().out
+    assert "CHANGELOG.md:3" in out
+    assert "CHANGELOG.md:6" not in out
+
+    (root / "CHANGELOG.md").write_text(
+        f"# Changelog\n\nAll notable changes to the kit.\n\n## [1.0.0]\n- renamed from {OLD_NAME}\n",
+        encoding="utf-8",
+    )
+    _commit_all(root)
+    assert _load(root).main() == 0
+
+
+def test_changelog_without_the_marker_is_scanned_whole(tmp_path, capsys):
+    """마커가 사라진 채 파일 전체가 조용히 제외되는 쪽이 위험하다 — 마커 없으면 전량 검사."""
+    root = _init_repo(tmp_path)
+    _policy_with_exclude_from(root)
+    (root / "CHANGELOG.md").write_text(
+        f"no entries yet, but {OLD_NAME}\n", encoding="utf-8"
+    )
+    _commit_all(root)
+    assert _load(root).main() == 1
+    assert "CHANGELOG.md:1" in capsys.readouterr().out
+
+
+def test_real_policy_no_longer_excludes_changelog_wholesale():
+    policy = json.loads(
+        (SCRIPTS_DIR.parent / "packaging" / "name-targets.json").read_text()
+    )
+    assert "CHANGELOG.md" not in policy["oldNameScanExclude"]
+    assert policy["oldNameScanExcludeFrom"]["CHANGELOG.md"] == "## ["

@@ -196,7 +196,8 @@ jobs:
       - name: Always-on injection budget (§16)
         # scripts/check_injection_budget.py 가 단일 소스 — 로컬 verify-done.sh §16과 동일.
         # 이 검사는 원래 verify-done.sh 안 인라인이라 CI 에 없었다 — 로컬에서 누가 돌릴
-        # 때만 발화하는 상태였다(§18 이 겪은 것과 같은 구멍).
+        # 때만 발화하는 상태였다(§18 이 겪은 것과 같은 구멍). 진입점 파일(AGENTS.md·
+        # GEMINI.md)이 이 킷 몫의 크기 상한 안인지도 여기서 본다.
         run: python3 scripts/check_injection_budget.py
 
       - name: Shadowed top-level definitions (§22)
@@ -223,6 +224,17 @@ jobs:
         # 그 구멍으로 구 이름이 배포물 14건·사이트 브랜드·설치 스크립트에 남았고, 셋은
         # 기능 결함이었다(캐시 glob 2건 + setup.sh 가 전임 플러그인을 설치).
         run: python3 scripts/check_old_names.py
+
+      - name: Document references exist (§27)
+        # scripts/check_doc_refs.py 가 단일 소스 — 로컬 verify-done.sh §27과 동일 스크립트.
+        # 문서가 가리키는 파일·함수가 사라져도 보는 게이트가 없어 감사 전까지 P0 급 사실 오류
+        # 9건이 green 으로 남았다. 시점 고정 기록은 frontmatter status 로 제외한다.
+        run: python3 scripts/check_doc_refs.py
+
+      - name: Document status schema + stale tokens + table columns (§28)
+        # scripts/check_doc_status.py 가 단일 소스 — 로컬 verify-done.sh §28과 동일 스크립트.
+        # docs/ 문서의 지위 표기(status/as_of)와, 살아있는 문서의 제거된 이름·깨진 표.
+        run: python3 scripts/check_doc_status.py
 
       - name: Security scan (gitleaks — 범위 안의 모든 커밋)
         # gitleaks-action 은 push 에서 `--no-merges --first-parent` 로 스캔했다 — `--no-ff` 로
