@@ -1,5 +1,5 @@
 ---
-status: current
+status: historical
 as_of: 2026-10-05
 ---
 

@@ -49,8 +49,8 @@ ORCA status --json
 ORCA orchestration worker-start --help
 ```
 
-모델·effort·재사용은 `references/coordinator-loop.md`, 새 워크트리/원격 배치는
-`references/placement-and-remote.md`, 복구·해제는 `references/recovery-and-cleanup.md`를
+모델·effort·재사용은 `references/coordinator-loop.md`, 새 워크트리/원격 배치는 <!-- doc-ref-ok: Orca 안내의 레퍼런스 이름 — 이 레포 파일이 아니다 -->
+`references/placement-and-remote.md`, 복구·해제는 `references/recovery-and-cleanup.md`를 <!-- doc-ref-ok: 위와 같음 -->
 `skills get orchestration --reference … --json`으로 읽는다. 지원하지 않는 플래그를
 추측하지 말고 해당 버전의 안내를 따른다. 가이드 본문은 이 문서에 복제하지 않는다.
 

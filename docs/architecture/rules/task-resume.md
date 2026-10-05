@@ -94,6 +94,7 @@ v5.0.0 전에는 *"<계획>이 진행 중입니다. 재개할까요?"* 안내 �
 
 ## 5. 구버전(Work 시스템) 소비자
 
-`docs/works/active/`에 디렉토리가 남아 있으면 session-start가 한 줄 안내만 낸다 —
-과거처럼 progress.md를 읽어 Task ID를 매핑하는 재생성 알고리즘은 더 이상 없다.
+구 Work 시스템의 작업 디렉토리가 남아 있어도 session-start 는 그것을 읽지 않는다 — 계획 파일
+(`docs/plans/<날짜>-<slug>/plan.md`, `status` ≠ done)만 안내하고, 과거처럼 progress.md 를 읽어
+Task ID 를 매핑하는 재생성 알고리즘은 더 이상 없다.
 이전 Work 시스템에서 계획 파일로 옮기는 방법은 CHANGELOG의 4.0.0 항목이 설명한다.

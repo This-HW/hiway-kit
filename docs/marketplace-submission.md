@@ -43,7 +43,7 @@ Claude 디렉토리 제출 포털: claude.ai → Directory → Submissions(개�
 
 **정책 보류 3건과 판단** (포털 원문 요지):
 
-1. *사용자 머신의 자격증명 사용* — `skills/mcp-builder/SKILL.md` 가 MCP 서버 예시 코드에서 `API_KEY`
+1. *사용자 머신의 자격증명 사용* — `skills/mcp-builder/SKILL.md` 가 <!-- doc-ref-ok: 전임 킷의 파일(포털 거부 기록) --> MCP 서버 예시 코드에서 `API_KEY`
    환경변수와 `modelcontextprotocol.io` 링크를 함께 담는다. 스캐폴딩 **설명 예시**다. 문구를 정리하면
    보류가 사라진다(후속 후보).
 2. *같은 항목의 교차 판정* — `auto-dev` 의 `checklist pass <id>` 를 비밀번호 도구 `pass` 로, `review` 의

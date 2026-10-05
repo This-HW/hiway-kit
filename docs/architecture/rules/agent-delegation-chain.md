@@ -14,7 +14,7 @@ as_of: 2026-10-05
 > 파일을 읽을 때만 컨텍스트에 들어온다(5.4.0 정정, 감사 B-P1-21 — 그 전 이 머리말은
 > "세션에 주입되는 룰"이라고 적고 있었다).
 
-> **폐기 기록 (2026-08-27, W-022 R1)**: 이 문서는 원래 `---DELEGATION_SIGNAL---` 블록을
+> **폐기 기록 (2026-08-27)**: 이 문서는 원래 `---DELEGATION_SIGNAL---` 블록을
 > 스캔해 `TYPE`/`TARGET` 필드로 다음 에이전트를 자동 호출하는 **순차 체인 모델**을
 > 설명했다(과거 §2~§7 — 플로우 다이어그램, TYPE별 처리, 위임 중단 조건, 워크드 예시).
 > 판별 결과 이 신호를 실제로 파싱하는 결정론적 코드는 어디에도 없었다. 유일한 소비
@@ -25,11 +25,11 @@ as_of: 2026-10-05
 > 않았다** — `implement-code` 시나리오의 `task.md`가 검사 대상 형식을 직접 지시했으므로
 > 대조군이 아니었다. 트리거였을 뿐이다. `CLAUDE.md` → Delegation Signal 참고.) 신호 기계 계약(형식·TYPE→Action 매핑·자동 호출
 > 절차)을 정본에서 폐기했고, 이 해설본도 그에 맞춰 정리했다. 상세 근거:
-> `docs/specs/2026-08-27-delegation-signal-contract-review.md`(W-021).
+> `docs/specs/2026-08-27-delegation-signal-contract-review.md`.
 
 > **leaf 에이전트는 중첩하지 않는다.** 네이티브 중첩 서브에이전트가 가능해도, 이 레포
 > 스케일에서 leaf 중첩은 성능 이득 없이 예측불가능성·디버깅 부채만 더한다. 대규모 병렬은
-> 네이티브 `ultracode`로 위임한다 (Spec 2 / W-006, `CLAUDE.md` → Orchestration Model).
+> 네이티브 `ultracode`로 위임한다 (`CLAUDE.md` → Orchestration Model).
 
 ---
 
@@ -137,7 +137,7 @@ ALWAYS have main Claude manage the delegation chain directly.
 ```
 
 **병렬 dispatch에서는 무엇이 다른가.** 스킬 주도 플랫 위임(`CLAUDE.md` → Orchestration
-Model, Spec 2/W-006)에서는 메인이 여러 에이전트를 동시에 dispatch하고 결과를 모아
+Model)에서는 메인이 여러 에이전트를 동시에 dispatch하고 결과를 모아
 판단한다 — 순차 체인처럼 "이전 출력의 신호가 다음 호출을 트리거"하는 구조가 아니다.
 이 절이 순차 호출을 전제하지 않는 것은 그래서다.
 

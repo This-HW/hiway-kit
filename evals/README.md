@@ -66,10 +66,10 @@ evals/
 ./scripts/run-evals.sh --baseline
 
 # 기준선 대비 후퇴 검출 (pass-rate 하락 시 exit 1) — **전량 재실행**한다
-./scripts/run-evals.sh --compare evals/baseline/2026-07-07.json
+./scripts/run-evals.sh --compare evals/baseline/<날짜>.json
 
 # 이미 실행한 리포트로 비교만 (재실행 없음, API 비용 0)
-./scripts/run-evals.sh --compare evals/baseline/2026-07-07.json \
+./scripts/run-evals.sh --compare evals/baseline/<날짜>.json \
   --report evals/reports/<timestamp>.json
 ```
 
@@ -139,10 +139,10 @@ evals/
     (a) 통과해야 하는 정확한 출력(오탐 원문 포함)과 (b) fail 해야 하는 거짓 green 선언을
     가진다. 가드를 가진 시나리오가 표에 없으면 테스트가 red 다. 새 가드는 표에 행을 더한다.
   - 오탐 실측 6건(부분 문자열 시절) — 이 목록은 지우지 마라:
-    - `analyze-dependencies/order-utils-impact` — 두 차례 거짓양성 후 어서션 제거(W-022 R3)
+    - `analyze-dependencies/order-utils-impact` — 두 차례 거짓양성 후 어서션 제거(2026-08-27)
     - `security-scan/shared-tmp-and-hardcoded-token` — Critical 1·High 2·Medium 2·Low 1 을
       보고하고도 **수정안 코드 주석** `# 원자적 rename, 심볼릭 링크 문제 없음` 때문에 fail
-      (W-023). 이를 계기로 18개 시나리오에서 `문제 없음`·`문제가 없`·`이상 없음`·
+      (`docs/specs/2026-08-31-eval-git-coverage.md`). 이를 계기로 18개 시나리오에서 `문제 없음`·`문제가 없`·`이상 없음`·
       `looks fine`·`looks good` 5종을 제거했다.
     - `security-scan/shared-tmp-and-hardcoded-token` 4번째(2026-09-20) — 기술적 한정절
       `… 코드 실행 취약점은 없지만(안전한 파서) …` 에 `취약점은 없` 어간이 걸렸다.
@@ -241,7 +241,7 @@ evals/
 그 시나리오는 **에이전트의 능력이 아니라 지시 따르기**를 측정한다. 통과해도 아무것도
 증명되지 않고, 더 나쁘게는 **"이 에이전트는 안정적"이라는 잘못된 확신**을 준다.
 
-실제로 이 함정에 빠진 적이 있다(W-022 R1). `implement-code` 시나리오의 `task.md` 가
+실제로 이 함정에 빠진 적이 있다(2026-08-27). `implement-code` 시나리오의 `task.md` 가
 출력 마커 형식을 직접 지시하고 있었고, 그래서 나온 6/6 통과가 "안정 대조군"으로
 인용됐다 — 대조군이 아니었다. 이 오독은 폐기 판정의 근거 문서 다섯 곳에 퍼진 뒤에야
 발견됐다.
