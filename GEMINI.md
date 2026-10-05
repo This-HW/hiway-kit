@@ -3,7 +3,7 @@
 > 이 파일의 `kit:` 마커 블록은 **자동 생성**된다.
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:8a0e15e1d6ee5a3879f1a3d8f0efb5093c999babec9dfa66e4fd4c77c9e28806 -->
+<!-- kit:begin rules-v1.4.0 sha256:354f3da0b3f8ff1a083439eb5eb78eb7cd18ddc30847477d5b82f1e6be6ade67 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -12,8 +12,8 @@
 > `./scripts/export-harness.sh`). 손으로 고치면 드리프트 검사가 막는다.
 
 이 절은 [hiway-kit](https://hiway.thishw.com/)의 규범을
-**원문 그대로** 옮긴 것이다. Claude Code·Codex·OpenCode·Copilot·Pi·Hermes 등 이
-파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
+**원문 그대로** 옮긴 것이다. Codex·Antigravity·Gemini CLI·OpenCode·Copilot·Pi·Hermes·
+Claude Code 등 이 파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
 
 ### 워크플로 체인
 
@@ -49,7 +49,9 @@ brainstorming  →  plan-task  →  auto-dev
 
 | 영역 | 이유 |
 | --- | --- |
-| 차단·검증 훅 (protect-sensitive · stop-validator) | Claude Code 전용 — Codex 에는 싣지 않는다(PreToolUse 차단이 유지되지 않는다). 세션 시작 주입(session-start)·자동 포맷(auto-format)은 Codex 에서도 돈다(훅 신뢰 승인 필요) — 그 밖의 하네스에는 실행 지점이 없다 |
+| 차단·검증 훅 (protect-sensitive · stop-validator) | 이 킷은 Claude Code 에만 싣는다. Codex 도 PreToolUse 차단 자체는 된다(codex-cli 0.159.3 실측, 2026-10-05) — 다만 Codex 의 도구 페이로드(`Bash`·`apply_patch`)를 읽는 파서가 아직 없어 이식하지 않았다 |
+| 세션 시작 주입 · 자동 포맷 (session-start · auto-format) | Codex 마켓플레이스 설치에서는 돈다(훅 신뢰 승인 필요). Codex 디렉토리(ZIP) 설치에는 훅이 없다 — 이 파일이 유일한 경로다 |
+| Antigravity · Gemini CLI 의 규범 주입 | **주입 없음 — 이 정적 파일만** 도착한다. Antigravity 는 `AGENTS.md`·`GEMINI.md` 를 둘 다 읽어 이 블록이 **두 번** 로드된다 |
 | 서브에이전트 정의 (15종) | Claude Code 서브에이전트 규격 전용 |
 | 룰 본문의 kit-레포 전용 명령 (`scripts/verify-done.sh` 등) | "요약 금지 / 원문 그대로" 정책의 대가 — 각 룰이 "이 레포에선"으로 한정하고 있으니, 당신 프로젝트의 해당 명령으로 읽어라 |
 | `rules/agent-delegation-chain` | Claude Code 고유 프리미티브에 종속 |
@@ -121,8 +123,9 @@ rc 는 `tail` 것이다). 둘 다 `&&` 를 통과시킨다 — `pipefail`. 상�
 
 <!-- 앵커: #task-마감-규율 -->
 
-**태스크를 쓰는 작업을 마감 보고할 때는 끝난 태스크를 먼저 completed로 마킹한다** — 보고
+**Task 도구가 있는 세션에서**, 마감 보고 전에 끝난 태스크를 먼저 completed로 마킹한다 — 보고
 뒤에 한 마킹은 유실된다(반복 실측). 남는 항목은 사유를 적고, 완료로 위장하지 않는다.
+도구가 없으면 같은 규율을 `skills/plan-task/references/task-tools-fallback.md` 의 대체 경로에 건다.
 
 ---
 
@@ -214,7 +217,7 @@ portable: true
 그것을 읽고 시작한다. **완료 조건은 실행 가능한 명령**이어야 Dev 로 넘긴다.
 <!-- kit:end -->
 
-<!-- kit2:begin conventions-v1.0.0 sha256:b0fa768f5194d5cfce0a77beca267dc0ff3971d5d323a407b7aafbd640ded4db -->
+<!-- kit2:begin conventions-v1.0.0 sha256:5b4bbbe1e28fa86c3a80b0306a1fe56093156b108f9478e071be8df71d97522a -->
 
 ## hiway-kit — Project Conventions (요약 발췌)
 
@@ -226,58 +229,66 @@ portable: true
 
 ### 설정값으로 경로를 만들면 반드시 봉쇄한다
 
-**같은 결함이 세 번 반복됐다.** 정책·설정 파일에서 읽은 값으로 파일 경로를 조립하는 코드가
+**같은 결함이 네 번 반복됐다.** 정책·설정 파일에서 읽은 값으로 파일 경로를 조립하는 코드가
 그 값을 검증하지 않으면 레포 밖을 읽거나 쓴다. `pathlib` 의 `a / b` 는 **`b` 가 절대경로면 `a` 를
-통째로 버린다** — 이 한 줄이 세 번 모두의 원인이었다.
+통째로 버린다** — 이 한 줄이 매번 원인이었다.
 
 | 인스턴스 | 발견 | 증상 |
 | --- | --- | --- |
 | `export_harness.py` | 2.14.1 적대적 리뷰 | 심링크 탈출 + 검사/쓰기가 각각 resolve (TOCTOU) |
 | `build-targets.py` | 2.15.0 교차 리뷰 | `manifestPath` 절대경로·`..`·심링크 3종 전부 레포 밖에 **씀** |
 | `check_eval_coverage.py` | 2.15.0 기획 세션 전수조사 | `baseline.file` 절대경로로 레포 밖 파일을 기준선으로 **신뢰하고 green** |
+| `export_harness.py` `--entrypoints` | 적대적 리뷰 ATK-002 | 절대경로를 넘기면 트리 밖 임의 파일에 **씀** (함수 docstring 기록) |
 
 **규칙**:
 
 1. 설정에서 온 경로는 **한 번만 resolve** 하고 그 결과를 끝까지 쓴다. 검사와 사용이 각각
-   resolve하면 그 틈이 TOCTOU다 (`_resolve_target()` / `_resolve_in_repo()` 관례)
+   resolve하면 그 틈이 TOCTOU다 (`_resolve_in_repo()` 관례)
 2. resolve 결과가 **레포 루트(또는 정해진 하위 디렉토리) 안**이 아니면 **exit 1**. 절대경로·`..`·심링크 전부
-3. **읽기 경로도 봉쇄한다.** 세 번째 인스턴스는 읽기 전용인데도 게이트가 거짓 green을 냈다
+3. **읽기 경로도 봉쇄한다.** `check_eval_coverage.py` 인스턴스는 읽기 전용인데도 게이트가 거짓 green을 냈다
 4. `--check` 같은 **검사 전용 모드에도 같은 봉쇄를 건다.** 2.14.1은 쓰기에만 걸어 구멍이 남았다
 
 새 코드가 설정값으로 경로를 만든다면 이 레포의 `scripts/build-targets.py`(`_resolve_in_repo`) 또는
-`plugins/common/tools/export_harness.py`(`_resolve_target`)의 헬퍼를 **그대로 따라라.** 관례를 새로
+`plugins/common/tools/export_harness.py`(`_resolve_in_repo`)의 헬퍼를 **그대로 따라라.** 관례를 새로
 발명하는 것이 이 결함이 반복된 이유다.
 
 ### 드리프트 게이트는 여럿이고, 통합하지 않는다
 
-This repo's completion gate has **three** checks that ask "does the generated artifact match its
-source of truth?" — `AGENTS.md` marker block vs `rules/` (sha256), eval scenarios vs baseline (set
-comparison + tier coverage), and target manifests vs the plugin SSOT (existence + content diff).
-They look like the same question, but **the input, the pass/fail criteria, and the failure message
-are all different for each.**
+This repo's completion gate has **several** checks that ask "does the generated artifact or copy
+match its source of truth?" — e.g. the `AGENTS.md` marker block vs `rules/` (sha256), eval
+scenarios vs baseline (set comparison + tier coverage), target manifests vs the plugin SSOT
+(regenerate + content diff). **Which checks those are is owned by `scripts/verify-done.sh`** — this
+document does not count or list them. They look like the same question, but **the input, the
+pass/fail criteria, and the failure message are different for each.**
 
 **They are not merged into one shared abstraction.** A common primitive would have to bend to fit
-all three cases — more branching parameters, harder-to-read gate code. A gate only works if
-whoever reads a failure trusts it enough to act; a gate nobody can follow gets ignored when it goes
-red.
+every case — more branching parameters, harder-to-read gate code. A gate only works if whoever
+reads a failure trusts it enough to act; a gate nobody can follow gets ignored when it goes red.
 
-Duplication here is reduced through **convention, not code** — e.g. the path-containment pattern
-above, followed the same way in every place a config value becomes a file path, is exactly that.
-A fourth "does the generated thing match its source" gate is the point to reconsider this — not
-before. Rule-of-three isn't "merge at the third instance," it's "the third instance is still not
+Duplication here is reduced through **convention, not code** — e.g. the path-containment pattern,
+followed the same way in every place a config value becomes a file path, is exactly that.
+Rule-of-three isn't "merge at the third instance," it's "the third instance is still not
 necessarily a pattern."
 
-## 새 드리프트 게이트가 필요한지 판별하는 법 (2026-09-07, 27-3)
+## 새 드리프트 게이트가 필요한지 판별하는 법 (2026-09-07)
 
 > **생성물이 사본이면 게이트가 필요하고, 참조면 필요 없다.**
 
 `CLAUDE.md` 가 규약 절들을 `@docs/conventions/*.md` **import** 로 바꿨을 때 게이트를 신설하지
-않았다 — import 는 참조이지 사본이 아니므로 **드리프트할 대상이 없다**. 반대로 `AGENTS.md`(§11)·
-타겟 매니페스트(§14)·이름 파생(§18)은 전부 **사본을 만든다**. 그래서 각각 게이트가 있다.
+않았다 — import 는 참조이지 사본이 아니므로 **드리프트할 대상이 없다**. 반대로 `AGENTS.md`·
+타겟 매니페스트·이름 파생은 전부 **사본을 만든다**. 그래서 각각 게이트가 있다.
 
-그리고 게이트가 넷이 돼도 **통합하지 않는다**. 판정 방식이 넷 다 다르고(sha256 대조 · 집합
-양방향 대조 · 파일 존재+내용 대조 · 문자열 파생 대조), 통합으로 줄어드는 것은 이미 공유 중인
-`hdr`/`green`/`red` 껍데기뿐이다. rule of three 는 세 번째에 묶으라는 뜻이 아니다.
+## 재검토 기록 (2026-09-10)
+
+원래 약속은 "네 번째가 필요해지면 재검토한다"였다. 그 시점은 조용히 지났고, 게이트가
+일곱째까지 늘어난 뒤에야 다시 읽었다. 통합 판정은 **유지** 한다 — 판정 방식이 제각각이고,
+통합으로 줄어드는 것은 이미 공유 중인 `hdr`/`green`/`red` 껍데기뿐이다.
+
+바뀐 것은 서술 방식이다. 이 판정을 적은 문단들이 게이트를 **열거** 하고 있었고, 게이트가
+늘 때마다 아무도 고치지 않아 낡았다(`rules/definition-of-done.md` 의 *"기계 검사 목록은
+게이트가 소유한다 — 열거하면 낡는다"*, `warning-signal.md` §5 *"대상을 나열하지 말고 제외를
+나열한다"* 를 자기 문서가 어긴 것이다). 그래서 목록과 개수를 지웠다. 남기는 것은 **판정과
+그 근거** 뿐이고, 그 둘은 게이트가 몇 개든 변하지 않는다.
 
 ### 그 밖의 host-neutral 관례 (경로 참조만 — 이 파일엔 인라인하지 않음)
 

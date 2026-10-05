@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-10-05
+---
+
 # W3 skills 완료 보고
 
 브랜치 `This-HW/remed-skills` · 기준 커밋 `ea87de2` (조상 확인 OK) · 구현 커밋 `5e42440`. 버전·CHANGELOG 불변,

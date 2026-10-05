@@ -1,3 +1,8 @@
+---
+status: historical
+as_of: 2026-10-05
+---
+
 ### 스킬 로직·폴백·경로 규약 (W3 — 스펙 D10·D11·D12)
 
 - **킷 도구 탐색 규약 신설** — `skills/plan-task/references/task-tools-fallback.md` §A 가 SSOT.
