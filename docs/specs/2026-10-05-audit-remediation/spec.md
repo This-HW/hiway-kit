@@ -54,7 +54,7 @@ size: large
 ### 외부 동향 흡수 (W5)
 - **D15** `claude plugin eval` **파일럿**(C-C1): `plugins/common/evals/` 에 스킬 발동 케이스 **3~5개**(예: 새 기능 요청 → `plan-task` 발동, 에러 로그 → `debug`, 리뷰 요청 → `review`, Small 버그 → 스킬 미발동) + 무플러그인 baseline Δ. 먼저 `claude plugin eval --help` 와 **실제 실행 가능 여부**(early-access 게이트) 확인 — 안 되면 케이스만 커밋하고 보고. 비용 상한 `--max-cost-usd` 명시. `build-codex-zip.py` 에서 `evals/` 제외(디렉토리 ZIP 크기·심사 표면). `evals/README.md` 에 "레포 `evals/`(에이전트 행동·기준선) vs 플러그인 `evals/`(스킬 발동)" 구분 절. 기존 `evals/` 는 건드리지 않는다.
 
-## 사용자 결정 (P0 — 제품 범위·보안)
+## 사용자 결정 (P0 — 제품 범위·보안) — **2026-10-05 답: 세 건 모두 기본값 확정**
 
 | ID | 질문 | 기본값(답 없으면) |
 | --- | --- | --- |
