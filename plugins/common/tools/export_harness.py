@@ -38,7 +38,11 @@ AGENTS.md는 **텍스트 규범만** 이식한다. 훅(protect-sensitive·stop-v
 
 exit code:
   0 = 성공 (또는 --check 드리프트 없음)
-  1 = --check 드리프트 / 분류 누락 / 기록 실패
+  1 = --check 드리프트(진입점 없음·블록 없음·sha 불일치·블록 본문 변조 포함) /
+      마커 손상(begin 만 있음·중복·형식 어긋남) / 분류 누락(규범 frontmatter 에 `portable:`
+      또는 `tier:` 미선언) / 규범 소스 읽기 실패 / 대상 루트 없음 / `--entrypoints` 비어 있음 /
+      `--plugin-root` 명시했으나 rules/ 없음(아래) / 기록 실패(인코딩·트리 밖 심링크 포함).
+      **stderr 의 원인을 읽어라** — 재생성으로 안 고쳐지는 종류가 있다.
   2 = SKIPPED — 규범 소스(plugin root)를 **자동 탐색**으로 찾지 못함(kit 미설치 등).
       절대 0으로 위장하지 않는다. 반면 `--plugin-root`를 명시했는데 그곳에 rules/가
       없으면 SKIPPED가 아니라 exit 1이다 — 사용자가 지정한 것이 틀렸다는 뜻이고,
@@ -192,6 +196,26 @@ def _conventions_dir(target_root: Path) -> Path:
     return target_root / "docs" / "conventions"
 
 
+def _strip_leading_frontmatter(text: str, source: str) -> str:
+    """인라인할 문서의 **맨 앞** YAML frontmatter 를 벗긴다. 없으면 그대로.
+
+    `docs/**/*.md` 는 문서 지위 frontmatter(`status:`·`as_of:`, D0-2)를 갖는다 — 그것은
+    문서의 메타데이터이지 관례 본문이 아니므로 생성물에 싣지 않는다. 판정은 규범과 같은
+    `_FRONTMATTER_RE`(offset 0, 줄 앵커)로 한다. **첫 줄이 `---` 인데 닫히지 않으면**
+    본문을 frontmatter 로 삼키거나 `---` 를 본문으로 흘리는 대신 실패한다 — 손상된 구조
+    마커를 조용히 통과시키지 않는다.
+    """
+    if text.split("\n", 1)[0].rstrip() != "---":
+        return text
+    m = _FRONTMATTER_RE.match(text if text.endswith("\n") else text + "\n")
+    if m is None:
+        raise ClassificationError(
+            f"{source}: 첫 줄이 `---` 인데 frontmatter 가 닫히지 않았다 — "
+            "닫는 `---` 줄을 넣거나 첫 줄의 `---` 를 지워라."
+        )
+    return text[m.end():].lstrip("\n")
+
+
 def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     """conventions 인라인 블록을 계산한다.
 
@@ -223,7 +247,9 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
                 f"docs/conventions/{fname} 없음 (CONVENTIONS_INLINE에 등재된 파일)."
                 " export_harness.py의 CONVENTIONS_INLINE 목록을 수정했다면 파일도 같이 옮겨라."
             )
-        body = p.read_text(encoding="utf-8").rstrip()
+        body = _strip_leading_frontmatter(
+            p.read_text(encoding="utf-8"), f"docs/conventions/{fname}"
+        ).rstrip()
         if any(t in body for t in CONV_MARKER_TOKENS):
             raise ClassificationError(
                 f"docs/conventions/{fname}에 kit2 마커 문자열이 있다 — 생성물이 자기 자신을 손상시킨다."
@@ -387,17 +413,23 @@ def _rule_portability(path: Path) -> tuple[bool | None, str]:
 # ── 진입점 (하네스별 파일 이름) ───────────────────────────────────────────────
 #
 # 하네스마다 **읽는 파일 이름이 다르다**: Codex·OpenCode·Copilot·Cursor 는 `AGENTS.md`,
-# Gemini CLI 계열은 `GEMINI.md`. **내용은 같다** — 규범은 하네스 중립이므로 블록도 sha 도
+# Gemini CLI 는 `GEMINI.md`(기본값 — `AGENTS.md` 는 `context.fileName` 으로 지정할 때만),
+# Antigravity(agy)는 **둘 다**. **내용은 같다** — 규범은 하네스 중립이므로 블록도 sha 도
 # 하나이고, 파일만 여러 개다. 한 파일에만 내보내면 나머지 하네스는 규율 밖에서 돈다.
 #
 # `CLAUDE.md` 는 **의도적으로 뺐다.** Claude Code 는 이 킷의 SessionStart 훅이 규범을
 # 직접 주입하므로 파일로 또 실으면 같은 규범이 두 번 들어간다. 세션 시작 주입 훅이
 # **돌지 않는** 하네스만 파일이 필요하다.
 #
-# **Codex 는 예외적으로 이중 도달한다.** Codex 는 `AGENTS.md` 를 읽고, 훅 신뢰를
-# 승인하면 세션 시작 주입 훅(`--portable-only`)도 돈다 — 같은 portable 규범이 두 번
-# 들어간다. 신뢰 승인 **전에는** 훅이 조용히 건너뛰어지므로 `AGENTS.md` 가 유일한
-# 경로다. 그 폴백을 잃지 않으려고 `AGENTS.md` 를 유지하고 이중 도달을 감수한다.
+# **이중 도달하는 곳이 셋 있다 — 알고 감수한다.**
+# - Codex: `AGENTS.md` 를 읽고, 훅 신뢰를 승인하면 세션 시작 주입 훅(`--portable-only`)도
+#   돈다. 신뢰 승인 **전에는** 훅이 조용히 건너뛰어지므로 `AGENTS.md` 가 유일한 경로다 —
+#   그 폴백을 잃지 않으려고 유지한다.
+# - Antigravity: `AGENTS.md`·`GEMINI.md` 를 둘 다 읽어 같은 블록이 두 번 로드된다
+#   (agy 1.2.17 실측, 2026-10-05 — `packaging/targets.json` 의 관측 기록).
+# - Claude Code 2.1.277+: 프로젝트에 `CLAUDE.md` 가 **없으면** `AGENTS.md` 를 직접 읽는다
+#   (code.claude.com/docs/en/memory). 그 프로젝트에선 훅 주입과 겹친다.
+# 줄이는 방법(얇은 GEMINI.md, 훅의 주입 생략)은 실측·결정 전이라 이 생성기는 바꾸지 않는다.
 #
 # 소비자의 플러그인 캐시에는 `packaging/` 이 없으므로 이 목록은 **정책 파일이 아니라
 # 이 모듈의 상수**다 — 훅은 자기가 설치된 곳에서 자족해야 한다(consumer-first).
@@ -419,8 +451,8 @@ BLOCK_HEADER = """
 > `./scripts/export-harness.sh`). 손으로 고치면 드리프트 검사가 막는다.
 
 이 절은 [{kit_name}]({kit_homepage})의 규범을
-**원문 그대로** 옮긴 것이다. Claude Code·Codex·OpenCode·Copilot·Pi·Hermes 등 이
-파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
+**원문 그대로** 옮긴 것이다. Codex·Antigravity·Gemini CLI·OpenCode·Copilot·Pi·Hermes·
+Claude Code 등 이 파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
 
 ### 워크플로 체인
 
@@ -450,7 +482,9 @@ brainstorming  →  plan-task  →  auto-dev
 
 | 영역 | 이유 |
 | --- | --- |
-| 차단·검증 훅 (protect-sensitive · stop-validator) | Claude Code 전용 — Codex 에는 싣지 않는다(PreToolUse 차단이 유지되지 않는다). 세션 시작 주입(session-start)·자동 포맷(auto-format)은 Codex 에서도 돈다(훅 신뢰 승인 필요) — 그 밖의 하네스에는 실행 지점이 없다 |
+| 차단·검증 훅 (protect-sensitive · stop-validator) | 이 킷은 Claude Code 에만 싣는다. Codex 도 PreToolUse 차단 자체는 된다(codex-cli 0.159.3 실측, 2026-10-05) — 다만 Codex 의 도구 페이로드(`Bash`·`apply_patch`)를 읽는 파서가 아직 없어 이식하지 않았다 |
+| 세션 시작 주입 · 자동 포맷 (session-start · auto-format) | Codex 마켓플레이스 설치에서는 돈다(훅 신뢰 승인 필요). Codex 디렉토리(ZIP) 설치에는 훅이 없다 — 이 파일이 유일한 경로다 |
+| Antigravity · Gemini CLI 의 규범 주입 | **주입 없음 — 이 정적 파일만** 도착한다. Antigravity 는 `AGENTS.md`·`GEMINI.md` 를 둘 다 읽어 이 블록이 **두 번** 로드된다 |
 | 서브에이전트 정의{agent_count} | Claude Code 서브에이전트 규격 전용 |
 | 룰 본문의 kit-레포 전용 명령 (`scripts/verify-done.sh` 등) | "요약 금지 / 원문 그대로" 정책의 대가 — 각 룰이 "이 레포에선"으로 한정하고 있으니, 당신 프로젝트의 해당 명령으로 읽어라 |
 {not_portable_rows}
@@ -1201,8 +1235,15 @@ def main(argv: list[str]) -> int:
     Critical). 모드를 분리하면 각 함수의 시그니처가 "무엇을 받아 무엇을 판정하는가"를
     드러내므로 같은 종류의 누락이 구조적으로 보인다.
     """
+    # 종료코드의 SSOT 는 모듈 docstring 이다 — `--help` 는 그 절을 그대로 보여 준다.
+    # 스킬 문서는 이 표를 복제하지 않고 `--help` 를 가리킨다(복제본은 실제로 낡았다:
+    # exit 1 을 exit 2 로, 사라진 PORTABLE 딕셔너리를 현행으로 적고 있었다).
+    doc = __doc__ or ""
+    exit_idx = doc.find("exit code:")
     ap = argparse.ArgumentParser(
-        description="이 킷의 규범을 하네스 중립 진입점 파일(AGENTS.md·GEMINI.md)로 내보낸다"
+        description="이 킷의 규범을 하네스 중립 진입점 파일(AGENTS.md·GEMINI.md)로 내보낸다",
+        epilog=doc[exit_idx:].rstrip() if exit_idx >= 0 else None,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     ap.add_argument("--plugin-root", help="plugins/common 경로 (기본: 자동 탐색)")
     ap.add_argument("--target", help="대상 프로젝트 루트 (기본: git 최상위 또는 CWD)")

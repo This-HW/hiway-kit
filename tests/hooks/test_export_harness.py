@@ -1475,3 +1475,69 @@ def test_reference_rules_carry_deterministic_repo_fallback():
     assert (repo_root / _mod.KIT_RULES_REPO_PATH).resolve() == (
         TOOLS_DIR.parent / "rules"
     ).resolve()
+
+
+def test_help_shows_exit_codes_from_docstring(capsys):
+    """종료코드 SSOT 는 docstring — 스킬 문서는 `--help` 를 가리킨다(B-P0-2).
+
+    `--help` 가 그 절을 보여 주지 않으면 문서가 가리킬 곳이 없어 다시 복제본이 생긴다.
+    """
+    import pytest
+
+    with pytest.raises(SystemExit) as exc:
+        _mod.main(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "exit code:" in out
+    for code in ("0 =", "1 =", "2 =", "3 ="):
+        assert code in out, code
+
+
+def test_block_header_does_not_claim_codex_cannot_block(tmp_path):
+    """생성물은 Codex 차단 불가를 주장하지 않는다 — 0.159.3 에서 차단됨을 실측(A-P0-2)."""
+    root = _fake_plugin_root(tmp_path, {})
+    target = tmp_path / "proj"
+    target.mkdir()
+    rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    assert rc == 0
+    text = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "차단이 유지되지 않" not in text
+    assert "Antigravity" in text and "주입 없음" in text
+
+
+def test_conventions_frontmatter_is_stripped_and_absent_is_unchanged(tmp_path):
+    """문서 지위 frontmatter(D0-2)는 생성물에 실리지 않는다. 없는 문서는 그대로."""
+    target = tmp_path / "proj"
+    conv = _fake_conventions_dir(target)
+    fname = _mod.CONVENTIONS_INLINE[0][0]
+    plain_block, plain_sha = _mod.build_conventions_block(target)
+    (conv / fname).write_text(
+        f"---\nstatus: current\nas_of: 2026-10-05\n---\n\n# {fname}\n\n본문.\n",
+        encoding="utf-8",
+    )
+    block, sha = _mod.build_conventions_block(target)
+    assert "status: current" not in block and "as_of:" not in block
+    # frontmatter 만 다른 입력은 같은 블록·같은 sha — 메타데이터 갱신이 드리프트가 아니다.
+    assert (block, sha) == (plain_block, plain_sha)
+
+
+def test_conventions_body_rule_line_is_not_mistaken_for_frontmatter(tmp_path):
+    """본문 중간의 수평선 `---` 은 frontmatter 가 아니다(offset 0 만 인정)."""
+    target = tmp_path / "proj"
+    conv = _fake_conventions_dir(target)
+    fname = _mod.CONVENTIONS_INLINE[0][0]
+    (conv / fname).write_text("# t\n\n---\n\nkeep: me\n\n---\n", encoding="utf-8")
+    block, _ = _mod.build_conventions_block(target)
+    assert "keep: me" in block
+
+
+def test_conventions_unclosed_frontmatter_refuses(tmp_path):
+    target = tmp_path / "proj"
+    conv = _fake_conventions_dir(target)
+    fname = _mod.CONVENTIONS_INLINE[0][0]
+    (conv / fname).write_text("---\nstatus: current\n\n# 본문\n", encoding="utf-8")
+    try:
+        _mod.build_conventions_block(target)
+        raise AssertionError("닫히지 않은 frontmatter 를 조용히 넘겼다")
+    except _mod.ClassificationError:
+        pass

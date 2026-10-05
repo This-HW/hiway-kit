@@ -1,3 +1,8 @@
+---
+status: current
+as_of: 2026-10-05
+---
+
 # Task Resume — 계획 파일 기반 재개
 
 > 규범 본문(정의)은 `plugins/common/rules/task-resume.md` 가 SSOT다. 이 문서는 그 규칙이
@@ -42,12 +47,22 @@
 
 ```json
 [
-  { "id": "C-1", "description": "요구사항 분석", "passes": true },
-  { "id": "C-2", "description": "인증 API 구현", "passes": true },
-  { "id": "C-3", "description": "테스트 작성", "passes": false },
-  { "id": "C-4", "description": "리뷰", "passes": false }
+  { "id": "C-1", "description": "토큰 발급 API", "acceptance": "200 + 토큰",
+    "verify": "pytest tests/test_token.py", "passes": true },
+  { "id": "C-2", "description": "토큰 갱신 API", "acceptance": "만료 토큰 → 새 토큰",
+    "verify": "pytest tests/test_refresh.py", "passes": true },
+  { "id": "C-3", "description": "로그아웃 무효화", "acceptance": "무효 토큰 401",
+    "verify": "pytest tests/test_logout.py", "passes": false },
+  { "id": "C-4", "description": "경계 검사", "acceptance": "rc 0",
+    "verify": "ruff check .", "passes": false }
 ]
 ```
+
+항목마다 `id`·`description`·`acceptance`·`verify` 가 필수다 — 스키마는
+`plugins/common/tools/checklist.py` 가 소유하고, `verify` 가 비면 거부된다. 그래서 checklist
+항목은 **명령으로 판정되는 것**만 담는다("리뷰"·"요구사항 분석"처럼 걸 명령이 없는 단계는
+여기 들어갈 수 없다 — 그런 단계의 진행 표시는 `skills/plan-task/references/task-tools-fallback.md`
+가 소유한다).
 
 ### 재개 시 진행
 

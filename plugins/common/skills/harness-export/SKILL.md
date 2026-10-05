@@ -14,11 +14,14 @@ disable-model-invocation: true
 
 | 전달 형태 | 대상 | 경로 |
 | --- | --- | --- |
-| 세션형 + 훅 | Claude Code | SessionStart 훅이 **자동 주입** — 이 스킬 불필요 |
-| 세션형, 주입·포맷 훅 있음(신뢰 승인 후), 차단 훅 없음 | Codex | **`AGENTS.md`** — 훅 신뢰 전엔 이것이 유일한 경로(폴백). 승인 후엔 훅 주입과 **이중 도달**(아래) |
-| 세션형, 세션 시작 훅 없음 | OpenCode · Copilot CLI · Cursor | **`AGENTS.md`** |
-| 세션형, 세션 시작 훅 없음 | Gemini CLI 계열 | **`GEMINI.md`** |
+| 세션형 + 킷 훅 | Claude Code | SessionStart 훅이 **자동 주입** — 이 스킬 불필요(단 `CLAUDE.md` 없는 프로젝트는 아래) |
+| 세션형, 킷 훅 = 주입·포맷(마켓플레이스 설치·훅 신뢰 승인 후) | Codex | **`AGENTS.md`** — 신뢰 승인 전과 **디렉토리(ZIP) 설치**(훅이 빠진다)에선 이것이 유일한 경로. 승인 후엔 훅 주입과 **이중 도달**(아래) |
+| 세션형, 킷 훅 미탑재 · 플러그인 `rules/` 미도착 | Antigravity (agy) | **`AGENTS.md` + `GEMINI.md` 둘 다 읽는다** — 플러그인 설치로는 규범이 오지 않는다(실측). **이중 로드**(아래) |
+| 세션형, 킷 훅 미탑재 | OpenCode · Copilot CLI · Cursor | **`AGENTS.md`** |
+| 세션형, 킷 훅 미탑재 | Gemini CLI | **`GEMINI.md`**(기본 파일명 — `AGENTS.md` 는 `context.fileName` 으로 지정할 때만) |
 | **API 성 호출**(세션 아님) | 래퍼가 모델을 함수처럼 부르는 레인 | **`--stdout` 으로 뽑아 프롬프트에 싣는다** |
+
+하네스별 실측 기록(버전·날짜)은 킷 레포의 `packaging/targets.json` 관측 키가 소유한다.
 
 **내용은 같다** — 규범이 하네스 중립이므로 블록도 sha 도 하나이고 파일만 여럿이다.
 한 파일에만 내보내면 나머지 하네스는 규율 밖에서 돈다.
@@ -27,10 +30,16 @@ disable-model-invocation: true
 > 직접 주입한다 — 파일로 또 실으면 같은 규범이 두 번 들어간다. 세션 시작 주입 훅이
 > **돌지 않는** 하네스만 파일이 필요하다.
 >
-> **예외 — Codex 는 이중 도달을 감수한다.** Codex 는 훅 신뢰를 승인하면 세션 시작 주입
-> 훅(portable 규범만)도 돌아 `AGENTS.md` 와 같은 규범이 두 번 들어간다. 그래도
-> `AGENTS.md` 를 유지하는 것은, 신뢰 승인 **전에는** 훅이 조용히 건너뛰어져 `AGENTS.md`
-> 가 유일한 경로이기 때문이다 — 폴백을 잃는 것이 중복보다 나쁘다.
+> **같은 규범이 두 번 들어가는 곳 — 셋 다 알고 감수한다:**
+>
+> | 하네스 | 왜 두 번인가 | 그래도 두는 이유 |
+> | --- | --- | --- |
+> | Codex | 훅 신뢰 승인 후 세션 시작 주입 훅(portable 규범만) + `AGENTS.md` | 승인 **전**·ZIP 설치에선 `AGENTS.md` 가 유일한 경로 — 폴백을 잃는 것이 중복보다 나쁘다 |
+> | Antigravity | `AGENTS.md`·`GEMINI.md` 를 둘 다 읽는다 | Gemini CLI 는 `GEMINI.md` 만 읽으므로 둘 다 필요하다. 얇은 `GEMINI.md`(`@./AGENTS.md`)는 Gemini CLI 런타임 실측 전이라 채택하지 않았다 |
+> | Claude Code 2.1.277+ | **`CLAUDE.md` 가 없는 프로젝트**에서는 `AGENTS.md` 를 직접 읽는다 → 훅 주입과 겹친다 | `CLAUDE.md` 가 있으면 겹치지 않는다. 겹침을 훅이 피하는 방안은 별도 결정이다 |
+>
+> 블록이 크므로 두 번이면 컨텍스트 비용도 두 배다. 진입점을 줄이고 싶으면 `--entrypoints` 로
+> 실제 쓰는 하네스의 파일만 남겨라.
 
 진입점 목록을 바꾸려면 `--entrypoints AGENTS.md,GEMINI.md,OTHER.md` 로 덮어쓴다.
 
@@ -68,19 +77,21 @@ NORMS="$(python3 "$EH" --stdout)"   # 캐시하고 sha 로 갱신 판단
 구현은 **플러그인 안**에 있다(`<플러그인 루트>/tools/export_harness.py`).
 설치한 프로젝트에는 킷 레포의 개발용 래퍼가 없으므로 이 경로를 쓴다.
 
-> **`$CLAUDE_PLUGIN_ROOT`를 그대로 신뢰하지 마라.** 이 변수는 스킬의 Bash 컨텍스트에
-> **설정돼 있지 않을 수 있다**(kit의 `feedback.sh`·`auto-dev`가 같은 이유로 의존을
-> 제거했다). 빈 값이면 `python3 "/tools/export_harness.py"`가 되어 파일 없음으로
-> **종료코드 2**가 나고, exit 표상 2는 "SKIPPED"라서 **원인을 오보고**하게 된다.
-> 아래처럼 먼저 해석하라.
+> **`$CLAUDE_PLUGIN_ROOT`를 그대로 신뢰하지 마라.** 이 변수는 스킬의 셸 컨텍스트에
+> **설정돼 있지 않을 수 있다** — Codex 의 모델 셸 환경에는 없다(실측), Claude Code 에서도
+> 비어 있을 수 있다. 빈 값이면 `python3 "/tools/export_harness.py"`가 되어 **파이썬이**
+> 파일 없음으로 종료코드 2를 내는데, 이 도구의 2는 "SKIPPED"라서 **원인을 오보고**하게 된다.
+> `~/.claude` 캐시만 뒤지는 폴백도 Codex 전용 머신에서는 죽은 경로다.
+>
+> **`$EH`(이 도구의 경로)는 킷 도구 탐색 규약으로 해석한다** — 순서와 명령은
+> `skills/plan-task/references/task-tools-fallback.md` 의 *킷 도구 탐색* 절이 소유한다
+> (이 스킬은 복제하지 않는다). 찾을 도구 이름은 `export_harness.py` 다. 끝내 못 찾으면
+> 추측하지 말고 사용자에게 플러그인 경로를 물어 `--plugin-root` 로 넘긴다.
 
 ```bash
-# 1) 구현 위치 해석 — 변수가 비면 캐시에서 찾는다
-EH="${CLAUDE_PLUGIN_ROOT:-}/tools/export_harness.py"
-[ -f "$EH" ] || EH=$(ls -1 ~/.claude/plugins/cache/*/*/*/tools/export_harness.py 2>/dev/null | sort -V | tail -1)
-[ -f "$EH" ] || { echo "export_harness.py를 찾지 못했다 — 플러그인 설치 확인"; exit 2; }
+# 1) $EH 해석 — 위 규약대로 (못 찾으면 여기서 멈춘다)
 
-# 2) 현재 프로젝트(git 최상위)의 AGENTS.md 갱신
+# 2) 현재 프로젝트(git 최상위)의 AGENTS.md·GEMINI.md 갱신
 python3 "$EH"
 
 # 3) 드리프트 검사만 (기록하지 않음)
@@ -94,7 +105,8 @@ python3 "$EH" --target /path/to/project
 ```
 
 `--plugin-root`를 **명시**했는데 그 경로에 `rules/`가 없으면 자동 탐색으로 폴백하지
-않고 exit 2다. 지정한 것과 다른 레포의 규범을 내보내고 성공을 보고하는 사고를 막는다.
+않고 **실패**한다(SKIPPED 가 아니다). 지정한 것과 다른 레포의 규범을 내보내고 성공을
+보고하는 사고를 막는다.
 명시하지 않으면 **스크립트 자기 위치**가 1순위이고(플러그인 캐시에서도 불변),
 환경변수는 그 다음이다 — 셸에 남은 다른 플러그인의 값이 남의 규범을 내보내지 않도록.
 
@@ -107,11 +119,12 @@ python3 "$EH" --target /path/to/project
 
 ## exit code
 
-| code | 의미 | 대응 |
-| --- | --- | --- |
-| 0 | 성공 / 드리프트 없음 | — |
-| 1 | 드리프트 · **블록 본문 변조** · 마커 손상 · 분류 미등재/유령 엔트리 · 인코딩 실패 · 트리 밖 심링크 | **stderr의 원인을 읽어라** — 재생성으로 안 고쳐지는 종류가 있다 |
-| 2 | SKIPPED — 규범 소스 미탐지 | `--plugin-root` 지정. **0으로 위장하지 말 것** |
+**표는 `python3 "$EH" --help` 가 소유한다**(모듈 docstring 의 `exit code:` 절을 그대로
+보여 준다). 여기 복제하지 않는다 — 복제본은 실제로 낡았었다(명시 `--plugin-root` 실패를
+exit 2 로, 사라진 분류 딕셔너리를 현행으로 적고 있었다).
+
+읽을 때 지킬 것 둘: **0 이 아니면 stderr 의 원인을 읽는다**(재생성으로 안 고쳐지는 종류가
+있다) · **SKIPPED 와 "conventions 블록 건너뜀"을 성공으로 위장하지 않는다.**
 
 ## 불변식 [건너뛰기 금지]
 
@@ -123,9 +136,10 @@ python3 "$EH" --target /path/to/project
    이 도구가 막겠다고 선언한 상황이 그대로 게이트를 통과한다.
 3. **요약 금지.** 이식 대상 룰은 **원문 그대로** 실린다. 규범을 요약하면 원문과
    의미가 갈리고, 갈린 규범은 규범이 아니다.
-4. **분류 누락도, 유령 엔트리도 실패.** 새 룰을 추가하면 `tools/export_harness.py`의 `PORTABLE` 또는
-   `NOT_PORTABLE`에 **사유와 함께** 등재해야 한다. 반대로 룰을 삭제·개명하면 그 엔트리를
-   빼야 한다 — 두면 소비자 AGENTS.md가 존재하지 않는 룰을 영구히 광고한다. 양쪽 다 exit 1.
+4. **분류 누락은 실패.** 룰은 자기 frontmatter 에 `portable: true|false`(사유는
+   `portable_reason:`)와 `tier:` 를 **선언**한다 — 생성기는 그것을 읽기만 한다. 미선언이면
+   실패한다. 분류가 룰 파일 안에 있으므로 룰을 지우면 분류도 함께 사라진다(별도 등재표가
+   없으니 "유령 엔트리"도 생길 수 없다).
 
 ## 마커 규약 — 자기 AGENTS.md에 마커를 *설명*하려면
 
@@ -157,17 +171,23 @@ python3 "$EH" --target /path/to/project
 
 - 이 스킬(`AGENTS.md`)은 **규범 텍스트**를 어느 하네스에서든 읽히는 자유형식 파일로 실어
   나른다 — 플러그인 설치 여부와 무관하게 동작한다.
-- 네이티브 패키지는 **스킬·컴포넌트**를 그 플랫폼의 설치 메커니즘으로 실어 나른다 — Codex 는
-  스킬만(규범 전용 필드가 없다), Antigravity 는 스킬+규범(에이전트는 비지원).
+- 네이티브 패키지는 **스킬·컴포넌트**를 그 플랫폼의 설치 메커니즘으로 실어 나른다:
+  - **Codex 마켓플레이스 설치** — 스킬 + 훅(세션 시작 주입·자동 포맷, 훅 신뢰 승인 후).
+  - **Codex 디렉토리(ZIP) 설치** — **스킬만**. 디렉토리 심사가 훅을 받지 않아 ZIP 에서 뺀다.
+  - **Antigravity** — **스킬만**. 플러그인 `rules/` 는 런타임에 도착하지 않고(실측 — 공식
+    문서는 `rules/` 를 나열하지만 런타임과 다르다), 에이전트는 인식되지 않는다(원인은
+    에이전트 frontmatter 의 `model:` 값 — 실측).
 
-**Codex 에서 규범은 세션 시작 훅(훅 신뢰 승인 후에만 돈다) 아니면 이 스킬로만 전달된다** —
-훅이 돌지 않는 환경에서는 `/harness-export` 로 만든 `AGENTS.md` 가 유일한 경로다.
+**규범은 Claude Code 를 뺀 어느 하네스에서도 플러그인 설치만으로 보장되지 않는다.** Codex 는
+세션 시작 훅(마켓플레이스 설치 + 신뢰 승인 후에만 돈다) 아니면 이 스킬로만, Antigravity·
+Gemini CLI 는 **이 스킬로만** 전달된다 — `/harness-export` 로 만든 진입점 파일이 유일한 경로다.
 
 ## 이식되지 않는 것 (정직한 한계)
 
-훅(`protect-sensitive`·`stop-validator`·`auto-format`), 서브에이전트 정의 전부,
-그리고 Claude Code 프리미티브에 종속된 규범(frontmatter `portable: false`)은 이식되지 않는다.
-생성물이 그 목록과 사유를 표로 남긴다.
+차단·검증 훅(`protect-sensitive`·`stop-validator`), 서브에이전트 정의 전부, 그리고 Claude
+Code 프리미티브에 종속된 규범(frontmatter `portable: false`)은 이식되지 않는다. 생성물이 그
+목록과 사유를 표로 남긴다. (Codex 도 PreToolUse 차단 자체는 된다 — 실측. 이식하지 않은 것은
+Codex 의 도구 페이로드를 읽는 파서가 없어서이지 Codex 가 못 막아서가 아니다.)
 
 **다른 하네스에서 이 킷은 규율 *문서*로 동작하지 강제 *장치*로 동작하지 않는다.**
 강제가 필요하면 그 하네스의 네이티브 수단(pre-commit, CI)에 같은 검사를 건다.
