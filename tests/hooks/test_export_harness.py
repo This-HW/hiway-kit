@@ -1503,3 +1503,41 @@ def test_block_header_does_not_claim_codex_cannot_block(tmp_path):
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert "차단이 유지되지 않" not in text
     assert "Antigravity" in text and "주입 없음" in text
+
+
+def test_conventions_frontmatter_is_stripped_and_absent_is_unchanged(tmp_path):
+    """문서 지위 frontmatter(D0-2)는 생성물에 실리지 않는다. 없는 문서는 그대로."""
+    target = tmp_path / "proj"
+    conv = _fake_conventions_dir(target)
+    fname = _mod.CONVENTIONS_INLINE[0][0]
+    plain_block, plain_sha = _mod.build_conventions_block(target)
+    (conv / fname).write_text(
+        f"---\nstatus: current\nas_of: 2026-10-05\n---\n\n# {fname}\n\n본문.\n",
+        encoding="utf-8",
+    )
+    block, sha = _mod.build_conventions_block(target)
+    assert "status: current" not in block and "as_of:" not in block
+    # frontmatter 만 다른 입력은 같은 블록·같은 sha — 메타데이터 갱신이 드리프트가 아니다.
+    assert (block, sha) == (plain_block, plain_sha)
+
+
+def test_conventions_body_rule_line_is_not_mistaken_for_frontmatter(tmp_path):
+    """본문 중간의 수평선 `---` 은 frontmatter 가 아니다(offset 0 만 인정)."""
+    target = tmp_path / "proj"
+    conv = _fake_conventions_dir(target)
+    fname = _mod.CONVENTIONS_INLINE[0][0]
+    (conv / fname).write_text("# t\n\n---\n\nkeep: me\n\n---\n", encoding="utf-8")
+    block, _ = _mod.build_conventions_block(target)
+    assert "keep: me" in block
+
+
+def test_conventions_unclosed_frontmatter_refuses(tmp_path):
+    target = tmp_path / "proj"
+    conv = _fake_conventions_dir(target)
+    fname = _mod.CONVENTIONS_INLINE[0][0]
+    (conv / fname).write_text("---\nstatus: current\n\n# 본문\n", encoding="utf-8")
+    try:
+        _mod.build_conventions_block(target)
+        raise AssertionError("닫히지 않은 frontmatter 를 조용히 넘겼다")
+    except _mod.ClassificationError:
+        pass

@@ -196,6 +196,26 @@ def _conventions_dir(target_root: Path) -> Path:
     return target_root / "docs" / "conventions"
 
 
+def _strip_leading_frontmatter(text: str, source: str) -> str:
+    """인라인할 문서의 **맨 앞** YAML frontmatter 를 벗긴다. 없으면 그대로.
+
+    `docs/**/*.md` 는 문서 지위 frontmatter(`status:`·`as_of:`, D0-2)를 갖는다 — 그것은
+    문서의 메타데이터이지 관례 본문이 아니므로 생성물에 싣지 않는다. 판정은 규범과 같은
+    `_FRONTMATTER_RE`(offset 0, 줄 앵커)로 한다. **첫 줄이 `---` 인데 닫히지 않으면**
+    본문을 frontmatter 로 삼키거나 `---` 를 본문으로 흘리는 대신 실패한다 — 손상된 구조
+    마커를 조용히 통과시키지 않는다.
+    """
+    if text.split("\n", 1)[0].rstrip() != "---":
+        return text
+    m = _FRONTMATTER_RE.match(text if text.endswith("\n") else text + "\n")
+    if m is None:
+        raise ClassificationError(
+            f"{source}: 첫 줄이 `---` 인데 frontmatter 가 닫히지 않았다 — "
+            "닫는 `---` 줄을 넣거나 첫 줄의 `---` 를 지워라."
+        )
+    return text[m.end():].lstrip("\n")
+
+
 def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
     """conventions 인라인 블록을 계산한다.
 
@@ -227,7 +247,9 @@ def build_conventions_block(target_root: Path) -> tuple[str, str] | None:
                 f"docs/conventions/{fname} 없음 (CONVENTIONS_INLINE에 등재된 파일)."
                 " export_harness.py의 CONVENTIONS_INLINE 목록을 수정했다면 파일도 같이 옮겨라."
             )
-        body = p.read_text(encoding="utf-8").rstrip()
+        body = _strip_leading_frontmatter(
+            p.read_text(encoding="utf-8"), f"docs/conventions/{fname}"
+        ).rstrip()
         if any(t in body for t in CONV_MARKER_TOKENS):
             raise ClassificationError(
                 f"docs/conventions/{fname}에 kit2 마커 문자열이 있다 — 생성물이 자기 자신을 손상시킨다."
