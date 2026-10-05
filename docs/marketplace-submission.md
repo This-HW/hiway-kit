@@ -14,7 +14,7 @@ as_of: 2026-10-05
 | 채널 | 상태 | 확인일 | 다음 행동 |
 | --- | --- | --- | --- |
 | Claude Code 직접 마켓플레이스 (`This-HW/hiway-kit` → `hiway-kit@hiway-kit`) | 동작. `/plugin marketplace update` 시 `main` HEAD 를 즉시 반영. `setup.sh` 가 설치하는 경로 | 2026-10-05 | 없음 |
-| Claude 디렉토리 (Claude Code 내장 마켓플레이스 `anthropic-plugin-directory`) | **Published**(2026-09-29, v5.0.3), 이후 Auto-publish — push webhook 으로 스캔 통과 시 자동 공개(v5.2.2 Live 확인). `claude plugin install hiway-kit@anthropic-plugin-directory` 가 로그인 없이 성공(실측). 게재 대상은 Claude Code 만. claude.ai 웹 검색에는 아직 안 보임 | 2026-10-05 | 디렉토리 팀 티켓 회신 대기(웹 노출·목록 URL 갱신·아이콘 재심사) |
+| Claude 디렉토리 (Claude Code 내장 마켓플레이스 `anthropic-plugin-directory`) | **Published**(2026-09-29, v5.0.3), 이후 Auto-publish — push webhook 으로 스캔 통과 시 자동 공개(v5.2.2 Live 확인 · v5.4.0 은 push 후 약 25분 만에 캐시 제공, 2026-10-05 20:32 KST 실측). `claude plugin install hiway-kit@anthropic-plugin-directory` 가 로그인 없이 성공(실측). 게재 대상은 Claude Code 만. claude.ai 웹 검색에는 아직 안 보임 | 2026-10-05 | 디렉토리 팀 티켓 회신 대기(웹 노출·목록 URL 갱신·아이콘 재심사) |
 | OpenAI 디렉토리 (Codex) | 5.2.0 **In review**(2026-09-30 제출, 자동 검사 통과). ZIP 은 `hooks/` 를 빼므로 이 경로 설치자는 규범 자동 주입이 없다 | 2026-09-30 | 승인 후 Publish → 디렉토리 노출 확인 → README 설치 절 갱신. 이후 버전마다 ZIP 재업로드(`docs/codex-submission-checklist.md`) |
 | Codex 직접 마켓플레이스 (`codex plugin marketplace add This-HW/hiway-kit`) | 동작 — 스킬 인식 + 훅 신뢰 승인 후 SessionStart 주입(2026-10-05 감사 A 실측, codex 0.159.3) | 2026-10-05 | 없음 |
 | 커뮤니티 카탈로그 (`claude-community`, `anthropics/claude-plugins-community`) | 자동 동기화가 2026-08-13 이후 멈춤. hiway-kit 없음. 전임 `claude-code-kit` 항목이 v2.12.3(`292ba07e`) pin 으로 남아 있음 | 2026-10-05 | 조치 없음(읽기 전용 미러). 2026-09-28 보낸 구 항목 삭제 요청의 결과 대기 |
