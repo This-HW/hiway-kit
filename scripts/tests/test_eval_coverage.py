@@ -61,7 +61,7 @@ def _make_repo(
     populate_agents: bool = True,
 ) -> Path:
     """`populate_agents`(기본 True)는 policy의 tier1+tier2 목록을 그대로
-    `plugins/common/agents/dev/*.md`로 심어준다 — check_classification_complete가
+    `plugins/common/agents/*.md`로 심어준다 — check_classification_complete가
     "에이전트 0종"으로 무조건 fail하는 새 가드(코디네이터 실증, W-024 후속) 때문에,
     분류를 직접 검사하지 않는 다른 테스트(baseline/tier1/tier2 케이스들)까지
     영향받지 않게 하기 위함이다. 0종 가드 자체를 검사하는 테스트만
@@ -97,10 +97,9 @@ def _make_repo(
 
 
 def _add_agent_files(root: Path, names: list[str]) -> None:
-    """가짜 레포에 `plugins/common/agents/dev/<name>.md` 파일을 심는다 — 실물
-    레포의 하위 카테고리 재귀 구조(backend/dev/meta/planning)를 대표해 dev/ 하나만
-    써도 _discover_all_agents의 rglob 경로가 동일하게 동작한다."""
-    agents_dir = root / "plugins" / "common" / "agents" / "dev"
+    """가짜 레포에 `plugins/common/agents/<name>.md` 파일을 심는다 — 실물처럼 평탄 배치다
+    (Claude Code 가 하위 폴더 에이전트를 표시하지 않아 5.3.0 에서 평탄화했다)."""
+    agents_dir = root / "plugins" / "common" / "agents"
     agents_dir.mkdir(parents=True, exist_ok=True)
     for name in names:
         (agents_dir / f"{name}.md").write_text(
@@ -566,6 +565,6 @@ def test_classification_zero_agents_dir_empty_fails_regardless_of_flag(tmp_path)
     )
     # 디렉토리는 존재하되 .md 파일은 하나도 없다 — "부재"가 아니라 "빈 디렉토리"
     # 경로까지 막는지 별도로 확인한다.
-    (root / "plugins" / "common" / "agents" / "dev").mkdir(parents=True)
+    (root / "plugins" / "common" / "agents").mkdir(parents=True)
     rc = cec.main(["--root", str(root)])
     assert rc == 1

@@ -6,10 +6,16 @@ verify-done.sh §6(로컬 DoD 게이트)과 .github/workflows/validate.yml(CI)�
 (원장 F-023) — 정의와 검사 전부를 여기 한 곳에만 둔다.
 
 정의 (SSOT):
-  - agent  = plugins/*/agents/ 아래 frontmatter `name:` 보유 .md
-             (경로 기반 전체 .md 카운트는 보조 문서가 끼면 부풀므로 사용하지 않음)
+  - agent  = plugins/*/agents/*.md 중 frontmatter `name:` 보유 파일 — **최상위만** 센다
+             (경로 기반 전체 .md 카운트는 보조 문서가 끼면 부풀므로 사용하지 않음.
+             하위 디렉토리는 아래 평탄 배치 검사가 red 로 막는다)
   - skill  = plugins/*/skills/**/SKILL.md
   - rule   = plugins/common/rules/*.md
+
+평탄 배치 (5.3.0): plugins/*/agents/ 아래 **하위 디렉토리가 있으면 red**.
+  Claude Code 가 하위 폴더의 에이전트를 집계·표시하지 않는다 — 세션에서는 로드되지만
+  `claude plugin details` 는 *Agents (0)*, `/plugin` 상세에도 Agents 줄이 없다(5.2.x 까지
+  `agents/{dev,meta,planning}/` 15개가 그렇게 보였다). 하위 폴더를 쓰지 않는 것이 우회다.
 
 시맨틱 (verify-done §6 계승):
   - 문서에 카운트 주장이 없으면 skip(통과) — 주장 없음은 drift가 아님.
@@ -32,7 +38,7 @@ NG = "\033[31m✗\033[0m"
 
 def count_actuals(root: Path) -> dict:
     agents = 0
-    for f in root.glob("plugins/*/agents/**/*.md"):
+    for f in root.glob("plugins/*/agents/*.md"):
         try:
             if re.search(r"^name:", f.read_text(encoding="utf-8"), re.MULTILINE):
                 agents += 1
@@ -44,6 +50,32 @@ def count_actuals(root: Path) -> dict:
         "skills_total": len(list(root.glob("plugins/*/skills/**/SKILL.md"))),
         "rules": len(list(root.glob("plugins/common/rules/*.md"))),
     }
+
+
+def check_agents_flat(root: Path) -> bool:
+    """`plugins/*/agents/` 아래 하위 디렉토리(심링크 포함)가 있으면 red.
+
+    이 검사가 도는 조건: `plugins/*/agents/` 가 있으면 항상 — 에이전트 수·문서 주장과
+    무관하게 main() 이 가장 먼저 부른다(카운트가 맞아도 중첩은 red 여야 한다).
+    """
+    bad = sorted(
+        d.relative_to(root).as_posix()
+        for agents in root.glob("plugins/*/agents")
+        if agents.is_dir()
+        for d in agents.iterdir()
+        if d.is_dir()
+    )
+    if not bad:
+        print(f"{OK} agents 평탄 배치: plugins/*/agents/ 아래 하위 디렉토리 없음")
+        return True
+    for d in bad:
+        print(f"{NG} agents 하위 디렉토리: {d}/")
+    print(
+        "  → 에이전트는 agents/<name>.md 로 평탄하게 둔다. Claude Code 가 하위 폴더의 "
+        "에이전트를 표시하지 않는다(`claude plugin details` 가 Agents (0) 으로 보이고 "
+        "/plugin 상세에도 안 나온다 — 세션 로드는 정상이라 조용히 지나간다)."
+    )
+    return False
 
 
 def check_claim(root: Path, rel: str, pattern: str, actual: int, label: str) -> bool:
@@ -130,7 +162,7 @@ def main() -> int:
     root = args.root
 
     a = count_actuals(root)
-    ok = True
+    ok = check_agents_flat(root)
     # 루트 CLAUDE.md / README.md (verify-done §6 계승 패턴)
     ok &= check_claim(root, "CLAUDE.md", r"rules \((\d+)\)", a["rules"], "rules(CLAUDE.md)")
     ok &= check_claim(root, "README.md", r"rules \((\d+)\)", a["rules"], "rules(README)")

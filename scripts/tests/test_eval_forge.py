@@ -32,7 +32,7 @@ def _fake_repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     (root / "evals" / "scenarios").mkdir(parents=True)
     shutil.copy2(REPO_ROOT / "evals" / "run.py", root / "evals" / "run.py")
-    agents = root / "plugins" / "common" / "agents" / "dev"
+    agents = root / "plugins" / "common" / "agents"
     agents.mkdir(parents=True)
     (agents / "review-code.md").write_text(
         "---\nname: review-code\n---\n", encoding="utf-8"

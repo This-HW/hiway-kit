@@ -34,7 +34,7 @@ tags = ["private", "internal"]
 description = "허용 목록"
 paths = [
     '''.gitleaks.toml''',
-    '''plugins/common/agents/dev/security-scan.md''',
+    '''plugins/common/agents/security-scan.md''',
     '''plugins/common/rules/CHECKSUMS.sha256''',
 ]
 # CHANGELOG.md는 blanket 제외하지 않는다 — 실제 시크릿이 changelog에 붙어도 스캔되도록

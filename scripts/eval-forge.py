@@ -180,7 +180,7 @@ def _repo_root() -> Path:
 
 
 def _agent_exists(root: Path, name: str) -> bool:
-    return bool(list((root / "plugins").rglob(f"agents/**/{name}.md")))
+    return bool(list((root / "plugins").rglob(f"agents/{name}.md")))
 
 
 def _ledger_entry(root: Path, fid: str) -> str | None:

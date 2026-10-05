@@ -162,7 +162,8 @@ cache), but `scripts/`, `evals/` and `tests/` (hook tests live in `tests/hooks/`
 
 ### Adding a New Agent
 
-1. Create `plugins/common/agents/{category}/{name}.md`
+1. Create `plugins/common/agents/{name}.md` — flat only (Claude Code hides subfolder agents;
+   `check_doc_counts.py` fails on any subdirectory)
 2. Add required frontmatter (see template above)
 3. Write Korean description with `MUST USE when:` trigger conditions
 4. No manifest edit needed — agents are auto-discovered from the directory

@@ -6,6 +6,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.3.0] — 2026-10-05
+
+### Changed — 에이전트를 `agents/` 최상위로 평탄화 (**에이전트 ID 변경**)
+
+`plugins/common/agents/{dev,meta,planning}/*.md` 15개를 `plugins/common/agents/<name>.md` 로 옮겼다(내용 불변, `git mv`).
+Claude Code(2.1.289 실측)가 **하위 폴더의 에이전트를 집계·표시하지 않기** 때문이다 — 세션에서는 정상 로드되지만
+`claude plugin details` 는 *Agents (0)*, `/plugin` Installed 상세에는 Agents 줄이 없다. 최소 재현: 임시 플러그인
+`agents/top.md` + `agents/sub/nested.md` → details 가 *Agents (1) top*. 공식 문서는 하위 폴더를 지원한다고 하나(*"Subfolders are
+part of the agent name"*) 사용자 화면에서 에이전트가 안 보이므로 킷 쪽에서 우회했다. Codex·Antigravity 는 에이전트를 싣지
+않으므로(`packaging/targets.json` `omit.agents`) 영향이 없다.
+
+**에이전트 ID 대응표** (폴더가 이름의 일부였다 — 이제 `hiway-kit:<name>`):
+
+| 이전 | 이후 |
+| --- | --- |
+| `hiway-kit:dev:analyze-dependencies` | `hiway-kit:analyze-dependencies` |
+| `hiway-kit:dev:fix-bugs` | `hiway-kit:fix-bugs` |
+| `hiway-kit:dev:git-workflow` | `hiway-kit:git-workflow` |
+| `hiway-kit:dev:implement-code` | `hiway-kit:implement-code` |
+| `hiway-kit:dev:plan-implementation` | `hiway-kit:plan-implementation` |
+| `hiway-kit:dev:research-external` | `hiway-kit:research-external` |
+| `hiway-kit:dev:review-code` | `hiway-kit:review-code` |
+| `hiway-kit:dev:security-scan` | `hiway-kit:security-scan` |
+| `hiway-kit:dev:sync-docs` | `hiway-kit:sync-docs` |
+| `hiway-kit:dev:verify-code` | `hiway-kit:verify-code` |
+| `hiway-kit:dev:write-tests` | `hiway-kit:write-tests` |
+| `hiway-kit:meta:devils-advocate` | `hiway-kit:devils-advocate` |
+| `hiway-kit:planning:clarify-requirements` | `hiway-kit:clarify-requirements` |
+| `hiway-kit:planning:define-business-logic` | `hiway-kit:define-business-logic` |
+| `hiway-kit:planning:design-user-journey` | `hiway-kit:design-user-journey` |
+
+**사용자 조치**: 옛 ID(`hiway-kit:dev:review-code` 등)를 직접 적어 둔 설정·문서·프롬프트·훅 매처가 있으면 위 표대로 바꿔라.
+킷의 스킬은 처음부터 폴더 없는 이름(`subagent_type: review-code`)으로 불러 영향이 없다.
+
+- **경로 참조 갱신**: `setup.sh` 주석, `scripts/{eval-forge.py,check_eval_coverage.py,check_injection_budget.py}`(탐색을 최상위 glob 으로),
+  `.gitleaks.toml` 경로 허용(`agents/security-scan.md`), `skills/{review,debug,test}/SKILL.md` 의 `agents/<이름>.md`,
+  `evals/README.md`·eval 시나리오 `expect.json` 의 경로 언급, `CLAUDE.md` Adding a New Agent, README Antigravity 행.
+  역사 기록(과거 CHANGELOG·`docs/specs/**`)은 고치지 않았다.
+- **회귀 방지 게이트**: `scripts/check_doc_counts.py` 가 `plugins/*/agents/` 아래 **하위 디렉토리가 생기면 red**
+  (이유 — Claude Code 가 하위 폴더 에이전트를 표시하지 않음 — 를 메시지에 적는다). `verify-done.sh §6`·CI 가 이미 호출한다.
+  에이전트 수 집계도 최상위만 센다. 테스트 `scripts/tests/test_check_doc_counts.py`.
+
+---
+
 ## [5.2.2] — 2026-10-02
 
 ### Changed — 제품 사이트가 `hiway.thishw.com` 으로 이사 — 링크 교체 + 옛 주소는 리다이렉트 스텁

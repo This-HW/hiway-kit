@@ -15,8 +15,9 @@
 | 에이전트 설명 | **하네스**가 에이전트 선택용으로 노출 | 에이전트 수 / description 길이 |
 
 두 번째 축은 `claude plugin details` 의 `Always-on` 추정에도 **잡히지 않는다** —
-그 명령은 `agents/*.md` 만 세고 하위 디렉토리를 무시하는데(실측), 이 킷의 에이전트는
-전부 `agents/{category}/` 에 있다. 도구가 못 세는 것을 우리가 대신 센다.
+그 명령은 `agents/*.md` 만 세고 하위 디렉토리를 무시한다(실측). 5.2.x 까지 이 킷의
+에이전트는 `agents/{category}/` 에 있어 그 명령이 0종으로 셌다 — 5.3.0 에서 평탄화했지만
+(`check_doc_counts.py` 가 하위 디렉토리를 막는다) 하네스가 노출하는 상시 비용을 우리가 직접 재는 이유는 그대로다.
 
 ## 왜 축을 합치지 않는가
 
@@ -353,7 +354,7 @@ def agent_entries() -> tuple[list[tuple[int, str]], SkipTally]:
     """
     out: list[tuple[int, str]] = []
     skipped = SkipTally(LABEL)
-    for path in sorted((PLUGIN_ROOT / "agents").rglob("*.md")):
+    for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
         skipped.attempted += 1
         rel = str(path.relative_to(PLUGIN_ROOT.parent.parent))
         try:
