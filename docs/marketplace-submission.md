@@ -86,6 +86,12 @@ created"* — 제출 시점 `plugin.json` 값을 보여 줄 뿐, 상단 Edit 은
 (512×512)를 업로드했다 → *"Icon uploaded. It's waiting for review."* URL 4종(Homepage·Documentation `/docs/`·Support GitHub issues·Privacy
 `/privacy/`)은 18:04 KST 같은 티켓 스레드로 디렉토리 팀에 갱신을 요청했고, 노출 문의도 다시 적었다.
 
+**10-05 재확인** — 여전히 미노출(claude.ai 디렉토리·claude.com/marketplace 검색 결과 없음, 커뮤니티 미러 2,283개 중 0·`marketplace.json`
+마지막 커밋 10-01 수동 추가), 포털 v5.2.2 Live, 10-02 18:04 이후 디렉토리 팀 회신 없음. 10-02 에 올린 아이콘은 *"This icon wasn't
+reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(Anthropic 쪽 심사 정체로 보임). 같은 파일로 Replace 재업로드
+(*"waiting for review"*), 17:37 KST 같은 티켓 스레드로 상태 확인·목록 URL 갱신 재요청. 추적 cron 은 세션이 쉬는 동안만 돌아
+10-04 10:44 ~ 10-05 17:25 사이 약 31시간 실행되지 않았다.
+
 **스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
 `https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
 **근거 파일·문구까지** 나온다(Review 탭은 제목만 보여 준다). 이걸로 이분 탐색했다(브랜치 16개, 끝나고 전부 삭제):
