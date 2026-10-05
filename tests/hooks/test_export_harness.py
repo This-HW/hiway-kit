@@ -1475,3 +1475,31 @@ def test_reference_rules_carry_deterministic_repo_fallback():
     assert (repo_root / _mod.KIT_RULES_REPO_PATH).resolve() == (
         TOOLS_DIR.parent / "rules"
     ).resolve()
+
+
+def test_help_shows_exit_codes_from_docstring(capsys):
+    """종료코드 SSOT 는 docstring — 스킬 문서는 `--help` 를 가리킨다(B-P0-2).
+
+    `--help` 가 그 절을 보여 주지 않으면 문서가 가리킬 곳이 없어 다시 복제본이 생긴다.
+    """
+    import pytest
+
+    with pytest.raises(SystemExit) as exc:
+        _mod.main(["--help"])
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "exit code:" in out
+    for code in ("0 =", "1 =", "2 =", "3 ="):
+        assert code in out, code
+
+
+def test_block_header_does_not_claim_codex_cannot_block(tmp_path):
+    """생성물은 Codex 차단 불가를 주장하지 않는다 — 0.159.3 에서 차단됨을 실측(A-P0-2)."""
+    root = _fake_plugin_root(tmp_path, {})
+    target = tmp_path / "proj"
+    target.mkdir()
+    rc = _mod.main(["--plugin-root", str(root), "--target", str(target)])
+    assert rc == 0
+    text = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert "차단이 유지되지 않" not in text
+    assert "Antigravity" in text and "주입 없음" in text
