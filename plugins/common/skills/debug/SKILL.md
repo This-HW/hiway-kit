@@ -1,6 +1,6 @@
 ---
 name: debug
-description: Analyze errors and apply fixes. Use when you have an error message, traceback, or failing log to diagnose.
+description: Investigate a failure whose cause is not evident from the error itself - flaky or intermittent failures, failures that only happen in CI or one environment, or errors with several plausible causes across files - by reproducing, isolating, fixing and verifying. Skip it when the message already shows the fix (a missing variable, a typo, a wrong import); just fix that directly.
 ---
 
 # 디버깅 실행

@@ -6,6 +6,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.4.1] — 2026-10-06
+
+### Changed — `debug` 스킬이 "원인이 안 보이는 실패"에서 뜨고 명백한 오류에서는 뜨지 않는다
+
+설명문을 *"원인이 메시지에 드러나지 않는 실패(간헐·CI 전용·여러 파일에 걸친 후보 원인)를 재현·격리·수정·검증"* 으로
+바꾸고, 메시지가 이미 고칠 곳을 보여 주면(누락된 변수·오타·잘못된 import) 쓰지 말라고 적었다. `claude plugin eval`
+실측(sonnet 5.5, 6회): 간헐 실패에서 발동 1/6 → **6/6**, 명백한 오류에서 과발동 2/6 → **0/6**. opus 5.5 4회도 4/4·4/4.
+다른 발동 케이스 6종은 후퇴 없음(전부 5/6 이상, 음성 6/6). `plan-task` 는 재측정 10/12 로 5.4.0 파일럿의 2/6 이
+표본 변동이었음을 확인해 바꾸지 않았다. 기록: `docs/specs/2026-10-06-trigger-and-delegation/spec.md`.
+
+- 플러그인 eval: 5.4.0 의 `debug-fires`(메시지에 원인이 보이는 `KeyError`)를 음성 케이스 `debug-obvious-no-skill` 로
+  돌리고, 원인이 안 보이는 간헐 실패를 새 `debug-fires` 로. `evals/README.md` 에 "발동 케이스는 음성과 짝으로"와
+  `claude plugin eval` 실행 함정 2종(`--case` 반복 시 마지막만 적용, `runsPerCase` 보고값) 추가.
+
+### Fixed — 에이전트 frontmatter 검사가 에이전트가 아닌 문서를 에이전트로 봤다
+
+CI 2단계·`verify-done.sh` §2·`setup/pre-commit` 에 복제된 검사가 대상을 `plugins/**/*.md` 에서 `skills/`·`rules/` 만
+빼서 잡았다 — frontmatter 가 있는 비-에이전트 `.md`(플러그인 eval 케이스 등)에 `name`/`description` 을 요구했고,
+frontmatter 가 **없는** 에이전트는 건너뛰었다. `scripts/check_agent_frontmatter.py` 가 대상을 `plugins/*/agents/*.md`
+에서 파생해 필수 4필드(`name`·`description`·`model`·`maxTurns`)·이름=파일명·금지 필드를 판정하고 CI·§2 가 호출한다.
+`setup/pre-commit`(배포물 — `scripts/` 없는 레포에도 설치된다)은 인라인을 유지하되 대상을 `agents/` 로 좁히고
+frontmatter 없는 에이전트를 red 로.
+
+### Docs — 위임 승인 문단이 주입되지 않아도 위임은 일어난다 (재실측)
+
+`agent-delegation-chain` 은 `tier: reference` 라 승인 문단 본문이 세션에 없다. 2026-08-21 실측(문단 없으면 위임 0/3)이
+맞다면 억제돼야 하지만, 재실측(구현 후 병합 전 리뷰 과제, Opus 5.5·Sonnet 5.5 × 문단 없음/주입 × 6회)에서 **24/24
+모두 `review-code` 로 위임**했다. 억제는 현 버전에서 재현되지 않으므로 tier 를 유지한다. 규칙의 근거 노트와 해설본
+미러의 "미해결" 절을 이 결과로 갱신(CHECKSUMS·MIRROR 재생성). 규칙은 `portable: false` 라 진입점 규범 블록 sha 는
+불변(`354f3da0…`).
+
+---
+
 ## [5.4.0] — 2026-10-05
 
 ### 전수 감사 후속 — 하네스·규범·스킬·문서·게이트 정합 (`docs/specs/2026-10-05-audit-remediation/`)

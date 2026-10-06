@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: debug-obvious-no-skill
+description: Negative case - an error whose cause is readable from the message itself is a Small fix and should not start the 4-phase debug pipeline.
+tags: [skill-trigger, debug, negative]
+expected_outcome: No debug skill call; the missing DEBUG variable is named and a direct fix given.
+max_turns: 8
+timeout_seconds: 240
+allowed_tools: [Read, Glob, Grep, Skill]
+execution:
+  prompt: |
+    My service crashes on startup with this error. Can you figure out what is wrong?
+
+    Traceback (most recent call last):
+      File "app/main.py", line 42, in <module>
+        settings = load_settings()
+      File "app/config.py", line 17, in load_settings
+        return Settings(log_level=os.environ["LOG_LEVEL"], debug=os.environ["DEBUG"] == "1")
+      File "/usr/lib/python3.11/os.py", line 679, in __getitem__
+        raise KeyError(key) from None
+    KeyError: 'DEBUG'
+graders:
+  - name: no-debug-skill
+    type: tool_used
+    tool: Skill
+    input_match: '"skill"\s*:\s*"(?:[\w-]+:)?debug"'
+    min: 0
+    max: 0
+    arm: both
+  - name: criteria
+    type: llm
+    criteria: >-
+      PASS if the response names the root cause (the DEBUG environment variable
+      is not set and is read with os.environ[...] instead of .get with a
+      default) and proposes a concrete fix. FAIL if it blames something else,
+      or lists generic debugging tips without identifying the cause.

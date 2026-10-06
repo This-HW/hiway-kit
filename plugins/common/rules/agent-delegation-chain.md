@@ -29,6 +29,10 @@ conversation's context. When in doubt about a one-step task, do it inline.
 > 호출 **0/3**, `--append-system-prompt`로 위 문단만 주입한 조건에서 **3/3**.
 > (Fisher exact 단측 p=0.05 — 경계값이므로 표본 확대 필요.)
 >
+> 재실측(2026-10-06, Opus 5.5·Sonnet 5.5 각 6+6): 문단 **없이도** 위임 12/12, 주입해도 12/12 —
+> 위 억제는 현 버전에서 재현되지 않는다. 그래서 이 규칙은 상시 주입하지 않는다(`tier: reference`).
+> 기록: 킷 CHANGELOG 5.4.1.
+>
 > 억제 원인은 **미규명**이다. Claude Code v2.1.219+가 주입하는 서버사이드 섹션
 > `heron_brook`("Do not call the AgentTool unless the user requested it", Opus 5 전용,
 > 문서화된 opt-out 없음, https://github.com/anthropics/claude-code/issues/80988)이

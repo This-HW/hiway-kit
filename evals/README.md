@@ -20,6 +20,15 @@
 플러그인 쪽 실행은 비용이 든다: `cd plugins/common && claude plugin eval . --runs 3 --model <고정 모델> --max-cost-usd 3 --no-publish`
 (결과는 `plugins/common/evals/results/` 에 쌓이며 그 디렉토리의 `.gitignore` 가 막는다).
 
+**발동 케이스는 "그 스킬이 맡아야 하는 일"로 쓰고, 음성 케이스를 짝으로 둔다.** 5.4.0 의 `debug-fires` 는
+메시지만 봐도 원인이 보이는 `KeyError` 였다 — 킷 규약(Small 은 바로 고친다)상 안 뜨는 것이 맞는데 "발동률이 낮다"로
+읽혔다. 5.4.1 에서 원인이 안 보이는 간헐 실패(`debug-fires`)와 원인이 보이는 오류(`debug-obvious-no-skill`, 음성)로
+나눴다. 발동률은 쌍으로 읽는다 — 양성만 올리면 과발동(비싼 파이프라인이 사소한 일에 뜨는 것)을 못 본다.
+
+실행 함정 두 가지(claude 2.1.291 실측): `--case` 를 여러 번 주면 **마지막 것만** 적용된다(글롭 `--case '*-fires'` 나
+`--tag` 를 써라). `--runs N` 은 실제로 N 회 돌지만 JSON 의 `runsPerCase` 는 케이스 기본값을 그대로 보고한다 — 횟수는
+`arms.with` 길이로 센다.
+
 ## 철학
 
 - **Deterministic-first.** 채점은 규칙(정규식/파일 검사/pytest 실행)으로 하며,

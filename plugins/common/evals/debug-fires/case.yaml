@@ -1,23 +1,22 @@
 schema_version: "1.1"
 name: debug-fires
-description: A pasted traceback should fire the debug skill.
+description: A failure whose cause is not visible from the error (intermittent, several candidate causes) should fire the debug skill.
 tags: [skill-trigger, debug]
-expected_outcome: Skill hiway-kit:debug is invoked to diagnose the error.
+expected_outcome: Skill hiway-kit:debug is invoked to reproduce and isolate the failure before fixing.
 max_turns: 8
 timeout_seconds: 240
 allowed_tools: [Read, Glob, Grep, Skill]
 execution:
   prompt: |
-    My service crashes on startup with this error. Can you figure out what is wrong?
+    Our CI fails maybe one run in five with the error below. It never fails on my
+    laptop, and re-running the job usually makes it pass. I have no idea where to
+    start. Can you help me track it down and fix it?
 
-    Traceback (most recent call last):
-      File "app/main.py", line 42, in <module>
-        settings = load_settings()
-      File "app/config.py", line 17, in load_settings
-        return Settings(log_level=os.environ["LOG_LEVEL"], debug=os.environ["DEBUG"] == "1")
-      File "/usr/lib/python3.11/os.py", line 679, in __getitem__
-        raise KeyError(key) from None
-    KeyError: 'DEBUG'
+    FAILED tests/test_orders.py::test_bulk_import - AssertionError: assert 49 == 50
+      tests/test_orders.py:88: in test_bulk_import
+        assert Order.count() == len(rows)
+    -------- Captured log call --------
+    WARNING  app.importer:importer.py:131 worker 3 retrying batch 7 after OperationalError: database is locked
 graders:
   - name: skill-fired
     type: tool_used
@@ -26,7 +25,8 @@ graders:
   - name: criteria
     type: llm
     criteria: >-
-      PASS if the response names the root cause (the DEBUG environment variable
-      is not set and is read with os.environ[...] instead of .get with a
-      default) and proposes a concrete fix. FAIL if it blames something else,
-      or lists generic debugging tips without identifying the cause.
+      PASS if the response treats this as an investigation - proposes how to
+      reproduce the flaky failure (e.g. run the test repeatedly or in parallel)
+      and connects the lost row to the retried batch / database lock before
+      proposing a fix. FAIL if it jumps to a one-line fix without a way to
+      confirm the cause, or only lists generic flaky-test tips.
