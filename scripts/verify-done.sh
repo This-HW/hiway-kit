@@ -58,29 +58,27 @@ done
 [ "$FAIL" -eq 0 ] && green "all JSON valid"
 
 hdr "2. plugin.json 필수 필드 + agent frontmatter + 금지 필드 (CI 동등)"
-python3 - <<'EOF' && green "manifest + frontmatter checks" || red "manifest/frontmatter check failed"
-import json, pathlib, re, sys
+python3 - <<'EOF' && green "manifest checks" || red "manifest check failed"
+import json, pathlib, sys
 REQ = ["name","version","description","homepage","repository","license"]
-FORB = ["permissionMode","context_cache","output_schema","next_agents","hooks"]
 err = []
 for f in pathlib.Path("plugins").glob("*/.claude-plugin/plugin.json"):
     d = json.loads(f.read_text())
     err += [f"{f}: missing {k}" for k in REQ if k not in d]
     a = d.get("author", {})
     if not isinstance(a, dict) or "email" not in a: err.append(f"{f}: missing author.email")
-for f in pathlib.Path("plugins").rglob("*.md"):
-    if "/skills/" in str(f) or "/rules/" in str(f): continue
-    c = f.read_text()
-    if not c.startswith("---"): continue
-    end = c.find("---", 3)
-    if end == -1: continue
-    fm = c[3:end]
-    if "name:" not in fm: err.append(f"{f}: no name")
-    if "description:" not in fm: err.append(f"{f}: no description")
-    err += [f"{f}: forbidden {x}" for x in FORB if re.search(rf"^{x}:", fm, re.M)]
 if err:
     print("\n".join("    " + e for e in err)); sys.exit(1)
 EOF
+# 에이전트 frontmatter 판정은 scripts/check_agent_frontmatter.py 가 단일 소스 — CI(validate.yml)와
+# 같은 스크립트. 대상은 plugins/*/agents/*.md 에서 파생한다(예전 인라인 검사는 plugins/**/*.md 에서
+# skills/·rules/ 만 빼서, frontmatter 가 있는 비-에이전트 문서를 에이전트로 보고 frontmatter 없는
+# 에이전트는 건너뛰었다).
+if python3 scripts/check_agent_frontmatter.py; then
+  green "agent frontmatter (check_agent_frontmatter.py — CI와 단일 소스)"
+else
+  red "agent frontmatter 위반 — 상세는 위 출력"
+fi
 
 hdr "3. ruff (레포 전체 — 룰셋은 ruff.toml SSOT)"
 # 대상을 나열하지 않는다: `ruff check .` + 루트 ruff.toml(exclude 포함)이 범위의 단일

@@ -53,55 +53,10 @@ jobs:
         run: |
           python3 -c "import json; json.load(open('.claude-plugin/marketplace.json'))" && echo "✓ marketplace.json valid"
 
-      - name: Check agent frontmatter — required fields
-        run: |
-          python3 - <<'EOF'
-          import pathlib, re, sys
-          errors = []
-          for f in pathlib.Path("plugins").rglob("*.md"):
-              if "/skills/" in str(f) or "/rules/" in str(f):
-                  continue
-              content = f.read_text()
-              if not content.startswith("---"):
-                  continue
-              end = content.find("---", 3)
-              if end == -1:
-                  continue
-              fm = content[3:end]
-              if "name:" not in fm:
-                  errors.append(f"{f}: missing 'name' in frontmatter")
-              if "description:" not in fm:
-                  errors.append(f"{f}: missing 'description' in frontmatter")
-          if errors:
-              print("\n".join(errors))
-              sys.exit(1)
-          print("✓ All agent frontmatter valid")
-          EOF
-
-      - name: Check agent frontmatter — no forbidden fields
-        run: |
-          python3 - <<'EOF'
-          import pathlib, re, sys
-          FORBIDDEN = ["permissionMode", "context_cache", "output_schema", "next_agents", "hooks"]
-          errors = []
-          for f in pathlib.Path("plugins").rglob("*.md"):
-              if "/skills/" in str(f) or "/rules/" in str(f):
-                  continue
-              content = f.read_text()
-              if not content.startswith("---"):
-                  continue
-              end = content.find("---", 3)
-              if end == -1:
-                  continue
-              fm = content[3:end]
-              for field in FORBIDDEN:
-                  if re.search(rf"^{field}:", fm, re.MULTILINE):
-                      errors.append(f"{f}: forbidden field '{field}' in frontmatter")
-          if errors:
-              print("\n".join(errors))
-              sys.exit(1)
-          print("✓ No forbidden frontmatter fields found")
-          EOF
+      - name: Check agent frontmatter — required + forbidden fields
+        # scripts/check_agent_frontmatter.py 가 단일 소스 — 로컬 verify-done.sh §2와 동일.
+        # 대상은 plugins/*/agents/*.md 에서 파생한다(비-에이전트 .md 는 대상이 아니다).
+        run: python3 scripts/check_agent_frontmatter.py
 
       - name: Run hook unit tests
         run: |

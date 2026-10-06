@@ -37,8 +37,10 @@ if [ -n "$STAGED_JSON" ]; then
     done <<< "$STAGED_JSON"
 fi
 
-# plugins/ 하위 .md 파일 frontmatter 필수값 검증
-STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep '^plugins/.*\.md$' || true)
+# 에이전트(plugins/*/agents/*.md) frontmatter 필수값 검증 — 비-에이전트 .md 는 대상이 아니다.
+# 판정 정본은 scripts/check_agent_frontmatter.py(CI·verify-done §2). 이 훅은 scripts/ 가 없는
+# 레포에도 설치되므로 인라인으로 둔다.
+STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^plugins/[^/]+/agents/[^/]+\.md$' || true)
 if [ -n "$STAGED_MD" ]; then
     python3 - <<'PYEOF'
 import sys, re, pathlib, subprocess
@@ -47,20 +49,17 @@ result = subprocess.run(
     ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
     capture_output=True, text=True
 )
-files = [f for f in result.stdout.splitlines() if f.startswith("plugins/") and f.endswith(".md")]
+files = [f for f in result.stdout.splitlines() if re.match(r"^plugins/[^/]+/agents/[^/]+\.md$", f)]
 
 errors = []
 for fpath in files:
-    if "/skills/" in fpath or "/rules/" in fpath:
-        continue
     p = pathlib.Path(fpath)
     if not p.exists():
         continue
     content = p.read_text(encoding="utf-8")
-    if not content.startswith("---"):
-        continue  # frontmatter 없는 파일은 스킵 (README 등)
     m = re.match(r"^---\n(.*?)\n---", content, re.DOTALL)
     if not m:
+        errors.append(f"{fpath}: frontmatter 없음 또는 닫히지 않음")
         continue
     fm = m.group(1)
     if "name:" not in fm:
