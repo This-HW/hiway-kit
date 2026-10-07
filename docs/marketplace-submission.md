@@ -18,7 +18,7 @@ as_of: 2026-10-05
 | OpenAI 디렉토리 (Codex) | 5.2.0 **In review**(2026-09-30 제출, 자동 검사 통과). ZIP 은 `hooks/` 를 빼므로 이 경로 설치자는 규범 자동 주입이 없다 | 2026-09-30 | 승인 후 Publish → 디렉토리 노출 확인 → README 설치 절 갱신. 이후 버전마다 ZIP 재업로드(`docs/codex-submission-checklist.md`) |
 | Codex 직접 마켓플레이스 (`codex plugin marketplace add This-HW/hiway-kit`) | 동작 — 스킬 인식 + 훅 신뢰 승인 후 SessionStart 주입(2026-10-05 감사 A 실측, codex 0.159.3) | 2026-10-05 | 없음 |
 | 커뮤니티 카탈로그 (`claude-community`, `anthropics/claude-plugins-community`) | 자동 동기화가 2026-08-13 이후 멈춤. hiway-kit 없음. 전임 `claude-code-kit` 항목이 v2.12.3(`292ba07e`) pin 으로 남아 있음 | 2026-10-05 | 조치 없음(읽기 전용 미러). 2026-09-28 보낸 구 항목 삭제 요청의 결과 대기 |
-| Antigravity | 공개 레지스트리 미확인 — 로컬/워크스페이스 설치만 안내(README) | 2026-10-05 | 없음 |
+| Antigravity | 공식 마켓플레이스는 **큐레이션** — 공개 레지스트리·커스텀 마켓플레이스 없음(`agy plugin install x@<mp>` 는 등록된 마켓플레이스만, 임의 이름은 `unknown marketplace`, agy 1.3.1 실측). 등재는 관심 신청 폼(antigravity.google/docs/marketplace)만 — **2026-10-07 제출**(신청자 thishw · 지원 창구 GitHub Issues · 문서 hiway.thishw.com/docs). 현재 설치 경로는 로컬 디렉토리(`agy plugin install <repo>/plugins/common`) — 스킬 15 인식, 에이전트는 `model:` 값 때문에 0(1.3.1 재측정) | 2026-10-07 | 심사 회신 대기(폼 응답 이메일). 등재 연락이 오면 README 설치 절에 반영 |
 
 Claude 디렉토리 제출 포털: claude.ai → Directory → Submissions(개인 저자는 `platform.claude.com/plugins/submit`).
 
