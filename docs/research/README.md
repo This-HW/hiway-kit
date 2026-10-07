@@ -1,6 +1,6 @@
 ---
 status: current
-as_of: 2026-10-05
+as_of: 2026-10-07
 ---
 
 # docs/research/ — 조사 노트
@@ -18,3 +18,4 @@ as_of: 2026-10-05
 | [`2026-09-08-plugin-directory-status.md`](2026-09-08-plugin-directory-status.md) | 커뮤니티 플러그인 카탈로그 실태 조사 (2026-09-08) | `historical` |
 | [`2026-09-11-cross-harness-norm-integration.md`](2026-09-11-cross-harness-norm-integration.md) | 조사 — 하네스 간 규범·룰 통합 패턴 비교 | `historical` |
 | [`2026-09-15-dryforge-evaluation.md`](2026-09-15-dryforge-evaluation.md) | dryforge 채택 검토 — 전언 검증과 실체 조사 (2026-09-15) | `historical` |
+| [`2026-10-07-agensh-orchestratorless-harness.md`](2026-10-07-agensh-orchestratorless-harness.md) | Agensh(오케스트레이터 없는 멀티 에이전트 하네스) — 1차 출처 대조와 흡수 판정 | `historical` |
