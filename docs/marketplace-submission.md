@@ -15,7 +15,7 @@ as_of: 2026-10-05
 | --- | --- | --- | --- |
 | Claude Code 직접 마켓플레이스 (`This-HW/hiway-kit` → `hiway-kit@hiway-kit`) | 동작. `/plugin marketplace update` 시 `main` HEAD 를 즉시 반영. `setup.sh` 가 설치하는 경로 | 2026-10-05 | 없음 |
 | Claude 디렉토리 (Claude Code 내장 마켓플레이스 `anthropic-plugin-directory`) | **Published**(2026-09-29, v5.0.3), 이후 Auto-publish — push webhook 으로 스캔 통과 시 자동 공개(v5.2.2 Live 확인 · v5.4.0 은 push 후 약 25분 만에 캐시 제공, 2026-10-05 20:32 KST 실측). `claude plugin install hiway-kit@anthropic-plugin-directory` 가 로그인 없이 성공(실측). 게재 대상은 Claude Code 만. claude.ai 웹 검색에는 아직 안 보임 | 2026-10-05 | 디렉토리 팀 티켓 회신 대기(웹 노출·목록 URL 갱신·아이콘 재심사) |
-| OpenAI 디렉토리 (Codex) | 5.2.0 **In review**(2026-09-30 제출, 자동 검사 통과). ZIP 은 `hooks/` 를 빼므로 이 경로 설치자는 규범 자동 주입이 없다 | 2026-09-30 | 승인 후 Publish → 디렉토리 노출 확인 → README 설치 절 갱신. 이후 버전마다 ZIP 재업로드(`docs/codex-submission-checklist.md`) |
+| OpenAI 디렉토리 (Codex) | 5.2.0 **In review**(2026-09-30 제출). **2026-10-12 포털 변화**: 이전 버전 4개(5.1.1·5.1.2·5.1.3-probe.1·probe.2)가 *Needs attention* — 차단 사유 `Terms of service URL is required.` · `We are not accepting more skills-only submissions at this time.` 공식 문서(submission-errors)는 아직 "skills-only 경로 있음, 약관 URL 은 ZIP 제출에 선택"이라 **문서와 포털이 어긋난다**. 킷 ZIP 은 `hooks/` 를 빼므로 skills-only 다 — 5.2.0 도 같은 판정을 받을 수 있다 | 2026-10-12 | 결정 필요(사용자): 약관 페이지 신설 + 회신 대기 / MCP 경로 검토 / 대기만 |
 | Codex 직접 마켓플레이스 (`codex plugin marketplace add This-HW/hiway-kit`) | 동작 — 스킬 인식 + 훅 신뢰 승인 후 SessionStart 주입(2026-10-05 감사 A 실측, codex 0.159.3) | 2026-10-05 | 없음 |
 | 커뮤니티 카탈로그 (`claude-community`, `anthropics/claude-plugins-community`) | 자동 동기화가 2026-08-13 이후 멈춤. hiway-kit 없음. 전임 `claude-code-kit` 항목이 v2.12.3(`292ba07e`) pin 으로 남아 있음 | 2026-10-05 | 조치 없음(읽기 전용 미러). 2026-09-28 보낸 구 항목 삭제 요청의 결과 대기 |
 | Antigravity | 공식 마켓플레이스는 **큐레이션** — 공개 레지스트리·커스텀 마켓플레이스 없음(`agy plugin install x@<mp>` 는 등록된 마켓플레이스만, 임의 이름은 `unknown marketplace`, agy 1.3.1 실측). 등재는 관심 신청 폼(antigravity.google/docs/marketplace)만 — **2026-10-07 제출**(신청자 thishw · 지원 창구 GitHub Issues · 문서 hiway.thishw.com/docs). 현재 설치 경로는 로컬 디렉토리(`agy plugin install <repo>/plugins/common`) — 스킬 15 인식, 에이전트는 `model:` 값 때문에 0(1.3.1 재측정) | 2026-10-07 | 심사 회신 대기(폼 응답 이메일). 등재 연락이 오면 README 설치 절에 반영 |
@@ -118,6 +118,10 @@ created"* — 제출 시점 `plugin.json` 값을 보여 줄 뿐, 상단 Edit 은
 reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(Anthropic 쪽 심사 정체로 보임). 같은 파일로 Replace 재업로드
 (*"waiting for review"*), 17:37 KST 같은 티켓 스레드로 상태 확인·목록 URL 갱신 재요청. 추적 cron 은 세션이 쉬는 동안만 돌아
 10-04 10:44 ~ 10-05 17:25 사이 약 31시간 실행되지 않았다.
+
+**10-12 재확인** — 포털 v5.4.1 Live. 10-05 에 다시 올린 아이콘이 **또 Expired**(심사 없이 만료, 두 번째) → 같은 파일로 Replace 재업로드,
+*"Waiting for review"*. Listing URL 4종은 여전히 제출 시점 값(Homepage github·나머지 No value), 디렉토리 팀 회신 없음(10-05 17:37 이후 메일 0건),
+claude.ai 디렉토리 'hiway' 검색 미노출.
 
 **스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
 `https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
