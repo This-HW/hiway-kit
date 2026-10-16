@@ -264,6 +264,11 @@ def validate(zip_bytes: bytes) -> tuple[list[str], list[str]]:
     privacy = iface.get("privacyPolicyURL", "")
     if not isinstance(privacy, str) or not privacy.startswith("https://"):
         errors.append("plugin_privacy_policy_url: interface.privacyPolicyURL must be an https URL")
+    # 2026-10-12 포털 판정: 문서는 ZIP 제출에 약관 URL 이 선택이라고 하지만 포털은
+    # "Terms of service URL is required." 로 막았다. 2026-10-16 probe 에서 LICENSE URL 로 해소 확인.
+    terms = iface.get("termsOfServiceURL", "")
+    if not isinstance(terms, str) or not terms.startswith("https://"):
+        errors.append("plugin_terms_of_service_url: interface.termsOfServiceURL must be an https URL")
     if not iface.get("developerName"):
         errors.append("plugin_developer_name_empty")
     elif iface["developerName"] != (m.get("author") or {}).get("name"):

@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.4.2] — 2026-10-16
+
+### Changed — Codex 매니페스트에 약관 URL(`interface.termsOfServiceURL`)
+
+OpenAI 디렉토리 포털이 2026-10-12 부터 이전 버전들에 `Terms of service URL is required.` 를 차단 사유로 붙였다
+(문서는 아직 "ZIP 제출에는 선택"). 2026-10-16 같은 플러그인에 초안을 올려(제출 안 함) `LICENSE` URL 로 이 사유가
+사라지는 것을 확인하고 `packaging/targets.json` 에 넣었다. `scripts/build-codex-zip.py` 는 이 필드가 https URL 이
+아니면 exit 1 — 포털보다 느슨한 로컬 검사는 검사가 아니다. 남은 차단은 포털의 skills-only 접수 중단 하나다
+(`docs/marketplace-submission.md`). Claude Code 동작 변화 없음.
+
 ## [5.4.1] — 2026-10-06
 
 ### Changed — `debug` 스킬이 "원인이 안 보이는 실패"에서 뜨고 명백한 오류에서는 뜨지 않는다

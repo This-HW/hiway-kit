@@ -29,6 +29,7 @@ GOOD_MANIFEST = {
         "shortDescription": "short",
         "longDescription": "What the plugin does, in full.",
         "privacyPolicyURL": "https://example.com/privacy",
+        "termsOfServiceURL": "https://example.com/terms",
         "developerName": "Dev",
         "category": "Developer Tools",
         "logo": "./assets/icon.png",
@@ -194,3 +195,11 @@ def test_real_zip_drops_hooks_dir_but_keeps_skill_tools(mod, tmp_path):
         assert f"{top}/tools/{tool}" in names, f"제출본에 tools/{tool} 가 없다"
     submitted = json.loads(zf.read(f"{top}/.codex-plugin/plugin.json"))
     assert "hooks" not in submitted
+
+
+def test_missing_terms_of_service_url_is_error(mod):
+    """포털 메타데이터 검사: "Terms of service URL is required."(2026-10-12)."""
+    manifest = json.loads(json.dumps(GOOD_MANIFEST))
+    del manifest["interface"]["termsOfServiceURL"]
+    errors, _ = mod.validate(_package(manifest))
+    assert any("plugin_terms_of_service_url" in e for e in errors)

@@ -22,6 +22,7 @@
     "privacyPolicyURL": "https://hiway.thishw.com/privacy/",
     "shortDescription": "Coding agent discipline kit",
     "supportURL": "https://github.com/This-HW/hiway-kit/issues",
+    "termsOfServiceURL": "https://github.com/This-HW/hiway-kit/blob/main/LICENSE",
     "websiteURL": "https://hiway.thishw.com/"
   },
   "keywords": [
@@ -37,5 +38,5 @@
   "name": "hiway-kit",
   "repository": "https://github.com/This-HW/hiway-kit",
   "skills": "./skills/",
-  "version": "5.4.1"
+  "version": "5.4.2"
 }
