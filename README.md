@@ -207,7 +207,10 @@ pass, where the isolation is part of the value.
 # Validate (checks the manifest and component dirs — it counts files, it does not prove recognition)
 agy plugin validate /path/to/hiway-kit/plugins/common
 
-# Install
+# Install from GitHub (agy finds plugins/common in the repo; measured agy 1.4.2, 2026-10-18)
+agy plugin install https://github.com/This-HW/hiway-kit
+
+# ...or from a local clone
 agy plugin install /path/to/hiway-kit/plugins/common
 
 # Verify
@@ -223,7 +226,8 @@ twice (measured 2026-10-05).
 
 **No official public registry is confirmed for Antigravity.** `agy plugin` also offers
 `install <plugin>@<marketplace>`, `link`, and `import [gemini|claude]`; none of these is verified
-with this kit, so the local path above is the only one documented here.
+with this kit, so the GitHub and local paths above are the only ones documented here. Both install
+hiway-kit 5.4.2 with 15 skills; agents are skipped (see the table above).
 
 ### Gemini CLI
 

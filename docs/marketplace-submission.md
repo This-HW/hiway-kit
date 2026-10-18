@@ -1,6 +1,6 @@
 ---
 status: current
-as_of: 2026-10-16
+as_of: 2026-10-18
 ---
 
 # Marketplace Submission & Community Listing
@@ -14,11 +14,11 @@ as_of: 2026-10-16
 | 채널 | 상태 | 확인일 | 다음 행동 |
 | --- | --- | --- | --- |
 | Claude Code 직접 마켓플레이스 (`This-HW/hiway-kit` → `hiway-kit@hiway-kit`) | 동작. `/plugin marketplace update` 시 `main` HEAD 를 즉시 반영. `setup.sh` 가 설치하는 경로 | 2026-10-05 | 없음 |
-| Claude 디렉토리 (Claude Code 내장 마켓플레이스 `anthropic-plugin-directory`) | **Published**(2026-09-29, v5.0.3), 이후 Auto-publish — push webhook 으로 스캔 통과 시 자동 공개(v5.2.2 Live 확인 · v5.4.0 은 push 후 약 25분 만에 캐시 제공, 2026-10-05 20:32 KST 실측). `claude plugin install hiway-kit@anthropic-plugin-directory` 가 로그인 없이 성공(실측). 게재 대상은 Claude Code 만. claude.ai 웹 검색에는 아직 안 보임 | 2026-10-05 | 디렉토리 팀 티켓 회신 대기(웹 노출·목록 URL 갱신·아이콘 재심사) |
-| OpenAI 디렉토리 (Codex) | 5.2.0 **Changes required**(2026-09-30 제출 → 10-12~10-16 사이 판정, 사유 메일·포털 문구 없음). **2026-10-16 초안 실측**(같은 플러그인에 5.4.1-probe.1 업로드, 제출 안 함): 스킬 15개 전부 `Checks passed`, 약관 URL 사유는 `LICENSE` URL 로 해소(5.4.2 매니페스트 반영), **남은 차단은 하나** — `We are not accepting more skills-only submissions at this time.`(포털이 링크하는 plugin-guidelines 는 "skills-only 는 추가 자격 요건이 있을 수 있다"만 적음, 재개 시점 공지 없음). 킷 ZIP 은 `hooks/` 를 빼므로 skills-only 이고, 기존 skills-only 플러그인에 MCP 추가는 문서상 미지원 | 2026-10-16 | 지원 케이스 15960350 에 사유·재개 시점 문의(10-16 19:50 KST) 회신 대기. 재개되면 5.4.2 ZIP 업로드 → 사용자 확인 후 Submit |
+| Claude 디렉토리 (Claude Code 내장 마켓플레이스 `anthropic-plugin-directory`) | **Published**(2026-09-29, v5.0.3), 이후 Auto-publish — push webhook 으로 스캔 통과 시 자동 공개(v5.2.2 Live 확인 · v5.4.0 은 push 후 약 25분 만에 캐시 제공, 2026-10-05 20:32 KST 실측). `claude plugin install hiway-kit@anthropic-plugin-directory` 가 로그인 없이 성공(실측). 게재 대상은 Claude Code 만. claude.ai 웹 검색에는 아직 안 보임. 10-18 포털: v5.4.2 Live, 아이콘 **세 번째 무심사 만료** → 재업로드, Listing URL 3종 여전히 비어 있음, 구 `claude-code-kit` 제출 2건 남음. `claude-plugins-official`(Anthropic 큐레이션, 포털 제출 안 받음)에는 없음 | 2026-10-18 | 10-18 21:34 KST 티켓 스레드로 4건(목록 URL·아이콘·웹 노출·전임 정리) 후속 문의 — 회신 대기 |
+| OpenAI 디렉토리 (Codex) | 5.2.0 **Changes required**(2026-09-30 제출 → 10-12~10-16 사이 판정, 사유 메일·포털 문구 없음). **2026-10-16 초안 실측**(같은 플러그인에 5.4.1-probe.1 업로드, 제출 안 함): 스킬 15개 전부 `Checks passed`, 약관 URL 사유는 `LICENSE` URL 로 해소(5.4.2 매니페스트 반영), **남은 차단은 하나** — `We are not accepting more skills-only submissions at this time.`(포털이 링크하는 plugin-guidelines 는 "skills-only 는 추가 자격 요건이 있을 수 있다"만 적음, 재개 시점 공지 없음). 킷 ZIP 은 `hooks/` 를 빼므로 skills-only 이고, 기존 skills-only 플러그인에 MCP 추가는 문서상 미지원. **10-18 재확인**: 5.4.2 ZIP 을 초안으로 올림(`5.4.2 · Draft`, 제출 안 함) — 약관·홈페이지·개인정보 URL 반영, 차단은 여전히 skills-only 접수 중단 1건 | 2026-10-18 | 케이스 17442948(15960350 에서 전환, 10-16 스페셜리스트 에스컬레이션)에 10-18 21:31 KST 초안 상태 회신 — 재개 공지 대기. 재개되면 사용자 확인 후 이 초안을 Submit |
 | Codex 직접 마켓플레이스 (`codex plugin marketplace add This-HW/hiway-kit`) | 동작 — 스킬 인식 + 훅 신뢰 승인 후 SessionStart 주입(2026-10-05 감사 A 실측, codex 0.159.3) | 2026-10-05 | 없음 |
-| 커뮤니티 카탈로그 (`claude-community`, `anthropics/claude-plugins-community`) | 자동 동기화가 2026-08-13 이후 멈춤. hiway-kit 없음. 전임 `claude-code-kit` 항목이 v2.12.3(`292ba07e`) pin 으로 남아 있음 | 2026-10-05 | 조치 없음(읽기 전용 미러). 2026-09-28 보낸 구 항목 삭제 요청의 결과 대기 |
-| Antigravity | 공식 마켓플레이스는 **큐레이션** — 공개 레지스트리·커스텀 마켓플레이스 없음(`agy plugin install x@<mp>` 는 등록된 마켓플레이스만, 임의 이름은 `unknown marketplace`, agy 1.3.1 실측). 등재는 관심 신청 폼(antigravity.google/docs/marketplace)만 — **2026-10-07 제출**(신청자 thishw · 지원 창구 GitHub Issues · 문서 hiway.thishw.com/docs). 현재 설치 경로는 로컬 디렉토리(`agy plugin install <repo>/plugins/common`) — 스킬 15 인식, 에이전트는 `model:` 값 때문에 0(1.3.1 재측정) | 2026-10-07 | 심사 회신 대기(폼 응답 이메일). 등재 연락이 오면 README 설치 절에 반영 |
+| 커뮤니티 카탈로그 (`claude-community`, `anthropics/claude-plugins-community`) | `marketplace.json` 자동 동기화는 2026-08-13 이 마지막, 이후 수동 커밋만(최근 10-13 항목 삭제). 2,283개 중 hiway-kit 없음. 전임 `claude-code-kit` 항목이 v2.12.3(`292ba07e`) pin 으로 남아 있음 | 2026-10-18 | 조치 없음(읽기 전용 미러, PR 자동 종료). 구 항목 삭제는 10-18 디렉토리 팀 후속 문의에 포함 |
+| Antigravity | 공식 마켓플레이스는 **큐레이션** — 공개 레지스트리·커스텀 마켓플레이스 없음(`agy plugin install x@<mp>` 는 등록된 마켓플레이스만, 임의 이름은 `unknown marketplace`, agy 1.3.1 실측). 등재는 관심 신청 폼(antigravity.google/docs/marketplace)만 — **2026-10-07 제출**(신청자 thishw · 지원 창구 GitHub Issues · 문서 hiway.thishw.com/docs). 설치 경로: **GitHub URL**(`agy plugin install https://github.com/This-HW/hiway-kit` — 저장소의 `plugins/` 를 찾아 설치, `…/tree/main/plugins/common` 도 동작, agy 1.4.2 빈 HOME 실측 2026-10-18) 또는 로컬 디렉토리 — 스킬 15, 에이전트 0(`skipped`) | 2026-10-18 | 심사 회신 대기(폼 응답 이메일, 10-07 제출 후 0건). 등재 연락이 오면 README 설치 절에 반영 |
 
 Claude 디렉토리 제출 포털: claude.ai → Directory → Submissions(개인 저자는 `platform.claude.com/plugins/submit`).
 
@@ -124,6 +124,19 @@ reviewed in time, so its image was deleted"* — **심사 없이 만료**됐다(
 claude.ai 디렉토리 'hiway' 검색 미노출.
 
 **10-16 OpenAI 재확인** — 5.2.0 이 *Changes required* 로 바뀌어 있었다(언제 바뀌었는지 모른다 — 두 Gmail 계정 어디에도 심사 결과 메일이 없고 버전 페이지에도 사유가 없다). 페이지의 *Upload plugin to make changes* 가 다시 활성이라 10-12 에 만든 probe ZIP(5.4.1, 약관=LICENSE URL)을 초안으로 올렸다 — 이 버튼은 `<input type=file>` 이 없어 자동화의 파일 선택이 안 열리고, 버튼의 `drop` 핸들러에 파일을 떨어뜨리면 된다. 판정: 메타데이터 차단 **1건** `We are not accepting more skills-only submissions at this time.` · 스킬 15/15 `Checks passed`. 다른 개발자도 같은 문구를 받았다(github.com/bompus/swarmail PR #118, 10-09 — 그쪽은 "다른 AI 어시스턴트 이름을 리스팅에 씀"도 받았지만 킷은 받지 않았다). 지원 케이스 15960350 의 09-30 회신(ChatGPT 워크스페이스 Skills 일반 안내 — 질문과 어긋남)에 그동안 답하지 않았던 것을 이번에 구체 질문 3개로 회신했다. 추적 공백: 10-12 이후 추적 cron 을 다시 걸지 않아 4일간 확인이 없었다.
+
+**10-18 전 채널 재점검** — 10-16 이후 매시간 추적에서 메일·포털 변화 0건. 그날 한 일:
+- OpenAI: 5.4.2 ZIP(`build-codex-zip.py --out`, 약관=LICENSE URL)을 같은 플러그인에 **초안으로 재업로드**(대화상자 이름이 이미 초안이 있으면
+  *Create draft from ZIP* 대신 *Reupload draft* 다). 결과 `5.4.2 · Draft`, Review status *Needs attention*, 메타데이터에 홈페이지
+  `hiway.thishw.com`·개인정보 `/privacy/`·약관 LICENSE URL 반영, 차단 1건 그대로 — *We are not accepting more skills-only submissions at this time.*
+  제출하지 않았다. 케이스 17442948 스레드에 초안 상태를 21:31 KST 회신.
+- Claude: 포털 v5.4.2 Live. 10-12 에 올린 아이콘이 **세 번째로 무심사 만료**(*This icon wasn't reviewed in time, so its image was deleted*)
+  → Replace 재업로드(*waiting for review*). Listing 의 Documentation·Support·Privacy 는 여전히 *No value*. claude.ai/directory 'hiway' 검색 미노출.
+  관리 목록에 전임 `claude-code-kit` 제출 2건(*Scan passed*·*Needs changes*) 잔존. 이 넷을 21:34 KST 티켓 스레드로 후속 문의.
+  `claude-plugins-official` 315개에 hiway-kit 없음 — 이 카탈로그는 Anthropic 큐레이션이라 포털 제출로 들어가지 않는다(10-02 정정 절).
+- Antigravity: agy **1.4.2** 에서 GitHub URL 설치가 된다 — `agy plugin install https://github.com/This-HW/hiway-kit` 이
+  *Found bulk plugins directory … plugins* 로 `plugins/common` 을 찾아 hiway-kit 5.4.2 를 설치(스킬 15·규칙 14, 에이전트·훅 *skipped*),
+  `…/tree/main/plugins/common` 도 같은 결과(빈 HOME, 검사 후 삭제). README 설치 절에 반영. 관심 신청 폼 회신은 10-07 이후 0건.
 
 **스캔 경고 원인 실측(2026-09-29, v5.0.1~5.0.3)** — 포털의 **Validate**(Submit new → Plugin bundle → 저장소 칸에
 `https://github.com/<owner>/<repo>/tree/<branch>/<path>` → Validate, 저장·제출 없이 검사만)를 조사용 브랜치에 돌리면
