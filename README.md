@@ -256,12 +256,13 @@ there makes them visible to those harnesses without a plugin install. Two costs:
 the `hiway-kit:` namespace (they appear under their bare names), and if the same harness **also**
 has the plugin installed, every skill loads twice — the same "never run two copies" rule as above.
 
-The [`skills` CLI](https://skills.sh) copies the 15 skills into whichever agents it detects. Point it at
-`plugins/common` — the bare `This-HW/hiway-kit` finds only this repo's three maintainer skills in
-`.claude/skills/` (measured skills 1.7.2, 2026-10-19):
+The [`skills` CLI](https://skills.sh) copies the 15 skills into whichever agents it detects (listed at
+[skills.sh/this-hw/hiway-kit](https://skills.sh/this-hw/hiway-kit)). This repo's three maintainer skills in
+`.claude/skills/` carry `metadata.internal: true`, so the CLI skips them and finds the 15 under
+`plugins/common/skills/` (measured skills 1.7.2, 2026-10-19 — without the flag it found only those three):
 
 ```bash
-npx skills add https://github.com/This-HW/hiway-kit/tree/main/plugins/common
+npx skills add This-HW/hiway-kit
 ```
 
 ---
