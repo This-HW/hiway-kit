@@ -150,7 +150,9 @@ Two install paths deliver **different things** — pick deliberately:
 | Status | works today | see the channel table in [`docs/marketplace-submission.md`](docs/marketplace-submission.md) |
 
 ```bash
-# Add this repo (or your installed copy) as a plugin marketplace
+# Add this repo as a plugin marketplace, straight from GitHub (measured codex-cli 0.160.1, 2026-10-19)
+codex plugin marketplace add This-HW/hiway-kit
+# ...or from a local clone
 codex plugin marketplace add /path/to/hiway-kit
 
 # Install
