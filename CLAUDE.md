@@ -49,7 +49,7 @@ plugins/
 - `tools/` — Python tools skills call (not hooks — see Hooks)
 - `rules/` — governance rules (common only)
 - `assets/icon.png` — plugin icon (Codex manifest `interface.logo`·`composerIcon`; directory listings)
-- `.codex-plugin/plugin.json`, `plugin.json` — **생성물**. Codex·Antigravity 타겟 매니페스트로,
+- `.codex-plugin/plugin.json`, `plugin.json`, `.cursor-plugin/plugin.json` — **생성물**. Codex·Antigravity·Cursor 타겟 매니페스트로,
   `.claude-plugin/plugin.json` 을 SSOT 삼아 `scripts/build-targets.py` 가 만든다. 손으로 고치지 말 것
   (`verify-done.sh` §14가 드리프트를 exit 1로 잡는다). 정책은 레포 루트 `packaging/targets.json`
 

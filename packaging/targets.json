@@ -195,10 +195,32 @@
     },
     {
       "id": "cursor",
-      "enabled": false,
+      "enabled": true,
+      "manifestPath": "plugins/common/.cursor-plugin/plugin.json",
+      "requiredFields": [
+        "name",
+        "version",
+        "description"
+      ],
+      "passthroughFields": [
+        "homepage",
+        "repository",
+        "license",
+        "keywords"
+      ],
+      "_passthroughReason": "author 는 싣지 않는다 — Cursor 스키마(github.com/cursor/plugins schemas/plugin.schema.json)의 author 는 additionalProperties:false 로 name·email 만 받는데 SSOT author 에는 url 이 있어 그대로 실으면 스키마 위반이다. 저작자는 repository·cursor.directory 의 GitHub 소유자로 드러난다.",
+      "componentFields": {
+        "skills": "./skills/",
+        "hooks": {
+          "version": 1,
+          "hooks": {}
+        }
+      },
+      "_componentFieldsReason": "스킬만 싣는다. hooks 는 **빈 인라인 설정**으로 둔다 — 매니페스트에 경로를 주면 그 컴포넌트의 폴더 탐색을 대체하므로(cursor.com/docs/reference/plugins, 2026-10-19 확인) Claude Code 형식 hooks/hooks.json(exec form·${CLAUDE_PLUGIN_ROOT})을 Cursor 가 집어 들지 않는다. Cursor 에서 그 형식·변수가 동작하는지 실측하지 않았다 — 측정하지 않은 훅을 싣지 않는다(codex 타겟과 같은 계약). version:1 은 Cursor hooks 설정의 필수 필드(cursor.com/docs/agent/hooks). agents(model: opus 등 Claude 값)·rules(.md — Cursor 는 .mdc)도 같은 이유로 뺀다.",
       "verificationLevel": "spec-verified",
+      "_enabledNote": "2026-10-19 활성화 — 공개 등재 경로가 생겼다: cursor.directory(cursor/community-plugins)의 웹 제출은 레포 URL 만 받고 탐지 코드가 트리 안 <dir>/.cursor-plugin/plugin.json 을 찾는다. 공식 Cursor Marketplace(cursor.com/marketplace/publish)는 여전히 큐레이션이다. 런타임 왕복(install→list→remove)은 로컬에 Cursor 가 없어 아직 못 했다 — spec-verified.",
       "_specSummary": "공식 문서(cursor.com/docs/plugins, cursor.com/docs/reference/plugins)와 공개 스펙 저장소(github.com/cursor/plugins) 확인 [researched: 검색 결과, n=3 이상 독립 출처, 2026-08-27]. 매니페스트는 .cursor-plugin/plugin.json(필수), 다중 플러그인 저장소는 .cursor-plugin/marketplace.json. 컴포넌트 타입이 skills/agents/rules/hooks/commands/mcpServers 6종으로 전부 1급 지원 — codex(skills만)·antigravity(skills·rules, agents 비지원)와 달리 kit의 33 에이전트 + 13 rules를 전부 실을 수 있는 유일한 후보다. 스키마 검증이 엄격하다(additionalProperties:false, kebab-case 패턴, URI·email 포맷 검사). superpowers 실물(.cursor-plugin/plugin.json)이 skills + hooks: \"./hooks/hooks-cursor.json\"(훅을 타겟 전용 파일로 분리)을 실제로 쓰는 것도 확인했다 [confirmed: superpowers 원문].",
-      "_disabledReason": "두 가지 독립적인 이유로 비활성 상태다. (1) 공개 게재: Cursor Marketplace는 큐레이션 파트너 한정이라 오픈 제출이 안 된다 [researched: n=2] — 로컬/Git 마켓플레이스 설치는 이 제약과 무관하다. (2) 검증 수준: 로컬에 cursor CLI가 없어 스키마는 확인했어도 install→list→remove 런타임 왕복을 못 했다(spec-verified, runtime-verified 아님) — Antigravity agents/ 사건이 보여주듯 스키마가 맞아도 실제 발견·인식은 별개일 수 있다.",
+      "_previousDisabledReason": "두 가지 독립적인 이유로 비활성 상태다. (1) 공개 게재: Cursor Marketplace는 큐레이션 파트너 한정이라 오픈 제출이 안 된다 [researched: n=2] — 로컬/Git 마켓플레이스 설치는 이 제약과 무관하다. (2) 검증 수준: 로컬에 cursor CLI가 없어 스키마는 확인했어도 install→list→remove 런타임 왕복을 못 했다(spec-verified, runtime-verified 아님) — Antigravity agents/ 사건이 보여주듯 스키마가 맞아도 실제 발견·인식은 별개일 수 있다.",
       "_enableWhen": "cursor CLI(또는 동등 도구)로 실물 install→list→remove 왕복 검증이 가능해지거나, 사용자가 수용 테스트 트랜스크립트를 제공하면 — runtime-verified로 승격 후 재검토 (superpowers의 새 하네스 지원 기준과 동일)."
     },
     {

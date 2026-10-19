@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.5.0] — 2026-10-19
+
+### Added — Cursor 타겟 매니페스트(`plugins/common/.cursor-plugin/plugin.json`)
+
+`packaging/targets.json` 의 cursor 타겟을 켰다. 공개 등재 경로가 생겼기 때문이다: cursor.directory(Cursor 의
+커뮤니티 마켓플레이스)는 레포 URL 만 받고, 트리 안의 `<dir>/.cursor-plugin/plugin.json` 을 찾는다. 공식 Cursor
+Marketplace 는 여전히 큐레이션이다. 싣는 것은 **스킬 15개뿐**이다. hooks 는 빈 인라인 설정(`{"version":1,"hooks":{}}`)으로
+둬서 Cursor 가 Claude Code 형식 `hooks/hooks.json` 을 폴더 탐색으로 집어 들지 않게 했다. 에이전트(`model: opus`)와
+룰(`.md`, Cursor 는 `.mdc`)도 실측 전이라 뺐다. `author` 는 Cursor 스키마가 `url` 을 받지 않아 생략했다. 생성물은
+Cursor 공개 스키마(github.com/cursor/plugins `schemas/plugin.schema.json`)를 통과한다. 음성 대조로 `author.url` 을 넣으면
+실패한다. 설치 왕복은 로컬에 Cursor 가 없어 측정하지 못했다(spec-verified). Claude Code·Codex·Antigravity 동작 변화 없음.
+
 ## [5.4.2] — 2026-10-16
 
 ### Changed — Codex 매니페스트에 약관 URL(`interface.termsOfServiceURL`)

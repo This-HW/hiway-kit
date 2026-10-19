@@ -73,6 +73,13 @@ ahead of two targets that were verified one at a time against `codex`/`agy`, not
 from documentation alone. Record each runtime measurement in `targets.json` with its date
 and CLI version — a measurement is only as current as the CLI it was taken on.
 
+**One recorded exception: `cursor` (5.5.0, 2026-10-19).** It was enabled without a Cursor install round
+trip, because the cursor.directory listing needs the manifest in the tree and this machine has no
+Cursor. Three things keep the risk down: it ships skills only (hooks are an empty inline config, and
+agents and rules are left out); the generated file passes Cursor's published JSON schema, with a negative
+control; and `verificationLevel` stays `spec-verified`. Measure it on a real Cursor before adding
+anything beyond skills.
+
 ## `name-targets.json` — deriving the product name into prose docs
 
 `targets.json` (above) generates *manifests* — pure, never-hand-edited artifacts, so

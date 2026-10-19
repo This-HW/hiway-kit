@@ -99,7 +99,7 @@ a `_suffix` form). Measured precision of that rule across full history: 4%.
 ## Other Harnesses (Codex · Antigravity · Gemini CLI)
 
 **Claude Code is the full-feature baseline.** The kit's plugin root (`plugins/common/`) also ships
-**native plugin manifests** for Codex and Antigravity, generated from the same source of truth as
+**native plugin manifests** for Codex, Antigravity and Cursor, generated from the same source of truth as
 the Claude Code manifest (`packaging/targets.json` + `scripts/build-targets.py` — see
 [`packaging/README.md`](packaging/README.md)). What reaches each harness differs by platform
 capability. The cells below cite the measurement they rest on; the dated records live in
@@ -231,6 +231,15 @@ twice (measured 2026-10-05).
 with this kit, so the GitHub and local paths above are the only ones documented here. Both install
 hiway-kit 5.4.2 with 15 skills; agents are skipped (see the table above).
 
+### Cursor
+
+`plugins/common/.cursor-plugin/plugin.json` (generated, like the others) ships **the 15 skills only**.
+Hooks are set to an empty inline config, so Cursor does not pick up the Claude Code `hooks/hooks.json`.
+That file's exec form and `${CLAUDE_PLUGIN_ROOT}` are unmeasured on Cursor. Agents (`model: opus` and
+other Claude values) and rules (`.md`; Cursor expects `.mdc`) are left out for the same reason. The
+manifest passes Cursor's published JSON schema. An install round trip has **not** been measured: this
+machine has no Cursor. Norms reach Cursor only through `AGENTS.md` (run `/harness-export`).
+
 ### Gemini CLI
 
 The kit provides **only `GEMINI.md`** for Gemini CLI (written by `/harness-export`; Gemini CLI reads
@@ -246,6 +255,14 @@ Several harnesses also read a user-level skills folder — Codex and Gemini CLI 
 there makes them visible to those harnesses without a plugin install. Two costs: the skills lose
 the `hiway-kit:` namespace (they appear under their bare names), and if the same harness **also**
 has the plugin installed, every skill loads twice — the same "never run two copies" rule as above.
+
+The [`skills` CLI](https://skills.sh) copies the 15 skills into whichever agents it detects. Point it at
+`plugins/common` — the bare `This-HW/hiway-kit` finds only this repo's three maintainer skills in
+`.claude/skills/` (measured skills 1.7.2, 2026-10-19):
+
+```bash
+npx skills add https://github.com/This-HW/hiway-kit/tree/main/plugins/common
+```
 
 ---
 
