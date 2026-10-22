@@ -1,6 +1,6 @@
 ---
 status: current
-as_of: 2026-10-22
+as_of: 2026-10-23
 ---
 
 # Marketplace Submission & Community Listing
@@ -21,7 +21,11 @@ as_of: 2026-10-22
 | Antigravity | 공식 마켓플레이스는 **큐레이션** — 공개 레지스트리·커스텀 마켓플레이스 없음(`agy plugin install x@<mp>` 는 등록된 마켓플레이스만, 임의 이름은 `unknown marketplace`, agy 1.3.1 실측). 등재는 관심 신청 폼(antigravity.google/docs/marketplace)만 — **2026-10-07 제출**(신청자 thishw · 지원 창구 GitHub Issues · 문서 hiway.thishw.com/docs). 설치 경로: **GitHub URL**(`agy plugin install https://github.com/This-HW/hiway-kit` — 저장소의 `plugins/` 를 찾아 설치, `…/tree/main/plugins/common` 도 동작, agy 1.4.2 빈 HOME 실측 2026-10-18) 또는 로컬 디렉토리 — 스킬 15, 에이전트 0(`skipped`) | 2026-10-18 | 심사 회신 대기(폼 응답 이메일, 10-07 제출 후 0건). 등재 연락이 오면 README 설치 절에 반영 |
 | skills.sh (Vercel `skills` CLI) | **등재** — [skills.sh/this-hw/hiway-kit](https://skills.sh/this-hw/hiway-kit), 스킬 15개(설치 텔레메트리로 자동 생성, 2026-10-19 첫 설치 후 확인). 레포 전용 스킬 3종에 `metadata.internal` 을 붙여 페이지의 설치 명령 `npx skills add this-hw/hiway-kit` 이 15개를 찾게 함(c7710ec, 전에는 3개만) | 2026-10-19 | 없음 |
 | buildwithclaude.com (`davepoon/buildwithclaude` 마켓플레이스) | **등재** — PR [#488](https://github.com/davepoon/buildwithclaude/pull/488) 2026-10-19 19:51 KST 병합(관리자가 v5.4.2 `2315253` 의 훅·데이터 취급을 읽고 승인), 페이지 [buildwithclaude.com/plugin/hiway-kit](https://buildwithclaude.com/plugin/hiway-kit). 항목은 커밋 고정이라 새 버전은 반영되지 않는다 | 2026-10-19 | 버전 갱신이 필요하면 sha 를 올리는 PR |
-| cursor.directory (Cursor 커뮤니티 마켓플레이스) | 5.5.0 에서 `plugins/common/.cursor-plugin/plugin.json`(스킬만) 추가 — 제출 폼은 GitHub 로그인 필요, Aside 브라우저에 GitHub 세션이 없어 중단 | 2026-10-19 | 사용자 GitHub 로그인 후 레포 URL 제출(자동 보안 스캔 safe 면 즉시 공개) |
+| cursor.directory (Cursor 커뮤니티 마켓플레이스) | **제출**(2026-10-23 02:3x KST, Aside — GitHub OAuth `Email addresses (read-only)` 만 승인, 사용자 지시). 페이지 [cursor.directory/plugins/hiway-kit](https://cursor.directory/plugins/hiway-kit) — *"Scanning your plugin… it will appear publicly once the security agent finishes. This plugin is unpublished and hidden from the directory."* | 2026-10-23 | 보안 스캔 결과 확인(공개되면 상태 갱신) |
+| mcpmarket.com (Agent Skills) | **제출**(2026-10-23, Aside, 무료 대기열 — 유료 즉시 등록 미선택): *"Submitted! You're in the free queue — current wait is ~4–6 weeks. We'll email you when it's live."* | 2026-10-23 | 게시 메일 대기 |
+| claudemarketplace.net | **제출**(2026-10-23 02:44 KST, thishw.op → 사이트가 안내한 제출 메일). 사이트 안내: 수동 검토, 보통 영업일 2일 이내 | 2026-10-23 | 회신·게시 확인 |
+| claudemarketplaces.com · skillsmp.com | 미등재 — 둘 다 **GitHub 자동 인덱싱**(제출 폼 없음). skillsmp 는 `claude-skills`/`claude-code-skill` topic 을 일일 동기화하므로 10-23 에 `claude-code-skill` topic 추가(`claude-skills` 는 이미 있음) | 2026-10-23 | 인덱싱 확인 |
+| aitmpl.com (`davila7/claude-code-templates`) | 미제출 — 개별 컴포넌트(에이전트·명령) 단위 카탈로그라 킷 전체 등재 형식이 없음, 최근 병합은 관리자 본인 PR 뿐 | 2026-10-23 | 보류 |
 | awesome-claude-code (`hesreallyhim/awesome-claude-code`) | 미제출 — 규칙상 **사람이 웹 이슈 폼으로만** 제출(자동화·`gh` 금지) | 2026-10-19 | 사용자가 recommend-resource 폼 제출(카테고리 Agent Orchestration > SDLC) |
 
 Claude 디렉토리 제출 포털: claude.ai → Directory → Submissions(개인 저자는 `platform.claude.com/plugins/submit`).
