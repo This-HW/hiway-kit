@@ -200,6 +200,65 @@ def test_passthrough_field_included_when_present_and_omitted_when_absent(tmp_pat
     assert "license" not in data  # SSOT에 없음 → 조용히 생략
 
 
+def _with_interface_from(root: Path, mapping: dict) -> None:
+    path = root / "packaging" / "targets.json"
+    policy = json.loads(path.read_text())
+    policy["targets"][0]["interfaceFrom"] = mapping
+    path.write_text(json.dumps(policy))
+
+
+def test_interface_from_copies_ssot_values_and_follows_ssot_change(tmp_path):
+    root = _fake_repo(tmp_path)
+    _with_interface_from(root, {"supportURL": "supportUrl", "logo": "icon"})
+    ssot_path = root / "plugins/common/.claude-plugin/plugin.json"
+    ssot = {**SSOT, "supportUrl": "https://example.com/issues", "icon": "./a.png"}
+    ssot_path.write_text(json.dumps(ssot))
+    assert _run(root, "--write", "--only", "alpha") == 0
+    manifest = root / "plugins" / "common" / ".alpha-plugin" / "plugin.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert data["interface"] == {
+        "displayName": "Alpha Target",  # 리터럴은 그대로
+        "supportURL": "https://example.com/issues",
+        "logo": "./a.png",
+    }
+    assert "supportUrl" not in data and "icon" not in data  # 목록 필드는 새지 않는다
+    ssot_path.write_text(json.dumps({**ssot, "supportUrl": "https://example.com/new"}))
+    assert _run(root, "--check", "--only", "alpha") == 1  # SSOT 변경 = 드리프트
+
+
+def test_interface_from_missing_ssot_field_is_exit_1(tmp_path, capsys):
+    root = _fake_repo(tmp_path)
+    _with_interface_from(root, {"supportURL": "supportUrl"})
+    assert _run(root, "--write", "--only", "alpha") == 1
+    assert "원천 SSOT 필드 'supportUrl' 없음" in capsys.readouterr().err
+
+
+LISTING_FIELDS = (
+    "icon",
+    "documentationUrl",
+    "supportUrl",
+    "privacyPolicyUrl",
+    "termsOfServiceUrl",
+)
+
+
+def test_real_repo_listing_fields_stay_in_claude_manifest_only():
+    """실제 레포: Claude 디렉토리 목록 필드는 SSOT 에만 있고 어떤 타겟 생성물에도
+    최상위 키로 새지 않는다(Cursor 스키마는 additionalProperties:false)."""
+    repo = SCRIPTS_DIR.parent
+    ssot = json.loads(
+        (repo / "plugins/common/.claude-plugin/plugin.json").read_text(encoding="utf-8")
+    )
+    assert all(field in ssot for field in LISTING_FIELDS)
+    policy = json.loads((repo / "packaging/targets.json").read_text(encoding="utf-8"))
+    enabled = [t for t in policy["targets"] if t.get("enabled")]
+    assert enabled
+    for target in enabled:
+        data = json.loads((repo / target["manifestPath"]).read_text(encoding="utf-8"))
+        leaked = [field for field in LISTING_FIELDS if field in data]
+        assert not leaked, (target["id"], leaked)
+
+
 def test_second_target_without_marketplace_generates_manifest_only(tmp_path):
     root = _fake_repo(tmp_path)
     rc = _run(root, "--write", "--only", "gamma")

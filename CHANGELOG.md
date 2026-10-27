@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.5.1] — 2026-10-28
+
+### Added — Claude 디렉토리 목록 필드(`icon`·`documentationUrl`·`supportUrl`·`privacyPolicyUrl`·`termsOfServiceUrl`)
+
+Anthropic 디렉토리는 등재 화면의 아이콘과 문서·지원·개인정보·약관 링크를 `plugin.json` 의 이 다섯 필드에서 읽는다
+(https://code.claude.com/docs/en/plugins/manifest-reference §Directory listing fields). 지금까지 SSOT 에 없어서
+디렉토리 Listing 의 네 링크가 "No value" 였고, 포털에 따로 올린 아이콘은 심사 없이 만료되기를 반복했다. 값은
+`icon: ./assets/icon.png`(512×512, Codex 와 같은 파일), 문서 `https://hiway.thishw.com/docs/`, 지원 GitHub issues,
+개인정보 `https://hiway.thishw.com/privacy/`, 약관 `LICENSE` 다. **Claude Code 동작 변화 없음** — Claude Code 는 로드할 때
+이 필드를 무시하고, `claude plugin validate` 는 2.1.281 부터 이 필드를 미지 키로 보고하지 않는다(2.1.311 에서 `--strict`
+통과, 미지 키를 넣은 대조군은 경고·실패).
+
+Codex `interface` 의 `websiteURL`·`supportURL`·`privacyPolicyURL`·`termsOfServiceURL`·`logo`·`composerIcon` 은
+`packaging/targets.json` 에 리터럴로 있던 같은 값이다. 두 곳에 두지 않도록 이제 생성기가 SSOT 에서 옮겨 담는다(새 정책 키
+`interfaceFrom`, 원천 필드가 없으면 exit 1). 생성된 Codex 매니페스트는 버전 외에 바이트 단위로 같다. 목록 필드는
+Codex·Cursor·Antigravity 생성물로 새지 않는다(필드 화이트리스트). Cursor 공개 스키마 검증을 통과하고, 같은 스키마는 SSOT
+원본을 이 다섯 필드로 거부한다. Codex·Cursor·Antigravity 동작 변화 없음.
+
 ## [5.5.0] — 2026-10-19
 
 ### Added — Cursor 타겟 매니페스트(`plugins/common/.cursor-plugin/plugin.json`)

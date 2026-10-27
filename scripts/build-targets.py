@@ -146,8 +146,9 @@ def build_manifest(ssot: dict, target: dict, present_dirs: set[str]) -> dict:
     """타겟 하나의 플러그인 매니페스트 내용을 계산한다. 필드 매핑은 전부 target(정책)이 정한다.
 
     필드 하드코딩 없음: SSOT에서 뽑을 필드 이름(`requiredFields`/`optionalFields`/
-    `passthroughFields`), 컴포넌트 필드 매핑(`componentFields`), 인터페이스 문구(`interface`),
-    스키마 URL(`schemaUrl`)은 전부 `packaging/targets.json`에서 온다.
+    `passthroughFields`), 컴포넌트 필드 매핑(`componentFields`), 인터페이스 문구(`interface`)와
+    SSOT 에서 옮겨 담을 인터페이스 필드(`interfaceFrom`), 스키마 URL(`schemaUrl`)은 전부
+    `packaging/targets.json`에서 온다.
 
     `optionalFields`와 `passthroughFields`는 동작이 같다(SSOT에 있으면 싣고, 없으면 조용히
     생략) — 이름을 분리한 것은 정책 문서의 의도를 구분해 남기기 위해서다:
@@ -177,8 +178,17 @@ def build_manifest(ssot: dict, target: dict, present_dirs: set[str]) -> dict:
     hooks = target.get("hooks")
     if hooks and "hooks" in present_dirs:
         out["hooks"] = hooks["manifestField"]
-    if target.get("interface"):
-        out["interface"] = target["interface"]
+    if target.get("interface") or target.get("interfaceFrom"):
+        interface = dict(target.get("interface", {}))
+        # 같은 값을 정책에 리터럴로 두면 SSOT 와 두 벌이 된다 — SSOT 에서 옮겨 담는다.
+        # 원천이 없으면 빈 URL 을 조용히 싣지 않고 실패한다.
+        for field, src in target.get("interfaceFrom", {}).items():
+            if src not in ssot:
+                raise PolicyError(
+                    f"타겟 '{target['id']}': interface.{field} 의 원천 SSOT 필드 '{src}' 없음"
+                )
+            interface[field] = ssot[src]
+        out["interface"] = interface
     return out
 
 
@@ -373,8 +383,10 @@ def _yaml_scalar(value: object) -> str:
 
 def _dumps_yaml(d: dict) -> str:
     """2단 매핑만 쓰는 결정론적 YAML. 키 순서는 내용 dict 의 순서(정책 순서) 그대로."""
-    lines = ["# 자동 생성 — scripts/build-targets.py (packaging/targets.json skillInterface).",
-             "# 손으로 고치지 말 것: SKILL.md frontmatter 를 고치고 --write 로 재생성한다."]
+    lines = [
+        "# 자동 생성 — scripts/build-targets.py (packaging/targets.json skillInterface).",
+        "# 손으로 고치지 말 것: SKILL.md frontmatter 를 고치고 --write 로 재생성한다.",
+    ]
     for section, body in d.items():
         lines.append(f"{section}:")
         for key, value in body.items():
@@ -489,7 +501,9 @@ def artifacts_for(
             content = build_skill_interface(
                 read_skill_frontmatter(skill_md), spec, skill
             )
-            out_path = _policy_path(skill_md.parent, spec["path"], "skillInterface.path")
+            out_path = _policy_path(
+                skill_md.parent, spec["path"], "skillInterface.path"
+            )
             out.append(
                 Artifact(
                     target["id"],

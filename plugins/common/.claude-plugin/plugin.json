@@ -1,6 +1,6 @@
 {
   "name": "hiway-kit",
-  "version": "5.5.0",
+  "version": "5.5.1",
   "description": "Turn any task into production-ready code. Rules and skills work on any coding harness; specialized agents and automatic hook enforcement are a Claude Code deepening feature.",
   "author": {
     "name": "This-HW",
@@ -8,8 +8,13 @@
     "url": "https://github.com/This-HW"
   },
   "homepage": "https://hiway.thishw.com/",
+  "documentationUrl": "https://hiway.thishw.com/docs/",
+  "supportUrl": "https://github.com/This-HW/hiway-kit/issues",
+  "privacyPolicyUrl": "https://hiway.thishw.com/privacy/",
+  "termsOfServiceUrl": "https://github.com/This-HW/hiway-kit/blob/main/LICENSE",
   "repository": "https://github.com/This-HW/hiway-kit",
   "license": "MIT",
+  "icon": "./assets/icon.png",
   "keywords": [
     "agents",
     "skills",

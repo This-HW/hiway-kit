@@ -149,7 +149,7 @@ Codex's own docs describe as required/expected for a plugin manifest
 | `description` | ✅ | SSOT |
 | `author` (name/email/url) | ✅ | SSOT, passed through (`packaging/targets.json` `passthroughFields`) |
 | `homepage` | ✅ | SSOT, passed through |
-| `interface.websiteURL` / `privacyPolicyURL` | ✅ | `packaging/targets.json` codex `interface` — the product site `https://hiway.thishw.com/` and `https://hiway.thishw.com/privacy/` (since 5.2.2; `supportURL` stays the GitHub issues page) |
+| `interface.websiteURL` / `supportURL` / `privacyPolicyURL` / `termsOfServiceURL` / `logo` / `composerIcon` | ✅ | SSOT `homepage` / `supportUrl` / `privacyPolicyUrl` / `termsOfServiceUrl` / `icon` (the Claude directory listing fields), copied by `packaging/targets.json` codex `interfaceFrom` since 5.5.1 — the product site `https://hiway.thishw.com/` and `https://hiway.thishw.com/privacy/`; `supportURL` stays the GitHub issues page |
 | `repository` | ✅ | SSOT, passed through |
 | `license` | ✅ | SSOT, passed through |
 | `keywords` | ✅ | SSOT, passed through |

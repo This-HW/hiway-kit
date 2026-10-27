@@ -1,11 +1,11 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "_comment": "다중 하네스 타겟 매니페스트 생성 정책의 단일 소스. 이 파일 밖(스크립트·문서)에 필드 매핑이나 문구를 중복 기재하지 말 것.",
   "source": {
     "pluginRoot": "plugins/common",
     "manifest": "plugins/common/.claude-plugin/plugin.json",
     "_meta": {
-      "authority": "name·version·description·author·license·homepage·repository·keywords 의 SSOT는 이 매니페스트다. 어떤 타겟 생성물도 이 값을 재정의하지 않는다.",
+      "authority": "name·version·description·author·license·homepage·repository·keywords 와 디렉토리 목록 필드(icon·documentationUrl·supportUrl·privacyPolicyUrl·termsOfServiceUrl)의 SSOT는 이 매니페스트다. 어떤 타겟 생성물도 이 값을 재정의하지 않는다. 목록 필드는 Claude 디렉토리 전용이라 타겟에 통과시키지 않는다(`passthroughFields` 에 없다 — Cursor 스키마는 additionalProperties:false) — Codex 는 `interfaceFrom` 으로 자기 필드 이름에 옮겨 담는다.",
       "componentDirs": [
         "skills",
         "agents",
@@ -55,21 +55,24 @@
       "interface": {
         "displayName": "hiway-kit",
         "shortDescription": "Coding agent discipline kit",
-        "websiteURL": "https://hiway.thishw.com/",
-        "supportURL": "https://github.com/This-HW/hiway-kit/issues",
-        "privacyPolicyURL": "https://hiway.thishw.com/privacy/",
-        "termsOfServiceURL": "https://github.com/This-HW/hiway-kit/blob/main/LICENSE",
         "longDescription": "hiway-kit is a discipline kit for coding agents. Its 15 skills turn a request into verified, production-ready code.\n\n- Planning: plan-task writes a plan file with executable done-criteria; brainstorming handles design for large new features.\n- Execution: auto-dev runs a plan through implementation and validation; test and debug run the tests, diagnose failures and fix them.\n- Review: review runs lint, an adversarial code review and a security scan; multi-perspective-review and cross-engine-review reach an evidence-backed decision across perspectives or across agent engines.\n- Coordination: control-loop and child-session keep multi-session work safe with clear briefs, isolated branches and verification before merge.\n- Knowledge: web-research, skill-forge (turn a solved problem into a reusable skill), agent-creator, and harness-export (share the kit's rules with other coding agents through AGENTS.md).\n\nDone is judged by command output, not by claims: the skills tell the agent to run the project's own tests and checks before reporting work as finished.\n\nThe kit makes no network calls and collects no data. Skills that search the web use the tools you already have.",
         "developerName": "This-HW",
         "category": "Developer Tools",
-        "logo": "./assets/icon.png",
-        "composerIcon": "./assets/icon.png",
         "capabilities": [
           "Interactive",
           "Read",
           "Write"
         ]
       },
+      "interfaceFrom": {
+        "websiteURL": "homepage",
+        "supportURL": "supportUrl",
+        "privacyPolicyURL": "privacyPolicyUrl",
+        "termsOfServiceURL": "termsOfServiceUrl",
+        "logo": "icon",
+        "composerIcon": "icon"
+      },
+      "_interfaceFrom": "`interface` 필드 이름 → SSOT 매니페스트 필드 이름. 5.5.1 전에는 이 URL·아이콘 값이 위 `interface` 에 **리터럴로** 있었고, 같은 값이 Claude 디렉토리 목록 필드(`supportUrl`·`privacyPolicyUrl`·`termsOfServiceUrl`·`icon`, code.claude.com/docs/en/plugins/manifest-reference §Directory listing fields)로 SSOT 에도 생겼다 — 두 곳에 두면 한쪽만 고치는 드리프트 표면이 된다. 그래서 SSOT 에서 읽는다. `websiteURL` 은 이전부터 SSOT `homepage` 와 같은 값이었다. SSOT 에 원천 필드가 없으면 생성기가 exit 1 — 빈 URL 을 조용히 싣지 않는다(빠지면 `build-codex-zip.py` 제출 검사가 거부한다). `documentationUrl` 은 Codex interface 에 대응 필드가 없어 싣지 않는다.",
       "verifyWith": [
         "codex plugin marketplace add <repo>",
         "codex plugin list"
