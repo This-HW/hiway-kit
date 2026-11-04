@@ -36,6 +36,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   Session search also bounds directory entries, traversal and aggregate reads, with explicit truncation.
 - Document persistent-source reinstall behavior and preserve explicitly disabled hooks. These helpers
   currently require POSIX file/process primitives and do not claim full OMO feature equivalence.
+- Select logged-in browser capabilities from the current host instead of naming a personal CLI;
+  public-page fetches do not establish authenticated access.
 
 ## [5.5.1] — 2026-10-28
 
