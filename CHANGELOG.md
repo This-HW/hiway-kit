@@ -68,6 +68,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   absent explicit installation paths remain unknown. Distinguish missing files from other IO failures.
 - Reject protected directory identities during session-log descent, including aliases through other
   hard paths; protect the OS account home as well as configured homes and report skipped-tree truncation.
+- Compare executable/PATH ancestors to one shared workspace identity, blocking case-alias bypasses.
+  Drop uninspectable PATH entries. Handle missing passwd records and invalid home values in history
+  without a traceback; report unknown protection boundaries instead of scanning without a usable home.
+- Clarify installation doctor help: diagnosis reads files, while explicit snapshot capture writes a file.
 - Run AST queries with a neutral working directory and explicit empty configuration. Probe only `ast-grep`;
   pattern validation is confirmed for 0.51.0, with zero-match results from other versions marked unverified.
   AST/LSP outputs carry an untrusted-content notice.

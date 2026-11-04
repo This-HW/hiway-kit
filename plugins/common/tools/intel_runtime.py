@@ -52,10 +52,26 @@ class PinnedExecutable(str):
     Popen to follow the original symlink again. This is not a filesystem sandbox.
     """
 
-    def __new__(cls, original: str, fixed: str):
+    def __new__(cls, original: str, fixed: str, workspace_identity: tuple[int, int] | None = None):
         value = super().__new__(cls, original)
         value.executable = fixed
+        value.workspace_identity = workspace_identity
         return value
+
+
+def filesystem_identity(path: Path) -> tuple[int, int]:
+    info = path.stat()
+    return info.st_dev, info.st_ino
+
+
+def within_workspace(path: Path, identity: tuple[int, int]) -> bool:
+    """Compare real identities, including case/firmlink aliases of an ancestor.
+
+    IO failures propagate: an uninspectable path is never deemed external.
+    The caller reuses one root identity through selection and child PATH setup.
+    This pathname check does not provide an OS execution sandbox.
+    """
+    return any(filesystem_identity(parent) == identity for parent in (path, *path.parents))
 
 
 def resolve_executable(path: str, root: Path, allow_custom: bool = False,
@@ -73,38 +89,47 @@ def resolve_executable(path: str, root: Path, allow_custom: bool = False,
             raise ValueError("Cannot safely resolve executable path: " + str(exc)) from exc
     original = os.path.abspath(path)
     fixed = cache[path]
-    if not allow_custom and (Path(original).is_relative_to(root) or Path(fixed).is_relative_to(root)):
-        raise ValueError("Workspace executable is forbidden for AST; LSP requires --allow-custom-server (arbitrary code execution)")
-    return PinnedExecutable(original, fixed)
+    identity = None
+    if not allow_custom:
+        root_key = ("workspace_identity", root)
+        if root_key not in cache:
+            cache[root_key] = filesystem_identity(root)
+        identity = cache[root_key]
+        if within_workspace(Path(original), identity) or within_workspace(Path(fixed), identity):
+            raise ValueError("Workspace executable is forbidden for AST; LSP requires --allow-custom-server (arbitrary code execution)")
+    return PinnedExecutable(original, fixed, identity)
 
 
-def child_path(value: str, root: Path | None) -> str:
+def child_path(value: str, root: Path | None, identity: tuple[int, int] | None = None) -> str:
     """Remove implicit cwd, relative and workspace directories from child PATH.
 
     Pin each accepted directory too: a directory symlink must not reintroduce a
     workspace lookup after its target was checked. Unresolvable entries cannot
     provide installed tools and are dropped.
     """
+    if root is not None and identity is None:
+        identity = filesystem_identity(root)
     entries = []
     for entry in value.split(os.pathsep):
         if not entry or not Path(entry).is_absolute():
             continue
         try:
             fixed = Path(entry).resolve(strict=True)
+            if not fixed.is_dir() or (identity is not None and within_workspace(fixed, identity)):
+                continue
         except (OSError, RuntimeError):
-            continue
-        if not fixed.is_dir() or (root is not None and fixed.is_relative_to(root)):
             continue
         entries.append(str(fixed))
     # An empty PATH is itself a cwd lookup; use an absolute non-directory.
     return os.pathsep.join(entries) if entries else os.devnull
 
 
-def child_environment(root: Path | None = None, allow_custom: bool = False) -> dict[str, str]:
+def child_environment(root: Path | None = None, allow_custom: bool = False,
+                      identity: tuple[int, int] | None = None) -> dict[str, str]:
     env = {key: value for key, value in os.environ.items() if allowed_environment_name(key)}
     if not allow_custom:
         # Set even an absent PATH: libc's fallback search must not be implicit.
-        env["PATH"] = child_path(env.get("PATH", ""), root)
+        env["PATH"] = child_path(env.get("PATH", ""), root, identity)
     # Prevent Go's automatic toolchain download. This is not a network sandbox.
     env["GOTOOLCHAIN"] = "local"
     return env

@@ -193,6 +193,7 @@ def test_p4_server_args_require_opt_in_before_launch(tmp_path, monkeypatch, caps
 @pytest.mark.parametrize("name,defaults", [("ruff", ["server"]), ("clangd", ["--background-index=false", "--log=error"]),
                                            ("pyright-langserver", ["--stdio"]), ("typescript-language-server", ["--stdio"])])
 def test_p4_explicit_known_server_receives_defaults(tmp_path, monkeypatch, name, defaults):
+    (tmp_path / "workspace").mkdir()
     binary = script(tmp_path / "external" / name, "#!/bin/sh\nexit 0\n")
     monkeypatch.setenv("PATH", str(binary.parent))
     for explicit in (name, str(binary)):

@@ -51,7 +51,8 @@ class ProcessBudget:
         remaining_time()
         process = subprocess.Popen(command, executable=getattr(command[0], "executable", command[0]), cwd=cwd, stdin=subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   start_new_session=True, env=child_environment(self.root))
+                                   start_new_session=True,
+                                   env=child_environment(self.root, identity=getattr(command[0], "workspace_identity", None)))
         stdout, stderr = bytearray(), bytearray()
         try:
             with selectors.DefaultSelector() as selector:

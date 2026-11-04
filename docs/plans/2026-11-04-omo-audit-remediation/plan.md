@@ -122,3 +122,12 @@ size: large
 - intel 인접 검사의 기존 Ruff fixture는 명시 서버 기본 인자와 중복되던 `--server-arg=server`를 제거했다. worker의 sandbox에서 `ps`가 차단된 기존 프로세스 정리 4건은 통합 게이트에서 확인한다. 부모는 진단 개수 제한의 두 경로를 모두 미검증 결과로 통일하고 회귀 검사를 추가했다.
 - 스킬 본문 변경은 code-intel과 session-history 두 파일이다. 실행 경로·환경 변수·상한·보호 경로 건너뛰기와 도구의 한계를 문서화했으며 description은 바꾸지 않았다. 최종 완료는 새 frozen HEAD의 재현·fresh gate·4차 독립 검수 후 판단한다. 실행 상태는 in-progress다.
 - 첫 통합 게이트는 pytest 실패로 rc1(36 pass / 1 fail)이었다. 기존 PATH 원문 보존 단언과 작업공간 내부의 AST 양성 fixture가 새 계약과 충돌했고 후자의 실패가 CLI 커버리지 실행 검사에 전파됐다. 외부 엔진 양성 fixture와 정제 PATH 기대값으로 수정한 뒤 실패 노드 3개를 직접 재실행해 모두 통과했다. 게이트 정책·등록 노드·기존 행동 검증은 유지했으며 전체 최종 게이트는 새 커밋 기준으로 실행한다.
+
+## 검수 4차 및 5차 수정
+
+- `cd79331`의 최종 게이트는 rc0, 37 pass / 0 fail, pytest 2,161 passed, 소비자 probe rc0이다. plan-control은 같은 delta·게이트와 P-1~P-9 되돌려-FAIL을 확인했으나 Q-1~Q-3로 CONDITIONAL 판정을 유지했다. code-intel 표본과 기존 발화 스위트는 각각 6/6이며 에이전트 eval은 아직 결과 대기다.
+- Q-1: 실행 파일과 PATH 항목의 조상들을 한 번 얻은 작업 공간 identity와 비교한다. 같은 identity를 실행 파일 선택과 자식 환경 구성에 공유하며 검사할 수 없는 PATH 항목은 제거한다. 실제 대소문자 alias의 node·AST·clangd 실행과 모든 파일시스템에서 동작하는 identity 양성/음성 대조를 추가한다.
+- Q-2: passwd KeyError·빈/상대 pw_dir와 빈/상대 HOME은 무시하고 유효한 절대 홈 보호를 유지한다. 둘 다 없으면 JSON 오류다. POSIX 확인 뒤에 pwd를 import한다. Q-3: doctor help에서 진단의 읽기와 명시적 snapshot 쓰기를 구분한다.
+- 부모가 쓰기 거부 sandbox에서 수정 전 회귀 15개 중 12개 FAIL을 확인했고 수정 후 같은 15개가 통과했다. 실행 상태는 in-progress이며 새 frozen HEAD의 전체 게이트와 5차 독립 검수 전 완료를 주장하지 않는다.
+- 합의한 경계와 잔여: 작업 공간 경계는 명시적 root이며 상위 저장소 자동 확장·다음 PATH 후보 자동 선택은 하지 않는다. 환경은 신뢰 입력이고 이름 필터는 값의 비밀정보·툴체인 실행을 차단하는 sandbox가 아니다. history identity는 백업 복사본을 구분하지 못한다. doctor 초기 snapshot 검증의 조기 종료/상세 reason 귀속·capture 관측, LSP close 오류의 출력 리팩터는 이번 필수 Q 수정과 분리해 후속으로 남긴다.
+- 최종 Q 회귀는 20개이며 관련 격리 검사 전체는 768 passed / 1 FS skip이다. 생산 5파일만 기준 HEAD로 되돌린 scratch에서는 16 FAIL / 4 PASS이고, Q-1~Q-3 각각 실제 행동 실패가 있다(공유 identity 헬퍼 부재 검사는 별도 구조적 실패). 실제 Python 3.9.25에서 모듈 5개 import·case alias 차단·passwd fallback·홈 불명 JSON·doctor help를 확인했다. 기존 서버 선택 단위 fixture 네 곳은 존재하는 root identity를 검사할 수 있도록 빈 workspace 디렉터리 생성을 추가했고 기존 단언은 유지했다.

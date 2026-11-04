@@ -92,6 +92,7 @@ def test_workspace_known_symlink_cannot_impersonate_path_server(tmp_path, monkey
 
 
 def test_external_known_symlink_matches_path_server(tmp_path, monkeypatch):
+    (tmp_path / "workspace").mkdir()
     trusted = executable(tmp_path / "external", "clangd")
     aliases = tmp_path / "aliases"
     aliases.mkdir()
@@ -148,6 +149,7 @@ def test_relative_path_server_is_rejected_before_execution(tmp_path, monkeypatch
 
 
 def test_selected_server_is_resolved_only_once(tmp_path, monkeypatch):
+    (tmp_path / "workspace").mkdir()
     binary = executable(tmp_path / "external", "clangd")
     calls = []
     resolve = Path.resolve
@@ -227,6 +229,7 @@ def test_missing_server_is_unverified(tmp_path, monkeypatch, capsys):
                                           ("javascriptreact", "typescript-language-server"),
                                           ("rust", "rust-analyzer"), ("go", "gopls")])
 def test_automatic_server_support_is_preserved(tmp_path, monkeypatch, language, name):
+    (tmp_path / "workspace").mkdir()
     binary = executable(tmp_path / "external", name)
     monkeypatch.setenv("PATH", str(binary.parent))
     command = lsp_query.select_server(language, None, root=tmp_path / "workspace")

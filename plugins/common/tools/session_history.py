@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import pwd
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -220,13 +219,24 @@ def scan_directory(fd: int, path: Path, queries: list[str], budget: ScanBudget, 
 def search(root: Path, queries: list[str], limit: int):
     budget = ScanBudget()
     session_history_io.require_secure_io()
+    import pwd  # POSIX-only; unsupported hosts fail through require_secure_io first.
+
     root = root.resolve(strict=True)
-    passwd_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
     # Path.home() with HOME="" becomes cwd on Python 3.9. The passwd home
     # remains protected even when HOME points elsewhere (or is empty).
-    homes = [passwd_home]
-    if os.environ.get("HOME"):
+    homes = []
+    try:
+        passwd_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    except KeyError:
+        pass  # Arbitrary container uids need not have a passwd entry.
+    else:
+        if passwd_home.is_absolute():
+            homes.append(passwd_home)
+    configured_home = os.environ.get("HOME", "")
+    if configured_home and Path(configured_home).is_absolute():
         homes.append(Path.home())
+    if not homes:
+        raise ValueError("No absolute home is available to protect session-log access")
     broad_roots = [path for home in homes for path in (home, home / ".claude", home / ".codex")]
     for variable in ("CODEX_HOME", "CLAUDE_CONFIG_DIR"):
         configured = os.environ.get(variable)

@@ -58,6 +58,9 @@ clangd `--background-index=false --log=error`). `--server-arg=<인자>`는 하�
 `--allow-custom-server`가 필요하고 기본 인자 뒤에 추가된다. 모드 교체나 안전 경계가 아니다.
 기본 모드에서는 자식 PATH의 빈 항목·상대 경로·해석 불가 항목·작업 공간 하위 경로를 제거한다.
 custom-server opt-in이면 원래 PATH를 유지하지만 아래 환경 변수 거부 규칙은 유지한다.
+작업 공간의 경계는 명시한 `--root`이며 상위 저장소까지 자동 확장하지 않는다.
+실행 파일과 PATH 항목의 조상 identity도 비교해 대소문자 별칭을 검사한다. 첫 PATH 후보가
+거부되면 다음 후보를 자동 실행하지 않는다. 사용할 신뢰 경로를 PATH에서 명시적으로 선택한다.
 실행 파일의 해석된 경로를 고정하되 argv0 이름은 보존한다. rustup/asdf 같은 shim이
 작업 공간 설정으로 다른 실행 파일을 선택하는 것까지 차단하지는 않는다. 이 스크립트에
 광범위한 실행 allow 규칙을 설정하지 않는다. 프로젝트의 빌드 설정이 있어야 의미 분석이
@@ -99,6 +102,9 @@ PATH·HOME·locale·temp·XDG·OS 기본값에 더해 Go 변수의 정확 목록
 `GIT_CONFIG_*`·`RUSTC_WRAPPER`·`CARGO_*_WRAPPER`·`CARGO_TARGET_*_RUNNER`·
 `CARGO_TARGET_*_LINKER`를 거부하고 `GOTOOLCHAIN=local`을 강제한다.
 사용자 오프라인·사설 툴체인 설정을 보존하지만 네트워크 차단 보증은 아니다.
+사용자 환경은 신뢰 입력이다. 이름 필터는 심층 방어이며 변수 값의 비밀정보나 실행 지시를
+검사하지 않는다(예: URL userinfo, `GOFLAGS=-toolexec`, 툴체인 옵션·프로젝트 설정).
+작업 공간을 가리키는 `VIRTUAL_ENV` 같은 설정값도 격리 경계를 만들지 않는다.
 Go 변수 전체 목록은 `tools/intel_runtime.py`의 `GO_ENV_NAMES`가 소유한다.
 
 파일 내용의 비밀 탐지는 제공하지 않는다. 지정 범위의 `.env` 같은 민감한 파일도 읽거나

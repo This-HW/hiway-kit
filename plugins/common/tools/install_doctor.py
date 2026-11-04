@@ -1,5 +1,6 @@
-"""Read-only Codex installation/source comparison; never invokes Codex or git.
+"""Codex installation/source comparison; explicit snapshot capture writes a new file.
 
+Diagnosis only reads files and never invokes Codex or git.
 Exit 0 confirms only installation/source version and identity agreement (for git,
 only the supplied checkout; remote freshness is unverified), 1 a confirmed
 installed/store defect or local source mismatch, 2 missing/unknown/stale evidence.

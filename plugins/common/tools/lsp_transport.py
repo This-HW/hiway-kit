@@ -43,7 +43,9 @@ class Connection:
     def __init__(self, command: list[str], cwd: str, *, allow_custom: bool = False):
         self.process = subprocess.Popen(command, executable=getattr(command[0], "executable", command[0]), cwd=cwd, stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                        start_new_session=True, env=child_environment(Path(cwd), allow_custom))
+                                        start_new_session=True,
+                                        env=child_environment(Path(cwd), allow_custom,
+                                                              getattr(command[0], "workspace_identity", None)))
         self.messages = queue.Queue(maxsize=MAX_PENDING_MESSAGES)
         self.notifications = []
         self.notification_count = 0
