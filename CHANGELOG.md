@@ -29,6 +29,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed — Audit findings in the integration draft
 
+- Describe review invocation arguments without repeated placeholder expansion; Claude Code appends supplied arguments to the skill body.
 - Accept valid preprocessed Python/Go AST metavariables; bound combined stdout/stderr and execution
   time across engine discovery, validation and queries. No unbounded output spool.
 - Distinguish complete pull diagnostics from provisional push diagnostics. An empty push is unverified,

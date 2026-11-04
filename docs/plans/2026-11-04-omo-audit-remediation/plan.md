@@ -140,3 +140,9 @@ size: large
 - 4차 에이전트 eval 최종 결과를 확인했다: `cd79331`에서 `scripts/run-evals.sh` rc0, 13개 에이전트 25/25 pass. 원본은 migration 디렉터리의 `review4/plan-control/agent-evals-cd79331.{json,log}`이며 기존 로그인에서 인증 복사 없이 실행했다. 이후 `778ff2a`까지 agents·rules·scenarios 변경이 없음을 직접 대조했고, plan-control과 합의한 최종 트리의 에이전트 회귀 증거로 사용한다. plan-control 측 대기 중인 eval은 없다.
 - 이번 판정은 코드 검수 수용이며 릴리스 승인이 아니다. 코드 수정·독립 검수와 실행 가능한 평가는 마쳤으나, Codex 자연어 E2E는 격리 홈 미로그인으로 미검증이고 실 홈 설치는 미실시다. 따라서 전체 실행 상태는 in-progress로 유지한다. 에이전트 회귀 통과를 OMO 대비 토큰·성능·결과 품질 개선으로 해석하지 않는다.
 - main merge·tag·push와 probe 브랜치 push는 사용자 확인 대상이다. 릴리스 전 Claude 디렉토리 probe Validate가 필요하며, 코드 ACCEPT를 해당 정책 검증이나 공개 승인으로 대신하지 않는다. 상주 LSP·rename·browser는 별도 Large 설계 범위로 남는다.
+
+## 디렉토리 Validate 후속 — 2026-11-05
+
+- plan-control의 probe 결과: review 호출 인자 서술 변경 후에도 기존 정책 보류가 남아 5.5.2 별도 핫픽스는 내지 않고 5.6.0에 합친다. `9371dab`의 review 본문 변경을 동일하게 반영했다. Claude Code의 [공식 인자 전달 계약](https://code.claude.com/docs/en/skills#pass-arguments-to-skills)에 따라 인자는 본문 끝에 전달되며 description은 변경하지 않는다.
+- 5.6 probe의 추가 보류 `UNREAD_ASSET_REFERENCED`에 대한 구현 측 제안은 doctor를 유지하고 심사자 확인을 받는 것이다. doctor는 매니페스트를 JSON으로 읽어 name/id/version을 검사하고, 별도로 제한된 hooks JSON 경로를 검증한다. 아이콘 경로를 따라 읽거나 실행하지 않는다. 캐시 디렉터리명·마켓플레이스 메타데이터만 사용하면 설치된 매니페스트 자체의 결함을 놓치고, 별도 요약 파일은 사본 드리프트를 만든다. 기존 진단 계약을 보존하는 동등한 미독해 대안은 확인하지 못했다. 문자열 조립 등 스캐너 회피 변경은 하지 않는다.
+- Validate 실행과 정책 보류 해소는 다르다. 심사자 판정과 Codex 자연어 E2E는 미결이며, 이 기록은 공개·설치 승인이나 전체 완료 선언이 아니다.
