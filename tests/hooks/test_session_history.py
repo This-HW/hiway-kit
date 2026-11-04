@@ -10,6 +10,13 @@ import pytest
 TOOLS = Path(__file__).resolve().parents[2] / "plugins/common/tools"
 sys.path.insert(0, str(TOOLS))
 import session_history
+import session_history_io
+
+
+def write_message(path, text="needle inside", **metadata):
+    raw = json.dumps({"type": "user", "message": {"content": text}, **metadata}).encode() + b"\n"
+    path.write_bytes(raw)
+    return raw
 
 
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="POSIX named pipe")
@@ -78,3 +85,355 @@ def test_whole_home_is_rejected(tmp_path, monkeypatch):
     monkeypatch.setattr(session_history.Path, "home", lambda: tmp_path)
     with pytest.raises(ValueError, match="session-log"):
         session_history.search(tmp_path, ["needle"], 10)
+
+
+@pytest.mark.parametrize("swap_ancestor", [False, True])
+def test_replacement_after_validation_never_reads_outside(tmp_path, monkeypatch, swap_ancestor):
+    """Also fails against the old path-based reader, without needing new IO APIs."""
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    nested = logs / "nested"
+    nested.mkdir()
+    candidate = nested / "swap.jsonl"
+    write_message(candidate)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    write_message(outside / candidate.name, "needle outside")
+    original = session_history.scan_file
+
+    def swap(*args):
+        if swap_ancestor:
+            nested.rename(logs / "moved")
+            nested.symlink_to(outside, target_is_directory=True)
+        else:
+            candidate.unlink()
+            candidate.symlink_to(outside / candidate.name)
+        return original(*args)
+
+    monkeypatch.setattr(session_history, "scan_file", swap)
+    result = session_history.search(logs, ["needle"], 10)
+    assert result["results"][0]["matches"][0]["preview"] == "needle inside"
+
+
+@pytest.mark.parametrize("replacement", ["symlink", "fifo"])
+def test_file_replacement_immediately_before_open_is_rejected(tmp_path, monkeypatch, replacement):
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    candidate = logs / "swap.jsonl"
+    write_message(candidate)
+    outside = tmp_path / "outside.jsonl"
+    write_message(outside, "needle outside")
+    original = os.open
+    opened = []
+
+    def swap(name, flags, *args, **kwargs):
+        if name == candidate.name:
+            opened.append(name)
+            candidate.unlink()
+            if replacement == "symlink":
+                candidate.symlink_to(outside)
+            else:
+                os.mkfifo(candidate)
+            # Assert before the call so a broken flag cannot hang this test.
+            assert flags & os.O_NOFOLLOW and flags & os.O_NONBLOCK
+        return original(name, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap)
+    result = session_history.search(logs, ["needle"], 10)
+    assert opened == [candidate.name]
+    assert result["scanned_files"] == result["read_bytes"] == 0
+    assert not result["results"]
+    assert result["scan_truncated"] and "entry_unavailable" in result["scan_truncation_reasons"]
+
+
+def test_directory_symlink_replacement_before_pin_is_rejected(tmp_path, monkeypatch):
+    logs = tmp_path / "logs"
+    nested = logs / "nested"
+    nested.mkdir(parents=True)
+    write_message(nested / "log.jsonl")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    write_message(outside / "log.jsonl", "needle outside")
+    original = os.open
+
+    def swap(name, *args, **kwargs):
+        if name == "nested":
+            nested.rename(logs / "moved")
+            nested.symlink_to(outside, target_is_directory=True)
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap)
+    result = session_history.search(logs, ["needle"], 10)
+    assert result["read_bytes"] == 0 and not result["results"]
+    assert result["scan_truncated"]
+
+
+def test_pinned_directory_survives_ancestor_swap_before_file_open(tmp_path, monkeypatch):
+    logs = tmp_path / "logs"
+    nested = logs / "nested"
+    nested.mkdir(parents=True)
+    write_message(nested / "log.jsonl")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    write_message(outside / "log.jsonl", "needle outside")
+    original = os.open
+
+    def swap(name, *args, **kwargs):
+        if name == "log.jsonl":
+            nested.rename(logs / "moved")
+            nested.symlink_to(outside, target_is_directory=True)
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap)
+    result = session_history.search(logs, ["needle"], 10)
+    assert result["results"][0]["matches"][0]["preview"] == "needle inside"
+
+
+def test_growing_file_is_limited_to_initial_size(tmp_path, monkeypatch):
+    log = tmp_path / "log.jsonl"
+    raw = write_message(log)
+    original = os.read
+
+    def grow(fd, size):
+        chunk = original(fd, size)
+        with log.open("ab") as destination:
+            destination.write(raw * 100)
+        return chunk
+
+    monkeypatch.setattr(os, "read", grow)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["read_bytes"] == len(raw)
+    assert len(result["results"][0]["matches"]) == 1
+    assert "file_changed" in result["scan_truncation_reasons"]
+    assert result["limited_files"] == 1
+
+
+def test_ten_thousand_empty_directories_are_bounded(tmp_path):
+    for index in range(10_000):
+        (tmp_path / str(index)).mkdir()
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_directories"] == session_history.MAX_SCAN_DIRECTORIES
+    assert result["scanned_entries"] < 10_000
+    assert result["scanned_files"] == result["read_bytes"] == 0
+    assert result["scan_truncated"]
+    assert "directories_limit" in result["scan_truncation_reasons"]
+
+
+def test_large_non_jsonl_directory_is_bounded_before_materialization(tmp_path, monkeypatch):
+    for index in range(300):
+        (tmp_path / f"{index}.txt").touch()
+    monkeypatch.setattr(session_history, "MAX_SCAN_ENTRIES", 128)
+    original = os.scandir
+    visited = []
+
+    class CountEntries:
+        def __init__(self, fd):
+            self.iterator = original(fd)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            self.iterator.close()
+
+        def __next__(self):
+            entry = next(self.iterator)
+            visited.append(entry.name)
+            assert len(visited) <= 128, "Entry materialization exceeded the scan budget"
+            return entry
+
+    monkeypatch.setattr(os, "scandir", CountEntries)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_entries"] == 128
+    assert len(visited) == 128
+    assert result["scanned_files"] == result["read_bytes"] == 0
+    assert result["scan_truncated"] and result["scan_truncation_reasons"] == ["entries_limit"]
+
+
+@pytest.mark.parametrize("extra", [-1, 0, 1])
+def test_total_read_budget_boundary(tmp_path, monkeypatch, extra):
+    raw = write_message(tmp_path / "log.jsonl")
+    monkeypatch.setattr(session_history, "MAX_TOTAL_READ_BYTES", len(raw) + extra)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["read_bytes"] == min(len(raw), len(raw) + extra)
+    assert result["scan_truncated"] == (extra <= 0)
+    assert result["malformed_records"] == 0
+    assert result["matched_sessions"] == int(extra >= 0)
+    assert ("read_bytes_limit" in result["scan_truncation_reasons"]) == (extra <= 0)
+
+
+def test_total_read_budget_is_shared_across_files(tmp_path, monkeypatch):
+    raw = write_message(tmp_path / "one.jsonl")
+    write_message(tmp_path / "two.jsonl")
+    monkeypatch.setattr(session_history, "MAX_TOTAL_READ_BYTES", len(raw) + 5)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_files"] == 2
+    assert result["read_bytes"] == len(raw) + 5
+    assert result["matched_sessions"] == 1 and result["malformed_records"] == 0
+    assert result["scan_truncation_reasons"] == ["read_bytes_limit"]
+
+
+@pytest.mark.parametrize("extra", [-1, 0, 1])
+def test_per_file_byte_budget_boundary(tmp_path, monkeypatch, extra):
+    raw = write_message(tmp_path / "log.jsonl")
+    monkeypatch.setattr(session_history, "MAX_FILE_BYTES", len(raw) + extra)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["read_bytes"] == min(len(raw), len(raw) + extra)
+    assert result["matched_sessions"] == int(extra >= 0)
+    assert result["malformed_records"] == 0
+    assert result["scan_truncated"] == (extra < 0)
+    assert ("file_bytes_limit" in result["scan_truncation_reasons"]) == (extra < 0)
+
+
+@pytest.mark.parametrize("extra", [-1, 0, 1])
+def test_line_byte_budget_boundary(tmp_path, monkeypatch, extra):
+    raw = write_message(tmp_path / "log.jsonl")
+    monkeypatch.setattr(session_history, "MAX_LINE_BYTES", len(raw) + extra)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["matched_sessions"] == int(extra >= 0)
+    assert result["scan_truncated"] == (extra < 0)
+    assert ("line_bytes_limit" in result["scan_truncation_reasons"]) == (extra < 0)
+
+
+@pytest.mark.parametrize("cap", [1, 2, 3])
+def test_entry_budget_boundary(tmp_path, monkeypatch, cap):
+    (tmp_path / "one.txt").touch()
+    (tmp_path / "two.txt").touch()
+    monkeypatch.setattr(session_history, "MAX_SCAN_ENTRIES", cap)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_entries"] == min(cap, 2)
+    assert result["scan_truncated"] == (cap <= 2)
+
+
+@pytest.mark.parametrize("cap", [1, 2, 3])
+def test_directory_budget_boundary(tmp_path, monkeypatch, cap):
+    (tmp_path / "nested").mkdir()
+    write_message(tmp_path / "nested/log.jsonl")
+    monkeypatch.setattr(session_history, "MAX_SCAN_DIRECTORIES", cap)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_directories"] == min(cap, 2)
+    assert result["matched_sessions"] == int(cap >= 2)
+    assert result["scan_truncated"] == (cap < 2)
+
+
+@pytest.mark.parametrize("cap", [1, 2, 3])
+def test_file_budget_boundary(tmp_path, monkeypatch, cap):
+    write_message(tmp_path / "one.jsonl")
+    write_message(tmp_path / "two.jsonl")
+    monkeypatch.setattr(session_history, "MAX_SCAN_FILES", cap)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_files"] == min(cap, 2)
+    assert result["matched_sessions"] == min(cap, 2)
+    assert result["scan_truncated"] == (cap <= 2)
+
+
+def test_deadline_before_traversal_reports_no_reads(tmp_path, monkeypatch):
+    write_message(tmp_path / "log.jsonl")
+    clock = iter([0, session_history.MAX_SCAN_SECONDS])
+    monkeypatch.setattr(session_history.time, "monotonic", lambda: next(clock, session_history.MAX_SCAN_SECONDS))
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_entries"] == result["scanned_files"] == result["read_bytes"] == 0
+    assert result["scan_truncated"] and result["scan_truncation_reasons"] == ["deadline"]
+
+
+def test_deadline_during_read_preserves_actual_byte_counts(tmp_path, monkeypatch):
+    raw = write_message(tmp_path / "log.jsonl")
+    now = [0.0]
+    monkeypatch.setattr(session_history.time, "monotonic", lambda: now[0])
+    original = os.read
+
+    def read(fd, size):
+        data = original(fd, size)
+        now[0] = session_history.MAX_SCAN_SECONDS
+        return data
+
+    monkeypatch.setattr(os, "read", read)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_files"] == 1 and result["read_bytes"] == len(raw)
+    assert result["matched_sessions"] == 0 and result["limited_files"] == 1
+    assert result["scan_truncation_reasons"] == ["deadline"]
+
+
+def test_deadline_during_non_jsonl_traversal(tmp_path, monkeypatch):
+    for index in range(20):
+        (tmp_path / f"{index}.txt").touch()
+    monkeypatch.setattr(session_history, "MAX_SCAN_SECONDS", 3)
+    ticks = iter(range(10))
+    monkeypatch.setattr(session_history.time, "monotonic", lambda: next(ticks))
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_entries"] == 2
+    assert result["scanned_files"] == result["read_bytes"] == 0
+    assert result["scan_truncated"] and result["scan_truncation_reasons"] == ["deadline"]
+
+
+@pytest.mark.parametrize("extra", [-0.1, 0, 0.1])
+def test_deadline_boundary(tmp_path, monkeypatch, extra):
+    write_message(tmp_path / "log.jsonl")
+    moment = session_history.MAX_SCAN_SECONDS + extra
+    ticks = iter([0.0])
+    monkeypatch.setattr(session_history.time, "monotonic", lambda: next(ticks, moment))
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["matched_sessions"] == int(extra < 0)
+    assert result["scan_truncated"] == (extra >= 0)
+
+
+def test_depth_budget_is_explicit(tmp_path, monkeypatch):
+    log = tmp_path / "one/two/log.jsonl"
+    log.parent.mkdir(parents=True)
+    write_message(log)
+    monkeypatch.setattr(session_history, "MAX_SCAN_DEPTH", 1)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["scanned_directories"] == 2 and result["scanned_files"] == 0
+    assert result["skipped_entries"] == 1 and result["scan_truncated"]
+    assert result["scan_truncation_reasons"] == ["depth_limit"]
+
+
+@pytest.mark.parametrize("relative", [".", ".codex", ".claude", "active"])
+def test_all_home_and_configuration_roots_stay_blocked(tmp_path, monkeypatch, relative):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "active"))
+    root = tmp_path / relative
+    root.mkdir(exist_ok=True)
+    with pytest.raises(ValueError, match="session-log"):
+        session_history.search(root, ["needle"], 10)
+
+
+@pytest.mark.parametrize("relative", [".codex/sessions", ".claude/projects", "active/sessions"])
+def test_explicit_session_subdirectories_are_allowed(tmp_path, monkeypatch, relative):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "active"))
+    logs = tmp_path / relative
+    logs.mkdir(parents=True)
+    write_message(logs / "log.jsonl")
+    result = session_history.search(logs, ["needle"], 10)
+    assert result["matched_sessions"] == 1 and not result["scan_truncated"]
+
+
+def test_unsupported_platform_fails_closed(tmp_path, monkeypatch):
+    write_message(tmp_path / "log.jsonl")
+    monkeypatch.setattr(session_history_io, "SECURE_IO_SUPPORTED", False)
+    with pytest.raises(ValueError, match="requires POSIX"):
+        session_history.search(tmp_path, ["needle"], 10)
+
+
+def test_preview_match_limit_metadata_and_malformed_counts(tmp_path):
+    log = tmp_path / "log.jsonl"
+    records = [b"bad-json\n", b"[]\n", b"\xff\n", json.dumps({
+        "type": "session_meta", "payload": {"id": "codex-id", "cwd": "/project"},
+    }).encode() + b"\n"]
+    message = "nEeDlE " + "x" * 300
+    records += [json.dumps({"type": "assistant", "message": {"content": message}}).encode() + b"\n"] * 6
+    log.write_bytes(b"".join(records))
+    result = session_history.search(tmp_path, ["absent", "NEEDLE"], 10)
+    record = result["results"][0]
+    assert result["malformed_records"] == record["malformed_records"] == 3
+    assert record["id"] == "codex-id" and record["cwd"] == "/project"
+    assert len(record["matches"]) == 5 and record["matches"][0]["line"] == 5
+    assert record["matches"][0]["preview"] == message[:240]
+    assert record["truncated"] and record["truncation_reasons"] == ["matches_limit"]
+
+
+def test_excessively_nested_json_is_reported_as_malformed(tmp_path):
+    (tmp_path / "deep.jsonl").write_bytes(b"[" * 5000 + b"]" * 5000 + b"\n")
+    result = session_history.search(tmp_path, ["needle"], 10)
+    assert result["malformed_records"] == 1 and not result["results"]
