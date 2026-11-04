@@ -1,6 +1,7 @@
 ---
 title: "OMO의 유용한 기능을 hiway-kit에 선택적으로 통합하고 로컬 OMO 제거"
 status: superseded
+superseded_by: docs/plans/2026-11-04-omo-audit-remediation/plan.md
 as_of: 2026-11-04
 execution_status: superseded-after-audit
 created: 2026-10-30

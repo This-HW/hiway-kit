@@ -56,3 +56,8 @@ size: large
 
 - 착수: 원본 도구와 감사 자료 존재, 현재 브랜치 및 staged 초안 확인. 아직 수정 후 게이트를 실행하지 않았다.
 - 지정 Claude 세션에 설계안 전달: Orca receipt `c9b3b67f-d6d0-499c-b43f-0a508837a65f`, `turn_started` 확인. `improvement-decision-2026-11-04.md` 판정을 수신했고 위 결정에 반영했다. 사용자의 직접 위임에 따라 합의를 승인 근거로 사용한다.
+- 기존 초안과 정정 계획을 커밋한 뒤 `origin/main`의 `102853ec8a13c38d6911f7b51b23ef4c2eb4676c` 위로 rebase했다.
+- AST `0b50fd0`, 세션 로그 `38264b6`, LSP `9238a7a`를 통합했다. 각 worker의 diff와 before/after 증거를 읽고 부모가 관련 테스트를 다시 실행해 각각 42/61/73 passed, rc=0을 확인했다. 아직 통합 전체 게이트와 독립 최종 리뷰는 미실행이다.
+- 각 worker는 Python 3.9에서 실제 CLI·자원/프로토콜 또는 경로 경계 검사를 실행했다. 3.9에 pytest는 없으므로 전체 pytest 통과를 주장하지 않는다. 증거 원본은 migration 디렉터리의 `fix-ast-evidence`, `fix-history-evidence`, `fix-lsp-evidence`에 보존했다.
+- Claude의 검수 기준 구체화에 합의: 스킬 커버리지는 모든 스킬을 대상으로 하되 기존 스킬은 사유가 있는 명시적 예외만 허용한다. 기존 agent 게이트와 통합하지 않는다. 자연어 스킬 선택 E2E는 별도 표본 검증이다.
+- 설치 doctor는 Python 3.11 이상에서 tomllib, 그 미만에서는 출처 파일의 현재 SHA256과 대조한 JSON snapshot을 사용한다. stale/증거 부재/CLI 부재는 unknown(rc=2), 확인된 불일치는 rc=1, 일치는 rc=0이다. fired는 실행 증거 없으면 unknown이며 config 원문·인증 파일은 출력/수집하지 않는다.
