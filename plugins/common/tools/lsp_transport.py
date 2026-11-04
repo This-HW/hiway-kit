@@ -82,14 +82,14 @@ class Connection:
                 message = json.loads(raw, object_pairs_hook=_object, parse_constant=_invalid_constant)
                 validate_message(message)
                 if "method" in message and "id" not in message:
+                    if message["method"] != "textDocument/publishDiagnostics":
+                        # The receive byte budget bounds discarded log/progress
+                        # notifications; only retained diagnostics count below.
+                        del message, raw
+                        continue
                     self.notification_count += 1
                     if self.notification_count > MAX_PENDING_MESSAGES:
                         raise LspBudgetExceeded("Language-server notification budget exceeded; result is unverified")
-                    if message["method"] != "textDocument/publishDiagnostics":
-                        # Count log/progress notifications without retaining
-                        # their payloads in either the queue or history.
-                        del message, raw
-                        continue
                 self.messages.put(message, timeout=REQUEST_TIMEOUT)
         except (OSError, ValueError, RecursionError, LspError, queue.Full) as exc:
             try:
@@ -204,7 +204,14 @@ class Connection:
     def close(self) -> None:
         try:
             if os.name == "posix":
-                os.killpg(self.process.pid, signal.SIGTERM)
+                try:
+                    os.killpg(self.process.pid, signal.SIGTERM)
+                except PermissionError:
+                    # macOS may return EPERM for an exited, unreaped leader.
+                    # Reap it and retry the group so live descendants still die.
+                    if self.process.poll() is None:
+                        raise
+                    os.killpg(self.process.pid, signal.SIGTERM)
             elif self.process.poll() is None:
                 self.process.terminate()
         except ProcessLookupError:

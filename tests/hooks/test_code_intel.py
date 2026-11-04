@@ -315,3 +315,26 @@ def test_ast_error_has_notice(tmp_path, monkeypatch, capsys):
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "error"
     assert "untrusted" in result["notice"].lower()
+
+
+def test_relative_ast_which_is_rejected_before_execution(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    marker = tmp_path / "executed"
+    engine = tmp_path / "ast-grep"
+    engine.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nPath({str(marker)!r}).touch()\nprint('ast-grep 0.51.0')\n")
+    engine.chmod(0o700)
+    monkeypatch.setenv("PATH", ".")
+    with pytest.raises(ValueError, match="relative"):
+        code_intel.find_ast_grep(cwd=tmp_path)
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_ast_json_marks_filtered_environment(tmp_path, monkeypatch, capsys, missing):
+    fake_engine(tmp_path, monkeypatch,
+                "import sys\nif '--version' in sys.argv: print('ast-grep 0.51.0')\n"
+                "elif '--stdin' not in sys.argv: print('[]')\n")
+    if missing:
+        monkeypatch.setattr(code_intel.shutil, "which", lambda name: None)
+    assert code_intel.main() == (3 if missing else 0)
+    assert json.loads(capsys.readouterr().out)["environment"] == "filtered"

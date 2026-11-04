@@ -91,6 +91,22 @@ def test_multiple_commands_share_remaining_bytes():
         budget.run(command("print('x')"))
 
 
+def test_output_overflow_after_leader_exits_preserves_budget_error(monkeypatch):
+    read = os.read
+
+    def delayed_read(*args):
+        chunk = read(*args)
+        # Let the short-lived leader exit before overflow cleanup. On macOS a
+        # group containing only an unreaped leader returns EPERM to killpg.
+        if chunk:
+            time.sleep(.1)
+        return chunk
+
+    monkeypatch.setattr(os, "read", delayed_read)
+    with pytest.raises(ValueError, match="output exceeded"):
+        ProcessBudget(2, 1).run(command("print('overflow')"))
+
+
 @pytest.mark.parametrize("close_pipes", [False, True])
 def test_deadline_includes_wait_after_pipe_eof(processes, close_pipes):
     source = "import os, time\n"
@@ -194,3 +210,26 @@ def test_child_environment_has_only_explicit_defaults(monkeypatch):
     assert env["LANG"] == "C"
     assert env["HOME"] == os.environ["HOME"]
     assert env["PATH"] == os.environ["PATH"]
+
+
+def test_toolchain_environment_preserves_configuration_and_denies_secrets(monkeypatch):
+    import json
+
+    allowed = ["GOPRIVATE", "GOFLAGS", "GOPROXY", "CARGO_NET_OFFLINE", "CARGO_HOME",
+               "RUSTUP_HOME", "RUSTUP_TOOLCHAIN", "VIRTUAL_ENV", "CONDA_PREFIX",
+               "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH",
+               "PKG_CONFIG_PATH", "SDKROOT", "DEVELOPER_DIR", "USER", "LOGNAME", "SHELL"]
+    denied = ["CARGO_REGISTRY_TOKEN", "CARGO_REGISTRIES_PRIVATE_TOKEN", "GO_SECRET",
+              "RUSTUP_PASSWORD", "CONDA_API_KEY", "go_private_token", "cargo_secret",
+              "rustup_password", "conda_api_key", "ld_preload", "dyld_library_path",
+              "node_options", "pythonpath", "pythonstartup", "bash_env", "env",
+              "git_config_count", "rustc_wrapper", "UNRELATED_SETTING"]
+    for name in allowed + denied:
+        monkeypatch.setenv(name, "fixture-value")
+    monkeypatch.setenv("GOTOOLCHAIN", "auto")
+    result = ProcessBudget(3, 32768).run(command("import json,os; print(json.dumps(dict(os.environ)))"))
+    assert result.returncode == 0
+    env = json.loads(result.stdout)
+    assert {name: env.get(name) for name in allowed} == dict.fromkeys(allowed, "fixture-value")
+    assert not set(denied) & env.keys()
+    assert env["GOTOOLCHAIN"] == "local"

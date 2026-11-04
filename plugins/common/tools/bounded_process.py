@@ -72,10 +72,19 @@ class ProcessBudget:
         finally:
             # Kill the group even if its leader exited: children can still hold
             # a pipe open, or close both pipes and outlive a successful command.
-            with suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGKILL)
             try:
-                process.wait(timeout=1)
+                with suppress(ProcessLookupError):
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except PermissionError:
+                        # macOS returns EPERM for a zombie-only group. Reap the
+                        # exited leader and retry; never ignore a live denial.
+                        if process.poll() is None:
+                            raise
+                        os.killpg(process.pid, signal.SIGKILL)
             finally:
-                process.stdout.close()
-                process.stderr.close()
+                try:
+                    process.wait(timeout=1)
+                finally:
+                    process.stdout.close()
+                    process.stderr.close()

@@ -42,6 +42,10 @@ while True:
             assert 'INTEL_TEST_API_TOKEN' not in os.environ
             assert 'NODE_OPTIONS' not in os.environ
             assert os.environ['GOTOOLCHAIN'] == 'local'
+            for name, value in case.get("expected_env", {}).items():
+                assert os.environ.get(name) == value, name
+            for name in case.get("denied_env", []):
+                assert name not in os.environ, name
         caps = case.get("capabilities", {})
         if case.get("pull"):
             caps["diagnosticProvider"] = {"interFileDependencies": False, "workspaceDiagnostics": False}
@@ -265,10 +269,18 @@ def test_cumulative_receive_budget_is_unverified(wire, diagnostics):
     assert "byte budget" in result["reason"]
 
 
-def test_notification_count_limit_remains_enforced(wire):
-    rc, result = wire({"push": [], "flood_count": 129, "flood_size": 0}, "symbols")
-    assert rc == 2
-    assert "notification budget" in result["reason"]
+@pytest.mark.parametrize("count", [128, 129])
+def test_notification_count_limit_remains_enforced(wire, count):
+    rc, result = wire({"push": [], "flood_count": count, "flood_size": 0,
+                       "flood_diagnostics": True}, "symbols")
+    assert rc == (0 if count == 128 else 2)
+    if count == 129:
+        assert "notification budget" in result["reason"]
+
+
+def test_discarded_logs_over_count_limit_still_allow_result(wire):
+    rc, result = wire({"push": [], "flood_count": 300, "flood_size": 1}, "symbols")
+    assert rc == 0 and result["complete"] is True
 
 
 def test_large_valid_diagnostics_below_budget_remain_accepted(wire):
@@ -293,6 +305,17 @@ def test_lsp_child_environment_is_filtered(wire, monkeypatch):
     rc, result = wire({"check_env": True, "result": []}, "symbols")
     assert rc == 0
     assert "untrusted" in result["notice"].lower()
+    assert result["environment"] == "filtered"
+
+
+def test_lsp_toolchain_environment_matches_bounded_process(wire, monkeypatch):
+    allowed = dict.fromkeys(("CPATH", "GOPRIVATE", "GOFLAGS", "CARGO_NET_OFFLINE",
+                             "RUSTUP_HOME", "VIRTUAL_ENV", "CONDA_PREFIX"), "fixture-value")
+    denied = ["CARGO_REGISTRY_TOKEN", "GO_SECRET", "CONDA_API_KEY", "RUSTUP_PASSWORD"]
+    for name in [*allowed, *denied]:
+        monkeypatch.setenv(name, "fixture-value")
+    rc, result = wire({"check_env": True, "expected_env": allowed, "denied_env": denied}, "symbols")
+    assert rc == 0 and result["environment"] == "filtered"
 
 
 @pytest.mark.parametrize("case,expected", [({"result": []}, 0), ({"result": [42]}, 2)])
@@ -301,6 +324,7 @@ def test_lsp_notice_on_success_and_error(wire, case, expected):
     assert rc == expected
     assert "untrusted" in result["notice"].lower()
     assert "instructions" in result["notice"].lower()
+    assert result["environment"] == "filtered"
 
 
 @pytest.mark.parametrize("identifier", [True, False, 1.0, [], {}, 2147483648])

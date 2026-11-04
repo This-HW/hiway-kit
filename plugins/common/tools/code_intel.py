@@ -39,10 +39,13 @@ def find_ast_grep(budget: ProcessBudget | None = None, cwd: Path | None = None) 
     # utility, and identifying that after execution is too late.
     candidate = shutil.which("ast-grep")
     if candidate:
+        if not Path(candidate).is_absolute():
+            raise ValueError("ast-grep PATH result is relative; use an absolute PATH entry")
+        candidate = str(Path(candidate).resolve(strict=True))
         result = budget.run([candidate, "--version"], timeout=PROBE_TIMEOUT, cwd=cwd)
         version = re.fullmatch(rb"ast-grep ([0-9]+\.[0-9]+\.[0-9]+)(?:\r?\n)?", result.stdout)
         if result.returncode == 0 and version:
-            return str(Path(candidate).absolute()), version[1].decode("ascii")
+            return candidate, version[1].decode("ascii")
     return None
 
 

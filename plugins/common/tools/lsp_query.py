@@ -28,7 +28,29 @@ LANGUAGES = {".c": "c", ".h": "c", ".cc": "cpp", ".cpp": "cpp", ".hpp": "cpp",
              ".js": "javascript", ".jsx": "javascriptreact", ".rs": "rust", ".go": "go"}
 
 
-def select_server(language: str, explicit: str | None, allow_custom: bool = False) -> list[str] | None:
+def select_server(language: str, explicit: str | None, allow_custom: bool = False,
+                  root: Path | None = None) -> list[str] | None:
+    root = Path.cwd().resolve() if root is None else root
+    resolved = {}
+
+    def executable(path: str) -> str:
+        # Resolve each candidate once, then execute exactly that fixed path.
+        if path not in resolved:
+            try:
+                resolved[path] = Path(path).resolve(strict=True)
+            except RuntimeError as exc:
+                # pathlib on Python 3.9 reports symlink loops as RuntimeError.
+                raise ValueError("Cannot safely resolve server path: " + str(exc)) from exc
+        return str(resolved[path])
+
+    def checked(path: str) -> str:
+        if not Path(path).is_absolute() and not allow_custom:
+            raise ValueError("Relative server PATH result requires --allow-custom-server (arbitrary code execution)")
+        fixed = executable(path)
+        if Path(fixed).is_relative_to(root) and not allow_custom:
+            raise ValueError("Workspace server requires --allow-custom-server (arbitrary code execution)")
+        return fixed
+
     if explicit is not None:
         if not explicit or explicit in (".", "..") or "\\" in explicit or (not Path(explicit).is_absolute() and "/" in explicit):
             raise ValueError("--server requires a bare executable name or absolute path; relative paths are forbidden")
@@ -36,18 +58,25 @@ def select_server(language: str, explicit: str | None, allow_custom: bool = Fals
         if Path(explicit).name not in known and not allow_custom:
             raise ValueError("Unknown --server basename; --allow-custom-server permits arbitrary code execution")
         path = shutil.which(explicit)
-        return [path] if path else None
+        if path is None:
+            return None
+        fixed = checked(path)
+        if Path(explicit).is_absolute() and not allow_custom:
+            installed = shutil.which(Path(explicit).name)
+            if installed is None or checked(installed) != fixed:
+                raise ValueError("Absolute server must match the installed PATH server; otherwise use --allow-custom-server")
+        return [fixed]
     for name, arguments in SERVER_CANDIDATES.get(language.removesuffix("react"), []):
         path = shutil.which(name)
         if path:
-            return [path, *arguments]
+            return [checked(path), *arguments]
     return None
 
 
 def query(args: argparse.Namespace) -> int:
     root, path, text = read_source(args.root, args.file, MAX_SOURCE_BYTES)
     language = LANGUAGES.get(path.suffix, "plaintext")
-    command = select_server(language, args.server, getattr(args, "allow_custom_server", False))
+    command = select_server(language, args.server, getattr(args, "allow_custom_server", False), root)
     if command is None:
         print_result({"status": "unavailable", "complete": False, "language": language, "reason": "No installed language server"})
         return 3
@@ -114,9 +143,9 @@ def main() -> int:
     parser.add_argument("--file", required=True)
     parser.add_argument("--line", type=int, default=1)
     parser.add_argument("--column", type=int, default=1)
-    parser.add_argument("--server", help="Installed known server basename, bare name or absolute path; a known name is not a trust guarantee")
+    parser.add_argument("--server", help="Known installed server: bare name or absolute path matching PATH; relative paths are forbidden")
     parser.add_argument("--allow-custom-server", action="store_true",
-                        help="Permit other --server basenames: arbitrary code execution; use only trusted executables")
+                        help="Permit custom, workspace, or relative PATH servers: arbitrary code execution; explicit relative paths remain forbidden")
     parser.add_argument("--server-arg", action="append", default=[],
                         help="Server argument (repeatable); arguments can execute project code, so do not broadly allow this script")
     try:
