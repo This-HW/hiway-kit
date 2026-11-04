@@ -51,7 +51,7 @@ def test_workspace_edit_request_is_declined(tmp_path):
     connection = lsp_transport.Connection([sys.executable, "-c", "import time; time.sleep(30)"], str(tmp_path))
     sent = []
     connection.send = sent.append
-    connection.messages.put({"id": 90, "method": "workspace/applyEdit", "params": {"edit": {}}})
+    connection.messages.put({"jsonrpc": "2.0", "id": 90, "method": "workspace/applyEdit", "params": {"edit": {}}})
     try:
         connection.receive(1e12)
         assert sent[0]["result"]["applied"] is False
@@ -61,7 +61,7 @@ def test_workspace_edit_request_is_declined(tmp_path):
 
 def test_invalid_server_configuration_request_is_rejected(tmp_path):
     connection = lsp_transport.Connection([sys.executable, "-c", "import time; time.sleep(30)"], str(tmp_path))
-    connection.messages.put({"id": 90, "method": "workspace/configuration", "params": {"items": None}})
+    connection.messages.put({"jsonrpc": "2.0", "id": 90, "method": "workspace/configuration", "params": {"items": None}})
     try:
         with pytest.raises(lsp_transport.LspError, match="configuration"):
             connection.receive(1e12)
@@ -95,12 +95,17 @@ def test_real_clangd_diagnostics_and_navigation(tmp_path, capsys):
     for action in ("diagnostics", "symbols", "definition", "references"):
         args = arguments(tmp_path, action)
         args.line, args.column = 2, 27
-        assert lsp_query.query(args) == 0
+        rc = lsp_query.query(args)
         result = json.loads(capsys.readouterr().out)
-        assert result["status"] == "ok"
         if action == "diagnostics":
+            # clangd may only support push: empty push is provisional, never a
+            # verified clean result. A negotiated full pull may be complete.
+            assert rc == (0 if result["complete"] else 2)
+            assert result["status"] == ("ok" if result["complete"] else "unverified")
             assert result["result"] == []
         else:
+            assert rc == 0
+            assert result["status"] == "ok"
             assert result["result"]
     assert source.read_bytes() == original
     source.write_text("int broken(void) { return missing_symbol; }\n")

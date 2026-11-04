@@ -10,13 +10,29 @@ import threading
 import time
 from contextlib import suppress
 
+from lsp_validation import (
+    LspError,
+    validate_message,
+    validate_publish,
+    validate_pull_report,
+)
+
 MAX_MESSAGE_BYTES = 2 * 1024 * 1024
 MAX_PENDING_MESSAGES = 128
 REQUEST_TIMEOUT = 15
 
 
-class LspError(RuntimeError):
-    pass
+def _object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise LspError("Duplicate JSON object key; result is unverified")
+        result[key] = value
+    return result
+
+
+def _invalid_constant(value):
+    raise LspError("Invalid JSON constant: " + value)
 
 
 class Connection:
@@ -52,13 +68,10 @@ class Connection:
                 raw = self.process.stdout.read(length)
                 if len(raw) != length:
                     raise LspError("Truncated LSP response")
-                message = json.loads(raw)
-                if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
-                    raise LspError("Invalid JSON-RPC response")
-                if "method" in message and (not isinstance(message["method"], str) or not isinstance(message.get("params", {}), dict)):
-                    raise LspError("Invalid LSP method or parameters")
+                message = json.loads(raw, object_pairs_hook=_object, parse_constant=_invalid_constant)
+                validate_message(message)
                 self.messages.put(message, timeout=REQUEST_TIMEOUT)
-        except (OSError, ValueError, LspError, queue.Full) as exc:
+        except (OSError, ValueError, RecursionError, LspError, queue.Full) as exc:
             try:
                 self.messages.put(LspError(str(exc)), timeout=1)
             except queue.Full:
@@ -93,6 +106,7 @@ class Connection:
             raise LspError("Language server response timed out; result is unverified") from exc
         if isinstance(message, LspError):
             raise message
+        validate_message(message)
         if "method" in message and "id" in message:
             method = message["method"]
             result = None
@@ -105,10 +119,16 @@ class Connection:
                 result = []
             elif method == "workspace/applyEdit":
                 result = {"applied": False, "failureReason": "read-only client"}
+            else:
+                self.send({"jsonrpc": "2.0", "id": message["id"],
+                           "error": {"code": -32601, "message": "Unsupported client method"}})
+                raise LspError("Unsupported language-server request: " + method)
             self.send({"jsonrpc": "2.0", "id": message["id"], "result": result})
         elif "method" in message:
+            if message["method"] == "textDocument/publishDiagnostics":
+                validate_publish(message.get("params"))
             if len(self.notifications) >= MAX_PENDING_MESSAGES:
-                self.notifications.pop(0)
+                raise LspError("Language-server notification budget exceeded; result is unverified")
             self.notifications.append(message)
         return message
 
@@ -119,7 +139,9 @@ class Connection:
         deadline = time.monotonic() + REQUEST_TIMEOUT
         while time.monotonic() < deadline:
             message = self.receive(deadline)
-            if message.get("id") == request_id and "method" not in message:
+            if "method" not in message:
+                if type(message["id"]) is not int or message["id"] != request_id:
+                    raise LspError("Unexpected JSON-RPC response ID; result is unverified")
                 if "error" in message:
                     raise LspError(str(message["error"]))
                 if "result" not in message:
@@ -127,15 +149,35 @@ class Connection:
                 return message["result"]
         raise LspError("Language server request timed out")
 
-    def diagnostics(self, uri: str):
+    def diagnostics(self, uri: str, provider=None):
+        if provider is not None:
+            params = {"textDocument": {"uri": uri}}
+            if "identifier" in provider:
+                params["identifier"] = provider["identifier"]
+            # One-shot requests have no cached result and must receive a full
+            # report. An unchanged report without previousResultId is invalid.
+            result, _ = validate_pull_report(self.request("textDocument/diagnostic", params))
+            return result, True
         deadline = time.monotonic() + REQUEST_TIMEOUT
         while time.monotonic() < deadline:
-            for message in reversed(self.notifications):
-                params = message.get("params", {})
-                if message.get("method") == "textDocument/publishDiagnostics" and params.get("uri") == uri and params.get("version", 1) == 1:
-                    if not isinstance(params.get("diagnostics"), list) or any(not isinstance(item, dict) for item in params["diagnostics"]):
-                        raise LspError("Invalid diagnostics response")
-                    return params["diagnostics"]
+            batches = [message["params"]["diagnostics"] for message in self.notifications
+                       if message.get("method") == "textDocument/publishDiagnostics"
+                       and message["params"]["uri"] == uri and message["params"].get("version", 1) == 1]
+            if batches:
+                # Consume already queued pushes, without claiming a quiet period
+                # is a completion signal. Retain errors observed before a clear.
+                if not self.messages.empty():
+                    self.receive(deadline)
+                    continue
+                result = list(batches[-1])
+                seen = {json.dumps(item, sort_keys=True) for item in result}
+                for batch in batches[:-1]:
+                    for item in batch:
+                        key = json.dumps(item, sort_keys=True)
+                        if item.get("severity", 1) == 1 and key not in seen:
+                            result.append(item)
+                            seen.add(key)
+                return result, False
             self.receive(deadline)
         raise LspError("No diagnostics received; result is unverified")
 
@@ -155,6 +197,10 @@ class Connection:
         if os.name == "posix":
             with suppress(ProcessLookupError):
                 os.killpg(self.process.pid, signal.SIGKILL)
-        self.process.stdin.close()
-        self.process.stdout.close()
+        # A server that exits during a write may leave a broken buffered pipe;
+        # still close the other stream and join the reader in that case.
+        with suppress(OSError):
+            self.process.stdin.close()
+        with suppress(OSError):
+            self.process.stdout.close()
         self.reader.join(timeout=1)

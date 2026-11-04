@@ -6,10 +6,10 @@ import argparse
 import json
 import os
 import shutil
-from pathlib import Path
 
-from code_intel import contained_path
+from lsp_source import SourceUnavailable, read_source
 from lsp_transport import Connection, LspError
+from lsp_validation import require, validate_navigation
 
 MAX_SOURCE_BYTES = 1024 * 1024
 SERVER_CANDIDATES = {
@@ -38,15 +38,11 @@ def select_server(language: str, explicit: str | None) -> list[str] | None:
 
 
 def query(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve(strict=True)
-    path = contained_path(root, args.file)
-    if not path.is_file() or path.stat().st_size > MAX_SOURCE_BYTES:
-        raise ValueError("Expected a source file no larger than 1 MiB")
-    text = path.read_text(encoding="utf-8")
+    root, path, text = read_source(args.root, args.file, MAX_SOURCE_BYTES)
     language = LANGUAGES.get(path.suffix, "plaintext")
     command = select_server(language, args.server)
     if command is None:
-        print(json.dumps({"status": "unavailable", "language": language, "reason": "No installed language server"}))
+        print(json.dumps({"status": "unavailable", "complete": False, "language": language, "reason": "No installed language server"}))
         return 3
     command += args.server_arg
     lines = text.splitlines() or [""]
@@ -59,12 +55,22 @@ def query(args: argparse.Namespace) -> int:
             "processId": os.getpid(), "rootUri": root.as_uri(),
             "workspaceFolders": [{"uri": root.as_uri(), "name": root.name}],
             "capabilities": {"general": {"positionEncodings": ["utf-16"]},
-                             "textDocument": {"publishDiagnostics": {"versionSupport": True}}},
+                             "workspace": {"configuration": True, "workspaceFolders": True},
+                             "textDocument": {"publishDiagnostics": {"versionSupport": True},
+                                              "diagnostic": {"dynamicRegistration": False, "relatedDocumentSupport": False},
+                                              "documentSymbol": {"hierarchicalDocumentSymbolSupport": True},
+                                              "definition": {"linkSupport": True}}},
         })
         if not isinstance(initialization, dict) or not isinstance(initialization.get("capabilities"), dict):
             raise LspError("Invalid language-server initialization response")
         if initialization["capabilities"].get("positionEncoding", "utf-16") != "utf-16":
             raise LspError("Language server did not negotiate UTF-16 positions")
+        provider = initialization["capabilities"].get("diagnosticProvider")
+        if provider is not None:
+            require(isinstance(provider, dict) and type(provider.get("interFileDependencies")) is bool
+                    and type(provider.get("workspaceDiagnostics")) is bool, "diagnosticProvider capability")
+            if "identifier" in provider:
+                require(isinstance(provider["identifier"], str), "diagnosticProvider identifier")
         connection.notify("initialized", {})
         connection.notify("textDocument/didOpen", {"textDocument": {
             "uri": path.as_uri(), "languageId": language, "version": 1, "text": text,
@@ -72,7 +78,7 @@ def query(args: argparse.Namespace) -> int:
         methods = {"symbols": "textDocument/documentSymbol", "definition": "textDocument/definition",
                    "references": "textDocument/references"}
         if args.action == "diagnostics":
-            result = connection.diagnostics(path.as_uri())
+            result, complete = connection.diagnostics(path.as_uri(), provider)
         else:
             params = {"textDocument": {"uri": path.as_uri()}}
             if args.action != "symbols":
@@ -80,12 +86,14 @@ def query(args: argparse.Namespace) -> int:
             if args.action == "references":
                 params["context"] = {"includeDeclaration": True}
             result = connection.request(methods[args.action], params)
-            valid_types = (list, dict) if args.action == "definition" else (list,)
-            if result is not None and not isinstance(result, valid_types):
-                raise LspError("Invalid symbol/navigation response")
-        print(json.dumps({"status": "ok", "action": args.action, "server": command[0],
+            validate_navigation(args.action, result)
+            complete = True
+        print(json.dumps({"status": "ok" if complete else "unverified", "complete": complete,
+                          "action": args.action, "server": command[0],
                           "file": str(path.relative_to(root)), "result": result}, ensure_ascii=False))
-        return int(args.action == "diagnostics" and any(item.get("severity", 1) == 1 for item in result))
+        if args.action == "diagnostics" and any(item.get("severity", 1) == 1 for item in result):
+            return 1
+        return 0 if complete else 2
     finally:
         connection.close()
 
@@ -101,8 +109,11 @@ def main() -> int:
     parser.add_argument("--server-arg", action="append", default=[])
     try:
         return query(parser.parse_args())
+    except SourceUnavailable as exc:
+        print(json.dumps({"status": "unavailable", "complete": False, "reason": str(exc)}))
+        return 3
     except (OSError, ValueError, LspError) as exc:
-        print(json.dumps({"status": "error", "reason": str(exc)}))
+        print(json.dumps({"status": "error", "complete": False, "reason": str(exc)}))
         return 2
 
 
