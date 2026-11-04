@@ -135,5 +135,70 @@
     "judgeActivation": "judge 활성화 시 필요한 '고정 평가셋 + 임계값' 설계 미정. 별도 배치로 위임",
     "tier2Design": "대화형 에이전트(clarify-requirements 등)의 시나리오화 방법 미정",
     "delegationSignalCompliance": "[폐기로 종결 — W-022 R1, 2026-08-27] 에이전트별 DELEGATION_SIGNAL 준수율 실측(관측 8종): implement-code 6/6, plan-implementation 2/2 — 안정. write-tests 1/2, sync-docs 2/3, verify-code 1/2, 그리고 v5.0.0 에서 삭제된 3종(1/4·1/2·1/2) — 불안정(8종 중 6종, 75%). **측정 교란 정정(W-022 R1)**: implement-code의 task.md 3건이 신호 보고를 직접 지시했고 나머지는 지시하지 않았다 — 6/6은 무지시 대조군이 아니다(무지시 준수는 plan-implementation 2/2뿐). 그럼에도 최종 판정은 폐기다 — 근거는 통계가 아니라 (1) 결정론적 파싱 코드가 hooks/skills/scripts/rules 어디에도 없음 (2) 오케스트레이션이 이미 스킬 주도 플랫 위임으로 이전. DELEGATION_SIGNAL 계약 자체를 에이전트 정의 33종·rules 2종·CLAUDE.md·스킬 4종에서 전부 제거했고, 5개 시나리오(implement-code x3·plan-implementation·v5.0.0 에서 삭제된 에이전트 1건)의 delegation_signal 어서션도 함께 제거했다(재부착 대상 없음 — 계약이 없다). 상세: docs/specs/2026-08-27-delegation-signal-contract-review.md(W-021)."
+  },
+  "skills": {
+    "schema": 1,
+    "legacyExceptions": [
+      {
+        "skill": "agent-creator",
+        "reason": "Pre-5.6 uncovered debt: agent definition authoring; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "auto-dev",
+        "reason": "Pre-5.6 uncovered debt: plan execution pipeline; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "brainstorming",
+        "reason": "Pre-5.6 uncovered debt: design/spec elicitation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "child-session",
+        "reason": "Pre-5.6 uncovered debt: dispatched worker discipline; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "control-loop",
+        "reason": "Pre-5.6 uncovered debt: multi-session coordination; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "cross-engine-review",
+        "reason": "Pre-5.6 uncovered debt: cross-engine evidence review; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "debug",
+        "reason": "Pre-5.6 uncovered debt: failure investigation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "harness-export",
+        "reason": "Pre-5.6 uncovered debt: host-neutral rule export; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "multi-perspective-review",
+        "reason": "Pre-5.6 uncovered debt: document deliberation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "plan-task",
+        "reason": "Pre-5.6 uncovered debt: structured planning; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "review",
+        "reason": "Pre-5.6 uncovered debt: code review workflow; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "skill-forge",
+        "reason": "Pre-5.6 uncovered debt: skill draft proposal; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "test",
+        "reason": "Pre-5.6 uncovered debt: test execution workflow; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "using-hiway-kit",
+        "reason": "Pre-5.6 uncovered debt: session-start workflow guidance; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      },
+      {
+        "skill": "web-research",
+        "reason": "Pre-5.6 uncovered debt: external source synthesis; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+      }
+    ]
   }
 }
