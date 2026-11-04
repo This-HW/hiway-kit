@@ -169,20 +169,38 @@ codex plugin marketplace remove hiway-kit-marketplace
 Codex also reads the repo's existing `.claude-plugin/marketplace.json` as a legacy path, alongside
 the generated `.agents/plugins/marketplace.json`.
 
-#### Trusting Codex hooks (do this once, or the norms never arrive)
+Keep the configured marketplace source consistent with the version you intend to use. A one-command
+`-c` source override does not change the persistent source: a later ordinary install can replace the
+preview build with the configured source's version. Test unpublished builds in a separate `CODEX_HOME`
+with a persistent local marketplace; keep the release installation on its chosen source.
 
-Installing is not enough. Codex asks for **hook trust** before it will run a plugin's
-hooks, and until you grant it the hooks are **skipped in silence** — no warning, no
-error, and nothing in the session says the rules were not injected. Measured directly:
-the same install answered `NONE` when asked about the completion gate, then answered
-correctly once trust was in place.
+For a read-only installation/source comparison, run the installed tool with an explicit home:
 
-- **Interactive `codex`**: start a session in the project once and approve the hook
-  trust prompt. After that, `SessionStart` fires and the rules plus the feedback-ledger
-  digest are injected the same way Claude Code injects them.
-- **Non-interactive `codex exec`**: there is no prompt to answer, so hooks stay skipped
-  unless you pass `--dangerously-bypass-hook-trust`. Read the flag's name literally —
-  it bypasses the approval gate, so use it only where you already trust the plugin.
+```bash
+python3 -B /path/to/hiway-kit/tools/install_doctor.py \
+  --codex-home /path/to/codex-home --plugin hiway-kit@hiway-kit-marketplace
+```
+
+For a Git source, add `--source-checkout /path/to/existing-checkout`; its local origin URL must match
+the configured source. The doctor never fetches or reinstalls. Exit 0 confirms source/version agreement,
+1 a confirmed defect, and 2 insufficient or stale evidence. It reports hook discovery, trust, enabled
+choice and execution separately; an unknown hook state is not proof of failure or success. A safe shared
+`plugins` store is supported, and `--plugin-store` can constrain its canonical root. Python 3.11+ reads
+TOML directly; Python 3.9/3.10 can use `--snapshot` captured with `--capture-snapshot` on 3.11+.
+Snapshots bind to the original paths and hashes and become unusable when those originals change.
+
+#### Trusting and enabling Codex hooks
+
+Installing, discovering, trusting, enabling and executing a hook are separate states. Native approval
+must match the current plugin contents; updates can require approval again. A hook explicitly disabled
+in configuration stays disabled after trust approval. Do not infer rule injection from installation or
+trust alone. Depending on the CLI version and failure, unavailable trust may appear as a skipped hook
+or a hook-approval error.
+
+- **Interactive `codex`**: review the native hook trust prompt and your enabled choices, then
+  verify execution in a new session. The kit does not approve or enable hooks automatically.
+- **Non-interactive `codex exec`**: a run cannot rely on an interactive approval prompt.
+  Check the native trust and enabled states before treating hook output as available.
 
 **Hooks are the better path, not the only one.** Even with hooks off, the norms still
 reach Codex through the entrypoint file (`AGENTS.md`, see
@@ -192,7 +210,8 @@ without trust is automatic delivery, not the discipline.
 
 #### Skills that name a sub-agent: read them as a contract, not a transport
 
-Codex loads every skill, but it exposes **no sub-agents**. Skills that dispatch an agent
+Delegation availability depends on the host and its enabled tools. Check the current session's
+capabilities instead of assuming a named sub-agent is available. Skills that dispatch an agent
 (`debug`, `review`, `test`, `auto-dev`, `multi-perspective-review`) name the agent as a contract.
 Each of those skills carries an explicit degradation path: the delegation is one
 **transport**, and the invariant is the **contract** inside the block — persona, checks,

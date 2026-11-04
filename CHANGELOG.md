@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [5.6.0] — 2026-10-30
+## [5.6.0] — 2026-11-04
 
 ### Added — On-demand code intelligence and session history
 
@@ -19,6 +19,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and project discovery. Existing global rules and hooks are unchanged.
 - OMO adoption audit and provenance: `docs/research/2026-10-30-omo-absorption.md`.
   Tools are independently implemented; OMO's runtime, telemetry, model overrides and daemons are not bundled.
+- Read-only installation doctor compares the installed Codex plugin with its persistent marketplace
+  source, supports safe shared plugin stores, and separates discovery/trust/enabled/execution evidence.
+  It never installs, fetches, approves hooks or reads authentication files. Python 3.9/3.10 use a
+  provenance-checked JSON snapshot captured on Python 3.11+; missing evidence remains unknown.
+- Independent deterministic CLI coverage gate for new skills, with explicit legacy exceptions.
+  This structural check does not claim natural-language skill selection or model quality.
+
+### Fixed — Audit findings in the integration draft
+
+- Accept valid preprocessed Python/Go AST metavariables; bound combined stdout/stderr and execution
+  time across engine discovery, validation and queries. No unbounded output spool.
+- Distinguish complete pull diagnostics from provisional push diagnostics. An empty push is unverified,
+  never a clean result. Validate JSON-RPC IDs and detailed LSP result schemas.
+- Pin source/log reads to file descriptors and reject replacement symlinks and special files.
+  Session search also bounds directory entries, traversal and aggregate reads, with explicit truncation.
+- Document persistent-source reinstall behavior and preserve explicitly disabled hooks. These helpers
+  currently require POSIX file/process primitives and do not claim full OMO feature equivalence.
 
 ## [5.5.1] — 2026-10-28
 

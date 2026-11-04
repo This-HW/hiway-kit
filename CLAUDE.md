@@ -182,6 +182,9 @@ cache), but `scripts/`, `evals/` and `tests/` (hook tests live in `tests/hooks/`
 1. Create `plugins/common/skills/{name}/SKILL.md`
 2. Optionally add `README.md` in the same directory
 3. No manifest edit needed — skills are auto-discovered from the directory
+4. Add positive and negative CLI contracts under `evals/skill-scenarios/`, backed by actual pytest
+   functions. `scripts/check_skill_eval_coverage.py` discovers all skills; only the fixed legacy
+   cohort in `evals/policy.json` is exempt. Model-driven skill selection is a separate evaluation.
 
 ### Naming Conventions
 
