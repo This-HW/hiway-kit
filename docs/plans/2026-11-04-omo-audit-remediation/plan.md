@@ -137,5 +137,6 @@ size: large
 - plan-control은 `3ae8f51405168e767144b4306ed1c529b0add0b5`에 **ACCEPT**를 판정했다. delta 바이트 일치, 독립 fresh gate rc0 / pytest 2,181 passed, Q 회귀 되돌려-FAIL 16/20, Q-1 실행 3종 차단과 외부 엔진 양성, Q-2 홈 조합 9종과 보호 유지, Q-3 help를 직접 확인했다. 독립 review-code는 ACCEPT(H0/M1/L6), code-intel 선택 표본은 2케이스×3회 6/6이다.
 - 부모의 같은 HEAD fresh gate는 rc0 / 37 pass / 0 fail / pytest 2,181 passed이며 소비자 probe rc0, 스킬 17개 발견, 설치·재설치 후 플러그인 해시 불변이다. 이 결과는 토큰·성능·전체 결과 품질 개선의 증거가 아니다.
 - 표현 확정: 실행 파일 선택과 자식 환경 구성 사이에 공유하는 것은 **root identity**다. 선택은 아직 부모 PATH의 첫 후보를 사용하고, 자식 PATH는 별도로 정제한다. 첫 후보를 거부하면 뒤의 후보를 자동 선택하지 않는다. 고정 FD 기반 root identity, identity/root 일치 검증, AST 공유 검사의 보강 등 권장은 후속 항목으로 남긴다.
-- 이번 판정은 코드 검수 수용이며 릴리스 승인이 아니다. 4차 에이전트 eval 최종 결과는 대기 중, Codex 자연어 E2E는 격리 홈 미로그인으로 미검증, 실 홈 설치는 미실시다. 따라서 전체 실행 상태는 in-progress로 유지한다.
+- 4차 에이전트 eval 최종 결과를 확인했다: `cd79331`에서 `scripts/run-evals.sh` rc0, 13개 에이전트 25/25 pass. 원본은 migration 디렉터리의 `review4/plan-control/agent-evals-cd79331.{json,log}`이며 기존 로그인에서 인증 복사 없이 실행했다. 이후 `778ff2a`까지 agents·rules·scenarios 변경이 없음을 직접 대조했고, plan-control과 합의한 최종 트리의 에이전트 회귀 증거로 사용한다. plan-control 측 대기 중인 eval은 없다.
+- 이번 판정은 코드 검수 수용이며 릴리스 승인이 아니다. 코드 수정·독립 검수와 실행 가능한 평가는 마쳤으나, Codex 자연어 E2E는 격리 홈 미로그인으로 미검증이고 실 홈 설치는 미실시다. 따라서 전체 실행 상태는 in-progress로 유지한다. 에이전트 회귀 통과를 OMO 대비 토큰·성능·결과 품질 개선으로 해석하지 않는다.
 - main merge·tag·push와 probe 브랜치 push는 사용자 확인 대상이다. 릴리스 전 Claude 디렉토리 probe Validate가 필요하며, 코드 ACCEPT를 해당 정책 검증이나 공개 승인으로 대신하지 않는다. 상주 LSP·rename·browser는 별도 Large 설계 범위로 남는다.
