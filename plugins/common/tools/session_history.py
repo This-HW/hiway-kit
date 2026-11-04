@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pwd
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,6 +25,7 @@ READ_CHUNK_BYTES = 64 * 1024
 PREVIEW_CHARS = 240
 MAX_SESSION_ID_CHARS = 512
 MAX_CWD_CHARS = 512
+MAX_ERROR_CHARS = 1024
 
 
 def message_text(record) -> str:
@@ -53,6 +55,7 @@ class ScanBudget:
     skipped_entries: int = 0
     stopped: bool = False
     reasons: list[str] = field(default_factory=list)
+    protected_identities: set[tuple[int, int]] = field(default_factory=set)
 
     def truncate(self, reason: str, *, stop: bool = False):
         if reason not in self.reasons:
@@ -170,6 +173,13 @@ def scan_file(fd: int, path: Path, queries: list[str], budget: ScanBudget):
 
 def scan_directory(fd: int, path: Path, queries: list[str], budget: ScanBudget, depth: int = 0):
     """Stream entries rather than materializing os.walk's unbounded lists."""
+    # Firmlinks/bind mounts can reach a protected tree through a different hard
+    # path. Inspect the opened FD before scandir, including after a rename race.
+    info = os.fstat(fd)
+    if (info.st_dev, info.st_ino) in budget.protected_identities:
+        budget.skipped_entries += 1
+        budget.truncate("protected_directory")
+        return
     with os.scandir(fd) as entries:
         budget.directories += 1
         while budget.can_continue():
@@ -211,19 +221,24 @@ def search(root: Path, queries: list[str], limit: int):
     budget = ScanBudget()
     session_history_io.require_secure_io()
     root = root.resolve(strict=True)
-    home = Path.home()
-    broad_roots = [home, home / ".claude", home / ".codex"]
+    passwd_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    # Path.home() with HOME="" becomes cwd on Python 3.9. The passwd home
+    # remains protected even when HOME points elsewhere (or is empty).
+    homes = [passwd_home]
+    if os.environ.get("HOME"):
+        homes.append(Path.home())
+    broad_roots = [path for home in homes for path in (home, home / ".claude", home / ".codex")]
     for variable in ("CODEX_HOME", "CLAUDE_CONFIG_DIR"):
         configured = os.environ.get(variable)
         if configured:
-            broad_roots.append(Path(configured))
+            broad_roots.append(Path(configured).expanduser())
     results = []
     malformed = 0
     limited_files = 0
     with session_history_io.open_root(root) as root_fd:
         # Check and scan the same pinned root, including on case-insensitive
         # filesystems. Explicit descendants (sessions/, projects/) stay allowed.
-        session_history_io.reject_protected_root(root_fd, broad_roots)
+        budget.protected_identities = session_history_io.reject_protected_root(root_fd, broad_roots)
         for record in scan_directory(root_fd, root, queries, budget):
             malformed += record["malformed_records"]
             limited_files += int(record["truncated"])
@@ -251,8 +266,8 @@ def main() -> int:
             raise ValueError("Queries must be nonempty")
         print(json.dumps(search(Path(args.root), args.query, args.limit), ensure_ascii=False))
         return 0
-    except (OSError, ValueError) as exc:
-        print(json.dumps({"status": "error", "reason": str(exc)}))
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(json.dumps({"status": "error", "reason": str(exc)[:MAX_ERROR_CHARS]}))
         return 2
 
 

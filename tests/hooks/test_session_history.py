@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import pwd
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -11,6 +13,14 @@ TOOLS = Path(__file__).resolve().parents[2] / "plugins/common/tools"
 sys.path.insert(0, str(TOOLS))
 import session_history
 import session_history_io
+
+
+@pytest.fixture(autouse=True)
+def controlled_passwd_home(tmp_path, monkeypatch):
+    """Keep passwd protection metadata in scratch, outside each selected root."""
+    home = tmp_path.with_name(tmp_path.name + "-passwd-home")
+    home.mkdir()
+    monkeypatch.setattr(pwd, "getpwuid", lambda uid: SimpleNamespace(pw_dir=str(home)))
 
 
 def write_message(path, text="needle inside", **metadata):
@@ -461,6 +471,7 @@ def test_protected_root_and_ancestors_rejected_before_read(tmp_path, monkeypatch
 
 @pytest.mark.parametrize("variant", [".CODEX", ".CLAUDE", "USERS", "users/FAKE", "CUSTOMCLAUDE"])
 def test_case_alias_protected_roots_are_rejected_before_scan(tmp_path, monkeypatch, variant):
+    """Skips on case-sensitive Linux; review4 descent fixtures mock FD aliases."""
     home = tmp_path / "users/fake"
     codex = home / ".codex"
     claude = home / ".claude"
@@ -658,10 +669,11 @@ def test_root_replacement_after_protection_check_cannot_redirect_scan(tmp_path, 
     checked = []
 
     def check(fd, protected):
-        original(fd, protected)
+        identities = original(fd, protected)
         checked.append(os.fstat(fd).st_ino)
         logs.rename(tmp_path / "moved")
         home.rename(logs)
+        return identities
 
     original_scan = session_history.scan_directory
 

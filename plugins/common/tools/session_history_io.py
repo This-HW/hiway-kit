@@ -72,12 +72,19 @@ def open_root(root: Path, *, forbidden_identity: tuple[int, int] | None = None, 
 
 
 def reject_protected_root(root_fd: int, protected_paths: list[Path]):
-    """Compare the pinned search root with real protected ancestor identities."""
+    """Reject protected ancestors and retain identities for descent checks.
+
+    Missing paths retain their last existing ancestor, matching the root
+    rejection policy. These are pinned FD identities, never path spellings.
+    """
     info = os.fstat(root_fd)
     root_identity = (info.st_dev, info.st_ino)
+    identities = set()
     for path in protected_paths:
         # Resolve aliases once. Even if non-strict resolution encounters an
         # unavailable component, the NOFOLLOW opens above cannot silently pass
         # it: only ENOENT is tolerated, and every existing ancestor is checked.
-        with open_root(path.resolve(), forbidden_identity=root_identity, missing_ok=True):
-            pass
+        with open_root(path.resolve(), forbidden_identity=root_identity, missing_ok=True) as fd:
+            info = os.fstat(fd)
+            identities.add((info.st_dev, info.st_ino))
+    return identities

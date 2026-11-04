@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import pwd
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -10,6 +12,14 @@ TOOLS = Path(__file__).resolve().parents[2] / "plugins/common/tools"
 sys.path.insert(0, str(TOOLS))
 import session_history
 import session_history_io
+
+
+@pytest.fixture(autouse=True)
+def controlled_passwd_home(tmp_path, monkeypatch):
+    """Keep passwd protection metadata in scratch, outside each selected root."""
+    home = tmp_path.with_name(tmp_path.name + "-passwd-home")
+    home.mkdir()
+    monkeypatch.setattr(pwd, "getpwuid", lambda uid: SimpleNamespace(pw_dir=str(home)))
 
 
 def test_regular_file_is_read_via_pinned_fd(tmp_path):
