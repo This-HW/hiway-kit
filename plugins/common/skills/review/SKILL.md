@@ -21,7 +21,7 @@ description: Review current changes or specified files - ruff lint for Python fi
 **대상이 정해지기 전에 정적 분석을 돌리지 않는다** — 대상 없이 도는 ruff 는 아무것도 검사하지 않고도
 "통과"로 보고된다.
 
-$ARGUMENTS에 파일/디렉토리가 있으면 그것이 대상이다. 없으면 git 변경분이 대상이다:
+호출 인자(Claude Code 는 스킬 본문 끝에 `ARGUMENTS:` 줄로 붙인다)에 파일/디렉토리가 있으면 그것이 대상이다. 없으면 git 변경분이 대상이다:
 
 ```bash
 # 비교 기준: 작업 트리(스테이징 포함)에 변경이 있으면 HEAD, 없으면 마지막 커밋(HEAD~1)
@@ -114,8 +114,8 @@ ruff check --select C901 [0.2단계와 동일한 대상 파일]
 
 0단계에서 확정한 대상의 **내용**을 모은다:
 
-- $ARGUMENTS가 있으면: 해당 파일/디렉토리를 읽는다
-- $ARGUMENTS가 없으면: 0단계의 `BASE` 로 `git diff "$BASE"` 를 뽑는다(삭제된 파일은 이 diff 로만 보인다)
+- 호출 인자가 있으면: 해당 파일/디렉토리를 읽는다
+- 호출 인자가 없으면: 0단계의 `BASE` 로 `git diff "$BASE"` 를 뽑는다(삭제된 파일은 이 diff 로만 보인다)
 
 ---
 
@@ -125,7 +125,7 @@ ruff check --select C901 [0.2단계와 동일한 대상 파일]
 
 ### 수동 오버라이드 확인
 
-$ARGUMENTS에 `--quick`이 포함되어 있으면:
+호출 인자에 `--quick`이 포함되어 있으면:
 
 - scope = 'quick' (사용자 명시 오버라이드)
 - security_scan_needed = false
@@ -179,7 +179,7 @@ $ARGUMENTS에 `--quick`이 포함되어 있으면:
 
 ## 1.7단계: 사용자 의견 처리 원칙 (조건부)
 
-**트리거**: $ARGUMENTS에 파일 경로·옵션(`--quick` 등)이 아닌 **자연어 문장이 포함된 경우**에만 실행.
+**트리거**: 호출 인자에 파일 경로·옵션(`--quick` 등)이 아닌 **자연어 문장이 포함된 경우**에만 실행.
 
 예시:
 - `/review src/auth.py 보안이 걱정돼` → **실행** (자연어 의견 포함)
