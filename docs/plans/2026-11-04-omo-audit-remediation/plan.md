@@ -131,3 +131,11 @@ size: large
 - 부모가 쓰기 거부 sandbox에서 수정 전 회귀 15개 중 12개 FAIL을 확인했고 수정 후 같은 15개가 통과했다. 실행 상태는 in-progress이며 새 frozen HEAD의 전체 게이트와 5차 독립 검수 전 완료를 주장하지 않는다.
 - 합의한 경계와 잔여: 작업 공간 경계는 명시적 root이며 상위 저장소 자동 확장·다음 PATH 후보 자동 선택은 하지 않는다. 환경은 신뢰 입력이고 이름 필터는 값의 비밀정보·툴체인 실행을 차단하는 sandbox가 아니다. history identity는 백업 복사본을 구분하지 못한다. doctor 초기 snapshot 검증의 조기 종료/상세 reason 귀속·capture 관측, LSP close 오류의 출력 리팩터는 이번 필수 Q 수정과 분리해 후속으로 남긴다.
 - 최종 Q 회귀는 20개이며 관련 격리 검사 전체는 768 passed / 1 FS skip이다. 생산 5파일만 기준 HEAD로 되돌린 scratch에서는 16 FAIL / 4 PASS이고, Q-1~Q-3 각각 실제 행동 실패가 있다(공유 identity 헬퍼 부재 검사는 별도 구조적 실패). 실제 Python 3.9.25에서 모듈 5개 import·case alias 차단·passwd fallback·홈 불명 JSON·doctor help를 확인했다. 기존 서버 선택 단위 fixture 네 곳은 존재하는 root identity를 검사할 수 있도록 빈 workspace 디렉터리 생성을 추가했고 기존 단언은 유지했다.
+
+## 코드 검수 수용 — 배포 전 관문 유지
+
+- plan-control은 `3ae8f51405168e767144b4306ed1c529b0add0b5`에 **ACCEPT**를 판정했다. delta 바이트 일치, 독립 fresh gate rc0 / pytest 2,181 passed, Q 회귀 되돌려-FAIL 16/20, Q-1 실행 3종 차단과 외부 엔진 양성, Q-2 홈 조합 9종과 보호 유지, Q-3 help를 직접 확인했다. 독립 review-code는 ACCEPT(H0/M1/L6), code-intel 선택 표본은 2케이스×3회 6/6이다.
+- 부모의 같은 HEAD fresh gate는 rc0 / 37 pass / 0 fail / pytest 2,181 passed이며 소비자 probe rc0, 스킬 17개 발견, 설치·재설치 후 플러그인 해시 불변이다. 이 결과는 토큰·성능·전체 결과 품질 개선의 증거가 아니다.
+- 표현 확정: 실행 파일 선택과 자식 환경 구성 사이에 공유하는 것은 **root identity**다. 선택은 아직 부모 PATH의 첫 후보를 사용하고, 자식 PATH는 별도로 정제한다. 첫 후보를 거부하면 뒤의 후보를 자동 선택하지 않는다. 고정 FD 기반 root identity, identity/root 일치 검증, AST 공유 검사의 보강 등 권장은 후속 항목으로 남긴다.
+- 이번 판정은 코드 검수 수용이며 릴리스 승인이 아니다. 4차 에이전트 eval 최종 결과는 대기 중, Codex 자연어 E2E는 격리 홈 미로그인으로 미검증, 실 홈 설치는 미실시다. 따라서 전체 실행 상태는 in-progress로 유지한다.
+- main merge·tag·push와 probe 브랜치 push는 사용자 확인 대상이다. 릴리스 전 Claude 디렉토리 probe Validate가 필요하며, 코드 ACCEPT를 해당 정책 검증이나 공개 승인으로 대신하지 않는다. 상주 LSP·rename·browser는 별도 Large 설계 범위로 남는다.
