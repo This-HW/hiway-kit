@@ -141,63 +141,63 @@
     "legacyExceptions": [
       {
         "skill": "agent-creator",
-        "reason": "Pre-5.6 uncovered debt: agent definition authoring; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: agent definition authoring; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "auto-dev",
-        "reason": "Pre-5.6 uncovered debt: plan execution pipeline; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: plan execution pipeline; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "brainstorming",
-        "reason": "Pre-5.6 uncovered debt: design/spec elicitation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: design/spec elicitation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "child-session",
-        "reason": "Pre-5.6 uncovered debt: dispatched worker discipline; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: dispatched worker discipline; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "control-loop",
-        "reason": "Pre-5.6 uncovered debt: multi-session coordination; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: multi-session coordination; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "cross-engine-review",
-        "reason": "Pre-5.6 uncovered debt: cross-engine evidence review; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: cross-engine evidence review; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "debug",
-        "reason": "Pre-5.6 uncovered debt: failure investigation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: failure investigation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "harness-export",
-        "reason": "Pre-5.6 uncovered debt: host-neutral rule export; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: host-neutral rule export; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "multi-perspective-review",
-        "reason": "Pre-5.6 uncovered debt: document deliberation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: document deliberation; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "plan-task",
-        "reason": "Pre-5.6 uncovered debt: structured planning; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: structured planning; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "review",
-        "reason": "Pre-5.6 uncovered debt: code review workflow; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: code review workflow; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "skill-forge",
-        "reason": "Pre-5.6 uncovered debt: skill draft proposal; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: skill draft proposal; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "test",
-        "reason": "Pre-5.6 uncovered debt: test execution workflow; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: test execution workflow; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "using-hiway-kit",
-        "reason": "Pre-5.6 uncovered debt: session-start workflow guidance; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: session-start workflow guidance; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       },
       {
         "skill": "web-research",
-        "reason": "Pre-5.6 uncovered debt: external source synthesis; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. No deterministic CLI contract registered in this change."
+        "reason": "Pre-5.6 skill-gate registration debt: external source synthesis; purpose confirmed in its SKILL.md at fixed pre-5.6 tree 102853ec8a13c38d6911f7b51b23ef4c2eb4676c. Not registered with the skill CLI scenario gate in this change; this does not assert an absence of existing tests."
       }
     ]
   }

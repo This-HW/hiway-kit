@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -233,15 +234,53 @@ def test_pytest_gate_must_collect_cli_tests(repo):
     assert run(repo) == 1
 
 
-def test_registered_nodes_are_actually_collected():
-    process = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-o", "addopts=",
-                              "tests/hooks/test_skill_cli_contracts.py"], cwd=ROOT,
-                             capture_output=True, text=True, check=False, timeout=30)
-    assert process.returncode == 0, process.stdout + process.stderr
-    collected = set(process.stdout.splitlines())
+def assert_cli_execution(report, nodes):
+    """A collected or runtime-skipped contract is not execution evidence."""
+    # Only this test's pytest process writes the report in its fresh tmp_path;
+    # no downloaded or user-supplied XML is accepted.
+    cases = ET.parse(report).findall(".//testcase")  # noqa: S314
+    expected = {(file.removesuffix(".py").replace("/", "."), name)
+                for file, name in (node.split("::") for node in nodes)}
+    observed = [(case.get("classname"), case.get("name")) for case in cases]
+    assert len(observed) == len(expected) and set(observed) == expected
+    for case in cases:
+        assert not any(case.find(tag) is not None for tag in ("skipped", "failure", "error")), ET.tostring(case)
+
+
+def test_registered_nodes_are_actually_collected(tmp_path):
+    nodes = []
     for path in (ROOT / "evals/skill-scenarios").glob("*/*.json"):
         for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
-            assert case["testNode"] in collected
+            nodes.append(case["testNode"])
+    report = tmp_path / "cli-results.xml"
+    process = subprocess.run([sys.executable, "-m", "pytest", "-q", "-o", "addopts=",
+                              "--junitxml", str(report), *nodes], cwd=ROOT,
+                             capture_output=True, text=True, check=False, timeout=45)
+    assert process.returncode == 0, process.stdout + process.stderr
+    assert_cli_execution(report, nodes)
+
+
+@pytest.mark.parametrize("behavior", ["pass", "skip", "xfail", "fail", "deselected"])
+def test_cli_execution_requires_pass_not_runtime_skip(tmp_path, behavior):
+    directory = tmp_path / "tests/hooks"
+    directory.mkdir(parents=True)
+    body = {"pass": "assert True", "skip": "pytest.skip('runtime')",
+            "xfail": "pytest.xfail('runtime')", "fail": "assert False", "deselected": "assert True"}[behavior]
+    (directory / "test_runtime.py").write_text(f"import pytest\ndef test_contract():\n    {body}\n")
+    report = tmp_path / "results.xml"
+    nodes = ["tests/hooks/test_runtime.py::test_contract"]
+    process = subprocess.run([sys.executable, "-m", "pytest", "-q", "-o", "addopts=",
+                              "--junitxml", str(report), *nodes,
+                              *(["-k", "absent"] if behavior == "deselected" else [])],
+                             cwd=tmp_path, capture_output=True, text=True, check=False, timeout=30)
+    if behavior == "pass":
+        assert process.returncode == 0
+        assert_cli_execution(report, nodes)
+    else:
+        if behavior in ("skip", "xfail"):
+            assert process.returncode == 0  # pytest alone would falsely satisfy the gate.
+        with pytest.raises(AssertionError):
+            assert_cli_execution(report, nodes)
 
 
 @pytest.mark.parametrize("missing", [False, True])

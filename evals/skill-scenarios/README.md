@@ -6,7 +6,9 @@ exceptions in `evals/policy.json` under `skills.legacyExceptions`. The checker
 seals its sorted names with the SHA256 of the tree identified in its source;
 adding or replacing an exception with a new skill fails. The names and reasons
 have one owner in policy, without a second generated list or dependency on git
-history at runtime. Retiring that frozen debt cohort requires an explicit
+history at runtime. This is registration debt in this gate, not a claim that the
+legacy skills have no tests; harness-export already has deterministic tests.
+Retiring that frozen debt cohort requires an explicit
 checker/policy review.
 
 Each remaining skill needs positive and negative cases in JSON files one
@@ -22,6 +24,9 @@ against isolated synthetic logs and AST/LSP peers. JSON expectations describe
 the assertions owned by those tests. The existing pytest gate executes these
 tests; section 29 separately checks structural coverage. Synthetic AST peers
 verify argument forwarding and read-only previews, not native pattern parsing.
+The coverage regression suite also executes every registered node and checks its
+JUnit result: each node must pass once, with zero skips, errors or failures.
+Runtime skip/xfail and deselection are rejected even when pytest exits zero.
 Installed real-engine checks in `test_code_intel.py` and `test_lsp_query.py`
 are separate evidence and may skip when the engines are absent.
 
