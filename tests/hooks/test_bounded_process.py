@@ -194,7 +194,7 @@ def test_expired_budget_does_not_launch(processes):
     assert processes == []
 
 
-def test_child_environment_has_only_explicit_defaults(monkeypatch):
+def test_child_environment_has_only_explicit_defaults(tmp_path, monkeypatch):
     import json
 
     banned = ["INTEL_TEST_API_TOKEN", "NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "DYLD_INSERT_LIBRARIES",
@@ -203,13 +203,15 @@ def test_child_environment_has_only_explicit_defaults(monkeypatch):
         monkeypatch.setenv(name, "fixture-value")
     monkeypatch.setenv("GOTOOLCHAIN", "auto")
     monkeypatch.setenv("LANG", "C")
+    # A valid external directory survives; implicit cwd entries do not.
+    monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.pathsep + ".")
     result = ProcessBudget(3, 16384).run(command("import json,os; print(json.dumps(dict(os.environ)))"))
     env = json.loads(result.stdout)
     assert not set(banned) & env.keys()
     assert env["GOTOOLCHAIN"] == "local"
     assert env["LANG"] == "C"
     assert env["HOME"] == os.environ["HOME"]
-    assert env["PATH"] == os.environ["PATH"]
+    assert env["PATH"] == str(tmp_path.resolve())
 
 
 def test_toolchain_environment_preserves_configuration_and_denies_secrets(monkeypatch):

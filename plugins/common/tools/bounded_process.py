@@ -23,9 +23,10 @@ class ProcessBudget:
     is outside this runner's containment contract.
     """
 
-    def __init__(self, timeout: float, max_output_bytes: int):
+    def __init__(self, timeout: float, max_output_bytes: int, *, root: Path | None = None):
         if timeout <= 0 or max_output_bytes < 0:
             raise ValueError("Invalid subprocess budget")
+        self.root = root
         self.deadline = time.monotonic() + timeout
         self.remaining_bytes = max_output_bytes
         self.max_output_bytes = max_output_bytes
@@ -48,9 +49,9 @@ class ProcessBudget:
             return remaining
 
         remaining_time()
-        process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL,
+        process = subprocess.Popen(command, executable=getattr(command[0], "executable", command[0]), cwd=cwd, stdin=subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                   start_new_session=True, env=child_environment())
+                                   start_new_session=True, env=child_environment(self.root))
         stdout, stderr = bytearray(), bytearray()
         try:
             with selectors.DefaultSelector() as selector:

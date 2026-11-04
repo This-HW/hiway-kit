@@ -1,4 +1,4 @@
-"""Bounded stdio transport for one read-only language-server conversation."""
+"""Bounded stdio transport for trusted servers; declining client edits is not a sandbox."""
 from __future__ import annotations
 
 import json
@@ -9,6 +9,7 @@ import subprocess
 import threading
 import time
 from contextlib import suppress
+from pathlib import Path
 
 from intel_runtime import child_environment
 from lsp_validation import (
@@ -39,10 +40,10 @@ def _invalid_constant(value):
 
 
 class Connection:
-    def __init__(self, command: list[str], cwd: str):
-        self.process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.PIPE,
+    def __init__(self, command: list[str], cwd: str, *, allow_custom: bool = False):
+        self.process = subprocess.Popen(command, executable=getattr(command[0], "executable", command[0]), cwd=cwd, stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                        start_new_session=True, env=child_environment())
+                                        start_new_session=True, env=child_environment(Path(cwd), allow_custom))
         self.messages = queue.Queue(maxsize=MAX_PENDING_MESSAGES)
         self.notifications = []
         self.notification_count = 0
@@ -148,7 +149,7 @@ class Connection:
             if message["method"] == "textDocument/publishDiagnostics":
                 validate_publish(message.get("params"))
                 if len(self.notifications) >= MAX_PENDING_MESSAGES:
-                    raise LspError("Language-server notification budget exceeded; result is unverified")
+                    raise LspBudgetExceeded("Language-server notification budget exceeded; result is unverified")
                 self.notifications.append(message)
         return message
 
@@ -202,32 +203,47 @@ class Connection:
         raise LspError("No diagnostics received; result is unverified")
 
     def close(self) -> None:
-        try:
-            if os.name == "posix":
+        def signal_group(sig):
+            try:
+                os.killpg(self.process.pid, sig)
+            except ProcessLookupError:
+                return
+            except PermissionError as denied:
+                # A leader can be entering zombie state before poll observes
+                # its exit. Allow a short bounded reap, never a live denial.
+                if self.process.poll() is None:
+                    try:
+                        self.process.wait(timeout=0.05)
+                    except subprocess.TimeoutExpired:
+                        raise denied from None
                 try:
-                    os.killpg(self.process.pid, signal.SIGTERM)
+                    os.killpg(self.process.pid, sig)
+                except ProcessLookupError:
+                    return
                 except PermissionError:
-                    # macOS may return EPERM for an exited, unreaped leader.
-                    # Reap it and retry the group so live descendants still die.
                     if self.process.poll() is None:
                         raise
-                    os.killpg(self.process.pid, signal.SIGTERM)
+                    # Reaped/zombie-only groups can still return EPERM. A
+                    # second denial must not mask the query result or error.
+
+        try:
+            if os.name == "posix":
+                signal_group(signal.SIGTERM)
             elif self.process.poll() is None:
                 self.process.terminate()
-        except ProcessLookupError:
-            pass
-        try:
-            self.process.wait(timeout=3)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait(timeout=3)
-        if os.name == "posix":
-            with suppress(ProcessLookupError):
-                os.killpg(self.process.pid, signal.SIGKILL)
-        # A server that exits during a write may leave a broken buffered pipe;
-        # still close the other stream and join the reader in that case.
-        with suppress(OSError):
-            self.process.stdin.close()
-        with suppress(OSError):
-            self.process.stdout.close()
-        self.reader.join(timeout=1)
+            try:
+                self.process.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=3)
+        finally:
+            try:
+                if os.name == "posix":
+                    signal_group(signal.SIGKILL)
+            finally:
+                # Finish local cleanup even if a live signal denial is raised.
+                with suppress(OSError):
+                    self.process.stdin.close()
+                with suppress(OSError):
+                    self.process.stdout.close()
+                self.reader.join(timeout=1)

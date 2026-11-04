@@ -49,7 +49,9 @@ def test_real_metavariables_search_and_preview(tmp_path, capsys, lang, filename,
 @pytest.mark.parametrize("stage", ["version", "preflight", "query"])
 @pytest.mark.parametrize("stream", ["stdout", "stderr"])
 def test_output_limit_stops_engine_while_running(tmp_path, monkeypatch, capsys, stage, stream):
-    engine = tmp_path / "engine"
+    external = tmp_path.parent / (tmp_path.name + "-external")
+    external.mkdir(exist_ok=True)
+    engine = external / "engine"
     finished = tmp_path / "finished"
     engine.write_text(
         f"#!{sys.executable} -B\n"
@@ -74,7 +76,9 @@ def test_output_limit_stops_engine_while_running(tmp_path, monkeypatch, capsys, 
 
 
 def fake_engine(tmp_path, monkeypatch, program):
-    engine = tmp_path / "engine"
+    external = tmp_path.parent / (tmp_path.name + "-external")
+    external.mkdir(exist_ok=True)
+    engine = external / "engine"
     engine.write_text(f"#!{sys.executable} -B\n" + program)
     engine.chmod(0o700)
     monkeypatch.setattr(code_intel.shutil, "which", lambda name: str(engine))

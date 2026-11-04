@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One-shot, read-only LSP queries; missing servers are never installed."""
+"""One-shot queries with trusted language servers; servers can execute workspace code and are not sandboxed."""
 from __future__ import annotations
 
 import argparse
@@ -8,7 +8,7 @@ import re
 import shutil
 from pathlib import Path
 
-from intel_runtime import print_result
+from intel_runtime import print_result, resolve_executable
 from lsp_source import SourceUnavailable, read_source
 from lsp_transport import Connection, LspError
 from lsp_validation import LspBudgetExceeded, require, validate_navigation
@@ -33,28 +33,13 @@ def select_server(language: str, explicit: str | None, allow_custom: bool = Fals
     root = Path.cwd().resolve() if root is None else root
     resolved = {}
 
-    def executable(path: str) -> str:
-        # Resolve each candidate once, then execute exactly that fixed path.
-        if path not in resolved:
-            try:
-                resolved[path] = Path(path).resolve(strict=True)
-            except RuntimeError as exc:
-                # pathlib on Python 3.9 reports symlink loops as RuntimeError.
-                raise ValueError("Cannot safely resolve server path: " + str(exc)) from exc
-        return str(resolved[path])
-
     def checked(path: str) -> str:
-        if not Path(path).is_absolute() and not allow_custom:
-            raise ValueError("Relative server PATH result requires --allow-custom-server (arbitrary code execution)")
-        fixed = executable(path)
-        if Path(fixed).is_relative_to(root) and not allow_custom:
-            raise ValueError("Workspace server requires --allow-custom-server (arbitrary code execution)")
-        return fixed
+        return resolve_executable(path, root, allow_custom, resolved)
 
     if explicit is not None:
         if not explicit or explicit in (".", "..") or "\\" in explicit or (not Path(explicit).is_absolute() and "/" in explicit):
             raise ValueError("--server requires a bare executable name or absolute path; relative paths are forbidden")
-        known = {name for candidates in SERVER_CANDIDATES.values() for name, _ in candidates}
+        known = {name: arguments for candidates in SERVER_CANDIDATES.values() for name, arguments in candidates}
         if Path(explicit).name not in known and not allow_custom:
             raise ValueError("Unknown --server basename; --allow-custom-server permits arbitrary code execution")
         path = shutil.which(explicit)
@@ -63,9 +48,9 @@ def select_server(language: str, explicit: str | None, allow_custom: bool = Fals
         fixed = checked(path)
         if Path(explicit).is_absolute() and not allow_custom:
             installed = shutil.which(Path(explicit).name)
-            if installed is None or checked(installed) != fixed:
+            if installed is None or checked(installed).executable != fixed.executable:
                 raise ValueError("Absolute server must match the installed PATH server; otherwise use --allow-custom-server")
-        return [fixed]
+        return [fixed, *known.get(Path(explicit).name, [])]
     for name, arguments in SERVER_CANDIDATES.get(language.removesuffix("react"), []):
         path = shutil.which(name)
         if path:
@@ -74,9 +59,12 @@ def select_server(language: str, explicit: str | None, allow_custom: bool = Fals
 
 
 def query(args: argparse.Namespace) -> int:
+    allow_custom = getattr(args, "allow_custom_server", False)
+    if getattr(args, "server_arg", []) and not allow_custom:
+        raise ValueError("--server-arg requires --allow-custom-server (arbitrary code execution and writes)")
     root, path, text = read_source(args.root, args.file, MAX_SOURCE_BYTES)
     language = LANGUAGES.get(path.suffix, "plaintext")
-    command = select_server(language, args.server, getattr(args, "allow_custom_server", False), root)
+    command = select_server(language, args.server, allow_custom, root)
     if command is None:
         print_result({"status": "unavailable", "complete": False, "language": language, "reason": "No installed language server"})
         return 3
@@ -87,7 +75,7 @@ def query(args: argparse.Namespace) -> int:
     if not 1 <= args.line <= len(lines) or not 1 <= args.column <= len(lines[args.line - 1]) + 1:
         raise ValueError("Position is outside the source file (line/column start at 1)")
     position = {"line": args.line - 1, "character": len(lines[args.line - 1][:args.column - 1].encode("utf-16-le")) // 2}
-    connection = Connection(command, str(root))
+    connection = Connection(command, str(root), allow_custom=allow_custom)
     try:
         initialization = connection.request("initialize", {
             "processId": os.getpid(), "rootUri": root.as_uri(),
@@ -127,7 +115,7 @@ def query(args: argparse.Namespace) -> int:
             validate_navigation(args.action, result)
             complete = True
         print_result({"status": "ok" if complete else "unverified", "complete": complete,
-                          "action": args.action, "server": command[0],
+                          "action": args.action, "server": getattr(command[0], "executable", command[0]),
                       "file": str(path.relative_to(root)), "result": result})
         if args.action == "diagnostics" and any(item.get("severity", 1) == 1 for item in result):
             return 1
@@ -147,7 +135,7 @@ def main() -> int:
     parser.add_argument("--allow-custom-server", action="store_true",
                         help="Permit custom, workspace, or relative PATH servers: arbitrary code execution; explicit relative paths remain forbidden")
     parser.add_argument("--server-arg", action="append", default=[],
-                        help="Server argument (repeatable); arguments can execute project code, so do not broadly allow this script")
+                        help="Append to server defaults (repeatable); requires --allow-custom-server and permits code execution/writes")
     try:
         return query(parser.parse_args())
     except SourceUnavailable as exc:

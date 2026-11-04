@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only structural queries using the consumer's installed ast-grep."""
+"""Structural queries with trusted installed ast-grep; executing the engine is not sandboxed."""
 from __future__ import annotations
 
 import argparse
@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from bounded_process import ProcessBudget
-from intel_runtime import print_result
+from intel_runtime import print_result, resolve_executable
 
 QUERY_TIMEOUT = 30
 PROBE_TIMEOUT = 5
@@ -32,16 +32,16 @@ def output(result: dict) -> None:
     print_result({"pattern_validated": False, **result})
 
 
-def find_ast_grep(budget: ProcessBudget | None = None, cwd: Path | None = None) -> tuple[str, str] | None:
+def find_ast_grep(budget: ProcessBudget | None = None, cwd: Path | None = None,
+                  root: Path | None = None) -> tuple[str, str] | None:
+    root = Path.cwd().resolve() if root is None else root
     if budget is None:
-        budget = ProcessBudget(PROBE_TIMEOUT, MAX_OUTPUT_BYTES)
+        budget = ProcessBudget(PROBE_TIMEOUT, MAX_OUTPUT_BYTES, root=root)
     # Never execute `sg` while probing: on Linux it can be a group-switching
     # utility, and identifying that after execution is too late.
     candidate = shutil.which("ast-grep")
     if candidate:
-        if not Path(candidate).is_absolute():
-            raise ValueError("ast-grep PATH result is relative; use an absolute PATH entry")
-        candidate = str(Path(candidate).resolve(strict=True))
+        candidate = resolve_executable(candidate, root)
         result = budget.run([candidate, "--version"], timeout=PROBE_TIMEOUT, cwd=cwd)
         version = re.fullmatch(rb"ast-grep ([0-9]+\.[0-9]+\.[0-9]+)(?:\r?\n)?", result.stdout)
         if result.returncode == 0 and version:
@@ -54,13 +54,13 @@ def query(args: argparse.Namespace) -> int:
     if not root.is_dir():
         raise ValueError("Workspace root must be a directory")
     paths = [contained_path(root, value) for value in args.paths]
-    budget = ProcessBudget(QUERY_TIMEOUT, MAX_OUTPUT_BYTES)
+    budget = ProcessBudget(QUERY_TIMEOUT, MAX_OUTPUT_BYTES, root=root)
     with tempfile.TemporaryDirectory(prefix="hiway-ast-") as directory:
         return run_query(args, root, paths, budget, Path(directory))
 
 
 def run_query(args, root: Path, paths: list[Path], budget: ProcessBudget, cwd: Path) -> int:
-    engine = find_ast_grep(budget, cwd=cwd)
+    engine = find_ast_grep(budget, cwd=cwd, root=root)
     if engine is None:
         output({"status": "unavailable", "reason": "ast-grep is not installed or its version output is unrecognized"})
         return 3
@@ -114,7 +114,7 @@ def main() -> int:
     parser.add_argument("--root", default=".")
     parser.add_argument("--lang", required=True)
     parser.add_argument("--pattern", required=True)
-    parser.add_argument("--rewrite", help="Preview replacements; never writes files")
+    parser.add_argument("--rewrite", help="Preview replacements through the trusted engine; no apply flag is sent")
     parser.add_argument("--limit", type=int, choices=range(1, 501), default=50, metavar="1..500")
     parser.add_argument("paths", nargs="+", help="Files/directories inside --root")
     try:

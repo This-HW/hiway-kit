@@ -45,7 +45,9 @@ def test_known_server_basenames_remain_allowed(tmp_path, monkeypatch, server):
     root.mkdir()
     monkeypatch.setenv("PATH", str(binary.parent))
     for value in (server, str(binary)):
-        assert lsp_query.select_server("c", value, root=root) == [str(binary)]
+        command = lsp_query.select_server("c", value, root=root)
+        defaults = next(args for candidates in lsp_query.SERVER_CANDIDATES.values() for name, args in candidates if name == server)
+        assert command == [str(binary), *defaults]
 
 
 def test_custom_server_requires_opt_in_but_relative_paths_stay_forbidden(tmp_path, monkeypatch):
@@ -84,7 +86,9 @@ def test_workspace_known_symlink_cannot_impersonate_path_server(tmp_path, monkey
     monkeypatch.setenv("PATH", str(trusted.parent))
     with pytest.raises(ValueError, match="allow-custom-server"):
         lsp_query.select_server("c", str(link), root=root)
-    assert lsp_query.select_server("c", str(link), True, root=root) == [str(Path("/bin/sh").resolve())]
+    command = lsp_query.select_server("c", str(link), True, root=root)
+    assert command == [str(link), "--background-index=false", "--log=error"]
+    assert command[0].executable == str(Path("/bin/sh").resolve())
 
 
 def test_external_known_symlink_matches_path_server(tmp_path, monkeypatch):
@@ -94,7 +98,9 @@ def test_external_known_symlink_matches_path_server(tmp_path, monkeypatch):
     alias = aliases / "clangd"
     alias.symlink_to(trusted)
     monkeypatch.setenv("PATH", str(trusted.parent))
-    assert lsp_query.select_server("c", str(alias), root=tmp_path / "workspace") == [str(trusted)]
+    command = lsp_query.select_server("c", str(alias), root=tmp_path / "workspace")
+    assert command == [str(alias), "--background-index=false", "--log=error"]
+    assert command[0].executable == str(trusted)
 
 
 def test_different_external_known_basename_requires_opt_in(tmp_path, monkeypatch, capsys):
@@ -151,7 +157,9 @@ def test_selected_server_is_resolved_only_once(tmp_path, monkeypatch):
         return resolve(path, *args, **kwargs)
     monkeypatch.setattr(Path, "resolve", once)
     monkeypatch.setattr(lsp_query.shutil, "which", lambda name: str(binary))
-    assert lsp_query.select_server("c", str(binary), root=tmp_path / "workspace") == [str(binary)]
+    command = lsp_query.select_server("c", str(binary), root=tmp_path / "workspace")
+    assert command == [str(binary), "--background-index=false", "--log=error"]
+    assert command[0].executable == str(binary)
 
 
 def test_server_symlink_loop_is_a_json_error(tmp_path, monkeypatch, capsys):

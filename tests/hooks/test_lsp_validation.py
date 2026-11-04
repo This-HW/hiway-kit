@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import shutil
 import sys
 import time
@@ -276,6 +277,17 @@ def test_notification_count_limit_remains_enforced(wire, count):
     assert rc == (0 if count == 128 else 2)
     if count == 129:
         assert "notification budget" in result["reason"]
+        assert result["status"] == "unverified"
+
+
+def test_retained_notification_limit_is_also_unverified():
+    connection = lsp_transport.Connection.__new__(lsp_transport.Connection)
+    connection.messages = queue.Queue()
+    connection.notifications = [None] * lsp_transport.MAX_PENDING_MESSAGES
+    connection.messages.put({"jsonrpc": "2.0", "method": "textDocument/publishDiagnostics",
+                             "params": {"uri": "file:///fixture.c", "diagnostics": []}})
+    with pytest.raises(lsp_validation.LspBudgetExceeded, match="notification budget"):
+        connection.receive(time.monotonic() + 1)
 
 
 def test_discarded_logs_over_count_limit_still_allow_result(wire):
@@ -497,7 +509,7 @@ def test_real_ruff_pull_diagnostics_and_unsupported_navigation(tmp_path, monkeyp
     for text, expected in [("x = 1\n", 0), ("def broken(:\n", 1)]:
         source.write_text(text)
         monkeypatch.setattr(sys, "argv", ["lsp_query", "diagnostics", "--root", str(tmp_path),
-                                         "--file", source.name, "--server", "ruff", "--server-arg=server"])
+                                         "--file", source.name, "--server", "ruff"])
         rc = lsp_query.main()
         result = json.loads(capsys.readouterr().out)
         assert rc == expected
@@ -505,6 +517,6 @@ def test_real_ruff_pull_diagnostics_and_unsupported_navigation(tmp_path, monkeyp
         assert result["status"] == "ok"
         assert bool(result["result"]) is bool(expected)
     monkeypatch.setattr(sys, "argv", ["lsp_query", "symbols", "--root", str(tmp_path),
-                                     "--file", source.name, "--server", "ruff", "--server-arg=server"])
+                                     "--file", source.name, "--server", "ruff"])
     assert lsp_query.main() == 2
     assert json.loads(capsys.readouterr().out)["complete"] is False

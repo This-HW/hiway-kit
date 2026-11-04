@@ -32,7 +32,8 @@ def cli(tmp_path, tool, *args, path=None):
 
 def test_ast_metavariables_and_preview_preserve_source(tmp_path):
     """Synthetic engine checks literal Python/Go argv, not native parsing."""
-    binary_dir = tmp_path / "bin"
+    # The positive installed-engine fixture must be outside the queried root.
+    binary_dir = tmp_path.parent / (tmp_path.name + "-external-bin")
     binary_dir.mkdir()
     engine = binary_dir / "ast-grep"
     engine.write_text(
