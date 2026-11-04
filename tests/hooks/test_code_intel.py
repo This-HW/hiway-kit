@@ -28,6 +28,8 @@ def query_args(tmp_path, **kwargs):
      "def $F($$$ARGS):\n    $$$BODY", "def $F($$$ARGS):\n    pass"),
     ("go", "example.go", "package main\nfunc greet(name string) { println(name) }\n",
      "println($A)", "log($A)"),
+    ("typescript", "example.ts", "function greet(name: string) { console.log(name); }\n",
+     "console.log($A)", "console.warn($A)"),
 ])
 def test_real_metavariables_search_and_preview(tmp_path, capsys, lang, filename, source, pattern, rewrite):
     file = tmp_path / filename
@@ -168,7 +170,9 @@ def test_cli_missing_binary_is_rc3(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(code_intel.shutil, "which", lambda name: None)
     monkeypatch.setattr(sys, "argv", ["code_intel.py", "--root", str(tmp_path), "--lang", "c", "--pattern", "f($A)", "."])
     assert code_intel.main() == 3
-    assert json.loads(capsys.readouterr().out)["status"] == "unavailable"
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "unavailable"
+    assert "untrusted" in result["notice"].lower()
 
 
 def test_query_rejects_path_escape(tmp_path):
@@ -189,8 +193,79 @@ def test_linux_sg_is_not_accepted(monkeypatch):
     assert code_intel.find_ast_grep() is None
 
 
+def test_sg_is_never_probed(monkeypatch):
+    calls = []
+    monkeypatch.setattr(code_intel.shutil, "which", lambda name: "/usr/bin/sg" if name == "sg" else None)
+    def probe(*args, **kwargs):
+        calls.append(args)
+        return argparse.Namespace(returncode=0, stdout=b"sg from util-linux\n")
+
+    monkeypatch.setattr(code_intel.ProcessBudget, "run", probe)
+    assert code_intel.find_ast_grep() is None
+    assert calls == []
+
+
+@pytest.mark.parametrize("version,matches,expected", [("0.51.0", False, 0), ("0.52.0", False, 2),
+                                                      ("0.52.0", True, 0)])
+def test_pattern_validation_is_version_scoped(tmp_path, monkeypatch, capsys, version, matches, expected):
+    source = tmp_path / "example.c"
+    source.write_text("f(x);\n")
+    rows = [{"file": str(source)}] if matches else []
+    fake_engine(tmp_path, monkeypatch,
+                "import sys\n"
+                f"if '--version' in sys.argv: print('ast-grep {version}')\n"
+                "elif '--stdin' in sys.argv: pass\n"
+                f"else: print({json.dumps(rows)!r})\n")
+    assert code_intel.main() == expected
+    result = json.loads(capsys.readouterr().out)
+    assert result["pattern_validated"] is (version == "0.51.0")
+    assert result["status"] == ("unverified" if expected == 2 else "ok")
+    assert "untrusted" in result["notice"].lower()
+
+
+@pytest.mark.parametrize("version", ["ast-grep 0.51.0 extra", "ast-grep 0.51.0\nmalicious", "ast-grep 0.51", "ast-grep 0.51.0 "])
+def test_version_output_is_strict(tmp_path, monkeypatch, capsys, version):
+    fake_engine(tmp_path, monkeypatch, f"print({version!r})\n")
+    assert code_intel.main() == 3
+    result = json.loads(capsys.readouterr().out)
+    assert result["pattern_validated"] is False
+    assert "untrusted" in result["notice"].lower()
+
+
+def test_engine_runs_with_neutral_cwd_and_explicit_config(tmp_path, monkeypatch, capsys):
+    fake_engine(tmp_path, monkeypatch,
+                "import os, sys\n"
+                "from pathlib import Path\n"
+                f"assert Path.cwd() != Path({str(tmp_path)!r})\n"
+                "if '--version' in sys.argv: print('ast-grep 0.51.0')\n"
+                "else:\n"
+                "    config = Path(sys.argv[sys.argv.index('--config') + 1])\n"
+                "    assert config.is_absolute() and config.read_text().strip() == 'ruleDirs: []'\n"
+                "    if '--stdin' not in sys.argv:\n"
+                "        assert all(Path(p).is_absolute() for p in sys.argv[sys.argv.index('--') + 1:])\n"
+                "        print('[]')\n")
+    assert code_intel.main() == 0
+    assert json.loads(capsys.readouterr().out)["pattern_validated"] is True
+
+
+@pytest.mark.skipif(not shutil.which("ast-grep"), reason="optional ast-grep binary")
+def test_real_workspace_and_temp_ancestor_configs_are_ignored(tmp_path, monkeypatch, capsys):
+    import tempfile
+
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "example.py").write_text("print('hello')\n")
+    for parent in (tmp_path, workspace):
+        (parent / "sgconfig.yml").write_text("[invalid yaml config")
+    neutral_parent = tmp_path / "temp"
+    neutral_parent.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(neutral_parent))
+    assert code_intel.query(query_args(workspace, lang="python", pattern="print($A)")) == 0
+    assert json.loads(capsys.readouterr().out)["match_count"] == 1
+
+
 def test_missing_binary_reports_unavailable(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(code_intel, "find_ast_grep", lambda budget: None)
+    monkeypatch.setattr(code_intel, "find_ast_grep", lambda budget, **kwargs: None)
     args = argparse.Namespace(root=str(tmp_path), paths=["."], pattern="f($A)", lang="c", rewrite=None, limit=5)
     assert code_intel.query(args) == 3
     assert json.loads(capsys.readouterr().out)["status"] == "unavailable"
@@ -231,3 +306,12 @@ def test_real_native_compile_failure_is_rc2(tmp_path, capsys):
     result = json.loads(capsys.readouterr().out)
     assert result["status"] == "error" and result["reason"] == "Pattern compilation failed"
     assert "Cannot parse query" in result["detail"]
+
+
+def test_ast_error_has_notice(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["code_intel.py", "--root", str(tmp_path / "missing"),
+                                     "--lang", "c", "--pattern", "f($A)", "."])
+    assert code_intel.main() == 2
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "error"
+    assert "untrusted" in result["notice"].lower()

@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from bounded_process import ProcessBudget
+from intel_runtime import print_result
 
 QUERY_TIMEOUT = 30
 PROBE_TIMEOUT = 5
@@ -25,16 +28,21 @@ def contained_path(root: Path, value: str) -> Path:
     return resolved
 
 
-def find_ast_grep(budget: ProcessBudget | None = None) -> str | None:
+def output(result: dict) -> None:
+    print_result({"pattern_validated": False, **result})
+
+
+def find_ast_grep(budget: ProcessBudget | None = None, cwd: Path | None = None) -> tuple[str, str] | None:
     if budget is None:
         budget = ProcessBudget(PROBE_TIMEOUT, MAX_OUTPUT_BYTES)
-    for name in ("ast-grep", "sg"):
-        candidate = shutil.which(name)
-        if not candidate:
-            continue
-        result = budget.run([candidate, "--version"], timeout=PROBE_TIMEOUT)
-        if result.returncode == 0 and result.stdout.startswith(b"ast-grep "):
-            return candidate
+    # Never execute `sg` while probing: on Linux it can be a group-switching
+    # utility, and identifying that after execution is too late.
+    candidate = shutil.which("ast-grep")
+    if candidate:
+        result = budget.run([candidate, "--version"], timeout=PROBE_TIMEOUT, cwd=cwd)
+        version = re.fullmatch(rb"ast-grep ([0-9]+\.[0-9]+\.[0-9]+)(?:\r?\n)?", result.stdout)
+        if result.returncode == 0 and version:
+            return str(Path(candidate).absolute()), version[1].decode("ascii")
     return None
 
 
@@ -44,30 +52,41 @@ def query(args: argparse.Namespace) -> int:
         raise ValueError("Workspace root must be a directory")
     paths = [contained_path(root, value) for value in args.paths]
     budget = ProcessBudget(QUERY_TIMEOUT, MAX_OUTPUT_BYTES)
-    binary = find_ast_grep(budget)
-    if binary is None:
-        print(json.dumps({"status": "unavailable", "reason": "ast-grep is not installed"}))
+    with tempfile.TemporaryDirectory(prefix="hiway-ast-") as directory:
+        return run_query(args, root, paths, budget, Path(directory))
+
+
+def run_query(args, root: Path, paths: list[Path], budget: ProcessBudget, cwd: Path) -> int:
+    engine = find_ast_grep(budget, cwd=cwd)
+    if engine is None:
+        output({"status": "unavailable", "reason": "ast-grep is not installed or its version output is unrecognized"})
         return 3
+    binary, version = engine
+    pattern_validated = version == "0.51.0"
+    # Override upward sgconfig discovery as well as using a neutral cwd. A
+    # config in a temp ancestor must not load custom workspace parsers/rules.
+    config = cwd / "sgconfig.yml"
+    config.write_text("ruleDirs: []\n", encoding="utf-8")
+    base = [binary, "run", "--config", str(config), "--pattern", args.pattern, "--lang", args.lang]
     validation = budget.run(
-        [binary, "run", "--pattern", args.pattern, "--lang", args.lang, "--stdin"],
-        timeout=PROBE_TIMEOUT,
+        [*base, "--stdin"], timeout=PROBE_TIMEOUT, cwd=cwd,
     )
     if validation.returncode not in (0, 1):
-        print(json.dumps({"status": "error", "reason": "Pattern compilation failed", "detail": validation.stderr.decode(errors="replace")[:2000]}))
+        output({"status": "error", "reason": "Pattern compilation failed", "detail": validation.stderr.decode(errors="replace")[:2000]})
         return 2
-    if INVALID_PATTERN_WARNING in validation.stderr.splitlines():
-        print(json.dumps({"status": "error", "reason": "Engine reported an invalid pattern", "detail": validation.stderr.decode(errors="replace")[:2000]}))
+    if pattern_validated and INVALID_PATTERN_WARNING in validation.stderr.splitlines():
+        output({"status": "error", "reason": "Engine reported an invalid pattern", "detail": validation.stderr.decode(errors="replace")[:2000]})
         return 2
-    command = [binary, "run", "--pattern", args.pattern, "--lang", args.lang, "--json=compact"]
+    command = [*base, "--json=compact"]
     if args.rewrite is not None:
         command += ["--rewrite", args.rewrite]
     command += ["--", *map(str, paths)]
-    result = budget.run(command, cwd=root)
+    result = budget.run(command, cwd=cwd)
     if result.returncode not in (0, 1):
-        print(json.dumps({"status": "error", "reason": result.stderr.decode(errors="replace").strip()[:2000]}))
+        output({"status": "error", "reason": result.stderr.decode(errors="replace").strip()[:2000]})
         return 2
-    if INVALID_PATTERN_WARNING in result.stderr.splitlines():
-        print(json.dumps({"status": "error", "reason": "Engine reported an invalid pattern", "detail": result.stderr.decode(errors="replace")[:2000]}))
+    if pattern_validated and INVALID_PATTERN_WARNING in result.stderr.splitlines():
+        output({"status": "error", "reason": "Engine reported an invalid pattern", "detail": result.stderr.decode(errors="replace")[:2000]})
         return 2
     matches = json.loads(result.stdout or b"[]")
     if not isinstance(matches, list):
@@ -79,11 +98,12 @@ def query(args: argparse.Namespace) -> int:
         file = contained_path(root, match["file"])
         match["file"] = str(file.relative_to(root))
         files.add(match["file"])
-    print(json.dumps({"status": "ok", "mode": "preview" if args.rewrite is not None else "search",
-                      "match_count": len(matches), "file_count": len(files),
-                      "truncated": len(matches) > args.limit, "matches": matches[:args.limit]},
-                     ensure_ascii=False))
-    return 0
+    verified = pattern_validated or bool(matches)
+    output({"status": "ok" if verified else "unverified", "pattern_validated": pattern_validated,
+            "engine_version": version, "mode": "preview" if args.rewrite is not None else "search",
+            "match_count": len(matches), "file_count": len(files),
+            "truncated": len(matches) > args.limit, "matches": matches[:args.limit]})
+    return 0 if verified else 2
 
 
 def main() -> int:
@@ -96,8 +116,8 @@ def main() -> int:
     parser.add_argument("paths", nargs="+", help="Files/directories inside --root")
     try:
         return query(parser.parse_args())
-    except (OSError, ValueError, subprocess.TimeoutExpired) as exc:
-        print(json.dumps({"status": "error", "reason": str(exc)}))
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
+        output({"status": "error", "reason": str(exc)})
         return 2
 
 

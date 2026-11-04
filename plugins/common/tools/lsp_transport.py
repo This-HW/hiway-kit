@@ -10,7 +10,9 @@ import threading
 import time
 from contextlib import suppress
 
+from intel_runtime import child_environment
 from lsp_validation import (
+    LspBudgetExceeded,
     LspError,
     validate_message,
     validate_publish,
@@ -18,6 +20,7 @@ from lsp_validation import (
 )
 
 MAX_MESSAGE_BYTES = 2 * 1024 * 1024
+MAX_RECEIVED_BYTES = 16 * 1024 * 1024
 MAX_PENDING_MESSAGES = 128
 REQUEST_TIMEOUT = 15
 
@@ -39,20 +42,28 @@ class Connection:
     def __init__(self, command: list[str], cwd: str):
         self.process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                        start_new_session=True)
+                                        start_new_session=True, env=child_environment())
         self.messages = queue.Queue(maxsize=MAX_PENDING_MESSAGES)
         self.notifications = []
+        self.notification_count = 0
+        self.received_bytes = 0
         self.counter = 0
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
 
     def _read(self) -> None:
+        def account(raw):
+            self.received_bytes += len(raw)
+            if self.received_bytes > MAX_RECEIVED_BYTES:
+                raise LspBudgetExceeded("Language-server receive byte budget exceeded; result is unverified")
+            return raw
+
         try:
             while True:
                 length = None
                 header_size = 0
                 while True:
-                    line = self.process.stdout.readline(8193)
+                    line = account(self.process.stdout.readline(min(8193, MAX_RECEIVED_BYTES - self.received_bytes + 1)))
                     header_size += len(line)
                     if not line:
                         raise LspError("Language server closed stdout")
@@ -65,15 +76,24 @@ class Connection:
                         length = int(value.strip())
                 if length is None or not 0 <= length <= MAX_MESSAGE_BYTES:
                     raise LspError("Invalid LSP Content-Length")
-                raw = self.process.stdout.read(length)
+                raw = account(self.process.stdout.read(min(length, MAX_RECEIVED_BYTES - self.received_bytes + 1)))
                 if len(raw) != length:
                     raise LspError("Truncated LSP response")
                 message = json.loads(raw, object_pairs_hook=_object, parse_constant=_invalid_constant)
                 validate_message(message)
+                if "method" in message and "id" not in message:
+                    self.notification_count += 1
+                    if self.notification_count > MAX_PENDING_MESSAGES:
+                        raise LspBudgetExceeded("Language-server notification budget exceeded; result is unverified")
+                    if message["method"] != "textDocument/publishDiagnostics":
+                        # Count log/progress notifications without retaining
+                        # their payloads in either the queue or history.
+                        del message, raw
+                        continue
                 self.messages.put(message, timeout=REQUEST_TIMEOUT)
         except (OSError, ValueError, RecursionError, LspError, queue.Full) as exc:
             try:
-                self.messages.put(LspError(str(exc)), timeout=1)
+                self.messages.put(exc if isinstance(exc, LspError) else LspError(str(exc)), timeout=1)
             except queue.Full:
                 self.process.terminate()
 
@@ -127,9 +147,9 @@ class Connection:
         elif "method" in message:
             if message["method"] == "textDocument/publishDiagnostics":
                 validate_publish(message.get("params"))
-            if len(self.notifications) >= MAX_PENDING_MESSAGES:
-                raise LspError("Language-server notification budget exceeded; result is unverified")
-            self.notifications.append(message)
+                if len(self.notifications) >= MAX_PENDING_MESSAGES:
+                    raise LspError("Language-server notification budget exceeded; result is unverified")
+                self.notifications.append(message)
         return message
 
     def request(self, method: str, params):

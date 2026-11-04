@@ -19,11 +19,98 @@ def arguments(root, action="diagnostics", file="example.c"):
                               server=None, server_arg=[])
 
 
+@pytest.mark.parametrize("server", ["sh", "python3", "./clangd", "bin/clangd", "../clangd", "a\\clangd", "", ".", ".."])
+def test_server_policy_rejects_implicit_arbitrary_execution(monkeypatch, server):
+    monkeypatch.setattr(lsp_query.shutil, "which", lambda name: pytest.fail("rejected server must not be resolved"))
+    with pytest.raises(ValueError):
+        lsp_query.select_server("c", server)
+
+
+@pytest.mark.parametrize("server", ["clangd", "/tmp/tools/clangd", "ruff", "gopls", "rust-analyzer",
+                                   "basedpyright-langserver", "pyright-langserver", "typescript-language-server"])
+def test_known_server_basenames_remain_allowed(monkeypatch, server):
+    monkeypatch.setattr(lsp_query.shutil, "which", lambda name: name)
+    assert lsp_query.select_server("c", server) == [server]
+
+
+def test_custom_server_requires_opt_in_but_relative_paths_stay_forbidden(monkeypatch):
+    monkeypatch.setattr(lsp_query.shutil, "which", lambda name: name)
+    assert lsp_query.select_server("c", "/tmp/custom-engine", True) == ["/tmp/custom-engine"]
+    assert lsp_query.select_server("c", "custom-engine", True) == ["custom-engine"]
+    for server in ("./custom-engine", "nested/custom-engine"):
+        with pytest.raises(ValueError):
+            lsp_query.select_server("c", server, True)
+
+
+@pytest.mark.parametrize("shortfall", [0, 1])
+def test_receive_byte_budget_counts_headers_at_boundary(tmp_path, monkeypatch, shortfall):
+    raw = json.dumps({"jsonrpc": "2.0", "id": 1, "result": []}).encode()
+    frame = b"X-Padding: " + b"x"*900 + b"\r\nContent-Length: %d\r\n\r\n" % len(raw) + raw
+    maximum = len(frame) - shortfall
+    monkeypatch.setattr(lsp_transport, "MAX_RECEIVED_BYTES", maximum)
+    script = f"import sys,time; sys.stdout.buffer.write({frame!r}); sys.stdout.buffer.flush(); time.sleep(30)"
+    connection = lsp_transport.Connection([sys.executable, "-B", "-c", script], str(tmp_path))
+    try:
+        if shortfall:
+            with pytest.raises(lsp_transport.LspError, match="byte budget"):
+                connection.request("initialize", {})
+        else:
+            assert connection.request("initialize", {}) == []
+        assert connection.received_bytes == len(frame)
+    finally:
+        connection.close()
+
+
+def test_lsp_reader_discards_log_payloads_and_counts_notifications(tmp_path):
+    script = """
+import json,sys,time
+def send(message):
+    raw=json.dumps(dict(jsonrpc='2.0', **message)).encode()
+    sys.stdout.buffer.write(b'Content-Length: %d\\r\\n\\r\\n'%len(raw)+raw)
+    sys.stdout.buffer.flush()
+for _ in range(120): send(dict(method='window/logMessage',params={'message':'x'*4096}))
+send(dict(id=1,result=[]))
+time.sleep(30)
+"""
+    connection = lsp_transport.Connection([sys.executable, "-B", "-c", script], str(tmp_path))
+    try:
+        assert connection.request("initialize", {}) == []
+        assert connection.notifications == []
+        assert connection.notification_count == 120
+    finally:
+        connection.close()
+
+
 def test_missing_server_is_unverified(tmp_path, monkeypatch, capsys):
     (tmp_path / "example.c").write_text("int x;\n")
     monkeypatch.setattr(lsp_query, "select_server", lambda *args: None)
     assert lsp_query.query(arguments(tmp_path)) == 3
-    assert json.loads(capsys.readouterr().out)["status"] == "unavailable"
+    result = json.loads(capsys.readouterr().out)
+    assert result["status"] == "unavailable"
+    assert "untrusted" in result["notice"].lower()
+
+
+@pytest.mark.parametrize("language,name", [("c", "clangd"), ("cpp", "clangd"), ("python", "basedpyright-langserver"),
+                                          ("typescriptreact", "typescript-language-server"),
+                                          ("javascriptreact", "typescript-language-server"),
+                                          ("rust", "rust-analyzer"), ("go", "gopls")])
+def test_automatic_server_support_is_preserved(monkeypatch, language, name):
+    monkeypatch.setattr(lsp_query.shutil, "which", lambda candidate: "/tmp/" + candidate)
+    command = lsp_query.select_server(language, None)
+    assert command[0] == "/tmp/" + name
+
+
+def test_cli_rejects_custom_server_before_execution(tmp_path, monkeypatch, capsys):
+    (tmp_path / "example.c").write_text("int x;\n")
+    marker = tmp_path / "executed"
+    server = tmp_path / "custom-server"
+    server.write_text(f"#!{sys.executable}\nfrom pathlib import Path\nPath({str(marker)!r}).touch()\n")
+    server.chmod(0o700)
+    monkeypatch.setattr(sys, "argv", ["lsp_query", "symbols", "--root", str(tmp_path),
+                                     "--file", "example.c", "--server", str(server)])
+    assert lsp_query.main() == 2
+    assert not marker.exists()
+    assert "allow-custom-server" in json.loads(capsys.readouterr().out)["reason"]
 
 
 def test_request_timeout_is_not_empty_success(tmp_path, monkeypatch):

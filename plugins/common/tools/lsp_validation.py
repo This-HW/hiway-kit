@@ -15,6 +15,10 @@ class LspError(RuntimeError):
     pass
 
 
+class LspBudgetExceeded(LspError):
+    """A resource ceiling was reached, so the result cannot be verified."""
+
+
 def require(condition: bool, detail: str) -> None:
     if not condition:
         raise LspError("Invalid " + detail + "; result is unverified")

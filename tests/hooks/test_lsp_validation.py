@@ -37,6 +37,11 @@ while True:
     message = json.loads(sys.stdin.buffer.read(length))
     method = message.get("method")
     if method == "initialize":
+        if case.get("check_env"):
+            import os
+            assert 'INTEL_TEST_API_TOKEN' not in os.environ
+            assert 'NODE_OPTIONS' not in os.environ
+            assert os.environ['GOTOOLCHAIN'] == 'local'
         caps = case.get("capabilities", {})
         if case.get("pull"):
             caps["diagnosticProvider"] = {"interFileDependencies": False, "workspaceDiagnostics": False}
@@ -52,12 +57,20 @@ while True:
             if index: time.sleep(case.get("delay", 0))
             send(dict(method="textDocument/publishDiagnostics", params={"uri": uri, "version": case.get("version", 1), "diagnostics": batch}))
     elif method and "id" in message:
+        for _ in range(case.get("flood_count", 0)):
+            if case.get("flood_diagnostics"):
+                diagnostic = {"range": {"start": {"line": 0, "character": 0}, "end": {"line": 0, "character": 1}}, "message": "x"*case["flood_size"]}
+                send(dict(method="textDocument/publishDiagnostics", params={"uri": uri, "diagnostics": [diagnostic]}))
+            else:
+                send(dict(method="window/logMessage", params={"message": "x"*case["flood_size"]}))
         if "expected_position" in case:
             assert message["params"]["position"] == case["expected_position"]
         if "wire_response" in case:
             response = dict(id=message["id"], **case["wire_response"])
         elif method == "textDocument/diagnostic":
             response = dict(id=message["id"], result=case.get("report", {"kind": "full", "items": []}))
+            if case.get("report_message_size"):
+                response["result"]["items"][0]["message"] = "x"*case["report_message_size"]
         else:
             response = dict(id=message["id"], result=case.get("result", []))
         send(response)
@@ -76,7 +89,7 @@ def wire(tmp_path, monkeypatch, capsys):
             source.write_text(text)
         monkeypatch.setattr(sys, "argv", ["lsp_query", action, "--root", str(tmp_path),
                                          "--file", source.name, "--line", str(line), "--column", str(column),
-                                         "--server", sys.executable,
+                                         "--server", sys.executable, "--allow-custom-server",
                                          "--server-arg=-B", "--server-arg=" + str(server),
                                          "--server-arg=" + json.dumps(case)])
         rc = lsp_query.main()
@@ -229,6 +242,65 @@ def test_utf16_position_contract(wire):
                         "definition", text="😀xy\n", column=3)
     assert rc == 0
     assert response["result"] == LOCATION
+
+
+@pytest.mark.parametrize("text,line,column,position", [
+    ("a\u0085\u2028\u2029😀z", 1, 6, {"line": 0, "character": 6}),
+    ("a\r\nb\rc\n", 4, 1, {"line": 3, "character": 0}),
+    ("😀\r\nx\u2028y", 2, 4, {"line": 1, "character": 3}),
+])
+def test_only_lsp_line_endings_split_source(wire, text, line, column, position):
+    rc, response = wire({"expected_position": position, "result": LOCATION}, "definition", text=text, line=line, column=column)
+    assert rc == 0
+    assert response["result"] == LOCATION
+
+
+@pytest.mark.parametrize("diagnostics", [False, True])
+def test_cumulative_receive_budget_is_unverified(wire, diagnostics):
+    rc, result = wire({"push": [], "flood_count": 17, "flood_size": 1024*1024,
+                       "flood_diagnostics": diagnostics}, "symbols")
+    assert rc == 2
+    assert result["status"] == "unverified"
+    assert result["complete"] is False
+    assert "byte budget" in result["reason"]
+
+
+def test_notification_count_limit_remains_enforced(wire):
+    rc, result = wire({"push": [], "flood_count": 129, "flood_size": 0}, "symbols")
+    assert rc == 2
+    assert "notification budget" in result["reason"]
+
+
+def test_large_valid_diagnostics_below_budget_remain_accepted(wire):
+    rc, result = wire({"pull": True, "report": {"kind": "full", "items": [ERROR]}, "report_message_size": 1024*1024}, "diagnostics")
+    assert rc == 1
+    assert result["complete"] is True
+    assert len(result["result"][0]["message"]) == 1024*1024
+
+
+@pytest.mark.parametrize("diagnostics", [False, True])
+def test_large_repeated_notifications_below_budget_remain_accepted(wire, diagnostics):
+    rc, result = wire({"push": [], "flood_count": 14, "flood_size": 1024*1024,
+                       "flood_diagnostics": diagnostics}, "symbols")
+    assert rc == 0
+    assert result["complete"] is True
+
+
+def test_lsp_child_environment_is_filtered(wire, monkeypatch):
+    monkeypatch.setenv("INTEL_TEST_API_TOKEN", "fixture-value")
+    monkeypatch.setenv("NODE_OPTIONS", "fixture-value")
+    monkeypatch.setenv("GOTOOLCHAIN", "auto")
+    rc, result = wire({"check_env": True, "result": []}, "symbols")
+    assert rc == 0
+    assert "untrusted" in result["notice"].lower()
+
+
+@pytest.mark.parametrize("case,expected", [({"result": []}, 0), ({"result": [42]}, 2)])
+def test_lsp_notice_on_success_and_error(wire, case, expected):
+    rc, result = wire(case, "symbols")
+    assert rc == expected
+    assert "untrusted" in result["notice"].lower()
+    assert "instructions" in result["notice"].lower()
 
 
 @pytest.mark.parametrize("identifier", [True, False, 1.0, [], {}, 2147483648])
