@@ -285,6 +285,7 @@ def test_close_after_server_exits(tmp_path):
     connection = lsp_transport.Connection([sys.executable, "-c", "pass"], str(tmp_path))
     connection.process.wait(timeout=3)
     connection.close()
+    assert connection.process.returncode == 0
 
 
 def test_close_after_unreaped_server_exit(tmp_path):
@@ -293,7 +294,6 @@ def test_close_after_unreaped_server_exit(tmp_path):
     # Leave the exited leader unreaped to exercise macOS's zombie-group EPERM.
     time.sleep(.1)
     connection.close()
-    assert connection.process.returncode == 0
     assert connection.process.returncode == 0
 
 

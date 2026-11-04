@@ -63,7 +63,7 @@ plugins/
 | review                   | `/review`                   | Code review: ruff + review-code + security-scan |
 | multi-perspective-review | `/multi-perspective-review` | 3-Round Deliberation with 10 perspectives       |
 | debug                    | `/debug`                    | 4-Phase debug pipeline                          |
-| code-intel               | `/code-intel`               | AST search/preview and on-demand read-only LSP queries |
+| code-intel               | `/code-intel`               | AST search/preview and LSP queries in trusted workspaces; servers may execute project code |
 | session-history          | `/session-history`          | Bounded search of explicitly selected local session logs |
 | test                     | `/test`                     | Run tests and auto-fix failures                 |
 | agent-creator            | `/agent-creator`            | Create a **project/user** agent (`.claude/agents/`) — not kit agents (see Adding a New Agent) |

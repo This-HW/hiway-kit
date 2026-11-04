@@ -87,3 +87,24 @@ size: large
 - 수정은 세 격리 worker의 doctor/코드 분석/history와 부모의 문서·커버리지로 나누며, 통합 후 fresh 전체 게이트와 plan-control 2차 검수를 수행한다.
 - 통합 기록: history `d608816`(worker `12883b3`, 부모 90 passed), skip=0·legacy 사유 `e7b159a`(54 passed 및 runtime skip을 이전 검사가 놓치고 새 검사가 거부하는 대조), 공개 문서 `34f6eb9`, doctor `0f3d197`(worker `0afff84`, 부모 198 passed), 코드 분석 `881e454`(worker `b99c96c`, 부모 샌드박스 165 passed와 별도 stdlib 프로세스 검사 4 passed). doctor 수정 전 동일 회귀는 94 failed/104 passed였고 수정 후 198 passed다. 코드 분석의 새 행동 회귀 30개도 수정 전 실패하고 수정 후 통과했다.
 - Python 3.9 실제 CLI 회귀는 history 21개, doctor 15개, 코드 분석 두 설치본 각각 16개이며 3.9 전체 pytest 결과가 아니다. 부모의 첫 코드 분석 재검증은 샌드박스에서 ps 실행이 막혀 4 failed/165 passed였으며, 해당 4개는 외부 엔진 없는 stdlib 검사로 분리하고 남은 샌드박스 검사도 정확한 선택 조건으로 다시 실행해 두 범위 모두 rc=0을 확인했다. 이 환경 실패와 재실행 원문도 보존했다.
+
+## 검수 2차 후 수정 계약
+
+- 대상 `e786fd9`의 부모 전체 게이트는 rc=0, 1851 passed, 37 pass/0 fail이며 격리 소비자 설치·재설치도 통과했다. plan-control의 독립 재실행은 1851 passed, 36 pass/0 fail(원격 태그 생략)이다. 독립 판정은 아래 추가 결함 때문에 CONDITIONAL이다.
+- history: 선택 루트의 고정 FD와 보호 루트·조상의 `(st_dev, st_ino)`를 비교해 대소문자 비구분 파일시스템의 표기 우회를 막는다. `CLAUDE_CONFIG_DIR`도 보호하고 빈 하네스 홈 환경값은 무시한다. 정상 하위 sessions/projects는 허용한다.
+- 코드 분석 환경: 툴체인 설정을 보존하되 비밀·로더 변수 이름은 먼저 거부한다. CPATH 삭제로 정상 코드가 header 오류로 오판된 재현을 양성 대조로 고정하고 결과에 environment=filtered를 표시한다.
+- 서버 선택: 알려진 basename만으로 신뢰하지 않는다. 절대경로는 PATH에서 찾은 같은 이름의 실제 경로와 일치해야 하며, 작업 공간 내부 실행 파일 또는 상대 which 결과는 명시적 custom 선택이 필요하다. AST 상대 which 결과는 실행 전 거부한다. 보관하지 않는 알림은 바이트 예산으로 제한하고 개수 상한은 보관하는 진단에만 적용한다.
+- doctor N-5 해석은 plan-control과 확정했다. Git 설치본과 제공 checkout이 일치하면 rc=0을 유지하되 comparison_scope=supplied_checkout와 remote_freshness=unverified를 표시한다. checkout 쪽 manifest/identity/버전 문제는 source_checkout_unverified 사유의 rc=2, 버전 불일치는 두 버전을 표시한다. 설치본/store 자체 결함과 local 설정 원본 불일치는 rc=1을 유지한다.
+- doctor 권장 수정: 시스템 조상 링크를 자동 허용하지 않고 canonical path 힌트를 제공한다. `.env.*`·`.credentials.json`을 파일 금지 범위에 포함하되 비슷한 정상 이름은 허용한다. 훅 오류의 종료코드 정책을 한곳에서 분류한다.
+- 스킬 선택용 description·생성 short description·README·CLAUDE 표도 신뢰 작업 공간과 서버의 코드 실행 가능성을 명시한다. 생성물은 SSOT에서 재생성한다.
+- plan-control의 `e786fd9` 행동 eval 전체 실행은 24/25, 나머지 1건은 실행 오류였다. 해당 시나리오 단독 재실행은 1/1 통과했으며 plan-control은 일시 실행 오류로 판단했다(원인 미확정). 이 결과는 기존 에이전트 회귀 증거이며 신규 스킬 선택·품질 증거는 아니다.
+- 새 수정도 e786fd9 기준 세 격리 worker와 부모 문서 작업으로 진행한다. 통합 후 항목별 커밋·테스트 노드·수정 전후 증거와 fresh 전체 게이트를 묶어 검수 3차를 요청한다. Codex 자연어 E2E와 공개 배포는 미완료로 유지한다.
+- review3 최초 worker 세 기는 Codex bootstrap의 workspace routing discovery timeout으로 구현 전에 종료됐다. 세 트리는 기준 HEAD에서 clean이며 새 구현 증거는 없다. plan-control과 복구를 합의해 프로세스 부재를 재확인한 뒤 guarded stop으로 정산했다. 비대화 로그인 상태 확인은 쓰기 거부 경계에서 rc=0이며, 이것만으로 TUI bootstrap 성공을 주장하지 않는다. 한 기의 bootstrap을 먼저 확인한 뒤 나머지를 재시도한다. 같은 오류가 재발하면 동시 재기동 없이 엔진 전환을 협의한다.
+- 검수 3차 증거표에는 수정 엔진을 명시한다. Claude로 전환할 경우에도 기존 브리프·N-5 계약·실 홈 및 공개 배포 금지를 유지하며 인증 만료는 별도 실행 차단으로 보고한다.
+- N-1/N-6 history 수정은 Codex worker `b603ca6`에서 부모 `bf4b796`으로 통합했다. 부모가 diff와 증거를 검토하고 격리된 두 모듈 테스트를 직접 실행해 rc=0을 확인했다. worker의 커밋 후 검증은 CLI 계약 포함 122 passed/1 FS 조건 skip, Python 3.9 실제 import·CLI는 33/33이다. case-sensitive 파일시스템의 반대 방향 양성 대조는 이 APFS 볼륨에서 실행할 수 없어 skip이며 해당 한계를 유지한다.
+- history worker의 task outcome은 failed로 보존한다. 커밋 시 기존 pre-commit이 Ruff를 명시적 격리 밖에서 자동 실행한 절차 예외가 있었으며, 실제 홈 접근의 전체 추적 증거는 없다. 부모의 코드 통합 판정은 이후 격리 검증과 diff에 근거하며 과거 실행의 격리 준수를 소급 주장하지 않는다. 예외는 plan-control에 전달했고 3차 검수 자료에도 포함한다. 부모 cherry-pick은 저장소·git 메타데이터·임시 경로 외 쓰기를 거부한 상태에서 rc=0이다. 전체 통합 게이트와 독립 검수는 아직 남아 있다.
+- plan-control은 history 산출물의 통합 브랜치 수용에 동의했고 최종 판단은 3차 검수로 남겼다. 남은 worker의 커밋에도 sandbox를 적용하는 선택지 (a)를 채택했다. 설치된 훅에는 자동 수정 후 재스테이징 분기가 있으므로 clean 상태만으로 자동 수정 부재를 단정하지 않는다. 훅 우회 없이 커밋 결과와 검증한 내용을 대조하고, 변경됐다면 최종 커밋 기준으로 재검증한다.
+- doctor N-4/N-5/N-7/N-9는 Codex worker `60c3b85`를 부모 `acc5cac`으로 통합했다. 부모가 diff를 검토하고 동일 격리 경계에서 368개 테스트를 직접 실행해 전부 pass/rc=0을 확인했다. worker의 Python 3.9 실제 CLI 18건과 native snapshot 캡처 등을 합친 35건은 각각 기대한 rc를 확인했으며, 3.9 전체 pytest는 미설치로 실행하지 않았다. 상세 증거 커밋은 배포 브랜치에 넣지 않고 migration 증거 디렉터리에도 복사해 보존했다. 뒤늦게 도착한 커밋 격리 지침에 대한 doctor 후속 task가 진행 중이므로 해당 실행 경계의 최종 판정은 그 보고와 함께 기록한다.
+- doctor와 intel 후속 보고에서 기존 커밋의 동일 격리 위반을 확인했다. 두 후속 task는 failed로 정정했고 원 보고서와 정정·커밋 후 격리 재검증·해시 증거를 함께 보존했다. plan-control은 세 예외를 명시하는 조건으로 동일한 산출물 수용 기준에 동의했다. 과거 훅의 no-fix나 실홈 쓰기 부재를 보증하지 않는다. 오래된 설치 훅 사본은 이번 범위에서 수정하지 않았으며 최종 보고 사항이다.
+- intel N-2/N-3/N-8/N-10/N-11은 Codex worker `e8efd0c`에서 부모 `48dfbff`로 통합했다. 부모는 격리 검사 191개와 별도 stdlib 프로세스 정리 4개를 직접 실행해 rc=0을 확인했다. 첫 부모 명령은 실행 파일 인덱스 오류로 테스트 시작 전 rc=64였고, 올바른 명령의 별도 로그를 보존했다. worker의 실제 Python 3.9.6 검사는 7개 import 포함 31건이며 3.9 전체 pytest는 미설치다. 검증 중 재현된 macOS zombie-group EPERM은 종료된 leader를 reap하고 group signal을 재시도해 해결했다. 부모 리뷰에서는 기존 close 테스트에서 옮겨져 중복된 assertion을 원래 테스트로 복원했다.
+- 릴리스 전 추가 조건: plan-control이 공유한 디렉토리 정책 재판정에 따라 probe 브랜치 Validate 결과를 확인한다. 해당 공유는 아직 부모가 독립 검증하지 않은 외부 판정이며, 조사 브랜치 push와 main/tag/릴리스 공개는 사용자 확인 뒤에만 수행한다. 이번 로컬 수정 검증을 디렉토리 승인으로 표현하지 않는다.

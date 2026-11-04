@@ -2,4 +2,4 @@
 # 손으로 고치지 말 것: SKILL.md frontmatter 를 고치고 --write 로 재생성한다.
 interface:
   display_name: "code-intel"
-  short_description: "Inspect code structure with AST search, replacement previews, and read-only language-server diagnostics or symbol navigation."
+  short_description: "Use AST search, replacement previews, and language-server diagnostics or navigation in trusted workspaces; servers may execute project code."

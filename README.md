@@ -184,14 +184,22 @@ python3 -B /path/to/hiway-kit/tools/install_doctor.py \
 For a Git source, add `--source-checkout /path/to/existing-checkout`; its local origin URL must match
 the configured source. This currently requires an ordinary checkout: a git worktree's `.git` file
 returns `source_checkout_is_worktree_unsupported` with exit 2 and is not followed.
-The doctor never fetches or reinstalls. Exit 0 confirms source/version agreement,
-1 a confirmed defect, and 2 insufficient or stale evidence. It reports hook discovery, trust, enabled
+The doctor never fetches or reinstalls. Exit 0 confirms version and identity agreement with the
+source being compared. For a Git source, this means only the supplied checkout:
+`installation.comparison_scope` is `supplied_checkout` and `remote_freshness` is `unverified`.
+Git checkout manifest, identity or version problems return exit 2 with a
+`source_checkout_unverified_*` reason; version mismatches include both versions.
+Exit 1 means a confirmed installation/store/hook defect or a mismatch with the configured local source;
+exit 2 means insufficient, unsupported or stale evidence. It reports hook discovery, trust, enabled
 choice and execution separately; an unknown hook state is not proof of failure or success. A safe shared
 `plugins` store is supported, and `--plugin-store` can constrain its canonical root. Python 3.11+ reads
 TOML directly; Python 3.9/3.10 can use `--snapshot` captured with `--capture-snapshot` on 3.11+.
 Snapshots bind to the original paths and hashes and become unusable when those originals change.
 Config and snapshot symlinks (including symlink parents) are unsupported and return exit 2 without
-reading the target. Unsafe links below the plugin store remain confirmed defects (exit 1).
+reading the target. The `pass_canonical_path` hint asks you to pass the canonical path explicitly;
+system aliases such as `/tmp`, `/var` or `/home` are not automatically trusted.
+Unsafe links below the plugin store remain confirmed defects (exit 1). Authentication filenames,
+including `.credentials.json`, `.env` and `.env.*`, are rejected before opening them.
 
 #### Trusting and enabling Codex hooks
 
@@ -459,7 +467,7 @@ Merge-back rules (verify-then-exit, sequential merge, conflict escalation to
 | `cross-engine-review`      | `/cross-engine-review`      | Evidence-backed consensus between sessions on different engines            |
 | `harness-export`           | `/harness-export`           | Export host-neutral rules to `AGENTS.md`/`GEMINI.md` for other harnesses   |
 | `skill-forge`              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft                  |
-| `code-intel`               | `/code-intel`               | AST search/preview and one-shot read-only LSP queries |
+| `code-intel`               | `/code-intel`               | AST search/preview and LSP queries in trusted workspaces; servers may execute project code |
 | `session-history`          | `/session-history`          | Bounded search of explicitly selected Codex/Claude session logs |
 | `using-hiway-kit`          | (injected at session start) | Workflow chain and plan file rules                                         |
 

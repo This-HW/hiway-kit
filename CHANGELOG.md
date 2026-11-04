@@ -39,15 +39,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Select logged-in browser capabilities from the current host instead of naming a personal CLI;
   public-page fetches do not establish authenticated access.
 - Reject session-log roots that contain a home/configuration root and bound displayed session metadata.
+- Compare pinned filesystem identities to protect home/configuration roots across case aliases;
+  include `CLAUDE_CONFIG_DIR` and ignore empty configuration-home environment values.
 - Distinguish unsupported doctor inputs from installation defects: config/snapshot symlinks and git
   worktree source checkouts remain unknown, while unsafe plugin-store descendants remain defects.
   Match forbidden authentication filenames exactly so normal plugin-name prefixes stay usable.
+- Scope Git-source doctor success to the supplied checkout and mark remote freshness unverified.
+  Checkout manifest/identity/version problems remain unknown; installed defects and configured local
+  source mismatches remain failures. Add canonical-path hints, reject `.env.*` and `.credentials.json`,
+  and classify unknown hook observation errors as unverified.
 - Require registered skill CLI contracts to execute without skips; legacy exemptions describe missing
   registration in this gate, not an absence of existing tests.
 - Clarify that code intelligence requires a trusted workspace: language servers may execute project build
   scripts, write files or access the network. Read-only client requests do not sandbox those processes.
 - Require explicit opt-in for custom language-server executables, filter child environments, and cap
   cumulative LSP input at 16MiB. Preserve LSP line and UTF-16 positions without splitting Unicode separators.
+- Preserve toolchain settings such as CPATH while filtering credential and loader variable names;
+  mark analysis results with `environment: filtered`. Match explicit server paths to their PATH
+  identity and require opt-in for workspace or relative-PATH servers. Reject relative AST executables.
+- Apply the notification count limit only to retained diagnostics; discarded LSP logs remain bounded
+  by the cumulative byte limit. Reap exited process leaders before retrying macOS zombie-group signals.
 - Run AST queries with a neutral working directory and explicit empty configuration. Probe only `ast-grep`;
   pattern validation is confirmed for 0.51.0, with zero-match results from other versions marked unverified.
   AST/LSP outputs carry an untrusted-content notice.
