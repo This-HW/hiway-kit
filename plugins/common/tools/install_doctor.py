@@ -14,6 +14,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -87,15 +88,15 @@ def select_config(config: dict, plugin_id: str, marketplace: str) -> dict:
         source = config["marketplaces"][marketplace]
         plugin = config["plugins"][plugin_id]
         if not isinstance(source, dict) or not isinstance(plugin, dict):
-            raise ObservationError("invalid_config_fields", 1)
+            raise ObservationError("invalid_config_fields")
         hooks = config.get("hooks", {}).get("state", {})
         if not isinstance(hooks, dict):
-            raise ObservationError("invalid_hook_state", 1)
+            raise ObservationError("invalid_hook_state")
         selected = {}
         for key, value in hooks.items():
             if isinstance(key, str) and key.startswith(plugin_id + ":"):
                 if not isinstance(value, dict):
-                    raise ObservationError("invalid_hook_state", 1)
+                    raise ObservationError("invalid_hook_state")
                 selected[key] = {"enabled": value.get("enabled"),
                                  "configured_trust_hash": bool(value.get("trusted_hash") or value.get("trusted_content_hash"))}
         result = {"marketplace": {"source_type": source.get("source_type"), "source": source.get("source")},
@@ -112,12 +113,14 @@ def validate_selected(value: dict):
         if source["source_type"] not in ("local", "git") or not isinstance(source["source"], str) or not source["source"]:
             raise ObservationError("source_not_supported")
         if type(value["plugin"]["enabled"]) not in (bool, type(None)):
-            raise ObservationError("invalid_plugin_enabled", 1)
+            raise ObservationError("invalid_plugin_enabled")
         if not isinstance(value["hook_states"], dict):
-            raise ObservationError("invalid_hook_state", 1)
+            raise ObservationError("invalid_hook_state")
         for key, entry in value["hook_states"].items():
             if not isinstance(key, str) or not isinstance(entry, dict) or type(entry.get("enabled")) not in (bool, type(None)):
-                raise ObservationError("invalid_hook_state", 1)
+                raise ObservationError("invalid_hook_state")
+            if type(entry.get("configured_trust_hash")) is not bool:
+                raise ObservationError("invalid_hook_state")
         if source["source_type"] == "git":
             url = urlsplit(source["source"])
             if url.scheme not in ("https", "ssh") or not url.hostname or url.password or url.query or url.fragment:
@@ -126,6 +129,19 @@ def validate_selected(value: dict):
                 raise ObservationError("source_url_contains_userinfo")
     except (KeyError, TypeError, ValueError) as exc:
         raise ObservationError("snapshot_fields_missing") from exc
+
+
+def snapshot_observations(snapshot: dict) -> set[tuple[str, str, str]]:
+    observations = snapshot.get("observations")
+    if not isinstance(observations, list) or not observations:
+        raise ObservationError("snapshot_observations_missing")
+    if any(not isinstance(entry, dict) or
+           any(not isinstance(entry.get(key), str) for key in ("kind", "path", "sha256")) for entry in observations):
+        raise ObservationError("snapshot_observations_invalid")
+    result = {(entry["kind"], entry["path"], entry["sha256"]) for entry in observations}
+    if len(result) != len(observations):
+        raise ObservationError("snapshot_stale")
+    return result
 
 
 def snapshot_config(reader: Reader, path: Path, home: Path, plugin_id: str, raw: bytes) -> tuple[dict, dict]:
@@ -148,8 +164,7 @@ def snapshot_config(reader: Reader, path: Path, home: Path, plugin_id: str, raw:
             raise ObservationError("snapshot_stale")
         selected = origin["selected"]
         validate_selected(selected)
-        if not isinstance(snapshot["observations"], list) or not snapshot["observations"]:
-            raise ObservationError("snapshot_observations_missing")
+        snapshot_observations(snapshot)
         return selected, snapshot
     except ObservationError as exc:
         # Malformed user evidence is an inability to diagnose the installation.
@@ -170,7 +185,7 @@ def load_config(reader: Reader, args, home: Path, plugin_id: str, marketplace: s
             try:
                 actual = select_config(tomllib.loads(raw.decode("utf-8")), plugin_id, marketplace)
             except (ValueError, UnicodeError, RecursionError) as exc:
-                raise ObservationError("invalid_config_toml", 1) from exc
+                raise ObservationError("invalid_config_toml") from exc
             if selected != actual:
                 raise ObservationError("snapshot_selected_fields_mismatch")
         return selected, snapshot
@@ -179,7 +194,7 @@ def load_config(reader: Reader, args, home: Path, plugin_id: str, marketplace: s
     try:
         return select_config(tomllib.loads(raw.decode("utf-8")), plugin_id, marketplace), None
     except (ValueError, UnicodeError, RecursionError) as exc:
-        raise ObservationError("invalid_config_toml", 1) from exc
+        raise ObservationError("invalid_config_toml") from exc
 
 
 def installed_root(reader: Reader, args, home: Path, name: str, marketplace: str) -> Path:
@@ -188,7 +203,7 @@ def installed_root(reader: Reader, args, home: Path, name: str, marketplace: str
     if args.installed_path:
         given = Path(args.installed_path).absolute()
         if ".." in given.parts:
-            raise ObservationError("unsafe_installed_path", 1)
+            raise ObservationError("unsafe_installed_path")
         # Accept either HOME/plugins/cache/... or the canonical STORE/cache/...
         # spelling, mapping both lexically to the pinned descriptor boundary.
         if given.is_relative_to(home / "plugins"):
@@ -196,10 +211,10 @@ def installed_root(reader: Reader, args, home: Path, name: str, marketplace: str
         elif given.is_relative_to(store):
             relative = given.relative_to(store)
         else:
-            raise ObservationError("unsafe_installed_path", 1)
+            raise ObservationError("unsafe_installed_path")
         root = reader.path(store, str(relative))
         if root.parent != store / base:
-            raise ObservationError("unsafe_installed_path", 1)
+            raise ObservationError("unsafe_installed_path")
         return root
     versions = reader.directories(store, base)
     if not versions:
@@ -222,18 +237,29 @@ def source_root(reader: Reader, args, selected: dict, name: str, marketplace: st
     source = selected["marketplace"]
     if source["source_type"] == "local":
         given = Path(source["source"])
-        if not given.is_absolute() or ".." in given.parts or given.is_symlink():
-            raise ObservationError("unsafe_source_root", 1)
-        root = given.resolve()
     else:
         if not args.source_checkout:
             raise ObservationError("source_checkout_unavailable")
         given = Path(args.source_checkout).absolute()
-        if given.is_symlink():
-            raise ObservationError("unsafe_source_root", 1)
-        root = given.resolve()
+    if not given.is_absolute() or ".." in given.parts or not given.name:
+        raise ObservationError("unsafe_source_root")
+    root = given
+    try:
+        root_mode = reader.mode(root.parent, root.name)
+    except ObservationError as exc:
+        if exc.reason == "file_unavailable":
+            raise ObservationError("source_root_unavailable") from exc
+        raise
+    if not stat.S_ISDIR(root_mode):
+        raise ObservationError("source_root_not_directory")
+    if source["source_type"] == "git":
         # Narrow, offline provenance: an ordinary checkout's local origin URL.
         # Worktrees, includes, and ambiguous origin declarations remain unknown.
+        mode = reader.mode(root, ".git")
+        if stat.S_ISREG(mode):
+            raise ObservationError("source_checkout_is_worktree_unsupported")
+        if not stat.S_ISDIR(mode):
+            raise ObservationError("source_checkout_git_layout_unsupported")
         raw = reader.read(root, ".git/config", "git_config")
         parser = configparser.RawConfigParser(interpolation=None, strict=True)
         try:
@@ -276,7 +302,7 @@ def observe_hooks(reader: Reader, root: Path, installed: dict, selected: dict, p
         raise ObservationError("hook_path_unsupported")
     rel = Path(relative)
     if not rel.parts or rel.parts[0] != "hooks" or rel.suffix != ".json":
-        raise ObservationError("unsafe_hook_path", 1)
+        raise ObservationError("unsafe_hook_path")
     data = reader.json(root, relative, "hook_manifest")
     events = data.get("hooks")
     if not isinstance(events, dict):
@@ -312,12 +338,9 @@ def observe_hooks(reader: Reader, root: Path, installed: dict, selected: dict, p
 def verify_snapshot(snapshot: dict, origins: list[dict]):
     # Never open paths supplied by a snapshot. Compare against independently
     # derived allowed files already read through the descriptor-based reader.
-    try:
-        expected = {(entry["kind"], entry["path"], entry["sha256"]) for entry in snapshot["observations"]}
-        actual = {(entry["kind"], entry["path"], entry["sha256"]) for entry in origins}
-    except (KeyError, TypeError) as exc:
-        raise ObservationError("snapshot_observations_invalid") from exc
-    if expected != actual or len(expected) != len(snapshot["observations"]):
+    expected = snapshot_observations(snapshot)
+    actual = {(entry["kind"], entry["path"], entry["sha256"]) for entry in origins}
+    if expected != actual:
         raise ObservationError("snapshot_stale")
 
 
@@ -327,11 +350,13 @@ def diagnose(args) -> tuple[dict, int]:
     try:
         parts = args.plugin.split("@")
         if len(parts) != 2 or not all(IDENTIFIER.fullmatch(part) for part in parts):
-            raise ObservationError("invalid_plugin_id", 1)
+            raise ObservationError("invalid_plugin_id")
         name, marketplace = parts
         if not shutil.which(args.codex_bin):
             raise ObservationError("codex_executable_unavailable")
-        home = Path(args.codex_home).resolve(strict=True)
+        home = Path(args.codex_home).absolute()
+        if ".." in home.parts:
+            raise ObservationError("unsafe_codex_home")
         selected, snapshot = load_config(reader, args, home, args.plugin, marketplace)
         report["hooks"] = configured_hooks(selected, args.plugin)
         store = reader.store or reader.bind_store(home, args.plugin_store)
@@ -347,8 +372,13 @@ def diagnose(args) -> tuple[dict, int]:
         except ObservationError as exc:
             hook_error = exc
             report["hooks"]["discovered"] = state(reason=exc.reason)
-        source = source_root(reader, args, selected, name, marketplace)
-        configured = manifest(reader, source, name, marketplace)
+        try:
+            source = source_root(reader, args, selected, name, marketplace)
+            configured = manifest(reader, source, name, marketplace)
+        except ObservationError as exc:
+            if exc.reason == "unsafe_symlink":
+                raise ObservationError("source_symlink_unsupported") from exc
+            raise
         report["installation"]["source_version"] = configured["version"]
         report["installation"]["source_type"] = selected["marketplace"]["source_type"]
         reader.verify_store()
@@ -371,6 +401,8 @@ def diagnose(args) -> tuple[dict, int]:
             report["hooks"]["observation_reason"] = hook_error.reason
             # Missing hook runtime evidence does not invalidate an installation
             # comparison. A confirmed unsafe/invalid hook file is still a defect.
+            if hook_error.reason in ("forbidden_file", "unsafe_path", "unsafe_hook_path"):
+                return report, 2
             return report, 1 if hook_error.rc == 1 else 0
         return report, 0
     except ObservationError as exc:

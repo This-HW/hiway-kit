@@ -13,6 +13,7 @@ MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 2 * 1024 * 1024
 MAX_ENTRIES = 128
 MAX_SECONDS = 5
+FORBIDDEN_BASENAMES = {"auth.json", "credential.json", "credentials.json", "token.json", "tokens.json", ".env"}
 
 
 class ObservationError(Exception):
@@ -24,28 +25,31 @@ class ObservationError(Exception):
 
 def _resolve_in_repo(root: Path, relative: str) -> Path:
     """Resolve once, contain reads as well as checks; reject all symlink inputs."""
-    rel = Path(relative)
-    if not relative or rel.is_absolute() or ".." in rel.parts:
-        raise ObservationError("unsafe_path", 1)
+    rel = _relative_path(relative)
+    _check_forbidden(root)
+    if any(parent.is_symlink() for parent in (root, *root.parents)):
+        raise ObservationError("unsafe_symlink", 1)
     current = root
     for part in rel.parts:
-        if part.casefold().startswith(("auth", "credential", "token", ".env")):
-            raise ObservationError("forbidden_file", 1)
         current = current / part
         if current.is_symlink():
             raise ObservationError("unsafe_symlink", 1)
     resolved = (root / rel).resolve()
     if not resolved.is_relative_to(root):
-        raise ObservationError("unsafe_path", 1)
+        raise ObservationError("unsafe_path")
     return resolved
+
+
+def _check_forbidden(path: Path, reason: str = "forbidden_file"):
+    if any(part.casefold() in FORBIDDEN_BASENAMES for part in path.parts):
+        raise ObservationError(reason)
 
 
 def _relative_path(relative: str) -> Path:
     rel = Path(relative)
     if not relative or rel.is_absolute() or ".." in rel.parts:
-        raise ObservationError("unsafe_path", 1)
-    if any(part.casefold().startswith(("auth", "credential", "token", ".env")) for part in rel.parts):
-        raise ObservationError("forbidden_file", 1)
+        raise ObservationError("unsafe_path")
+    _check_forbidden(rel)
     return rel
 
 
@@ -154,13 +158,18 @@ class Reader:
 
     def user_path(self, path: Path) -> tuple[Path, str]:
         """Map explicit snapshot paths into the same fixed boundary, if inside it."""
+        _check_forbidden(path)
+        if ".." in path.parts:
+            raise ObservationError("unsafe_path")
         if self.store is not None:
             logical = Path(self.store["logical_path"])
             if path.is_relative_to(logical):
                 return self.store_root, str(path.relative_to(logical))
             if path.is_relative_to(self.store_root):
                 return self.store_root, str(path.relative_to(self.store_root))
-        return path.parent.resolve(strict=True), path.name
+        # Keep the user's spelling so the descriptor walk can reject parent
+        # symlinks too; resolving the parent here would hide those links.
+        return path.parent, path.name
 
     def _walk(self, fd: int, components: tuple, directory: bool) -> int:
         try:
@@ -169,6 +178,7 @@ class Reader:
                 raise ObservationError("safe_file_access_unavailable")
             for index, part in enumerate(components):
                 self.check()
+                _relative_path(part)
                 before = os.stat(part, dir_fd=fd, follow_symlinks=False)
                 if stat.S_ISLNK(before.st_mode):
                     raise ObservationError("unsafe_symlink", 1)
@@ -206,11 +216,18 @@ class Reader:
         return self._open_absolute(root, path, directory)
 
     def read(self, root: Path, relative: str, kind: str, record: bool = True) -> bytes:
-        path = self.path(root, relative)
-        fd = self._open(root, path)
+        try:
+            path = self.path(root, relative)
+            fd = self._open(root, path)
+        except ObservationError as exc:
+            if kind in ("config", "snapshot") and exc.reason == "unsafe_symlink":
+                raise ObservationError(kind + "_symlink_unsupported") from exc
+            raise
         try:
             before = os.fstat(fd)
             if not stat.S_ISREG(before.st_mode):
+                if kind in ("config", "snapshot", "git_config"):
+                    raise ObservationError(kind + "_not_regular_file")
                 raise ObservationError("not_regular_file", 1)
             remaining = min(MAX_FILE_BYTES, MAX_TOTAL_BYTES - self.used)
             if before.st_size > remaining or remaining < 0:
@@ -248,6 +265,21 @@ class Reader:
             raise ObservationError("invalid_json_object", 1)
         return value
 
+    def mode(self, root: Path, relative: str) -> int:
+        """Inspect an entry through its parent FD without opening the entry."""
+        path = self.path(root, relative)
+        fd = self._open(root, path.parent, directory=True)
+        try:
+            self.check()
+            info = os.stat(path.name, dir_fd=fd, follow_symlinks=False)
+            if stat.S_ISLNK(info.st_mode):
+                raise ObservationError("unsafe_symlink", 1)
+            return info.st_mode
+        except OSError as exc:
+            raise ObservationError("file_unavailable") from exc
+        finally:
+            os.close(fd)
+
     def directories(self, root: Path, relative: str) -> list[str]:
         path = self.path(root, relative)
         fd = self._open(root, path, directory=True)
@@ -269,12 +301,16 @@ class Reader:
 
 def write_snapshot(path: Path, value: dict, reader: Reader | None = None):
     """Only explicit, new user outputs; never overwrite existing files or symlinks."""
-    if any(part.casefold().startswith(("auth", "credential", "token", ".env")) for part in path.parts):
-        raise ObservationError("forbidden_output", 1)
+    _check_forbidden(path, "forbidden_output")
     reader = reader or Reader()
-    root, relative = reader.user_path(path)
-    parent = reader.path(root, str(Path(relative).parent))
-    directory = reader._open(root, parent, directory=True)
+    try:
+        root, relative = reader.user_path(path)
+        parent = reader.path(root, str(Path(relative).parent))
+        directory = reader._open(root, parent, directory=True)
+    except ObservationError as exc:
+        if exc.reason == "unsafe_symlink":
+            raise ObservationError("snapshot_symlink_unsupported") from exc
+        raise
     try:
         fd = os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:

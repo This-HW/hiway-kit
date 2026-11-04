@@ -202,7 +202,9 @@ def test_source_plugin_path_contained(layout, capsys, bad):
     value["plugins"][0]["source"]["path"] = bad
     put_json(path, value)
     rc, report = run(layout, capsys)
-    assert rc == 1 and report["installation"]["status"] == "defect"
+    # R-2: unsupported source paths and forbidden access are unknown evidence.
+    assert rc == 2 and report["installation"]["status"] == "unknown"
+    assert report["installation"]["reason"] == ("forbidden_file" if bad.endswith("auth.json") else "unsafe_path")
 
 
 @pytest.mark.parametrize("location", ["plugin", "manifest", "hook", "auth_hook", "cache"])
@@ -222,8 +224,9 @@ def test_symlink_escape_and_auth_alias_rejected(layout, capsys, location):
         path.unlink()
         path.symlink_to(layout["home"] / "auth.json" if location == "auth_hook" else outside / "data.json")
     rc, report = run(layout, capsys)
-    assert rc == 1
-    assert "unsafe" in json.dumps(report)
+    assert rc == (2 if location == "plugin" else 1)
+    reason = report["hooks"]["observation_reason"] if location in ("hook", "auth_hook") else report["installation"]["reason"]
+    assert reason == ("source_symlink_unsupported" if location == "plugin" else "unsafe_symlink")
 
 
 @pytest.mark.parametrize("relative", ["../auth.json", "/auth.json", "hooks/auth.json"])
@@ -233,7 +236,8 @@ def test_hook_auth_and_unsafe_paths_rejected(layout, capsys, relative):
     value["hooks"] = relative
     put_json(path, value)
     rc, report = run(layout, capsys)
-    assert rc == 1
+    # R-2: refusing a requested path does not confirm an installation defect.
+    assert rc == 2
     assert report["hooks"]["discovered"]["value"] == "unknown"
     assert report["installation"]["status"] == "match"
 
@@ -244,7 +248,7 @@ def test_multiple_cache_versions_require_explicit_selection(layout, capsys):
     rc, report = run(layout, capsys)
     assert rc == 2 and report["installation"]["reason"] == "active_cache_ambiguous"
     assert run(layout, capsys, "--installed-path", layout["installed"])[0] == 0
-    assert run(layout, capsys, "--installed-path", layout["source"] / "plugin")[0] == 1
+    assert run(layout, capsys, "--installed-path", layout["source"] / "plugin")[0] == 2
 
 
 @pytest.mark.parametrize("location,field", [("cache", "name"), ("source", "name"), ("source", "id"), ("market", "name")])
@@ -349,7 +353,7 @@ def test_explicit_capture_never_overwrites_existing_or_auth_output(layout, capsy
     before = snapshot.read_bytes()
     assert run(layout, capsys, "--capture-snapshot", snapshot)[0] == 2
     assert snapshot.read_bytes() == before
-    assert run(layout, capsys, "--capture-snapshot", layout["tmp"] / "auth.json")[0] == 1
+    assert run(layout, capsys, "--capture-snapshot", layout["tmp"] / "auth.json")[0] == 2
 
 
 def test_executable_is_located_never_started(layout, capsys):
@@ -456,7 +460,7 @@ def test_snapshot_auth_origin_is_never_opened(layout, capsys, monkeypatch):
 def test_explicit_snapshot_input_cannot_read_auth_files(layout, capsys, filename):
     # Do not create or read even a fixture authentication file.
     rc, report = run(layout, capsys, "--snapshot", layout["tmp"] / filename)
-    assert rc == 1 and report["installation"]["reason"] == "forbidden_file"
+    assert rc == 2 and report["installation"]["reason"] == "forbidden_file"
 
 
 def share_store(layout):
@@ -592,8 +596,8 @@ def test_explicit_shared_cache_version_accepts_logical_or_canonical_spelling(lay
     moved = share_store(layout)
     given = moved / "cache/sample-market/example/5.6.0" if canonical else layout["installed"]
     assert run(layout, capsys, "--installed-path", given)[0] == 0
-    assert run(layout, capsys, "--installed-path", given.parent)[0] == 1
-    assert run(layout, capsys, "--installed-path", given / "nested")[0] == 1
+    assert run(layout, capsys, "--installed-path", given.parent)[0] == 2
+    assert run(layout, capsys, "--installed-path", given / "nested")[0] == 2
 
 
 @pytest.mark.parametrize("relative", ["cache", "cache/sample-market", "cache/sample-market/example",
@@ -827,3 +831,385 @@ def test_store_link_retarget_during_explicit_capture_fails_closed(layout, capsys
     monkeypatch.setattr(doctor, "write_snapshot", changed)
     rc, report = run(layout, capsys, "--capture-snapshot", layout["tmp"] / "capture.json")
     assert rc == 2 and report["installation"]["reason"] == "plugin_store_changed"
+
+
+@pytest.mark.parametrize("kind", ["config", "snapshot"])
+@pytest.mark.parametrize("link", ["file", "parent", "ancestor"])
+def test_user_evidence_symlinks_are_unknown_without_reading_targets(layout, capsys, monkeypatch, kind, link):
+    snapshot = capture(layout, capsys)
+    path = layout["config"] if kind == "config" else snapshot
+    extra = ["--snapshot", snapshot] if kind == "snapshot" else []
+    target_info = path.stat()
+    if link == "file":
+        target = path.with_name("original-" + path.name)
+        path.rename(target)
+        path.symlink_to(target)
+    elif link == "parent":
+        parent = path.parent
+        # Snapshot and layout share tmp_path; give snapshots a separate parent.
+        if kind == "snapshot":
+            parent = layout["tmp"] / "evidence"
+            parent.mkdir()
+            path.rename(parent / path.name)
+            extra = ["--snapshot", parent / path.name]
+        target = parent.with_name("original-" + parent.name)
+        parent.rename(target)
+        parent.symlink_to(target, target_is_directory=True)
+    else:
+        alias = layout["tmp"] / "alias"
+        alias.symlink_to(layout["tmp"], target_is_directory=True)
+        extra = (["--codex-home", alias / "home"] if kind == "config" else
+                 ["--snapshot", alias / snapshot.name])
+    original = os.read
+
+    def checked(fd, size):
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == (target_info.st_dev, target_info.st_ino):
+            pytest.fail("symlinked evidence target was read")
+        return original(fd, size)
+
+    monkeypatch.setattr(io.os, "read", checked)
+    rc, report = run(layout, capsys, *extra)
+    assert rc == 2
+    assert report["installation"]["status"] == "unknown"
+    assert report["installation"]["reason"] == kind + "_symlink_unsupported"
+
+
+@pytest.mark.parametrize("plugin", ["example", "../example@sample-market", "example@market/child", "@sample-market"])
+def test_invalid_plugin_id_is_input_error(layout, capsys, plugin):
+    rc, report = run(layout, capsys, "--plugin", plugin)
+    assert rc == 2 and report["installation"]["reason"] == "invalid_plugin_id"
+
+
+@pytest.mark.parametrize("kind", ["outside", "traversal", "parent", "nested"])
+def test_invalid_installed_selection_is_input_error(layout, capsys, kind):
+    path = {"outside": layout["source"] / "plugin",
+            "traversal": layout["installed"] / ".." / "5.6.0",
+            "parent": layout["installed"].parent,
+            "nested": layout["installed"] / "nested"}[kind]
+    rc, report = run(layout, capsys, "--installed-path", path)
+    assert rc == 2 and report["installation"]["reason"] == "unsafe_installed_path"
+
+
+@pytest.mark.parametrize("name", ["tokenizer-example", "auth-example", "credential-helper", ".env-example"])
+def test_normal_names_with_sensitive_prefixes_remain_supported(layout, capsys, name):
+    # The identifier grammar independently excludes a leading dot.
+    plugin_name = "example" if name.startswith(".") else name
+    old_plugin = layout["source"] / "plugin"
+    old_plugin.rename(layout["source"] / name)
+    market_path = layout["source"] / doctor.MARKETPLACE
+    value = json.loads(market_path.read_text())
+    value["plugins"][0].update(name=plugin_name, source={"source": "local", "path": name})
+    put_json(market_path, value)
+    for root in (layout["installed"], layout["source"] / name):
+        manifest_path = root / doctor.MANIFEST
+        value = json.loads(manifest_path.read_text())
+        value["name"] = plugin_name
+        put_json(manifest_path, value)
+    installed = layout["installed"].parent.parent / plugin_name / layout["installed"].name
+    if installed != layout["installed"]:
+        installed.parent.mkdir()
+        layout["installed"].rename(installed)
+    layout["config"].write_text(layout["config"].read_text().replace(PLUGIN, plugin_name + "@sample-market"))
+    rc, report = run(layout, capsys, "--plugin", plugin_name + "@sample-market")
+    assert rc == 0 and report["installation"]["status"] == "match"
+    snapshot = layout["tmp"] / (name + ".json")
+    assert run(layout, capsys, "--plugin", plugin_name + "@sample-market", "--capture-snapshot", snapshot)[0] == 0
+    assert run(layout, capsys, "--plugin", plugin_name + "@sample-market", "--snapshot", snapshot)[0] == 0
+
+
+@pytest.mark.parametrize("filename", ["auth.json", "credentials.json", "token.json"])
+@pytest.mark.parametrize("access", ["snapshot", "capture", "snapshot_parent", "source", "hook"])
+def test_authentication_basenames_are_never_opened(layout, capsys, monkeypatch, filename, access):
+    original = os.open
+    opened = []
+
+    def checked(path, *values, **kwargs):
+        assert Path(path).name.casefold() not in {"auth.json", "credentials.json", "token.json"}
+        opened.append(str(path))
+        return original(path, *values, **kwargs)
+
+    monkeypatch.setattr(io.os, "open", checked)
+    extra = []
+    if access in ("snapshot", "capture", "snapshot_parent"):
+        target = layout["tmp"] / filename
+        if access == "snapshot_parent":
+            target = target / "evidence.json"
+        extra = ["--capture-snapshot" if access == "capture" else "--snapshot", target]
+    elif access == "source":
+        layout["config"].write_text(layout["config"].read_text().replace(str(layout["source"]), str(layout["tmp"] / filename)))
+    else:
+        path = layout["installed"] / doctor.MANIFEST
+        value = json.loads(path.read_text())
+        value["hooks"] = "hooks/" + filename
+        put_json(path, value)
+    rc, report = run(layout, capsys, *extra)
+    assert rc == 2
+    assert (report["hooks"].get("observation_reason") if access == "hook" else report["installation"]["reason"]) == (
+        "forbidden_output" if access == "capture" else "forbidden_file")
+    assert opened
+
+
+@pytest.mark.parametrize("field,value,reason", [
+    ("plugin", {"enabled": "invalid"}, "invalid_plugin_enabled"),
+    ("hook_states", [], "invalid_hook_state"),
+    ("hook_states", {"key": {"enabled": "invalid"}}, "invalid_hook_state"),
+    ("hook_states", {"key": {"enabled": True, "configured_trust_hash": []}}, "invalid_hook_state"),
+    ("marketplace", [], "snapshot_fields_missing"),
+    ("plugin", [], "snapshot_fields_missing"),
+])
+@pytest.mark.parametrize("native_parser", [True, False])
+def test_invalid_selected_snapshot_fields_are_unknown(layout, capsys, monkeypatch, field, value, reason, native_parser):
+    snapshot = capture(layout, capsys)
+    evidence = json.loads(snapshot.read_text())
+    evidence["config"]["selected"][field] = value
+    put_json(snapshot, evidence)
+    if not native_parser:
+        monkeypatch.setattr(doctor, "tomllib", None)
+    rc, report = run(layout, capsys, "--snapshot", snapshot)
+    assert rc == 2 and report["installation"]["reason"] == reason
+
+
+@pytest.mark.parametrize("observations", [[None], [{"kind": [], "path": "ignored", "sha256": "ignored"}], ["invalid"]])
+def test_malformed_snapshot_observations_precede_installation_diagnosis(layout, capsys, observations):
+    snapshot = capture(layout, capsys)
+    evidence = json.loads(snapshot.read_text())
+    evidence["observations"] = observations
+    put_json(snapshot, evidence)
+    (layout["installed"] / doctor.MANIFEST).write_text("{")
+    rc, report = run(layout, capsys, "--snapshot", snapshot)
+    assert rc == 2 and report["installation"]["reason"] == "snapshot_observations_invalid"
+
+
+def test_duplicate_snapshot_observations_are_rejected_before_installation_diagnosis(layout, capsys):
+    snapshot = capture(layout, capsys)
+    evidence = json.loads(snapshot.read_text())
+    evidence["observations"].append(evidence["observations"][0].copy())
+    put_json(snapshot, evidence)
+    (layout["installed"] / doctor.MANIFEST).write_text("{")
+    rc, report = run(layout, capsys, "--snapshot", snapshot)
+    assert rc == 2 and report["installation"]["reason"] == "snapshot_stale"
+
+
+@pytest.mark.parametrize("mutation,reason", [
+    ("syntax", "invalid_config_toml"),
+    ("enabled", "invalid_plugin_enabled"),
+    ("hook", "invalid_hook_state"),
+])
+def test_invalid_configuration_is_unknown(layout, capsys, mutation, reason):
+    text = layout["config"].read_text()
+    if mutation == "syntax":
+        text += "[broken"
+    elif mutation == "enabled":
+        text = text.replace("enabled = true", "enabled = 42")
+    else:
+        text = text.replace("enabled = false", "enabled = 42")
+    layout["config"].write_text(text)
+    rc, report = run(layout, capsys)
+    assert rc == 2 and report["installation"]["reason"] == reason
+
+
+@pytest.mark.parametrize("kind", ["relative", "traversal", "symlink", "parent_symlink"])
+@pytest.mark.parametrize("source_type", ["local", "git"])
+def test_unsupported_source_root_is_unknown(layout, capsys, kind, source_type):
+    if source_type == "git":
+        git_source(layout)
+    given = layout["source"]
+    if kind == "relative":
+        given = Path("relative-source")
+    elif kind == "traversal":
+        given = given / ".." / "source"
+    elif kind == "symlink":
+        given = layout["tmp"] / "source-alias"
+        given.symlink_to(layout["source"], target_is_directory=True)
+    else:
+        alias = layout["tmp"] / "alias"
+        alias.symlink_to(layout["tmp"], target_is_directory=True)
+        given = alias / "source"
+    extra = []
+    if source_type == "local":
+        layout["config"].write_text(layout["config"].read_text().replace(str(layout["source"]), str(given)))
+    else:
+        extra = ["--source-checkout", given]
+    rc, report = run(layout, capsys, *extra)
+    assert rc == 2
+    expected = "source_symlink_unsupported" if "symlink" in kind else "unsafe_source_root"
+    if source_type == "git" and kind == "relative":
+        expected = "source_root_unavailable"
+    assert report["installation"]["reason"] == expected
+
+
+def test_worktree_git_file_is_reported_without_opening_or_following(layout, capsys, monkeypatch):
+    path = git_source(layout)
+    path.unlink()
+    path.parent.rmdir()
+    path.parent.write_text("gitdir: /outside/never-follow-this\n")
+    original = os.open
+
+    def checked(path, *values, **kwargs):
+        assert Path(path).name != ".git", "worktree gitdir file was opened"
+        return original(path, *values, **kwargs)
+
+    monkeypatch.setattr(io.os, "open", checked)
+    rc, report = run(layout, capsys, "--source-checkout", layout["source"])
+    assert rc == 2
+    assert report["installation"]["reason"] == "source_checkout_is_worktree_unsupported"
+
+
+@pytest.mark.parametrize("kind", ["file", "fifo", "missing"])
+@pytest.mark.parametrize("source_type", ["local", "git"])
+def test_unavailable_source_root_has_specific_unknown_reason(layout, capsys, kind, source_type):
+    if source_type == "git":
+        git_source(layout)
+    root = layout["source"]
+    shutil.rmtree(root)
+    if kind == "file":
+        root.write_text("unsupported source root")
+    elif kind == "fifo":
+        os.mkfifo(root)
+    extra = ["--source-checkout", root] if source_type == "git" else []
+    rc, report = run(layout, capsys, *extra)
+    assert rc == 2
+    assert report["installation"]["reason"] == ("source_root_unavailable" if kind == "missing" else "source_root_not_directory")
+
+
+def test_relative_ordinary_git_checkout_remains_supported(layout, capsys, monkeypatch):
+    git_source(layout)
+    monkeypatch.chdir(layout["tmp"])
+    assert run(layout, capsys, "--source-checkout", "source")[0] == 0
+
+
+@pytest.mark.parametrize("kind", ["fifo", "symlink"])
+def test_unsupported_git_metadata_is_not_opened(layout, capsys, monkeypatch, kind):
+    path = git_source(layout)
+    path.unlink()
+    path.parent.rmdir()
+    if kind == "fifo":
+        os.mkfifo(path.parent)
+    else:
+        path.parent.symlink_to(layout["tmp"] / "never-read-gitdir")
+    original = os.open
+
+    def checked(path, *values, **kwargs):
+        assert Path(path).name != ".git"
+        return original(path, *values, **kwargs)
+
+    monkeypatch.setattr(io.os, "open", checked)
+    rc, report = run(layout, capsys, "--source-checkout", layout["source"])
+    assert rc == 2
+    assert report["installation"]["reason"] == ("source_checkout_git_layout_unsupported" if kind == "fifo" else "source_symlink_unsupported")
+
+
+@pytest.mark.parametrize("kind", ["config", "snapshot"])
+def test_evidence_parent_swap_after_resolution_is_not_followed(layout, capsys, monkeypatch, kind):
+    snapshot = capture(layout, capsys)
+    path = layout["config"]
+    extra = []
+    if kind == "snapshot":
+        parent = layout["tmp"] / "evidence"
+        parent.mkdir()
+        path = parent / "snapshot.json"
+        snapshot.rename(path)
+        extra = ["--snapshot", path]
+    original = io.Reader._open
+    swapped = False
+
+    def swap(reader, root, given, directory=False):
+        nonlocal swapped
+        if not swapped and given == path:
+            swapped = True
+            target = path.parent.with_name("moved-" + path.parent.name)
+            path.parent.rename(target)
+            path.parent.symlink_to(target, target_is_directory=True)
+        return original(reader, root, given, directory)
+
+    monkeypatch.setattr(io.Reader, "_open", swap)
+    rc, report = run(layout, capsys, *extra)
+    assert swapped and rc == 2
+    assert report["installation"]["reason"] == kind + "_symlink_unsupported"
+
+
+@pytest.mark.parametrize("kind", ["config", "snapshot"])
+@pytest.mark.parametrize("file_type", ["fifo", "directory"])
+def test_nonregular_user_evidence_is_unknown(layout, capsys, kind, file_type):
+    snapshot = capture(layout, capsys)
+    path = layout["config"] if kind == "config" else snapshot
+    path.unlink()
+    if file_type == "fifo":
+        os.mkfifo(path)
+    else:
+        path.mkdir()
+    rc, report = run(layout, capsys, *(["--snapshot", snapshot] if kind == "snapshot" else []))
+    assert rc == 2 and report["installation"]["reason"] == kind + "_not_regular_file"
+
+
+@pytest.mark.parametrize("case,expected,reason", [
+    ("match", 0, "version_and_identity_match"),
+    ("shared", 0, "version_and_identity_match"),
+    ("mismatch", 1, "installation_source_version_mismatch"),
+    ("store_symlink", 1, "unsafe_symlink"),
+    ("invalid_plugin", 2, "invalid_plugin_id"),
+    ("installed_path", 2, "unsafe_installed_path"),
+    ("config_symlink", 2, "config_symlink_unsupported"),
+    ("snapshot_symlink", 2, "snapshot_symlink_unsupported"),
+    ("snapshot_parent", 2, "snapshot_symlink_unsupported"),
+    ("selected", 2, "invalid_plugin_enabled"),
+    ("auth_snapshot", 2, "forbidden_file"),
+    ("worktree", 2, "source_checkout_is_worktree_unsupported"),
+    ("without_snapshot", 2, "toml_parser_unavailable_use_snapshot"),
+])
+def test_real_python39_input_and_installation_contract(layout, capsys, case, expected, reason):
+    python39 = shutil.which("python3.9")
+    if not python39:
+        pytest.skip("Python 3.9 executable unavailable")
+    if case == "shared":
+        share_store(layout)
+    elif case == "mismatch":
+        path = layout["installed"] / doctor.MANIFEST
+        value = json.loads(path.read_text())
+        value["version"] = "5.5.1"
+        put_json(path, value)
+    snapshot = capture(layout, capsys)
+    extra = ["--snapshot", snapshot]
+    if case in ("config_symlink", "snapshot_symlink"):
+        path = layout["config"] if case == "config_symlink" else snapshot
+        target = path.with_name("original-" + path.name)
+        path.rename(target)
+        path.symlink_to(target)
+    elif case == "snapshot_parent":
+        parent = layout["tmp"] / "evidence"
+        parent.mkdir()
+        snapshot.rename(parent / snapshot.name)
+        alias = layout["tmp"] / "alias"
+        alias.symlink_to(parent, target_is_directory=True)
+        extra = ["--snapshot", alias / snapshot.name]
+    elif case == "invalid_plugin":
+        extra += ["--plugin", "invalid"]
+    elif case == "installed_path":
+        extra += ["--installed-path", layout["source"]]
+    elif case == "auth_snapshot":
+        extra = ["--snapshot", layout["tmp"] / "auth.json"]
+    elif case == "without_snapshot":
+        extra = []
+    elif case == "store_symlink":
+        path = layout["installed"] / ".codex-plugin"
+        target = layout["installed"] / "original-manifest"
+        path.rename(target)
+        path.symlink_to(target, target_is_directory=True)
+    elif case in ("selected", "worktree"):
+        value = json.loads(snapshot.read_text())
+        if case == "selected":
+            value["config"]["selected"]["plugin"]["enabled"] = "invalid"
+        else:
+            git_config = git_source(layout)
+            git_config.unlink()
+            git_config.parent.rmdir()
+            git_config.parent.write_text("gitdir: /outside/not-followed\n")
+            value["config"]["sha256"] = hashlib.sha256(layout["config"].read_bytes()).hexdigest()
+            value["config"]["selected"] = doctor.select_config(doctor.tomllib.loads(layout["config"].read_text()), PLUGIN, "sample-market")
+            extra += ["--source-checkout", layout["source"]]
+        put_json(snapshot, value)
+    command = [python39, "-B", str(TOOLS / "install_doctor.py"), *args(layout, *extra)]
+    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=10)
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert json.loads(result.stdout)["installation"]["reason"] == reason
