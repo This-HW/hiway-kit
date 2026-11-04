@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -1042,7 +1043,7 @@ def test_user_evidence_symlinks_are_unknown_without_reading_targets(layout, caps
     assert rc == 2
     assert report["installation"]["status"] == "unknown"
     assert report["installation"]["reason"] == kind + "_symlink_unsupported"
-    assert report["installation"]["hint"] == "pass_canonical_path"
+    assert report["installation"].get("hint") == (None if link == "file" else "pass_canonical_path")
     assert str(path) not in json.dumps(report)
 
 
@@ -1077,7 +1078,7 @@ def test_invalid_installed_selection_is_input_error(layout, capsys, kind):
     assert rc == 2 and report["installation"]["reason"] == "unsafe_installed_path"
 
 
-@pytest.mark.parametrize("name", ["tokenizer", "tokenizer-example", "auth-helper", "auth-example", "credential-helper", ".env-example"])
+@pytest.mark.parametrize("name", ["tokenizer", "tokenizer-example", "auth-helper", "auth-example", "credential-helper", ".env-example", ".envrc", ".environment"])
 def test_normal_names_with_sensitive_prefixes_remain_supported(layout, capsys, name):
     # The identifier grammar independently excludes a leading dot.
     plugin_name = "example" if name.startswith(".") else name
@@ -1232,7 +1233,7 @@ def test_unsupported_source_root_is_unknown(layout, capsys, kind, source_type):
         expected = "source_root_unavailable"
     assert report["installation"]["reason"] == expected
     if "symlink" in kind:
-        assert report["installation"]["hint"] == "pass_canonical_path"
+        assert report["installation"].get("hint") == ("pass_canonical_path" if kind == "parent_symlink" else None)
         assert str(given) not in json.dumps(report)
 
 
@@ -1412,3 +1413,171 @@ def test_real_python39_input_and_installation_contract(layout, capsys, case, exp
     result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=10)
     assert result.returncode == expected, result.stdout + result.stderr
     assert json.loads(result.stdout)["installation"]["reason"] == reason
+
+
+@pytest.mark.parametrize("present,expected,reason", [
+    (False, 2, "file_unavailable"), (True, 1, "plugin_manifest_missing"),
+])
+@pytest.mark.parametrize("shared", [False, True])
+def test_selected_installation_directory_absence_is_unknown(layout, capsys, present, expected, reason, shared):
+    if shared:
+        share_store(layout)
+    missing = layout["home"] / "plugins/cache/sample-market/example/9.9.9"
+    if present:
+        missing.mkdir()
+    rc, report = run(layout, capsys, "--installed-path", missing)
+    assert (rc, report["installation"]["reason"]) == (expected, reason)
+    assert report["decision"] == {"rc": expected, "reason": reason, "layer": "installation"}
+
+
+@pytest.mark.parametrize("source_type", ["local", "git"])
+@pytest.mark.parametrize("mismatch", [False, True])
+def test_stale_snapshot_preserves_hook_and_source_observations(layout, capsys, source_type, mismatch):
+    extra = []
+    if source_type == "git":
+        git_source(layout)
+        extra = ["--source-checkout", layout["source"]]
+    snapshot = layout["tmp"] / "layered-snapshot.json"
+    assert run(layout, capsys, *extra, "--capture-snapshot", snapshot)[0] == 0
+    (layout["installed"] / "hooks/hooks-codex.json").write_text("{")
+    if mismatch:
+        path = layout["source"] / "plugin" / doctor.MANIFEST
+        value = json.loads(path.read_text())
+        value["version"] = "5.5.1"
+        put_json(path, value)
+    rc, report = run(layout, capsys, *extra, "--snapshot", snapshot)
+    assert rc == 1
+    observations = {(entry["layer"], entry["rc"], entry["reason"]) for entry in report["observations"]}
+    assert ("hooks", 1, "invalid_json") in observations
+    assert ("snapshot", 2, "snapshot_stale") in observations
+    source_reason = ("source_checkout_unverified_version_mismatch" if source_type == "git"
+                     else "installation_source_version_mismatch") if mismatch else "version_and_identity_match"
+    source_rc = (2 if source_type == "git" else 1) if mismatch else 0
+    assert ("source", source_rc, source_reason) in observations
+    assert report["decision"]["rc"] == 1
+    expected = "installation_source_version_mismatch" if mismatch and source_type == "local" else "invalid_json"
+    assert report["installation"]["reason"] == report["decision"]["reason"] == expected
+    if source_type == "git":
+        assert report["installation"]["comparison_scope"] == "supplied_checkout"
+        assert report["installation"]["remote_freshness"] == "unverified"
+
+
+@pytest.mark.parametrize("source_type", ["local", "git"])
+def test_stale_snapshot_does_not_hide_confirmed_source_defect(layout, capsys, source_type):
+    extra = []
+    if source_type == "git":
+        git_source(layout)
+        extra = ["--source-checkout", layout["source"]]
+    snapshot = layout["tmp"] / "source-snapshot.json"
+    assert run(layout, capsys, *extra, "--capture-snapshot", snapshot)[0] == 0
+    path = layout["source"] / "plugin" / doctor.MANIFEST
+    value = json.loads(path.read_text())
+    value["version"] = "5.5.1"
+    put_json(path, value)
+    rc, report = run(layout, capsys, *extra, "--snapshot", snapshot)
+    assert rc == (2 if source_type == "git" else 1)
+    assert any(entry["layer"] == "snapshot" and entry["reason"] == "snapshot_stale" for entry in report["observations"])
+
+
+@pytest.mark.parametrize("operation", ["open", "stat"])
+@pytest.mark.parametrize("error,expected,reason", [
+    (errno.ENOENT, 0, "file_unavailable"),
+    (errno.EACCES, 2, "file_access_denied"),
+    (errno.ENOTDIR, 2, "file_not_directory"),
+    (errno.EMFILE, 2, "file_descriptor_limit"),
+    (errno.ELOOP, 1, "unsafe_symlink"),
+    (errno.EIO, 2, "file_io_error"),
+])
+def test_hook_walk_io_errors_are_not_absence(layout, capsys, monkeypatch, operation, error, expected, reason):
+    original = getattr(io.os, operation)
+
+    def fail(path, *values, **kwargs):
+        if not isinstance(path, int) and Path(path).name == "hooks-codex.json":
+            raise OSError(error, "private-error-must-not-echo")
+        return original(path, *values, **kwargs)
+
+    monkeypatch.setattr(io.os, operation, fail)
+    rc, report = run(layout, capsys)
+    assert rc == expected
+    assert report["hooks"]["observation_reason"] == reason
+    assert {"rc": expected, "reason": reason, "layer": "hooks"} in report["observations"]
+    assert "private-error" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("error,reason", [
+    (errno.EACCES, "file_access_denied"), (errno.ENOTDIR, "file_not_directory"),
+    (errno.EMFILE, "file_descriptor_limit"), (errno.ELOOP, "config_symlink_unsupported"),
+])
+def test_config_walk_errors_remain_unknown(layout, capsys, monkeypatch, error, reason):
+    original = io.os.open
+
+    def fail(path, *values, **kwargs):
+        if Path(path).name == "config.toml":
+            raise OSError(error, "private-config-error")
+        return original(path, *values, **kwargs)
+
+    monkeypatch.setattr(io.os, "open", fail)
+    rc, report = run(layout, capsys)
+    assert rc == 2 and report["installation"]["reason"] == reason
+    assert "hint" not in report["installation"]
+    assert "private-config" not in json.dumps(report)
+
+
+def test_hook_oserror_preserves_local_mismatch_and_json(layout, capsys, monkeypatch):
+    path = layout["source"] / "plugin" / doctor.MANIFEST
+    value = json.loads(path.read_text())
+    value["version"] = "5.5.1"
+    put_json(path, value)
+
+    def fail(*unused):
+        raise PermissionError(errno.EACCES, "private-hook-error")
+
+    monkeypatch.setattr(doctor, "observe_hooks", fail)
+    rc, report = run(layout, capsys)
+    assert rc == 1 and report["installation"]["reason"] == "installation_source_version_mismatch"
+    assert report["hooks"]["observation_reason"] == "file_access_denied"
+    assert "private-hook" not in json.dumps(report)
+
+
+def test_capture_ancestor_symlink_has_canonical_hint(layout, capsys):
+    target = layout["tmp"] / "evidence-directory"
+    target.mkdir()
+    alias = layout["tmp"] / "evidence-alias"
+    alias.symlink_to(target, target_is_directory=True)
+    rc, report = run(layout, capsys, "--capture-snapshot", alias / "snapshot.json")
+    assert rc == 2 and report["installation"]["reason"] == "snapshot_symlink_unsupported"
+    assert report["installation"]["hint"] == "pass_canonical_path"
+    assert not (target / "snapshot.json").exists()
+
+
+@pytest.mark.parametrize("case", ["missing_directory", "git_stale_hook", "local_stale_hook"])
+def test_real_python39_review4_contract(layout, capsys, case):
+    python39 = shutil.which("python3.9")
+    if not python39:
+        pytest.skip("Python 3.9 executable unavailable")
+    extra = []
+    if case == "git_stale_hook":
+        git_source(layout)
+        extra = ["--source-checkout", layout["source"]]
+    snapshot = layout["tmp"] / "python39-snapshot.json"
+    assert run(layout, capsys, *extra, "--capture-snapshot", snapshot)[0] == 0
+    extra += ["--snapshot", snapshot]
+    if case == "missing_directory":
+        extra += ["--installed-path", layout["installed"].with_name("9.9.9")]
+    else:
+        (layout["installed"] / "hooks/hooks-codex.json").write_text("{")
+        if case == "local_stale_hook":
+            path = layout["source"] / "plugin" / doctor.MANIFEST
+            value = json.loads(path.read_text())
+            value["version"] = "5.5.1"
+            put_json(path, value)
+    result = subprocess.run([python39, "-B", str(TOOLS / "install_doctor.py"), *args(layout, *extra)],
+                            capture_output=True, text=True, check=False, timeout=10)
+    assert result.returncode == (2 if case == "missing_directory" else 1), result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    expected = {"missing_directory": "file_unavailable", "git_stale_hook": "invalid_json",
+                "local_stale_hook": "installation_source_version_mismatch"}[case]
+    assert report["installation"]["reason"] == expected
+    if case != "missing_directory":
+        assert any(entry["reason"] == "snapshot_stale" for entry in report["observations"])
+        assert report["hooks"]["observation_reason"] == "invalid_json"

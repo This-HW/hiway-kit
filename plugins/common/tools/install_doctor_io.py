@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -17,23 +18,42 @@ FORBIDDEN_BASENAMES = {"auth.json", "credential.json", "credentials.json", "toke
 
 
 class ObservationError(Exception):
-    def __init__(self, reason: str, rc: int = 2):
+    def __init__(self, reason: str, rc: int = 2, *, hint: str | None = None):
         super().__init__(reason)
         self.reason = reason
         self.rc = rc
+        self.hint = hint
+
+
+def observation_oserror(exc: OSError, *, ancestor: bool = False) -> ObservationError:
+    """Only ENOENT means absent; other failures are unavailable evidence."""
+    if exc.errno == errno.ELOOP:
+        return ObservationError("unsafe_symlink", 1, hint="pass_canonical_path" if ancestor else None)
+    reason = {
+        errno.ENOENT: "file_unavailable",
+        errno.EACCES: "file_access_denied",
+        errno.EPERM: "file_access_denied",
+        errno.ENOTDIR: "file_not_directory",
+        errno.EMFILE: "file_descriptor_limit",
+        errno.ENFILE: "file_descriptor_limit",
+    }.get(exc.errno, "file_io_error")
+    return ObservationError(reason)
 
 
 def _resolve_in_repo(root: Path, relative: str) -> Path:
     """Resolve once, contain reads as well as checks; reject all symlink inputs."""
     rel = _relative_path(relative)
     _check_forbidden(root)
-    if any(parent.is_symlink() for parent in (root, *root.parents)):
-        raise ObservationError("unsafe_symlink", 1)
+    for parent in (root, *root.parents):
+        if parent.is_symlink():
+            raise ObservationError("unsafe_symlink", 1,
+                                   hint="pass_canonical_path" if parent != root / rel else None)
     current = root
     for part in rel.parts:
         current = current / part
         if current.is_symlink():
-            raise ObservationError("unsafe_symlink", 1)
+            raise ObservationError("unsafe_symlink", 1,
+                                   hint="pass_canonical_path" if current != root / rel else None)
     resolved = (root / rel).resolve()
     if not resolved.is_relative_to(root):
         raise ObservationError("unsafe_path")
@@ -172,16 +192,19 @@ class Reader:
         return path.parent, path.name
 
     def _walk(self, fd: int, components: tuple, directory: bool) -> int:
+        ancestor = False
         try:
             self.check()
             if not all(hasattr(os, flag) for flag in ("O_DIRECTORY", "O_NOFOLLOW", "O_NONBLOCK")):
                 raise ObservationError("safe_file_access_unavailable")
             for index, part in enumerate(components):
+                # Directory walks navigate to a parent of the observed file.
+                ancestor = index < len(components) - 1 or directory
                 self.check()
                 _relative_path(part)
                 before = os.stat(part, dir_fd=fd, follow_symlinks=False)
                 if stat.S_ISLNK(before.st_mode):
-                    raise ObservationError("unsafe_symlink", 1)
+                    raise ObservationError("unsafe_symlink", 1, hint="pass_canonical_path" if ancestor else None)
                 flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
                 if index < len(components) - 1 or directory:
                     flags |= os.O_DIRECTORY
@@ -192,7 +215,7 @@ class Reader:
             fd = -1
             return result
         except OSError as exc:
-            raise ObservationError("file_unavailable") from exc
+            raise observation_oserror(exc, ancestor=ancestor) from exc
         finally:
             if fd >= 0:
                 os.close(fd)
@@ -221,7 +244,7 @@ class Reader:
             fd = self._open(root, path)
         except ObservationError as exc:
             if kind in ("config", "snapshot") and exc.reason == "unsafe_symlink":
-                raise ObservationError(kind + "_symlink_unsupported") from exc
+                raise ObservationError(kind + "_symlink_unsupported", hint=exc.hint) from exc
             raise
         try:
             before = os.fstat(fd)
@@ -276,7 +299,7 @@ class Reader:
                 raise ObservationError("unsafe_symlink", 1)
             return info.st_mode
         except OSError as exc:
-            raise ObservationError("file_unavailable") from exc
+            raise observation_oserror(exc) from exc
         finally:
             os.close(fd)
 
@@ -309,7 +332,8 @@ def write_snapshot(path: Path, value: dict, reader: Reader | None = None):
         directory = reader._open(root, parent, directory=True)
     except ObservationError as exc:
         if exc.reason == "unsafe_symlink":
-            raise ObservationError("snapshot_symlink_unsupported") from exc
+            # Only the output's parent directory was traversed here.
+            raise ObservationError("snapshot_symlink_unsupported", hint="pass_canonical_path") from exc
         raise
     try:
         fd = os.open(path.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)

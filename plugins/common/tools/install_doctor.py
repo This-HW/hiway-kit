@@ -30,6 +30,7 @@ from install_doctor_io import (  # noqa: E402
     Reader,
     _relative_path,
     _resolve_in_repo,
+    observation_oserror,
     write_snapshot,
 )
 
@@ -239,6 +240,8 @@ def installed_root(reader: Reader, args, home: Path, name: str, marketplace: str
         root = reader.path(store, str(relative))
         if root.parent != store / base:
             raise ObservationError("unsafe_installed_path")
+        if not stat.S_ISDIR(reader.mode(store, str(relative))):
+            raise ObservationError("installed_path_not_directory", 1)
         return root
     versions = reader.directories(store, base)
     if not versions:
@@ -375,7 +378,16 @@ def verify_snapshot(snapshot: dict, origins: list[dict]):
 
 def diagnose(args) -> tuple[dict, int]:
     report = initial_report(args.plugin)
+    observations = report["observations"] = []
     reader = Reader()
+    layer = "config"
+
+    def observe(error: ObservationError, observed_layer: str):
+        entry = {"rc": error.rc, "reason": error.reason, "layer": observed_layer}
+        if error.hint is not None:
+            entry["hint"] = error.hint
+        observations.append(entry)
+
     try:
         parts = args.plugin.split("@")
         if len(parts) != 2 or not all(IDENTIFIER.fullmatch(part) for part in parts):
@@ -388,9 +400,11 @@ def diagnose(args) -> tuple[dict, int]:
             raise ObservationError("unsafe_codex_home")
         selected, snapshot = load_config(reader, args, home, args.plugin, marketplace)
         report["hooks"] = configured_hooks(selected, args.plugin)
+        layer = "store"
         store = reader.store or reader.bind_store(home, args.plugin_store)
         if snapshot is not None and snapshot.get("store") != store:
             raise ObservationError("snapshot_store_stale")
+        layer = "installation"
         root = installed_root(reader, args, home, name, marketplace)
         installed = manifest(reader, root, name, marketplace)
         report["installation"]["installed_version"] = installed["version"]
@@ -398,12 +412,13 @@ def diagnose(args) -> tuple[dict, int]:
         report["installation"]["source_type"] = source_type
         if source_type == "git":
             report["installation"].update(comparison_scope="supplied_checkout", remote_freshness="unverified")
-        # Hook observation errors must not erase a confirmed version mismatch.
-        hook_error = None
+        # Collect independent layers before making a single final decision.
         try:
             report["hooks"] = observe_hooks(reader, root, installed, selected, args.plugin)
-        except ObservationError as exc:
-            hook_error = exc
+        except (ObservationError, OSError) as exc:
+            if isinstance(exc, OSError):
+                exc = observation_oserror(exc)
+            observe(ObservationError(exc.reason, hook_observation_rc(exc)), "hooks")
             report["hooks"]["discovered"] = state(reason=exc.reason)
             report["hooks"]["observation_reason"] = exc.reason
         source_error = None
@@ -412,7 +427,7 @@ def diagnose(args) -> tuple[dict, int]:
             configured = manifest(reader, source, name, marketplace)
         except ObservationError as exc:
             if exc.reason == "unsafe_symlink":
-                source_error = ObservationError("source_symlink_unsupported")
+                source_error = ObservationError("source_symlink_unsupported", hint=exc.hint)
             elif source_type == "git" and exc.reason in SOURCE_CHECKOUT_UNVERIFIED_REASONS:
                 source_error = ObservationError("source_checkout_unverified_" + exc.reason)
             else:
@@ -422,18 +437,23 @@ def diagnose(args) -> tuple[dict, int]:
             source_error = ObservationError("observation_unavailable")
         else:
             report["installation"]["source_version"] = configured["version"]
-        # Recheck installed/store risks even when source evidence is unavailable.
-        reader.verify_store()
+            if installed["version"] != configured["version"]:
+                source_error = (ObservationError("source_checkout_unverified_version_mismatch") if source_type == "git"
+                                else ObservationError("installation_source_version_mismatch", 1))
         if source_error is not None:
-            if hook_error is not None and hook_observation_rc(hook_error) == 1:
-                raise ObservationError(hook_error.reason, 1)
-            raise source_error
-        version_mismatch = installed["version"] != configured["version"]
-        if source_type == "git" and version_mismatch and hook_error is not None and hook_observation_rc(hook_error) == 1:
-            raise ObservationError(hook_error.reason, 1)
+            observe(source_error, "source")
+        else:
+            observe(ObservationError("version_and_identity_match", 0), "source")
+        # Recheck installed/store risks even when source evidence is unavailable.
+        layer = "store"
+        reader.verify_store()
         if snapshot is not None:
-            verify_snapshot(snapshot, reader.origins)
-        if args.capture_snapshot:
+            try:
+                verify_snapshot(snapshot, reader.origins)
+            except ObservationError as exc:
+                observe(exc, "snapshot")
+        if args.capture_snapshot and (source_error is None or source_error.reason == "installation_source_version_mismatch"):
+            layer = "snapshot"
             if tomllib is None or args.snapshot:
                 raise ObservationError("capture_requires_native_toml_parser")
             config_origin = reader.origins[0]
@@ -442,29 +462,33 @@ def diagnose(args) -> tuple[dict, int]:
                       "config": {"path": config_origin["path"], "sha256": config_origin["sha256"], "selected": selected},
                       "store": store, "observations": reader.origins}
             write_snapshot(Path(args.capture_snapshot).absolute(), output, reader)
+            layer = "store"
             reader.verify_store()
-        if version_mismatch:
-            if source_type == "git":
-                raise ObservationError("source_checkout_unverified_version_mismatch")
-            raise ObservationError("installation_source_version_mismatch", 1)
-        report["installation"].update(status="match", reason="version_and_identity_match")
-        if hook_error is not None:
-            return report, hook_observation_rc(hook_error)
-        return report, 0
     except ObservationError as exc:
-        report["installation"].update(status="defect" if exc.rc == 1 else "unknown", reason=exc.reason)
-        if exc.reason in ("config_symlink_unsupported", "snapshot_symlink_unsupported", "source_symlink_unsupported"):
-            report["installation"]["hint"] = "pass_canonical_path"
-        return report, exc.rc
+        observe(exc, layer)
     except (OSError, RuntimeError, ValueError) as exc:
         # Never echo exception text: it can contain config or credential values.
         del exc
-        report["installation"].update(status="unknown", reason="observation_unavailable")
-        return report, 2
+        observe(ObservationError("observation_unavailable"), layer)
     finally:
         if reader.store is not None:
             report["store"] = {key: reader.store[key] for key in ("store_root", "store_shared", "link_source")}
         reader.close()
+    # Confirmed defects outrank unknown evidence, which outranks a match.
+    # At the same severity, keep the installation/source diagnosis ahead of hooks.
+    priority = {1: 0, 2: 1, 0: 2}
+    winner = min(observations, key=lambda entry: (priority[entry["rc"]], entry["layer"] == "hooks"))
+    report["decision"] = {key: winner[key] for key in ("rc", "reason", "layer")}
+    installation = [entry for entry in observations if entry["layer"] != "hooks"]
+    summary = min(installation, key=lambda entry: priority[entry["rc"]])
+    # Keep the established match+independent-hook status; promote confirmed hook
+    # defects when the installation/source evidence would otherwise be unknown.
+    if summary["rc"] == 2 and winner["rc"] == 1:
+        summary = winner
+    report["installation"].update(status={0: "match", 1: "defect", 2: "unknown"}[summary["rc"]], reason=summary["reason"])
+    if "hint" in summary:
+        report["installation"]["hint"] = summary["hint"]
+    return report, winner["rc"]
 
 
 def main(argv=None) -> int:
