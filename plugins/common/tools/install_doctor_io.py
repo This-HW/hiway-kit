@@ -13,7 +13,7 @@ MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 2 * 1024 * 1024
 MAX_ENTRIES = 128
 MAX_SECONDS = 5
-FORBIDDEN_BASENAMES = {"auth.json", "credential.json", "credentials.json", "token.json", "tokens.json", ".env"}
+FORBIDDEN_BASENAMES = {"auth.json", "credential.json", "credentials.json", "token.json", "tokens.json", ".credentials.json", ".env"}
 
 
 class ObservationError(Exception):
@@ -41,7 +41,7 @@ def _resolve_in_repo(root: Path, relative: str) -> Path:
 
 
 def _check_forbidden(path: Path, reason: str = "forbidden_file"):
-    if any(part.casefold() in FORBIDDEN_BASENAMES for part in path.parts):
+    if any(part.casefold() in FORBIDDEN_BASENAMES or part.casefold().startswith(".env.") for part in path.parts):
         raise ObservationError(reason)
 
 

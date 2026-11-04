@@ -1,7 +1,9 @@
 """Read-only Codex installation/source comparison; never invokes Codex or git.
 
-Exit 0 confirms only installation/source version and identity agreement, 1 a
-confirmed defect, 2 missing/unknown/stale evidence. Hook state is independent.
+Exit 0 confirms only installation/source version and identity agreement (for git,
+only the supplied checkout; remote freshness is unverified), 1 a confirmed
+installed/store defect or local source mismatch, 2 missing/unknown/stale evidence.
+Hook state is independent; a confirmed unsafe/invalid hook file also returns 1.
 Python 3.11+ captures selected TOML fields; 3.9+ can reuse a verified snapshot.
 """
 
@@ -26,6 +28,7 @@ sys.dont_write_bytecode = True
 from install_doctor_io import (  # noqa: E402
     ObservationError,
     Reader,
+    _relative_path,
     _resolve_in_repo,
     write_snapshot,
 )
@@ -43,6 +46,27 @@ IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
 VERSION = re.compile(r"[0-9][A-Za-z0-9.+_-]{0,63}\Z")
 EVENTS = {"SessionStart": "session_start", "PostToolUse": "post_tool_use",
           "PreToolUse": "pre_tool_use", "Stop": "stop", "UserPromptSubmit": "user_prompt_submit"}
+HOOK_DEFECT_REASONS = frozenset({
+    "invalid_json", "invalid_json_object", "invalid_hook_manifest", "unsafe_symlink", "not_regular_file",
+    "plugin_store_not_directory", "plugin_store_wrong_owner", "plugin_store_writable_by_others",
+})
+# Missing hook evidence does not invalidate a successful source comparison.
+# Every other unsupported, interrupted, or newly introduced observation is rc2.
+HOOK_COMPARISON_INDEPENDENT_REASONS = frozenset({"file_unavailable"})
+SOURCE_CHECKOUT_UNVERIFIED_REASONS = frozenset({
+    "invalid_json", "invalid_json_object", "not_regular_file", "file_unavailable", "plugin_manifest_missing",
+    "plugin_identity_mismatch", "plugin_version_missing", "marketplace_identity_mismatch",
+    "marketplace_plugins_missing", "marketplace_plugin_ambiguous",
+})
+
+
+def hook_observation_rc(error: ObservationError) -> int:
+    """Classify by observed reason; an unknown reason always falls back to rc2."""
+    if error.reason in HOOK_DEFECT_REASONS:
+        return 1
+    if error.reason in HOOK_COMPARISON_INDEPENDENT_REASONS:
+        return 0
+    return 2
 
 
 def state(value="unknown", reason="not_observed") -> dict:
@@ -225,7 +249,12 @@ def installed_root(reader: Reader, args, home: Path, name: str, marketplace: str
 
 
 def manifest(reader: Reader, root: Path, name: str, marketplace: str) -> dict:
-    value = reader.json(root, MANIFEST, "plugin_manifest")
+    try:
+        value = reader.json(root, MANIFEST, "plugin_manifest")
+    except ObservationError as exc:
+        if exc.reason == "file_unavailable" and isinstance(exc.__cause__, FileNotFoundError):
+            raise ObservationError("plugin_manifest_missing", 1) from exc
+        raise
     if value.get("name") != name or value.get("id", f"{name}@{marketplace}") != f"{name}@{marketplace}":
         raise ObservationError("plugin_identity_mismatch", 1)
     if not isinstance(value.get("version"), str) or not VERSION.fullmatch(value["version"]):
@@ -300,7 +329,7 @@ def observe_hooks(reader: Reader, root: Path, installed: dict, selected: dict, p
         return hooks
     if not isinstance(relative, str):
         raise ObservationError("hook_path_unsupported")
-    rel = Path(relative)
+    rel = _relative_path(relative)
     if not rel.parts or rel.parts[0] != "hooks" or rel.suffix != ".json":
         raise ObservationError("unsafe_hook_path")
     data = reader.json(root, relative, "hook_manifest")
@@ -365,6 +394,10 @@ def diagnose(args) -> tuple[dict, int]:
         root = installed_root(reader, args, home, name, marketplace)
         installed = manifest(reader, root, name, marketplace)
         report["installation"]["installed_version"] = installed["version"]
+        source_type = selected["marketplace"]["source_type"]
+        report["installation"]["source_type"] = source_type
+        if source_type == "git":
+            report["installation"].update(comparison_scope="supplied_checkout", remote_freshness="unverified")
         # Hook observation errors must not erase a confirmed version mismatch.
         hook_error = None
         try:
@@ -372,16 +405,32 @@ def diagnose(args) -> tuple[dict, int]:
         except ObservationError as exc:
             hook_error = exc
             report["hooks"]["discovered"] = state(reason=exc.reason)
+            report["hooks"]["observation_reason"] = exc.reason
+        source_error = None
         try:
             source = source_root(reader, args, selected, name, marketplace)
             configured = manifest(reader, source, name, marketplace)
         except ObservationError as exc:
             if exc.reason == "unsafe_symlink":
-                raise ObservationError("source_symlink_unsupported") from exc
-            raise
-        report["installation"]["source_version"] = configured["version"]
-        report["installation"]["source_type"] = selected["marketplace"]["source_type"]
+                source_error = ObservationError("source_symlink_unsupported")
+            elif source_type == "git" and exc.reason in SOURCE_CHECKOUT_UNVERIFIED_REASONS:
+                source_error = ObservationError("source_checkout_unverified_" + exc.reason)
+            else:
+                source_error = exc
+        except (OSError, RuntimeError, ValueError):
+            # Preserve confirmed installed risks without echoing source inputs.
+            source_error = ObservationError("observation_unavailable")
+        else:
+            report["installation"]["source_version"] = configured["version"]
+        # Recheck installed/store risks even when source evidence is unavailable.
         reader.verify_store()
+        if source_error is not None:
+            if hook_error is not None and hook_observation_rc(hook_error) == 1:
+                raise ObservationError(hook_error.reason, 1)
+            raise source_error
+        version_mismatch = installed["version"] != configured["version"]
+        if source_type == "git" and version_mismatch and hook_error is not None and hook_observation_rc(hook_error) == 1:
+            raise ObservationError(hook_error.reason, 1)
         if snapshot is not None:
             verify_snapshot(snapshot, reader.origins)
         if args.capture_snapshot:
@@ -394,19 +443,18 @@ def diagnose(args) -> tuple[dict, int]:
                       "store": store, "observations": reader.origins}
             write_snapshot(Path(args.capture_snapshot).absolute(), output, reader)
             reader.verify_store()
-        if installed["version"] != configured["version"]:
+        if version_mismatch:
+            if source_type == "git":
+                raise ObservationError("source_checkout_unverified_version_mismatch")
             raise ObservationError("installation_source_version_mismatch", 1)
         report["installation"].update(status="match", reason="version_and_identity_match")
         if hook_error is not None:
-            report["hooks"]["observation_reason"] = hook_error.reason
-            # Missing hook runtime evidence does not invalidate an installation
-            # comparison. A confirmed unsafe/invalid hook file is still a defect.
-            if hook_error.reason in ("forbidden_file", "unsafe_path", "unsafe_hook_path"):
-                return report, 2
-            return report, 1 if hook_error.rc == 1 else 0
+            return report, hook_observation_rc(hook_error)
         return report, 0
     except ObservationError as exc:
         report["installation"].update(status="defect" if exc.rc == 1 else "unknown", reason=exc.reason)
+        if exc.reason in ("config_symlink_unsupported", "snapshot_symlink_unsupported", "source_symlink_unsupported"):
+            report["installation"]["hint"] = "pass_canonical_path"
         return report, exc.rc
     except (OSError, RuntimeError, ValueError) as exc:
         # Never echo exception text: it can contain config or credential values.
