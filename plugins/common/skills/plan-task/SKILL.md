@@ -54,6 +54,8 @@ description: Structured task planning into a plan file. Use for any new feature,
 
 ## Step 1: T1 — 요구사항 명확화
 
+낯선 저장소라면 [프로젝트 탐색](references/project-discovery.md)으로 실제 진입점과 검증 명령부터 확인한다.
+
 `clarify-requirements` 에이전트에 위임하거나 직접 진행.
 
 > **절차 SSOT: `skills/plan-task/references/elicitation.md`** — 규모가 Medium 이상이면 **읽고 시작한다.**

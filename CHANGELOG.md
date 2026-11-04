@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.6.0] — 2026-10-30
+
+### Added — On-demand code intelligence and session history
+
+- `code-intel`: installed ast-grep structural search and replacement preview; one-shot read-only
+  LSP diagnostics, symbols, definitions and references. Missing executables, malformed responses
+  and timeouts are unverified outcomes, never successful empty results. No automatic installation.
+- `session-history`: bounded Codex/Claude JSONL search under an explicitly selected log root,
+  with symlink exclusion and untrusted-content framing. No authentication files or database scans.
+- Conditional references for debugging hypotheses, actual-surface and visual QA, research evidence,
+  and project discovery. Existing global rules and hooks are unchanged.
+- OMO adoption audit and provenance: `docs/research/2026-10-30-omo-absorption.md`.
+  Tools are independently implemented; OMO's runtime, telemetry, model overrides and daemons are not bundled.
+
 ## [5.5.1] — 2026-10-28
 
 ### Added — Claude 디렉토리 목록 필드(`icon`·`documentationUrl`·`supportUrl`·`privacyPolicyUrl`·`termsOfServiceUrl`)

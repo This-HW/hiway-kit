@@ -1,6 +1,6 @@
 # hiway-kit
 
-> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 15 agents + 15 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
+> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 15 agents + 17 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
 
 A focused, single-plugin AI agent system built for Claude Code. Covers the full software development lifecycle: planning, implementation, review, testing, and meta-tooling. (Not a TUI component library or a scaffolding installer — this is the agents + skills plugin.)
 
@@ -229,11 +229,11 @@ twice (measured 2026-10-05).
 **No official public registry is confirmed for Antigravity.** `agy plugin` also offers
 `install <plugin>@<marketplace>`, `link`, and `import [gemini|claude]`; none of these is verified
 with this kit, so the GitHub and local paths above are the only ones documented here. Both install
-hiway-kit 5.4.2 with 15 skills; agents are skipped (see the table above).
+hiway-kit 5.4.2 with its then-current skill set; agents are skipped (see the table above).
 
 ### Cursor
 
-`plugins/common/.cursor-plugin/plugin.json` (generated, like the others) ships **the 15 skills only**.
+`plugins/common/.cursor-plugin/plugin.json` (generated, like the others) ships **the 17 skills only**.
 Hooks are set to an empty inline config, so Cursor does not pick up the Claude Code `hooks/hooks.json`.
 That file's exec form and `${CLAUDE_PLUGIN_ROOT}` are unmeasured on Cursor. Agents (`model: opus` and
 other Claude values) and rules (`.md`; Cursor expects `.mdc`) are left out for the same reason. The
@@ -256,9 +256,9 @@ there makes them visible to those harnesses without a plugin install. Two costs:
 the `hiway-kit:` namespace (they appear under their bare names), and if the same harness **also**
 has the plugin installed, every skill loads twice — the same "never run two copies" rule as above.
 
-The [`skills` CLI](https://skills.sh) copies the 15 skills into whichever agents it detects (listed at
+The [`skills` CLI](https://skills.sh) copies the 17 skills into whichever agents it detects (listed at
 [skills.sh/this-hw/hiway-kit](https://skills.sh/this-hw/hiway-kit)). This repo's three maintainer skills in
-`.claude/skills/` carry `metadata.internal: true`, so the CLI skips them and finds the 15 under
+`.claude/skills/` carry `metadata.internal: true`, so the CLI skips them and finds the published skills under
 `plugins/common/skills/` (measured skills 1.7.2, 2026-10-19 — without the flag it found only those three):
 
 ```bash
@@ -364,7 +364,7 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 
 | Plugin            | Agents | Skills | Description                               |
 | ----------------- | ------ | ------ | ----------------------------------------- |
-| `hiway-kit` | 15     | 15     | Core: planning, development, review, meta |
+| `hiway-kit` | 15     | 17     | Core: planning, development, review, code intelligence, history |
 
 v5.0.0 cut the kit roughly in half, down to what earns its place: components with a native
 equivalent, that no skill ever invoked, or that only worked inside this repository were removed —
@@ -436,6 +436,8 @@ Merge-back rules (verify-then-exit, sequential merge, conflict escalation to
 | `cross-engine-review`      | `/cross-engine-review`      | Evidence-backed consensus between sessions on different engines            |
 | `harness-export`           | `/harness-export`           | Export host-neutral rules to `AGENTS.md`/`GEMINI.md` for other harnesses   |
 | `skill-forge`              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft                  |
+| `code-intel`               | `/code-intel`               | AST search/preview and one-shot read-only LSP queries |
+| `session-history`          | `/session-history`          | Bounded search of explicitly selected Codex/Claude session logs |
 | `using-hiway-kit`          | (injected at session start) | Workflow chain and plan file rules                                         |
 
 ### Planning Agents (Opus)
@@ -513,7 +515,7 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
 
 ```
 plugins/
-└── common/      — Core agents (15) + skills (15) + rules (12) + hooks
+└── common/      — Core agents (15) + skills (17) + rules (12) + hooks
 ```
 
 The plugin contains:

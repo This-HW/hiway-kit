@@ -5,6 +5,8 @@ description: Multi-source external research with cited sources, using search/doc
 
 # Web Research
 
+비교·성능 주장이나 여러 출처의 종합이 필요하면 [출처와 증거](references/source-evidence.md)를 읽는다.
+
 MCP 서버가 설치돼 있으면 우선 활용하고, **없거나 실패하면 빌트인 WebSearch/WebFetch로
 폴백**하여 외부 정보를 조사합니다. 이 스킬은 main 컨텍스트에서 실행되어 설치된 MCP를
 안전하게 상속합니다 — MCP 존재를 가정하지 마세요.

@@ -17,13 +17,13 @@ Pick **one** (installing both loads every skill and hook twice):
 Other harnesses (Codex, Antigravity, Gemini CLI) and what each one supports:
 [repository README](https://github.com/This-HW/hiway-kit#other-harnesses-codex--antigravity--gemini-cli).
 
-> The published plugin is **`hiway-kit`** (15 agents + 15 skills + 12 rules + hooks).
+> The published plugin is **`hiway-kit`** (15 agents + 17 skills + 12 rules + hooks).
 > Project-specific extensions live in a user's own `project-local/` tier, not as separate
 > published plugins.
 
 ## Key Skills
 
-A selection below — 15 skills total, auto-discovered from `skills/` (not hand-listed here).
+A selection below — 17 skills total, auto-discovered from `skills/` (not hand-listed here).
 
 | Command                     | Description                                              |
 | --------------------------- | -------------------------------------------------------- |

@@ -7,6 +7,9 @@ description: Review current changes or specified files - ruff lint for Python fi
 
 호출되면 바로 파이프라인을 시작한다. 단계가 바뀔 때 한 줄로 진행을 알린다.
 
+새 기능·비단순 수정은 `references/engineering-evidence.md`, 보이는 사용자 동작을 바꿨으면
+`references/visual-qa.md`를 해당 단계에서 읽는다. 관련 없는 참조까지 상시 로드하지 않는다.
+
 ## 파이프라인 구조
 
 ```

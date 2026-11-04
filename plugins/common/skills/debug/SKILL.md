@@ -12,6 +12,9 @@ description: Investigate a failure whose cause is not evident from the error its
 
 에러 정보: $ARGUMENTS
 
+원인이 여러 개인 실패는 `references/hypothesis-evidence.md`를 읽고 가설별 구분 실험을 기록한다.
+코드 구조/정의/참조가 필요하면 사용 가능한 호스트 도구 또는 `code-intel`을 선택한다.
+
 ---
 
 ## 파이프라인 구조

@@ -37,7 +37,7 @@ git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 
 ```
 plugins/
-└── common/      — Core agents (15) + skills (15) + rules (12) + hooks
+└── common/      — Core agents (15) + skills (17) + rules (12) + hooks
 ```
 
 `plugins/common/` contains:
@@ -63,6 +63,8 @@ plugins/
 | review                   | `/review`                   | Code review: ruff + review-code + security-scan |
 | multi-perspective-review | `/multi-perspective-review` | 3-Round Deliberation with 10 perspectives       |
 | debug                    | `/debug`                    | 4-Phase debug pipeline                          |
+| code-intel               | `/code-intel`               | AST search/preview and on-demand read-only LSP queries |
+| session-history          | `/session-history`          | Bounded search of explicitly selected local session logs |
 | test                     | `/test`                     | Run tests and auto-fix failures                 |
 | agent-creator            | `/agent-creator`            | Create a **project/user** agent (`.claude/agents/`) — not kit agents (see Adding a New Agent) |
 | brainstorming            | `/brainstorming`            | Design a Large feature before plan-task          |
