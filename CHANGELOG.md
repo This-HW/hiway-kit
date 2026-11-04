@@ -6,6 +6,77 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.6.0] — 2026-11-05
+
+### Added — On-demand code intelligence and session history
+
+- `code-intel`: installed ast-grep structural search and replacement preview; one-shot
+  LSP diagnostics, symbols, definitions and references with trusted servers that can execute project code. Missing executables, malformed responses
+  and timeouts are unverified outcomes, never successful empty results. No automatic installation.
+- `session-history`: bounded Codex/Claude JSONL search under an explicitly selected log root,
+  with symlink exclusion and untrusted-content framing. No authentication files or database scans.
+- Conditional references for debugging hypotheses, actual-surface and visual QA, research evidence,
+  and project discovery. Existing global rules and hooks are unchanged.
+- OMO adoption audit and provenance: `docs/research/2026-10-30-omo-absorption.md`.
+  Tools are independently implemented; OMO's runtime, telemetry, model overrides and daemons are not bundled.
+- Installation doctor compares the installed Codex plugin with its persistent marketplace
+  source, supports safe shared plugin stores, and separates discovery/trust/enabled/execution evidence.
+  It never installs, fetches, approves hooks or reads authentication files. Python 3.9/3.10 use a
+  provenance-checked JSON snapshot captured on Python 3.11+; missing evidence remains unknown.
+  Diagnosis reads only; explicit `--capture-snapshot` writes a new JSON file.
+- Independent deterministic CLI coverage gate for new skills, with explicit legacy exceptions.
+  This structural check does not claim natural-language skill selection or model quality.
+
+### Fixed — Audit findings in the integration draft
+
+- Describe review invocation arguments without repeated placeholder expansion; Claude Code appends supplied arguments to the skill body.
+- Accept valid preprocessed Python/Go AST metavariables; bound combined stdout/stderr and execution
+  time across engine discovery, validation and queries. No unbounded output spool.
+- Distinguish complete pull diagnostics from provisional push diagnostics. An empty push is unverified,
+  never a clean result. Validate JSON-RPC IDs and detailed LSP result schemas.
+- Pin source/log reads to file descriptors and reject replacement symlinks and special files.
+  Session search also bounds directory entries, traversal and aggregate reads, with explicit truncation.
+- Document persistent-source reinstall behavior and preserve explicitly disabled hooks. These helpers
+  currently require POSIX file/process primitives and do not claim full OMO feature equivalence.
+- Select logged-in browser capabilities from the current host instead of naming a personal CLI;
+  public-page fetches do not establish authenticated access.
+- Reject session-log roots that contain a home/configuration root and bound displayed session metadata.
+- Compare pinned filesystem identities to protect home/configuration roots across case aliases;
+  include `CLAUDE_CONFIG_DIR` and ignore empty configuration-home environment values.
+- Distinguish unsupported doctor inputs from installation defects: config/snapshot symlinks and git
+  worktree source checkouts remain unknown, while unsafe plugin-store descendants remain defects.
+  Match forbidden authentication filenames exactly so normal plugin-name prefixes stay usable.
+- Scope Git-source doctor success to the supplied checkout and mark remote freshness unverified.
+  Checkout manifest/identity/version problems remain unknown; installed defects and configured local
+  source mismatches remain failures. Add canonical-path hints, reject `.env.*` and `.credentials.json`,
+  and classify unknown hook observation errors as unverified.
+- Require registered skill CLI contracts to execute without skips; legacy exemptions describe missing
+  registration in this gate, not an absence of existing tests.
+- Clarify that code intelligence requires a trusted workspace: language servers may execute project build
+  scripts, write files or access the network. Read-only client requests do not sandbox those processes.
+- Require explicit opt-in for custom language-server executables, filter child environments, and cap
+  cumulative LSP input at 16MiB. Preserve LSP line and UTF-16 positions without splitting Unicode separators.
+- Preserve toolchain settings such as CPATH while filtering credential and loader variable names;
+  mark analysis results with `environment: filtered`. Match explicit server paths to their PATH
+  identity and require opt-in for workspace or relative-PATH servers. Reject relative AST executables.
+- Apply the notification count limit only to retained diagnostics; discarded LSP logs remain bounded
+  by the cumulative byte limit. Reap exited process leaders before retrying macOS zombie-group signals.
+- Filter child PATH entries before launching AST/LSP dependencies; reject workspace AST engines before
+  probing. Preserve original executable names while launching pinned paths for multicall shims.
+- Require custom-server opt-in for extra arguments and include known-server defaults for explicit
+  selections. Use exact Go environment names and reject credential and Cargo wrapper/runner/linker variables.
+- Preserve per-layer doctor observations and prioritize confirmed defects over unknown evidence;
+  absent explicit installation paths remain unknown. Distinguish missing files from other IO failures.
+- Reject protected directory identities during session-log descent, including aliases through other
+  hard paths; protect the OS account home as well as configured homes and report skipped-tree truncation.
+- Compare executable/PATH ancestors to one shared workspace identity, blocking case-alias bypasses.
+  Drop uninspectable PATH entries. Handle missing passwd records and invalid home values in history
+  without a traceback; report unknown protection boundaries instead of scanning without a usable home.
+- Clarify installation doctor help: diagnosis reads files, while explicit snapshot capture writes a file.
+- Run AST queries with a neutral working directory and explicit empty configuration. Probe only `ast-grep`;
+  pattern validation is confirmed for 0.51.0, with zero-match results from other versions marked unverified.
+  AST/LSP outputs carry an untrusted-content notice.
+
 ## [5.5.1] — 2026-10-28
 
 ### Added — Claude 디렉토리 목록 필드(`icon`·`documentationUrl`·`supportUrl`·`privacyPolicyUrl`·`termsOfServiceUrl`)

@@ -1,6 +1,6 @@
 # hiway-kit
 
-> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 15 agents + 15 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
+> Universal agent toolkit by [This-HW](https://github.com/This-HW) — 15 agents + 17 skills for software development, packaged for **Claude Code**, **Codex** and **Antigravity**.
 
 A focused, single-plugin AI agent system built for Claude Code. Covers the full software development lifecycle: planning, implementation, review, testing, and meta-tooling. (Not a TUI component library or a scaffolding installer — this is the agents + skills plugin.)
 
@@ -111,7 +111,7 @@ capability. The cells below cite the measurement they rest on; the dated records
 | Skills | ✅ `"skills": "./skills/"` — all recognized (measured 2026-10-05) | ✅ recognized by the model (measured 2026-10-05); running a skill end-to-end is unmeasured |
 | Rules | ⚠ no dedicated field → hook injection (marketplace install) or `AGENTS.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **plugin `rules/` does not arrive** (a token planted in `rules/` never reached the model, measured 2026-10-05 — although Google's plugin docs list `rules/`). Norms reach Antigravity **only** through the entrypoint file |
 | Agents | ⚠ no plugin field — files ship but are not exposed as subagents | ❌ **not recognized** — even after the 5.3.0 flat layout, `agy agents` lists none of them. The cause is the `model: haiku\|sonnet\|opus` frontmatter (an agent with `model: inherit` or no `model` is recognized — bisected 2026-10-05), not the folder layout. `agy plugin validate` counts files only (an empty `junk.txt` counts as an agent), so its green "agents processed" line is not evidence of recognition |
-| Hooks | ⚠ `session-start` and `auto-format` ship, **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is not shipped (see *Automatic blocking*) | ❌ not shipped — format unverified |
+| Hooks | ⚠ `session-start` and `auto-format` ship and require native trust and an enabled state — see *Trusting and enabling Codex hooks* below. `protect-sensitive` is not shipped (see *Automatic blocking*) | ❌ not shipped — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
 
 **Parity contract**: rules and skills (norms and procedures) work on every harness — but how the
@@ -169,20 +169,54 @@ codex plugin marketplace remove hiway-kit-marketplace
 Codex also reads the repo's existing `.claude-plugin/marketplace.json` as a legacy path, alongside
 the generated `.agents/plugins/marketplace.json`.
 
-#### Trusting Codex hooks (do this once, or the norms never arrive)
+Keep the configured marketplace source consistent with the version you intend to use. A one-command
+`-c` source override does not change the persistent source: a later ordinary install can replace the
+preview build with the configured source's version. Test unpublished builds in a separate `CODEX_HOME`
+with a persistent local marketplace; keep the release installation on its chosen source.
 
-Installing is not enough. Codex asks for **hook trust** before it will run a plugin's
-hooks, and until you grant it the hooks are **skipped in silence** — no warning, no
-error, and nothing in the session says the rules were not injected. Measured directly:
-the same install answered `NONE` when asked about the completion gate, then answered
-correctly once trust was in place.
+For a read-only installation/source comparison, run the installed tool with an explicit home:
 
-- **Interactive `codex`**: start a session in the project once and approve the hook
-  trust prompt. After that, `SessionStart` fires and the rules plus the feedback-ledger
-  digest are injected the same way Claude Code injects them.
-- **Non-interactive `codex exec`**: there is no prompt to answer, so hooks stay skipped
-  unless you pass `--dangerously-bypass-hook-trust`. Read the flag's name literally —
-  it bypasses the approval gate, so use it only where you already trust the plugin.
+```bash
+python3 -B /path/to/hiway-kit/tools/install_doctor.py \
+  --codex-home /path/to/codex-home --plugin hiway-kit@hiway-kit-marketplace
+```
+
+For a Git source, add `--source-checkout /path/to/existing-checkout`; its local origin URL must match
+the configured source. This currently requires an ordinary checkout: a git worktree's `.git` file
+returns `source_checkout_is_worktree_unsupported` with exit 2 and is not followed.
+The doctor never fetches or reinstalls. Exit 0 confirms version and identity agreement with the
+source being compared. For a Git source, this means only the supplied checkout:
+`installation.comparison_scope` is `supplied_checkout` and `remote_freshness` is `unverified`.
+Git checkout manifest, identity or version problems return exit 2 with a
+`source_checkout_unverified_*` reason; version mismatches include both versions.
+Exit 1 means a confirmed installation/store/hook defect or a mismatch with the configured local source;
+exit 2 means insufficient, unsupported or stale evidence. Confirmed defects take priority over unknown
+evidence; `decision` gives the final result and `observations` preserves reasons by layer. An absent
+explicit `--installed-path` is unknown; an existing installation missing its manifest is a defect.
+It reports hook discovery, trust, enabled
+choice and execution separately; an unknown hook state is not proof of failure or success. A safe shared
+`plugins` store is supported, and `--plugin-store` can constrain its canonical root. Python 3.11+ reads
+TOML directly; Python 3.9/3.10 can use `--snapshot` captured with `--capture-snapshot` on 3.11+.
+Snapshots bind to the original paths and hashes and become unusable when those originals change.
+`--capture-snapshot` is an explicit write mode: it creates the requested new JSON file.
+Config and snapshot symlinks (including symlink parents) are unsupported and return exit 2 without
+reading the target. For an ancestor symlink, `pass_canonical_path` asks for the canonical path explicitly;
+system aliases such as `/tmp`, `/var` or `/home` are not automatically trusted.
+Unsafe links below the plugin store remain confirmed defects (exit 1). Authentication filenames,
+including `.credentials.json`, `.env` and `.env.*`, are rejected before opening them.
+
+#### Trusting and enabling Codex hooks
+
+Installing, discovering, trusting, enabling and executing a hook are separate states. Native approval
+must match the current plugin contents; updates can require approval again. A hook explicitly disabled
+in configuration stays disabled after trust approval. Do not infer rule injection from installation or
+trust alone. Depending on the CLI version and failure, unavailable trust may appear as a skipped hook
+or a hook-approval error.
+
+- **Interactive `codex`**: review the native hook trust prompt and your enabled choices, then
+  verify execution in a new session. The kit does not approve or enable hooks automatically.
+- **Non-interactive `codex exec`**: a run cannot rely on an interactive approval prompt.
+  Check the native trust and enabled states before treating hook output as available.
 
 **Hooks are the better path, not the only one.** Even with hooks off, the norms still
 reach Codex through the entrypoint file (`AGENTS.md`, see
@@ -192,7 +226,8 @@ without trust is automatic delivery, not the discipline.
 
 #### Skills that name a sub-agent: read them as a contract, not a transport
 
-Codex loads every skill, but it exposes **no sub-agents**. Skills that dispatch an agent
+Delegation availability depends on the host and its enabled tools. Check the current session's
+capabilities instead of assuming a named sub-agent is available. Skills that dispatch an agent
 (`debug`, `review`, `test`, `auto-dev`, `multi-perspective-review`) name the agent as a contract.
 Each of those skills carries an explicit degradation path: the delegation is one
 **transport**, and the invariant is the **contract** inside the block — persona, checks,
@@ -229,11 +264,11 @@ twice (measured 2026-10-05).
 **No official public registry is confirmed for Antigravity.** `agy plugin` also offers
 `install <plugin>@<marketplace>`, `link`, and `import [gemini|claude]`; none of these is verified
 with this kit, so the GitHub and local paths above are the only ones documented here. Both install
-hiway-kit 5.4.2 with 15 skills; agents are skipped (see the table above).
+hiway-kit 5.4.2 with its then-current skill set; agents are skipped (see the table above).
 
 ### Cursor
 
-`plugins/common/.cursor-plugin/plugin.json` (generated, like the others) ships **the 15 skills only**.
+`plugins/common/.cursor-plugin/plugin.json` (generated, like the others) ships **the 17 skills only**.
 Hooks are set to an empty inline config, so Cursor does not pick up the Claude Code `hooks/hooks.json`.
 That file's exec form and `${CLAUDE_PLUGIN_ROOT}` are unmeasured on Cursor. Agents (`model: opus` and
 other Claude values) and rules (`.md`; Cursor expects `.mdc`) are left out for the same reason. The
@@ -256,9 +291,9 @@ there makes them visible to those harnesses without a plugin install. Two costs:
 the `hiway-kit:` namespace (they appear under their bare names), and if the same harness **also**
 has the plugin installed, every skill loads twice — the same "never run two copies" rule as above.
 
-The [`skills` CLI](https://skills.sh) copies the 15 skills into whichever agents it detects (listed at
+The [`skills` CLI](https://skills.sh) copies the 17 skills into whichever agents it detects (listed at
 [skills.sh/this-hw/hiway-kit](https://skills.sh/this-hw/hiway-kit)). This repo's three maintainer skills in
-`.claude/skills/` carry `metadata.internal: true`, so the CLI skips them and finds the 15 under
+`.claude/skills/` carry `metadata.internal: true`, so the CLI skips them and finds the published skills under
 `plugins/common/skills/` (measured skills 1.7.2, 2026-10-19 — without the flag it found only those three):
 
 ```bash
@@ -364,7 +399,7 @@ kit은 **특정 MCP 서버를 가정하지 않습니다** (consumer-first). 대�
 
 | Plugin            | Agents | Skills | Description                               |
 | ----------------- | ------ | ------ | ----------------------------------------- |
-| `hiway-kit` | 15     | 15     | Core: planning, development, review, meta |
+| `hiway-kit` | 15     | 17     | Core: planning, development, review, code intelligence, history |
 
 v5.0.0 cut the kit roughly in half, down to what earns its place: components with a native
 equivalent, that no skill ever invoked, or that only worked inside this repository were removed —
@@ -436,6 +471,8 @@ Merge-back rules (verify-then-exit, sequential merge, conflict escalation to
 | `cross-engine-review`      | `/cross-engine-review`      | Evidence-backed consensus between sessions on different engines            |
 | `harness-export`           | `/harness-export`           | Export host-neutral rules to `AGENTS.md`/`GEMINI.md` for other harnesses   |
 | `skill-forge`              | `/skill-forge`              | Distill a solved hard problem into a reusable skill draft                  |
+| `code-intel`               | `/code-intel`               | AST search/preview and LSP queries in trusted workspaces; servers may execute project code |
+| `session-history`          | `/session-history`          | Bounded search of explicitly selected Codex/Claude session logs |
 | `using-hiway-kit`          | (injected at session start) | Workflow chain and plan file rules                                         |
 
 ### Planning Agents (Opus)
@@ -491,15 +528,18 @@ owned by the skills themselves — read [`plan-task`](plugins/common/skills/plan
 
 ## Data handling
 
-The plugin collects nothing and sends nothing anywhere.
+The plugin has no telemetry or publisher service. Local helpers read selected project files
+and session logs; the publisher receives no data from these helpers.
 The full policy is in [PRIVACY.md](PRIVACY.md).
 
-- **No network calls.** The shipped hooks (`plugins/common/hooks/`) and skill tools
-  (`plugins/common/tools/`) make no HTTP or socket connections. They only run local commands: `git`, the formatter/linter for the edited file
-  (e.g. `ruff`), `pytest` on test files you edited, and verification commands you define in a
-  plan checklist.
-- **No telemetry, no accounts, no personal data.** The plugin does not read, store, or transmit
-  personal data.
+- **Local processes are not sandboxed by the kit.** Hooks and tools invoke installed commands,
+  including language servers, AST search, formatters, tests and verification commands. A language
+  server can execute project build scripts or macros, write caches or access the network.
+  Use code intelligence only in workspaces you trust. Its read-only queries and replacement
+  previews do not guarantee that the server or project configuration has no side effects.
+- **No telemetry or plugin accounts.** Selected session logs and project files can contain personal
+  or sensitive information. Their contents are returned locally to the calling agent; that agent's
+  provider and any external tools remain subject to their own data policies.
 - **What it writes stays on your machine.** The feedback ledger (recurring review findings) is
   kept under your repository's `.git/kit/` (untracked; outside a git repo it falls back to a
   file in the project); hook state and locks live in a per-user `0700` directory under your
@@ -513,7 +553,7 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
 
 ```
 plugins/
-└── common/      — Core agents (15) + skills (15) + rules (12) + hooks
+└── common/      — Core agents (15) + skills (17) + rules (12) + hooks
 ```
 
 The plugin contains:

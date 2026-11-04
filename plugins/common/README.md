@@ -17,13 +17,13 @@ Pick **one** (installing both loads every skill and hook twice):
 Other harnesses (Codex, Antigravity, Gemini CLI) and what each one supports:
 [repository README](https://github.com/This-HW/hiway-kit#other-harnesses-codex--antigravity--gemini-cli).
 
-> The published plugin is **`hiway-kit`** (15 agents + 15 skills + 12 rules + hooks).
+> The published plugin is **`hiway-kit`** (15 agents + 17 skills + 12 rules + hooks).
 > Project-specific extensions live in a user's own `project-local/` tier, not as separate
 > published plugins.
 
 ## Key Skills
 
-A selection below — 15 skills total, auto-discovered from `skills/` (not hand-listed here).
+A selection below — 17 skills total, auto-discovered from `skills/` (not hand-listed here).
 
 | Command                     | Description                                              |
 | --------------------------- | -------------------------------------------------------- |
@@ -56,7 +56,9 @@ The blocking and Stop hooks below are Claude Code behavior; on Codex only sessio
 - **PostToolUse** — Auto-formats the edited file (`auto-format.py`: ruff for Python; prettier/eslint only when the project has them installed)
 - **Stop** — Lints edited Python files and runs the tests you edited; on failure, the turn continues so the agent fixes it
 
-The hooks make no network calls and write nothing outside your machine.
+The hooks do not upload data to the publisher. Programs invoked by hooks and helpers can
+write files or access the network; read-only code queries do not sandbox language servers
+or project build scripts. Use code intelligence only in trusted workspaces.
 
 ## License
 

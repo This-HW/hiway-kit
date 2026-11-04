@@ -867,6 +867,16 @@ else
   red "문서 지위 스키마 위반 또는 낡은 토큰·깨진 표 — 고치는 법은 위 출력의 → 줄"
 fi
 
+hdr "29. 스킬 CLI 시나리오 커버리지 (agent eval과 별도)"
+# 전 스킬에서 시점 고정 legacy 예외만 뺀다. 정책/시나리오는 데이터로 검사하며
+# 명령을 실행하지 않는다. 실제 CLI 계약 테스트는 §4 pytest에서 실행한다.
+# 자연어 스킬 선택·모델 품질은 별도 표본 검증이며 이 green의 의미에 포함하지 않는다.
+if python3 scripts/check_skill_eval_coverage.py; then
+  green "스킬 CLI 커버리지 정합 (check_skill_eval_coverage.py — 구조 검사)"
+else
+  red "스킬 CLI 시나리오 누락 또는 정책/테스트 참조 오류 — 상세는 위 출력"
+fi
+
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'

@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "skill": "session-history",
+  "cases": [
+    {
+      "id": "explicit-root",
+      "polarity": "positive",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_history_explicit_root_finds_source_lines",
+      "expectation": "rc=0; explicit synthetic log root yields session, file, line and untrusted-data notice",
+      "evidence": "synthetic-cli"
+    },
+    {
+      "id": "absent-query",
+      "polarity": "negative",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_history_absent_query_is_complete_empty",
+      "expectation": "rc=0; absent query has zero matches with one scanned file and no truncation/malformed input",
+      "evidence": "synthetic-cli"
+    },
+    {
+      "id": "scope-refusal",
+      "polarity": "negative",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_history_configuration_scope_is_refused",
+      "expectation": "rc=2; isolated HOME and CODEX_HOME roots refused",
+      "evidence": "synthetic-cli"
+    },
+    {
+      "id": "truncated",
+      "polarity": "negative",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_history_truncated_search_is_not_complete_empty",
+      "expectation": "rc=0; bounded matches expose scan_truncated=true and matches_limit, never a complete search",
+      "evidence": "synthetic-cli"
+    }
+  ]
+}

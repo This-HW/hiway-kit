@@ -1,20 +1,24 @@
 # Privacy Policy — hiway-kit
 
-_Last updated: 2026-09-30_
+_Last updated: 2026-11-04_
 
 hiway-kit is an open-source plugin (skills, rules and local hooks) for coding agents such as Claude Code and
 Codex. It is published by This-HW. This policy describes what the plugin does with data.
 
 ## What the plugin collects
 
-**Nothing.** The plugin has no accounts, no telemetry, no analytics and no server. It does not read, store or
-transmit personal data, and the publisher receives no data from your use of it.
+The plugin has no accounts, telemetry, analytics or publisher server. The publisher receives no data
+from its helpers. Local tools read explicitly selected project files and session logs, which can contain
+personal or sensitive information, and return results to the calling agent. Your agent provider's data
+policy applies to the content you make available to that agent.
 
 ## Network access
 
-**The plugin makes no network calls.** Its hooks and helper scripts only run local commands: `git`, the formatter
-or linter for the file being edited (for example `ruff`), your own test runner, and the verification commands you
-write into a plan checklist.
+The kit does not send telemetry. Its hooks and helpers invoke local commands, including language servers,
+AST search, formatters, tests and your verification commands. Those processes can execute workspace code,
+write files or make network requests. For example, a language server may run project build scripts or macros.
+Use code intelligence only in trusted workspaces. Read-only query and preview modes describe the client's
+editing behavior; they do not sandbox the executed tools or guarantee an offline run.
 
 Skills such as `web-research` tell your agent to use search or browser tools that **you** have installed. Any such
 request is made by your agent and those tools under their own terms; the plugin ships no connector of its own.
@@ -26,7 +30,8 @@ request is made by your agent and those tools under their own terms; the plugin 
 - Hook state and lock files in a per-user directory (mode `0700`) under your system's temporary directory.
 - Plan files you create under `docs/plans/` in your own repository.
 
-You can delete any of these at any time. None of them is sent anywhere.
+You can delete these local files at any time. The kit does not upload them to the publisher.
+Content shared with your calling agent or external tools follows those services' policies.
 
 ## Children
 
