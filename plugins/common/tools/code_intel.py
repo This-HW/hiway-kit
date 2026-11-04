@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
+from bounded_process import ProcessBudget
+
 QUERY_TIMEOUT = 30
+PROBE_TIMEOUT = 5
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
+# This native diagnostic is version dependent (verified with ast-grep 0.51.0).
+# Raw debug ASTs precede metavariable preprocessing and are not a validity test.
+INVALID_PATTERN_WARNING = b"Warning: Pattern contains an ERROR node and may cause unexpected results."
 
 
 def contained_path(root: Path, value: str) -> Path:
@@ -21,16 +25,15 @@ def contained_path(root: Path, value: str) -> Path:
     return resolved
 
 
-def find_ast_grep() -> str | None:
+def find_ast_grep(budget: ProcessBudget | None = None) -> str | None:
+    if budget is None:
+        budget = ProcessBudget(PROBE_TIMEOUT, MAX_OUTPUT_BYTES)
     for name in ("ast-grep", "sg"):
         candidate = shutil.which(name)
         if not candidate:
             continue
-        result = subprocess.run(
-            [candidate, "--version"], capture_output=True, text=True,
-            timeout=5, check=False,
-        )
-        if result.returncode == 0 and result.stdout.startswith("ast-grep "):
+        result = budget.run([candidate, "--version"], timeout=PROBE_TIMEOUT)
+        if result.returncode == 0 and result.stdout.startswith(b"ast-grep "):
             return candidate
     return None
 
@@ -40,32 +43,33 @@ def query(args: argparse.Namespace) -> int:
     if not root.is_dir():
         raise ValueError("Workspace root must be a directory")
     paths = [contained_path(root, value) for value in args.paths]
-    binary = find_ast_grep()
+    budget = ProcessBudget(QUERY_TIMEOUT, MAX_OUTPUT_BYTES)
+    binary = find_ast_grep(budget)
     if binary is None:
         print(json.dumps({"status": "unavailable", "reason": "ast-grep is not installed"}))
         return 3
-    validation = subprocess.run(
-        [binary, "run", "--pattern", args.pattern, "--lang", args.lang, "--debug-query=ast", "--stdin"],
-        input="", capture_output=True, text=True, timeout=5, check=False,
+    validation = budget.run(
+        [binary, "run", "--pattern", args.pattern, "--lang", args.lang, "--stdin"],
+        timeout=PROBE_TIMEOUT,
     )
-    if validation.returncode not in (0, 1) or re.search(r"(?m)^\s+ERROR\b", validation.stderr):
-        print(json.dumps({"status": "error", "reason": "Pattern does not parse as valid code", "detail": validation.stderr[:2000]}))
+    if validation.returncode not in (0, 1):
+        print(json.dumps({"status": "error", "reason": "Pattern compilation failed", "detail": validation.stderr.decode(errors="replace")[:2000]}))
+        return 2
+    if INVALID_PATTERN_WARNING in validation.stderr.splitlines():
+        print(json.dumps({"status": "error", "reason": "Engine reported an invalid pattern", "detail": validation.stderr.decode(errors="replace")[:2000]}))
         return 2
     command = [binary, "run", "--pattern", args.pattern, "--lang", args.lang, "--json=compact"]
     if args.rewrite is not None:
         command += ["--rewrite", args.rewrite]
     command += ["--", *map(str, paths)]
-    with tempfile.TemporaryFile() as output:
-        result = subprocess.run(command, cwd=root, stdout=output, stderr=subprocess.PIPE,
-                                timeout=QUERY_TIMEOUT, check=False)
-        output.seek(0)
-        raw = output.read(MAX_OUTPUT_BYTES + 1)
-    if len(raw) > MAX_OUTPUT_BYTES:
-        raise ValueError("Query output exceeded 8 MiB; narrow the paths or pattern")
+    result = budget.run(command, cwd=root)
     if result.returncode not in (0, 1):
-        print(json.dumps({"status": "error", "reason": result.stderr.decode(errors="replace").strip()}))
+        print(json.dumps({"status": "error", "reason": result.stderr.decode(errors="replace").strip()[:2000]}))
         return 2
-    matches = json.loads(raw or b"[]")
+    if INVALID_PATTERN_WARNING in result.stderr.splitlines():
+        print(json.dumps({"status": "error", "reason": "Engine reported an invalid pattern", "detail": result.stderr.decode(errors="replace")[:2000]}))
+        return 2
+    matches = json.loads(result.stdout or b"[]")
     if not isinstance(matches, list):
         raise ValueError("ast-grep returned an unexpected response")
     files = set()
