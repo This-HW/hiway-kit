@@ -39,7 +39,7 @@ def test_ast_metavariables_and_preview_preserve_source(tmp_path):
         f"#!{sys.executable}\n"
         "import json, sys\n"
         "from pathlib import Path\n"
-        "if '--version' in sys.argv: print('ast-grep synthetic'); sys.exit(0)\n"
+        "if '--version' in sys.argv: print('ast-grep 0.51.0'); sys.exit(0)\n"
         "lang = sys.argv[sys.argv.index('--lang') + 1]\n"
         "pattern = sys.argv[sys.argv.index('--pattern') + 1]\n"
         "assert pattern == ('print($A)' if lang == 'python' else 'println($A)')\n"
@@ -99,7 +99,7 @@ while True:
 ''', encoding="utf-8")
     original = source.read_bytes()
     result = cli(tmp_path, "lsp_query.py", "diagnostics", "--root", tmp_path,
-                 "--file", source.name, "--server", sys.executable,
+                 "--file", source.name, "--allow-custom-server", "--server", sys.executable,
                  "--server-arg=-I", "--server-arg=-B", "--server-arg=" + str(server),
                  "--server-arg=" + json.dumps(errors))
     assert source.read_bytes() == original

@@ -39,8 +39,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Select logged-in browser capabilities from the current host instead of naming a personal CLI;
   public-page fetches do not establish authenticated access.
 - Reject session-log roots that contain a home/configuration root and bound displayed session metadata.
+- Distinguish unsupported doctor inputs from installation defects: config/snapshot symlinks and git
+  worktree source checkouts remain unknown, while unsafe plugin-store descendants remain defects.
+  Match forbidden authentication filenames exactly so normal plugin-name prefixes stay usable.
+- Require registered skill CLI contracts to execute without skips; legacy exemptions describe missing
+  registration in this gate, not an absence of existing tests.
 - Clarify that code intelligence requires a trusted workspace: language servers may execute project build
   scripts, write files or access the network. Read-only client requests do not sandbox those processes.
+- Require explicit opt-in for custom language-server executables, filter child environments, and cap
+  cumulative LSP input at 16MiB. Preserve LSP line and UTF-16 positions without splitting Unicode separators.
+- Run AST queries with a neutral working directory and explicit empty configuration. Probe only `ast-grep`;
+  pattern validation is confirmed for 0.51.0, with zero-match results from other versions marked unverified.
+  AST/LSP outputs carry an untrusted-content notice.
 
 ## [5.5.1] — 2026-10-28
 

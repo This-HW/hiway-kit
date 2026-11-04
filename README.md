@@ -182,12 +182,16 @@ python3 -B /path/to/hiway-kit/tools/install_doctor.py \
 ```
 
 For a Git source, add `--source-checkout /path/to/existing-checkout`; its local origin URL must match
-the configured source. The doctor never fetches or reinstalls. Exit 0 confirms source/version agreement,
+the configured source. This currently requires an ordinary checkout: a git worktree's `.git` file
+returns `source_checkout_is_worktree_unsupported` with exit 2 and is not followed.
+The doctor never fetches or reinstalls. Exit 0 confirms source/version agreement,
 1 a confirmed defect, and 2 insufficient or stale evidence. It reports hook discovery, trust, enabled
 choice and execution separately; an unknown hook state is not proof of failure or success. A safe shared
 `plugins` store is supported, and `--plugin-store` can constrain its canonical root. Python 3.11+ reads
 TOML directly; Python 3.9/3.10 can use `--snapshot` captured with `--capture-snapshot` on 3.11+.
 Snapshots bind to the original paths and hashes and become unusable when those originals change.
+Config and snapshot symlinks (including symlink parents) are unsupported and return exit 2 without
+reading the target. Unsafe links below the plugin store remain confirmed defects (exit 1).
 
 #### Trusting and enabling Codex hooks
 

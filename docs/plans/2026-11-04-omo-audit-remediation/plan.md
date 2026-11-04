@@ -85,3 +85,5 @@ size: large
 - 문서: read-only는 클라이언트의 편집 요청·preview 계약이며 언어서버의 프로젝트 코드 실행·파일쓰기·통신까지 차단하지 않음을 명시한다. 신뢰한 작업 공간만 사용하고 광범위한 실행 허용 규칙을 피하도록 안내한다. 공개 계획의 개인 절대경로를 제거한다.
 - 검증: 변경별 before FAIL/after PASS, 양성 대조와 Python 3.9 검사를 남긴다. 커버리지 CLI 실행에서 skip=0을 확인하고 legacy 예외는 기존 테스트 부재가 아닌 새 게이트 미연결 부채로 정확히 기술한다. 별도 G-1 경로 길이 의존 게이트는 이번 수정 범위 밖이다.
 - 수정은 세 격리 worker의 doctor/코드 분석/history와 부모의 문서·커버리지로 나누며, 통합 후 fresh 전체 게이트와 plan-control 2차 검수를 수행한다.
+- 통합 기록: history `d608816`(worker `12883b3`, 부모 90 passed), skip=0·legacy 사유 `e7b159a`(54 passed 및 runtime skip을 이전 검사가 놓치고 새 검사가 거부하는 대조), 공개 문서 `34f6eb9`, doctor `0f3d197`(worker `0afff84`, 부모 198 passed), 코드 분석 `881e454`(worker `b99c96c`, 부모 샌드박스 165 passed와 별도 stdlib 프로세스 검사 4 passed). doctor 수정 전 동일 회귀는 94 failed/104 passed였고 수정 후 198 passed다. 코드 분석의 새 행동 회귀 30개도 수정 전 실패하고 수정 후 통과했다.
+- Python 3.9 실제 CLI 회귀는 history 21개, doctor 15개, 코드 분석 두 설치본 각각 16개이며 3.9 전체 pytest 결과가 아니다. 부모의 첫 코드 분석 재검증은 샌드박스에서 ps 실행이 막혀 4 failed/165 passed였으며, 해당 4개는 외부 엔진 없는 stdlib 검사로 분리하고 남은 샌드박스 검사도 정확한 선택 조건으로 다시 실행해 두 범위 모두 rc=0을 확인했다. 이 환경 실패와 재실행 원문도 보존했다.
