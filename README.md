@@ -190,13 +190,17 @@ source being compared. For a Git source, this means only the supplied checkout:
 Git checkout manifest, identity or version problems return exit 2 with a
 `source_checkout_unverified_*` reason; version mismatches include both versions.
 Exit 1 means a confirmed installation/store/hook defect or a mismatch with the configured local source;
-exit 2 means insufficient, unsupported or stale evidence. It reports hook discovery, trust, enabled
+exit 2 means insufficient, unsupported or stale evidence. Confirmed defects take priority over unknown
+evidence; `decision` gives the final result and `observations` preserves reasons by layer. An absent
+explicit `--installed-path` is unknown; an existing installation missing its manifest is a defect.
+It reports hook discovery, trust, enabled
 choice and execution separately; an unknown hook state is not proof of failure or success. A safe shared
 `plugins` store is supported, and `--plugin-store` can constrain its canonical root. Python 3.11+ reads
 TOML directly; Python 3.9/3.10 can use `--snapshot` captured with `--capture-snapshot` on 3.11+.
 Snapshots bind to the original paths and hashes and become unusable when those originals change.
+`--capture-snapshot` is an explicit write mode: it creates the requested new JSON file.
 Config and snapshot symlinks (including symlink parents) are unsupported and return exit 2 without
-reading the target. The `pass_canonical_path` hint asks you to pass the canonical path explicitly;
+reading the target. For an ancestor symlink, `pass_canonical_path` asks for the canonical path explicitly;
 system aliases such as `/tmp`, `/var` or `/home` are not automatically trusted.
 Unsafe links below the plugin store remain confirmed defects (exit 1). Authentication filenames,
 including `.credentials.json`, `.env` and `.env.*`, are rejected before opening them.

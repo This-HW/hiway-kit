@@ -108,3 +108,17 @@ size: large
 - doctor와 intel 후속 보고에서 기존 커밋의 동일 격리 위반을 확인했다. 두 후속 task는 failed로 정정했고 원 보고서와 정정·커밋 후 격리 재검증·해시 증거를 함께 보존했다. plan-control은 세 예외를 명시하는 조건으로 동일한 산출물 수용 기준에 동의했다. 과거 훅의 no-fix나 실홈 쓰기 부재를 보증하지 않는다. 오래된 설치 훅 사본은 이번 범위에서 수정하지 않았으며 최종 보고 사항이다.
 - intel N-2/N-3/N-8/N-10/N-11은 Codex worker `e8efd0c`에서 부모 `48dfbff`로 통합했다. 부모는 격리 검사 191개와 별도 stdlib 프로세스 정리 4개를 직접 실행해 rc=0을 확인했다. 첫 부모 명령은 실행 파일 인덱스 오류로 테스트 시작 전 rc=64였고, 올바른 명령의 별도 로그를 보존했다. worker의 실제 Python 3.9.6 검사는 7개 import 포함 31건이며 3.9 전체 pytest는 미설치다. 검증 중 재현된 macOS zombie-group EPERM은 종료된 leader를 reap하고 group signal을 재시도해 해결했다. 부모 리뷰에서는 기존 close 테스트에서 옮겨져 중복된 assertion을 원래 테스트로 복원했다.
 - 릴리스 전 추가 조건: plan-control이 공유한 디렉토리 정책 재판정에 따라 probe 브랜치 Validate 결과를 확인한다. 해당 공유는 아직 부모가 독립 검증하지 않은 외부 판정이며, 조사 브랜치 push와 main/tag/릴리스 공개는 사용자 확인 뒤에만 수행한다. 이번 로컬 수정 검증을 디렉토리 승인으로 표현하지 않는다.
+
+## 검수 3차 및 4차 수정 계획
+
+- `783b90d`의 부모 fresh gate는 rc=0, 37 pass / 0 fail, pytest 2,071 passed이며 소비자 설치·재설치 probe도 rc=0이다. plan-control도 동일 delta와 fresh gate를 확인했으나 판정은 CONDITIONAL이다. 기존 N-1~N-11 수정의 되돌려-FAIL을 확인했으며 추가 P-1~P-9가 남아 있다.
+- 스킬 발화 표본은 HEAD/base 각각 2케이스×3회 전부 통과했고 기존 스킬 발화 스위트는 6/6이다. 이는 제한된 선택 회귀 증거이며 품질·토큰 개선의 증거가 아니다. plan-control의 3차 에이전트 eval은 기존 로그인으로 실행해 13종·25/25 pass, rc0이다. 인증을 복사하지 않았으며 이 결과도 P-1~P-9 CONDITIONAL 판정을 해소하지 않는다.
+- P-1/P-8: AST·LSP 공용 실행 경로 검사와 자식 PATH 정제. 명시적 custom-server opt-in 없이는 빈·상대·작업공간 하위 PATH를 자식에게 넘기지 않으며 AST의 작업공간 실행 파일은 probe 전 거부한다.
+- P-2/P-3/P-4: Go 변수 정확 목록과 자격증명·Cargo 실행 wrapper 거부, 고정 executable과 원래 argv0 분리, 추가 서버 인자 opt-in 및 알려진 명시 서버 기본 인자를 적용한다.
+- P-5/P-6: 없는 설치 버전 디렉터리는 rc2, 존재하는 설치본 manifest 결함은 rc1. 층별 관측 사유를 보존하고 최종 판정 우선순위는 rc1 > rc2 > rc0이다(숫자 최댓값이 아니다).
+- P-7: history 디렉터리 하강 때 열린 FD의 identity를 보호 집합과 비교한다. 실제 홈 탐색 대신 임시 픽스처로 검증하고 firmlink 실측은 stat으로 한정한다. P-9와 관련 문서 한계도 함께 정정한다.
+- plan-control은 위 계약에 동의했다. 수정은 `783b90d` 기준 세 영역으로 나누되 worker의 git commit을 금지하고 검증된 패치를 반환받는다. 부모가 검증·통합 커밋을 sandbox 안에서 수행한다. 이전 격리 예외 3건은 기록을 유지한다.
+- 세 Codex worker가 기준 HEAD에서 패치를 반환했고 부모가 diff·패치 해시·원본 검증 로그를 대조했다. 부모 재실행은 intel 134개, doctor 401개, history 132개 통과(파일시스템 조건 skip 1개)이며 쓰기 거부 경계에서 실행했다. worker는 커밋하지 않았고 패치·비공개 증거를 보존한 뒤 터미널을 해제했다.
+- intel 인접 검사의 기존 Ruff fixture는 명시 서버 기본 인자와 중복되던 `--server-arg=server`를 제거했다. worker의 sandbox에서 `ps`가 차단된 기존 프로세스 정리 4건은 통합 게이트에서 확인한다. 부모는 진단 개수 제한의 두 경로를 모두 미검증 결과로 통일하고 회귀 검사를 추가했다.
+- 스킬 본문 변경은 code-intel과 session-history 두 파일이다. 실행 경로·환경 변수·상한·보호 경로 건너뛰기와 도구의 한계를 문서화했으며 description은 바꾸지 않았다. 최종 완료는 새 frozen HEAD의 재현·fresh gate·4차 독립 검수 후 판단한다. 실행 상태는 in-progress다.
+- 첫 통합 게이트는 pytest 실패로 rc1(36 pass / 1 fail)이었다. 기존 PATH 원문 보존 단언과 작업공간 내부의 AST 양성 fixture가 새 계약과 충돌했고 후자의 실패가 CLI 커버리지 실행 검사에 전파됐다. 외부 엔진 양성 fixture와 정제 PATH 기대값으로 수정한 뒤 실패 노드 3개를 직접 재실행해 모두 통과했다. 게이트 정책·등록 노드·기존 행동 검증은 유지했으며 전체 최종 게이트는 새 커밋 기준으로 실행한다.

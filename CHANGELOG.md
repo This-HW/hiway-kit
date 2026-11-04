@@ -10,8 +10,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added — On-demand code intelligence and session history
 
-- `code-intel`: installed ast-grep structural search and replacement preview; one-shot read-only
-  LSP diagnostics, symbols, definitions and references. Missing executables, malformed responses
+- `code-intel`: installed ast-grep structural search and replacement preview; one-shot
+  LSP diagnostics, symbols, definitions and references with trusted servers that can execute project code. Missing executables, malformed responses
   and timeouts are unverified outcomes, never successful empty results. No automatic installation.
 - `session-history`: bounded Codex/Claude JSONL search under an explicitly selected log root,
   with symlink exclusion and untrusted-content framing. No authentication files or database scans.
@@ -19,10 +19,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and project discovery. Existing global rules and hooks are unchanged.
 - OMO adoption audit and provenance: `docs/research/2026-10-30-omo-absorption.md`.
   Tools are independently implemented; OMO's runtime, telemetry, model overrides and daemons are not bundled.
-- Read-only installation doctor compares the installed Codex plugin with its persistent marketplace
+- Installation doctor compares the installed Codex plugin with its persistent marketplace
   source, supports safe shared plugin stores, and separates discovery/trust/enabled/execution evidence.
   It never installs, fetches, approves hooks or reads authentication files. Python 3.9/3.10 use a
   provenance-checked JSON snapshot captured on Python 3.11+; missing evidence remains unknown.
+  Diagnosis reads only; explicit `--capture-snapshot` writes a new JSON file.
 - Independent deterministic CLI coverage gate for new skills, with explicit legacy exceptions.
   This structural check does not claim natural-language skill selection or model quality.
 
@@ -59,6 +60,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   identity and require opt-in for workspace or relative-PATH servers. Reject relative AST executables.
 - Apply the notification count limit only to retained diagnostics; discarded LSP logs remain bounded
   by the cumulative byte limit. Reap exited process leaders before retrying macOS zombie-group signals.
+- Filter child PATH entries before launching AST/LSP dependencies; reject workspace AST engines before
+  probing. Preserve original executable names while launching pinned paths for multicall shims.
+- Require custom-server opt-in for extra arguments and include known-server defaults for explicit
+  selections. Use exact Go environment names and reject credential and Cargo wrapper/runner/linker variables.
+- Preserve per-layer doctor observations and prioritize confirmed defects over unknown evidence;
+  absent explicit installation paths remain unknown. Distinguish missing files from other IO failures.
+- Reject protected directory identities during session-log descent, including aliases through other
+  hard paths; protect the OS account home as well as configured homes and report skipped-tree truncation.
 - Run AST queries with a neutral working directory and explicit empty configuration. Probe only `ast-grep`;
   pattern validation is confirmed for 0.51.0, with zero-match results from other versions marked unverified.
   AST/LSP outputs carry an untrusted-content notice.
