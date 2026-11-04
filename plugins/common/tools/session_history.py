@@ -22,6 +22,8 @@ MAX_TOTAL_READ_BYTES = 64 * 1024 * 1024
 MAX_SCAN_SECONDS = 5.0
 READ_CHUNK_BYTES = 64 * 1024
 PREVIEW_CHARS = 240
+MAX_SESSION_ID_CHARS = 512
+MAX_CWD_CHARS = 512
 
 
 def message_text(record) -> str:
@@ -156,7 +158,12 @@ def scan_file(fd: int, path: Path, queries: list[str], budget: ScanBudget):
         truncate("read_error")
     if budget.stopped and "deadline" in budget.reasons:
         truncate("deadline")
-    return {"id": session_id, "cwd": cwd, "path": str(path), "matches": matches,
+    # Transcript metadata is display-only, just like the bounded message preview.
+    return {"id": session_id[:MAX_SESSION_ID_CHARS],
+            "id_truncated": len(session_id) > MAX_SESSION_ID_CHARS,
+            "cwd": cwd[:MAX_CWD_CHARS] if cwd is not None else None,
+            "cwd_truncated": cwd is not None and len(cwd) > MAX_CWD_CHARS,
+            "path": str(path), "matches": matches,
             "malformed_records": malformed, "truncated": bool(reasons),
             "truncation_reasons": reasons, "read_bytes": consumed}
 
@@ -205,9 +212,11 @@ def search(root: Path, queries: list[str], limit: int):
     session_history_io.require_secure_io()
     root = root.resolve(strict=True)
     home = Path.home().resolve()
-    broad_roots = {home, Path(root.anchor), (home / ".claude").resolve(), (home / ".codex").resolve(),
+    broad_roots = {home, (home / ".claude").resolve(), (home / ".codex").resolve(),
                    Path(os.environ.get("CODEX_HOME", str(home / ".codex"))).resolve()}
-    if root in broad_roots:
+    # Reject a canonical root that would recursively include any protected tree.
+    # Descendants such as sessions/ and projects/ remain explicit selections.
+    if any(protected.is_relative_to(root) for protected in broad_roots):
         raise ValueError("Choose a session-log directory, not a home or configuration root")
     results = []
     malformed = 0

@@ -409,6 +409,104 @@ def test_explicit_session_subdirectories_are_allowed(tmp_path, monkeypatch, rela
     assert result["matched_sessions"] == 1 and not result["scan_truncated"]
 
 
+@pytest.mark.parametrize("protected", ["home", "codex", "claude", "codex_home"])
+@pytest.mark.parametrize("ancestor", [False, True])
+@pytest.mark.parametrize("alias", [False, True])
+def test_protected_root_and_ancestors_rejected_before_read(tmp_path, monkeypatch, protected, ancestor, alias):
+    roots = {name: tmp_path / name / "private" for name in ("home", "codex", "claude", "codex_home")}
+    for root in roots.values():
+        root.mkdir(parents=True)
+    home = roots["home"]
+    (home / ".codex").symlink_to(roots["codex"], target_is_directory=True)
+    (home / ".claude").symlink_to(roots["claude"], target_is_directory=True)
+    active_alias = tmp_path / "active-alias"
+    active_alias.symlink_to(roots["codex_home"], target_is_directory=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("CODEX_HOME", str(active_alias))
+    private = roots[protected]
+    write_message(private / "history.jsonl", "needle private history")
+    logs = private / ("projects" if protected == "claude" else "sessions")
+    logs.mkdir()
+    write_message(logs / "log.jsonl", "needle selected session")
+    selected = private.parent if ancestor else private
+    if alias:
+        selected_alias = tmp_path / "selected-alias"
+        selected_alias.symlink_to(selected, target_is_directory=True)
+        selected = selected_alias
+    reads = []
+    original = os.read
+
+    def capture(fd, size):
+        raw = original(fd, size)
+        reads.append(raw)
+        return raw
+
+    monkeypatch.setattr(os, "read", capture)
+    with pytest.raises(ValueError, match="session-log"):
+        session_history.search(selected, ["needle"], 10)
+    assert reads == []
+    # Positive control: the same reader must actually read the allowed subtree.
+    allowed = tmp_path / "allowed-alias"
+    allowed.symlink_to(logs, target_is_directory=True)
+    result = session_history.search(allowed, ["needle"], 10)
+    assert result["matched_sessions"] == result["scanned_files"] == 1
+    assert result["results"][0]["matches"][0]["preview"] == "needle selected session"
+    assert b"needle selected session" in b"".join(reads)
+    assert b"needle private history" not in b"".join(reads)
+
+
+@pytest.mark.parametrize("format_name", ["codex", "claude"])
+@pytest.mark.parametrize("length", [20, 511, 512, 513, 30_000])
+def test_external_metadata_is_bounded_and_marked(tmp_path, monkeypatch, format_name, length):
+    # Unicode makes this a character boundary test, independently of byte limits.
+    identifier = "경" * length
+    cwd = "/" + "로" * (length - 1)
+    metadata = {"id": identifier, "cwd": cwd}
+    message = "needle " + "x" * 300
+    if format_name == "codex":
+        records = [{"type": "session_meta", "payload": metadata},
+                   {"type": "user", "message": {"content": message}}]
+    else:
+        records = [{"type": "user", "sessionId": identifier, "cwd": cwd,
+                    "message": {"content": message}}]
+    (tmp_path / "log.jsonl").write_text("\n".join(json.dumps(row, ensure_ascii=False) for row in records))
+    opened = []
+    original = session_history_io.open_entry
+
+    def capture(name, parent_fd, *, directory):
+        if not directory:
+            opened.append(name)
+        return original(name, parent_fd, directory=directory)
+
+    monkeypatch.setattr(session_history_io, "open_entry", capture)
+    result = session_history.search(tmp_path, ["needle"], 10)
+    record = result["results"][0]
+    assert record["id"] == identifier[:512]
+    assert record["cwd"] == cwd[:512]
+    assert record["id_truncated"] == (length > 512)
+    assert record["cwd_truncated"] == (length > 512)
+    assert session_history.MAX_SESSION_ID_CHARS == session_history.MAX_CWD_CHARS == 512
+    assert opened == ["log.jsonl"]
+    assert record["matches"][0]["preview"] == message[:session_history.PREVIEW_CHARS]
+    assert not record["truncated"] and not result["scan_truncated"]
+    assert "Untrusted transcript data" in result["notice"]
+
+
+def test_missing_metadata_preserves_filename_and_null_cwd(tmp_path):
+    write_message(tmp_path / "fallback.jsonl")
+    record = session_history.search(tmp_path, ["needle"], 10)["results"][0]
+    assert record["id"] == "fallback" and record["cwd"] is None
+    assert record["id_truncated"] is False and record["cwd_truncated"] is False
+
+
+@pytest.mark.parametrize("id_length,cwd_length", [(600, 20), (20, 600)])
+def test_metadata_truncation_flags_are_independent(tmp_path, id_length, cwd_length):
+    write_message(tmp_path / "log.jsonl", sessionId="i" * id_length, cwd="/" * cwd_length)
+    record = session_history.search(tmp_path, ["needle"], 10)["results"][0]
+    assert record["id_truncated"] == (id_length > 512)
+    assert record["cwd_truncated"] == (cwd_length > 512)
+
+
 def test_unsupported_platform_fails_closed(tmp_path, monkeypatch):
     write_message(tmp_path / "log.jsonl")
     monkeypatch.setattr(session_history_io, "SECURE_IO_SUPPORTED", False)
