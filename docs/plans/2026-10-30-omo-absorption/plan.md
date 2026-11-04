@@ -1,13 +1,19 @@
 ---
 title: "OMO의 유용한 기능을 hiway-kit에 선택적으로 통합하고 로컬 OMO 제거"
-status: current
-as_of: 2026-10-30
-execution_status: awaiting-user-hook-approval
+status: superseded
+as_of: 2026-11-04
+execution_status: superseded-after-audit
 created: 2026-10-30
 size: large
 ---
 
 ## 요구사항
+
+> **2026-11-04 정정:** 아래 구현·검증 기록은 10월 30일 당시의 기록이며 현재 완료 상태가 아니다.
+> 11월 2일 독립 감사에서 정상 AST 패턴 오거부, LSP 거짓 성공, 응답 검증·파일 읽기·자원 한도 결함과
+> 설치 버전 회귀가 확인됐다. 현재 설치는 5.5.1이며 활성 계정 훅은 이전부터 disabled였다.
+> 따라서 “훅 승인만 남음”, “기존 기능에 흡수”와 마지막 수동 attest를 현재 결론으로 사용하지 않는다.
+> 후속 작업은 [감사 결함 수정 계획](../2026-11-04-omo-audit-remediation/plan.md)에서 추적한다.
 
 - OMO 기능 전체를 확인해 유용한 요소를 hiway에 통합한 뒤 OMO를 제거한다. `[confirmed: 사용자]`
 - 상시 지침 증가 없이 필요한 작업에서만 도구와 참조를 읽는다. `[researched: 로컬 16회 비교, n=16; OMO 입력 평균 2.32배, 정확도 동일]`
