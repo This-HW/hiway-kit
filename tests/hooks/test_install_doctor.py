@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -110,7 +111,7 @@ def test_no_toml_parser_requires_snapshot(layout, capsys, monkeypatch):
 def test_snapshot_provenance_selected_fields_and_python39_path(layout, capsys, monkeypatch):
     snapshot = capture(layout, capsys)
     value = json.loads(snapshot.read_text())
-    assert value["schema"] == 1
+    assert value["schema"] == doctor.SNAPSHOT_SCHEMA
     assert value["captured_at"]
     assert value["config"]["path"] == str(layout["config"])
     assert value["config"]["sha256"] == hashlib.sha256(layout["config"].read_bytes()).hexdigest()
@@ -402,8 +403,8 @@ def test_directory_symlink_swap_between_resolution_and_open_is_not_followed(layo
 
     monkeypatch.setattr(io.Reader, "_open", swap)
     rc, report = run(layout, capsys)
-    assert swapped and rc == 2
-    assert report["installation"]["reason"] == "file_unavailable"
+    assert swapped and rc == 1
+    assert report["installation"]["reason"] == "unsafe_symlink"
 
 
 def test_file_growth_and_total_read_budget_enforced_during_read(layout, capsys, monkeypatch):
@@ -458,16 +459,24 @@ def test_explicit_snapshot_input_cannot_read_auth_files(layout, capsys, filename
     assert rc == 1 and report["installation"]["reason"] == "forbidden_file"
 
 
-def test_config_disabled_choice_survives_unsafe_shared_plugin_store(layout, capsys):
+def share_store(layout):
     plugins = layout["home"] / "plugins"
     moved = layout["tmp"] / "shared-plugins"
     plugins.rename(moved)
     plugins.symlink_to(moved, target_is_directory=True)
+    return moved
+
+
+def test_config_disabled_choice_survives_normal_shared_plugin_store(layout, capsys):
+    moved = share_store(layout)
     rc, report = run(layout, capsys)
-    assert rc == 1 and report["installation"]["reason"] == "unsafe_symlink"
+    assert rc == 0 and report["installation"]["status"] == "match"
+    assert report["store"] == {"store_root": str(moved), "store_shared": True,
+                                "link_source": str(layout["home"] / "plugins")}
     entry = report["hooks"]["entries"][0]
     assert entry["enabled"]["value"] is False
-    assert entry["discovered"]["value"] == entry["trusted"]["value"] == entry["fired"]["value"] == "unknown"
+    assert entry["discovered"]["value"] is True
+    assert entry["trusted"]["value"] == entry["fired"]["value"] == "unknown"
 
 
 def test_no_safe_descriptor_flags_is_unknown(layout, capsys, monkeypatch):
@@ -484,3 +493,337 @@ def test_source_url_userinfo_is_not_captured_or_echoed(layout, capsys):
     assert rc == 2 and report["installation"]["reason"] == "source_url_contains_userinfo"
     assert not output.exists()
     assert "private-user" not in json.dumps(report)
+
+
+def test_private_store_reports_canonical_root(layout, capsys):
+    rc, report = run(layout, capsys)
+    assert rc == 0
+    assert report["store"] == {"store_root": str(layout["home"] / "plugins"),
+                                "store_shared": False, "link_source": None}
+
+
+@pytest.mark.parametrize("mode", [0o777, 0o775])
+def test_shared_store_group_or_other_writable_is_defect(layout, capsys, mode):
+    moved = share_store(layout)
+    assert run(layout, capsys)[0] == 0
+    moved.chmod(mode)
+    rc, report = run(layout, capsys)
+    assert rc == 1 and report["installation"]["reason"] == "plugin_store_writable_by_others"
+    moved.chmod(0o755)
+    assert run(layout, capsys)[0] == 0
+
+
+def test_wrong_uid_store_is_defect(layout, capsys, monkeypatch):
+    share_store(layout)
+    owner = os.getuid()
+    monkeypatch.setattr(io.os, "getuid", lambda: owner + 1)
+    rc, report = run(layout, capsys)
+    assert rc == 1 and report["installation"]["reason"] == "plugin_store_wrong_owner"
+
+
+@pytest.mark.parametrize("field,reason,rc", [
+    ("type", "plugin_store_not_directory", 1),
+    (stat.ST_UID, "plugin_store_wrong_owner", 1),
+    (stat.ST_MODE, "plugin_store_writable_by_others", 1),
+    (stat.ST_INO, "plugin_store_changed", 2),
+])
+def test_opened_store_fd_is_independently_validated(layout, capsys, monkeypatch, field, reason, rc):
+    moved = share_store(layout)
+    target = moved.stat()
+    original = os.fstat
+    changed = False
+
+    def replaced(fd):
+        nonlocal changed
+        info = original(fd)
+        if (info.st_dev, info.st_ino) == (target.st_dev, target.st_ino):
+            changed = True
+            values = list(info)
+            if field == "type":
+                values[stat.ST_MODE] = stat.S_IFREG | 0o600
+            else:
+                values[field] = values[field] | stat.S_IWOTH if field == stat.ST_MODE else values[field] + 1
+            return os.stat_result(values)
+        return info
+
+    monkeypatch.setattr(io.os, "fstat", replaced)
+    code, report = run(layout, capsys)
+    assert changed and code == rc and report["installation"]["reason"] == reason
+
+
+@pytest.mark.parametrize("kind", ["dangling", "loop", "permission"])
+def test_unavailable_shared_store_is_unknown(layout, capsys, monkeypatch, kind):
+    moved = share_store(layout)
+    logical = layout["home"] / "plugins"
+    if kind in ("dangling", "loop"):
+        logical.unlink()
+        logical.symlink_to(layout["tmp"] / "missing" if kind == "dangling" else logical, target_is_directory=True)
+    else:
+        original = io.Reader._open_absolute
+
+        def denied(reader, root, path, directory=False):
+            if root == moved:
+                raise PermissionError("fixture permission failure")
+            return original(reader, root, path, directory)
+
+        monkeypatch.setattr(io.Reader, "_open_absolute", denied)
+    rc, report = run(layout, capsys)
+    assert rc == 2 and report["installation"]["reason"] == "plugin_store_unavailable"
+
+
+def test_store_target_must_be_a_directory(layout, capsys):
+    moved = share_store(layout)
+    shutil.rmtree(moved)
+    moved.write_text("not a directory")
+    rc, report = run(layout, capsys)
+    assert rc == 1 and report["installation"]["reason"] == "plugin_store_not_directory"
+
+
+def test_plugin_store_option_pins_canonical_scope_without_resolution(layout, capsys):
+    moved = share_store(layout)
+    assert run(layout, capsys, "--plugin-store", moved)[0] == 0
+    for other in (layout["tmp"] / "other", layout["home"] / "plugins", moved / ".." / moved.name):
+        rc, report = run(layout, capsys, "--plugin-store", other)
+        assert rc == 2 and report["installation"]["reason"] == "plugin_store_scope_mismatch"
+
+
+@pytest.mark.parametrize("canonical", [True, False])
+def test_explicit_shared_cache_version_accepts_logical_or_canonical_spelling(layout, capsys, canonical):
+    moved = share_store(layout)
+    given = moved / "cache/sample-market/example/5.6.0" if canonical else layout["installed"]
+    assert run(layout, capsys, "--installed-path", given)[0] == 0
+    assert run(layout, capsys, "--installed-path", given.parent)[0] == 1
+    assert run(layout, capsys, "--installed-path", given / "nested")[0] == 1
+
+
+@pytest.mark.parametrize("relative", ["cache", "cache/sample-market", "cache/sample-market/example",
+                                      "cache/sample-market/example/5.6.0", "cache/sample-market/example/5.6.0/.codex-plugin"])
+def test_shared_store_descendant_symlink_is_defect(layout, capsys, relative):
+    moved = share_store(layout)
+    path = moved / relative
+    target = layout["tmp"] / "moved-descendant"
+    path.rename(target)
+    path.symlink_to(target, target_is_directory=True)
+    rc, report = run(layout, capsys)
+    assert rc == 1 and report["installation"]["reason"] == "unsafe_symlink"
+
+
+def test_only_logical_store_is_resolved_once(layout, capsys, monkeypatch):
+    moved = share_store(layout)
+    logical = layout["home"] / "plugins"
+    original = Path.resolve
+    count = 0
+
+    def resolve_once(path, *args, **kwargs):
+        nonlocal count
+        if path == logical:
+            count += 1
+        if path.is_relative_to(moved):
+            pytest.fail("canonical store was resolved again")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", resolve_once)
+    assert run(layout, capsys)[0] == 0
+    assert count == 1
+
+
+def test_store_replacement_between_stat_and_open_fails_closed(layout, capsys, monkeypatch):
+    moved = share_store(layout)
+    original = io.Reader._open_absolute
+    swapped = False
+
+    def replace(reader, root, path, directory=False):
+        nonlocal swapped
+        if not swapped and root == path == moved:
+            swapped = True
+            old = layout["tmp"] / "old-store"
+            moved.rename(old)
+            shutil.copytree(old, moved)
+        return original(reader, root, path, directory)
+
+    monkeypatch.setattr(io.Reader, "_open_absolute", replace)
+    rc, report = run(layout, capsys)
+    assert swapped and rc == 2 and report["installation"]["reason"] == "plugin_store_changed"
+    assert report["installation"]["installed_version"] is None
+
+
+@pytest.mark.parametrize("swap_link", [False, True])
+def test_store_replacement_after_pinning_reads_only_original_fd_and_fails_closed(layout, capsys, monkeypatch, swap_link):
+    moved = share_store(layout)
+    original = io.Reader._open
+    swapped = False
+
+    def replace(reader, root, path, directory=False):
+        nonlocal swapped
+        if not swapped and path == moved / "cache/sample-market/example/5.6.0" / doctor.MANIFEST:
+            swapped = True
+            if swap_link:
+                new = layout["tmp"] / "new-store"
+                shutil.copytree(moved, new)
+                logical = layout["home"] / "plugins"
+                logical.unlink()
+                logical.symlink_to(new, target_is_directory=True)
+            else:
+                old = layout["tmp"] / "old-store"
+                moved.rename(old)
+                shutil.copytree(old, moved)
+                new = moved
+            target = new / "cache/sample-market/example/5.6.0" / doctor.MANIFEST
+            value = json.loads(target.read_text())
+            value["version"] = "9.9.9"
+            put_json(target, value)
+        return original(reader, root, path, directory)
+
+    monkeypatch.setattr(io.Reader, "_open", replace)
+    rc, report = run(layout, capsys)
+    assert swapped and rc == 2 and report["installation"]["reason"] == "plugin_store_changed"
+    assert report["installation"]["installed_version"] == "5.6.0", "replacement store was read"
+
+
+def test_shared_snapshot_records_canonical_origins_and_link_provenance(layout, capsys):
+    moved = share_store(layout)
+    snapshot = capture(layout, capsys)
+    value = json.loads(snapshot.read_text())
+    assert value["schema"] == 2
+    assert value["store"]["store_root"] == str(moved)
+    assert value["store"]["logical_path"] == str(layout["home"] / "plugins")
+    assert value["store"]["link"]["target"] == str(moved)
+    assert value["store"]["root_identity"]["inode"] == moved.stat().st_ino
+    origins = value["observations"]
+    relation = next(entry for entry in origins if entry["kind"] == "plugin_store")
+    assert relation["path"] == str(layout["home"] / "plugins")
+    assert relation["sha256"] == hashlib.sha256(json.dumps(value["store"], sort_keys=True).encode()).hexdigest()
+    assert any(entry["path"] == str(moved / "cache/sample-market/example/5.6.0" / doctor.MANIFEST) for entry in origins)
+    assert run(layout, capsys, "--snapshot", snapshot)[0] == 0
+
+
+@pytest.mark.parametrize("change", ["retarget", "replace_link", "snapshot_metadata", "old_schema"])
+def test_shared_snapshot_relationship_changes_never_green(layout, capsys, monkeypatch, change):
+    moved = share_store(layout)
+    snapshot = capture(layout, capsys)
+    monkeypatch.setattr(doctor, "tomllib", None)
+    logical = layout["home"] / "plugins"
+    if change in ("retarget", "replace_link"):
+        target = moved
+        if change == "retarget":
+            target = layout["tmp"] / "new-store"
+            shutil.copytree(moved, target)
+        logical.unlink()
+        logical.symlink_to(target, target_is_directory=True)
+    else:
+        value = json.loads(snapshot.read_text())
+        if change == "old_schema":
+            value["schema"] = 1
+        else:
+            value["store"]["link"]["target"] = "/unrelated/store"
+        put_json(snapshot, value)
+    rc, report = run(layout, capsys, "--snapshot", snapshot)
+    assert rc == 2
+    assert report["installation"]["reason"] == ("snapshot_schema_unknown" if change == "old_schema" else "snapshot_store_stale")
+
+
+def test_real_python39_shared_snapshot(layout, capsys):
+    python39 = shutil.which("python3.9")
+    if not python39:
+        pytest.skip("Python 3.9 executable unavailable")
+    moved = share_store(layout)
+    snapshot = capture(layout, capsys)
+    command = [python39, "-B", str(TOOLS / "install_doctor.py"), *args(layout, "--snapshot", snapshot)]
+    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = json.loads(result.stdout)
+    assert report["store"]["store_shared"] is True
+    assert report["hooks"]["enabled"]["value"] is False
+    assert report["hooks"]["fired"]["value"] == "unknown"
+    new = layout["tmp"] / "new-store"
+    shutil.copytree(moved, new)
+    logical = layout["home"] / "plugins"
+    logical.unlink()
+    logical.symlink_to(new, target_is_directory=True)
+    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=10)
+    assert result.returncode == 2 and json.loads(result.stdout)["installation"]["reason"] == "snapshot_store_stale"
+
+
+def test_store_becoming_writable_after_pinning_is_defect(layout, capsys, monkeypatch):
+    moved = share_store(layout)
+    original = io.Reader._open
+    changed = False
+
+    def chmod(reader, root, path, directory=False):
+        nonlocal changed
+        if not changed and path == moved / "cache/sample-market/example/5.6.0" / doctor.MANIFEST:
+            changed = True
+            moved.chmod(0o777)
+        return original(reader, root, path, directory)
+
+    monkeypatch.setattr(io.Reader, "_open", chmod)
+    rc, report = run(layout, capsys)
+    assert changed and rc == 1 and report["installation"]["reason"] == "plugin_store_writable_by_others"
+
+
+def test_shared_capture_in_store_uses_fixed_root_without_resolving_again(layout, capsys, monkeypatch):
+    moved = share_store(layout)
+    original = Path.resolve
+
+    def checked(path, *args, **kwargs):
+        if path.is_relative_to(moved):
+            pytest.fail("capture resolved the fixed root")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", checked)
+    output = layout["home"] / "plugins" / "snapshot.json"
+    assert run(layout, capsys, "--capture-snapshot", output)[0] == 0
+    assert (moved / "snapshot.json").is_file()
+    assert run(layout, capsys, "--snapshot", output)[0] == 0
+
+
+def test_store_descriptors_are_closed_on_success_and_failure(layout, capsys, monkeypatch):
+    share_store(layout)
+    original_open = os.open
+    original_close = os.close
+    balance = 0
+
+    def opened(*args, **kwargs):
+        nonlocal balance
+        fd = original_open(*args, **kwargs)
+        balance += 1
+        return fd
+
+    original_dup = os.dup
+
+    def duplicated(fd):
+        nonlocal balance
+        result = original_dup(fd)
+        balance += 1
+        return result
+
+    def closed(fd):
+        nonlocal balance
+        original_close(fd)
+        balance -= 1
+
+    monkeypatch.setattr(io.os, "open", opened)
+    monkeypatch.setattr(io.os, "dup", duplicated)
+    monkeypatch.setattr(io.os, "close", closed)
+    assert run(layout, capsys)[0] == 0
+    assert balance == 0
+    monkeypatch.setattr(io, "MAX_SECONDS", -1)
+    assert run(layout, capsys)[0] == 2
+    assert balance == 0
+
+
+def test_store_link_retarget_during_explicit_capture_fails_closed(layout, capsys, monkeypatch):
+    moved = share_store(layout)
+    original = doctor.write_snapshot
+
+    def changed(path, value, reader=None):
+        original(path, value, reader)
+        new = layout["tmp"] / "new-store"
+        shutil.copytree(moved, new)
+        logical = layout["home"] / "plugins"
+        logical.unlink()
+        logical.symlink_to(new, target_is_directory=True)
+
+    monkeypatch.setattr(doctor, "write_snapshot", changed)
+    rc, report = run(layout, capsys, "--capture-snapshot", layout["tmp"] / "capture.json")
+    assert rc == 2 and report["installation"]["reason"] == "plugin_store_changed"

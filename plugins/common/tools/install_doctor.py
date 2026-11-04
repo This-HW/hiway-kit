@@ -35,6 +35,7 @@ except ImportError:
     tomllib = None
 
 SCHEMA = 1
+SNAPSHOT_SCHEMA = 2
 MANIFEST = ".codex-plugin/plugin.json"
 MARKETPLACE = ".agents/plugins/marketplace.json"
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}\Z")
@@ -49,6 +50,7 @@ def state(value="unknown", reason="not_observed") -> dict:
 
 def initial_report(plugin_id: str) -> dict:
     return {"schema": SCHEMA, "plugin_id": plugin_id,
+            "store": {"store_root": None, "store_shared": None, "link_source": None},
             "installation": {"status": "unknown", "reason": "not_observed",
                              "installed_version": None, "source_version": None},
             "hooks": {"discovered": state(), "trusted": state(), "enabled": state(),
@@ -128,10 +130,11 @@ def validate_selected(value: dict):
 
 def snapshot_config(reader: Reader, path: Path, home: Path, plugin_id: str, raw: bytes) -> tuple[dict, dict]:
     try:
-        snapshot = reader.json(path.parent.resolve(), path.name, "snapshot")
+        root, relative = reader.user_path(path)
+        snapshot = reader.json(root, relative, "snapshot")
         # The input snapshot is not an original observation.
         reader.origins.pop()
-        if type(snapshot["schema"]) is not int or snapshot["schema"] != SCHEMA:
+        if type(snapshot["schema"]) is not int or snapshot["schema"] != SNAPSHOT_SCHEMA:
             raise ObservationError("snapshot_schema_unknown")
         captured = datetime.fromisoformat(snapshot["captured_at"].replace("Z", "+00:00"))
         if captured.tzinfo is None or captured > datetime.now(timezone.utc):
@@ -160,6 +163,7 @@ def snapshot_config(reader: Reader, path: Path, home: Path, plugin_id: str, raw:
 def load_config(reader: Reader, args, home: Path, plugin_id: str, marketplace: str) -> tuple[dict, dict | None]:
     raw = reader.read(home, "config.toml", "config")
     if args.snapshot:
+        reader.bind_store(home, args.plugin_store)
         selected, snapshot = snapshot_config(reader, Path(args.snapshot).absolute(), home, plugin_id, raw)
         # On a parser-capable host, also detect edited selected snapshot fields.
         if tomllib is not None:
@@ -179,23 +183,30 @@ def load_config(reader: Reader, args, home: Path, plugin_id: str, marketplace: s
 
 
 def installed_root(reader: Reader, args, home: Path, name: str, marketplace: str) -> Path:
-    base = f"plugins/cache/{marketplace}/{name}"
+    store = reader.store_root
+    base = f"cache/{marketplace}/{name}"
     if args.installed_path:
         given = Path(args.installed_path).absolute()
-        try:
-            relative = str(given.relative_to(home))
-        except ValueError as exc:
-            raise ObservationError("unsafe_installed_path", 1) from exc
-        root = _resolve_in_repo(home, relative)
-        if root.parent != home / base:
+        if ".." in given.parts:
+            raise ObservationError("unsafe_installed_path", 1)
+        # Accept either HOME/plugins/cache/... or the canonical STORE/cache/...
+        # spelling, mapping both lexically to the pinned descriptor boundary.
+        if given.is_relative_to(home / "plugins"):
+            relative = given.relative_to(home / "plugins")
+        elif given.is_relative_to(store):
+            relative = given.relative_to(store)
+        else:
+            raise ObservationError("unsafe_installed_path", 1)
+        root = reader.path(store, str(relative))
+        if root.parent != store / base:
             raise ObservationError("unsafe_installed_path", 1)
         return root
-    versions = reader.directories(home, base)
+    versions = reader.directories(store, base)
     if not versions:
         raise ObservationError("installation_missing", 1)
     if len(versions) != 1:
         raise ObservationError("active_cache_ambiguous")
-    return _resolve_in_repo(home, f"{base}/{versions[0]}")
+    return reader.path(store, f"{base}/{versions[0]}")
 
 
 def manifest(reader: Reader, root: Path, name: str, marketplace: str) -> dict:
@@ -323,6 +334,9 @@ def diagnose(args) -> tuple[dict, int]:
         home = Path(args.codex_home).resolve(strict=True)
         selected, snapshot = load_config(reader, args, home, args.plugin, marketplace)
         report["hooks"] = configured_hooks(selected, args.plugin)
+        store = reader.store or reader.bind_store(home, args.plugin_store)
+        if snapshot is not None and snapshot.get("store") != store:
+            raise ObservationError("snapshot_store_stale")
         root = installed_root(reader, args, home, name, marketplace)
         installed = manifest(reader, root, name, marketplace)
         report["installation"]["installed_version"] = installed["version"]
@@ -337,17 +351,19 @@ def diagnose(args) -> tuple[dict, int]:
         configured = manifest(reader, source, name, marketplace)
         report["installation"]["source_version"] = configured["version"]
         report["installation"]["source_type"] = selected["marketplace"]["source_type"]
+        reader.verify_store()
         if snapshot is not None:
             verify_snapshot(snapshot, reader.origins)
         if args.capture_snapshot:
             if tomllib is None or args.snapshot:
                 raise ObservationError("capture_requires_native_toml_parser")
             config_origin = reader.origins[0]
-            output = {"schema": SCHEMA, "captured_at": datetime.now(timezone.utc).isoformat(),
+            output = {"schema": SNAPSHOT_SCHEMA, "captured_at": datetime.now(timezone.utc).isoformat(),
                       "plugin_id": args.plugin, "codex_home": str(home),
                       "config": {"path": config_origin["path"], "sha256": config_origin["sha256"], "selected": selected},
-                      "observations": reader.origins}
-            write_snapshot(Path(args.capture_snapshot).absolute(), output)
+                      "store": store, "observations": reader.origins}
+            write_snapshot(Path(args.capture_snapshot).absolute(), output, reader)
+            reader.verify_store()
         if installed["version"] != configured["version"]:
             raise ObservationError("installation_source_version_mismatch", 1)
         report["installation"].update(status="match", reason="version_and_identity_match")
@@ -365,6 +381,10 @@ def diagnose(args) -> tuple[dict, int]:
         del exc
         report["installation"].update(status="unknown", reason="observation_unavailable")
         return report, 2
+    finally:
+        if reader.store is not None:
+            report["store"] = {key: reader.store[key] for key in ("store_root", "store_shared", "link_source")}
+        reader.close()
 
 
 def main(argv=None) -> int:
@@ -372,7 +392,8 @@ def main(argv=None) -> int:
     parser.add_argument("--codex-home", default=os.environ.get("CODEX_HOME"), help="Explicit home (or CODEX_HOME); no implicit user home")
     parser.add_argument("--plugin", required=True, help="Plugin name@marketplace")
     parser.add_argument("--source-checkout", help="Existing ordinary git checkout; origin must exactly match configured source URL")
-    parser.add_argument("--installed-path", help="Explicit cache version directory when several versions exist")
+    parser.add_argument("--plugin-store", help="Require this canonical store root to equal the one resolved from CODEX_HOME/plugins")
+    parser.add_argument("--installed-path", help="Explicit direct cache version directory under logical HOME/plugins or canonical store root")
     parser.add_argument("--codex-bin", default="codex", help="Executable to locate, never executed")
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--snapshot", help="Verified JSON config snapshot (required for Python 3.9/3.10)")
