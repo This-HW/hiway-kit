@@ -409,11 +409,12 @@ def test_explicit_session_subdirectories_are_allowed(tmp_path, monkeypatch, rela
     assert result["matched_sessions"] == 1 and not result["scan_truncated"]
 
 
-@pytest.mark.parametrize("protected", ["home", "codex", "claude", "codex_home"])
+@pytest.mark.parametrize("protected", ["home", "codex", "claude", "codex_home", "claude_config"])
 @pytest.mark.parametrize("ancestor", [False, True])
 @pytest.mark.parametrize("alias", [False, True])
 def test_protected_root_and_ancestors_rejected_before_read(tmp_path, monkeypatch, protected, ancestor, alias):
-    roots = {name: tmp_path / name / "private" for name in ("home", "codex", "claude", "codex_home")}
+    roots = {name: tmp_path / name / "private"
+             for name in ("home", "codex", "claude", "codex_home", "claude_config")}
     for root in roots.values():
         root.mkdir(parents=True)
     home = roots["home"]
@@ -421,8 +422,11 @@ def test_protected_root_and_ancestors_rejected_before_read(tmp_path, monkeypatch
     (home / ".claude").symlink_to(roots["claude"], target_is_directory=True)
     active_alias = tmp_path / "active-alias"
     active_alias.symlink_to(roots["codex_home"], target_is_directory=True)
+    claude_alias = tmp_path / "claude-config-alias"
+    claude_alias.symlink_to(roots["claude_config"], target_is_directory=True)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("CODEX_HOME", str(active_alias))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude_alias))
     private = roots[protected]
     write_message(private / "history.jsonl", "needle private history")
     logs = private / ("projects" if protected == "claude" else "sessions")
@@ -453,6 +457,223 @@ def test_protected_root_and_ancestors_rejected_before_read(tmp_path, monkeypatch
     assert result["results"][0]["matches"][0]["preview"] == "needle selected session"
     assert b"needle selected session" in b"".join(reads)
     assert b"needle private history" not in b"".join(reads)
+
+
+@pytest.mark.parametrize("variant", [".CODEX", ".CLAUDE", "USERS", "users/FAKE", "CUSTOMCLAUDE"])
+def test_case_alias_protected_roots_are_rejected_before_scan(tmp_path, monkeypatch, variant):
+    home = tmp_path / "users/fake"
+    codex = home / ".codex"
+    claude = home / ".claude"
+    custom = tmp_path / "customclaude"
+    for root, subdir in ((codex, "sessions"), (claude, "projects"), (custom, "projects")):
+        (root / subdir).mkdir(parents=True)
+        write_message(root / "history.jsonl", "needle private history")
+        write_message(root / subdir / "log.jsonl", "needle selected session")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(custom))
+    selected = home / variant if variant.startswith(".") else tmp_path / variant
+    if not selected.exists():
+        pytest.skip("Filesystem distinguishes the actual case variant")
+    reads = []
+    scans = []
+    original_read, original_scan = os.read, os.scandir
+
+    def read(fd, size):
+        reads.append(fd)
+        return original_read(fd, size)
+
+    def scan(fd):
+        scans.append(fd)
+        return original_scan(fd)
+
+    monkeypatch.setattr(os, "read", read)
+    monkeypatch.setattr(os, "scandir", scan)
+    with pytest.raises(ValueError, match="session-log"):
+        session_history.search(selected, ["needle"], 10)
+    assert reads == scans == []
+    for allowed in (codex / "sessions", claude / "projects", custom / "projects"):
+        result = session_history.search(allowed, ["needle"], 10)
+        assert result["matched_sessions"] == result["scanned_files"] == 1
+        assert result["results"][0]["matches"][0]["preview"] == "needle selected session"
+    assert reads and scans
+
+
+def test_distinct_case_directory_is_allowed_when_filesystem_distinguishes_it(tmp_path, monkeypatch):
+    home = tmp_path / "fake"
+    home.mkdir()
+    selected = tmp_path / "FAKE"
+    if selected.exists():
+        pytest.skip("Filesystem aliases different case spellings")
+    selected.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    write_message(selected / "log.jsonl")
+    assert session_history.search(selected, ["needle"], 10)["matched_sessions"] == 1
+
+
+@pytest.mark.parametrize("variable", ["CODEX_HOME", "CLAUDE_CONFIG_DIR"])
+def test_empty_config_environment_does_not_protect_cwd(tmp_path, monkeypatch, variable):
+    home = tmp_path / "home"
+    home.mkdir()
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    write_message(logs / "log.jsonl")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv(variable, "")
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR" if variable == "CODEX_HOME" else "CODEX_HOME", raising=False)
+    monkeypatch.chdir(logs)
+    result = session_history.search(logs, ["needle"], 10)
+    assert result["matched_sessions"] == 1 and not result["scan_truncated"]
+
+
+@pytest.mark.parametrize("variable", ["CODEX_HOME", "CLAUDE_CONFIG_DIR"])
+@pytest.mark.parametrize("case_alias", [False, True])
+def test_missing_protected_path_still_protects_existing_ancestor(tmp_path, monkeypatch, variable, case_alias):
+    home = tmp_path / "home"
+    home.mkdir()
+    config_parent = tmp_path / "custom"
+    config_parent.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv(variable, str(config_parent / "not-created/config"))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR" if variable == "CODEX_HOME" else "CODEX_HOME", raising=False)
+    selected = tmp_path / "CUSTOM" if case_alias else config_parent
+    if not selected.exists():
+        pytest.skip("Filesystem distinguishes the actual case variant")
+    write_message(config_parent / "history.jsonl")
+
+    def forbidden(*args):
+        pytest.fail("Protected ancestor must be rejected before scanning or reading")
+
+    monkeypatch.setattr(os, "scandir", forbidden)
+    monkeypatch.setattr(os, "read", forbidden)
+    with pytest.raises(ValueError, match="session-log"):
+        session_history.search(selected, ["needle"], 10)
+
+
+@pytest.mark.parametrize("error", [PermissionError, OSError])
+@pytest.mark.parametrize("operation", ["open", "fstat"])
+def test_protection_identity_error_prevents_scan(tmp_path, monkeypatch, error, operation):
+    home = tmp_path / "home"
+    home.mkdir()
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    original_open, original_fstat = os.open, os.fstat
+    protected = home.stat()
+
+    def unavailable(name, *args, **kwargs):
+        if name == "home" and operation == "open":
+            raise error("synthetic protected identity failure")
+        return original_open(name, *args, **kwargs)
+
+    def uninspectable(fd):
+        info = original_fstat(fd)
+        if operation == "fstat" and (info.st_dev, info.st_ino) == (protected.st_dev, protected.st_ino):
+            raise error("synthetic protected identity failure")
+        return info
+
+    def forbidden(*args):
+        pytest.fail("Unverified protection must never proceed to a scan")
+
+    monkeypatch.setattr(os, "open", unavailable)
+    monkeypatch.setattr(os, "fstat", uninspectable)
+    monkeypatch.setattr(os, "scandir", forbidden)
+    monkeypatch.setattr(os, "read", forbidden)
+    with pytest.raises(error, match="protected identity failure"):
+        session_history.search(logs, ["needle"], 10)
+
+
+@pytest.mark.parametrize("swap_before_pin", [False, True])
+def test_root_identity_and_scan_use_the_same_pinned_descriptor(tmp_path, monkeypatch, swap_before_pin):
+    home = tmp_path / "home"
+    logs = tmp_path / "logs"
+    home.mkdir()
+    logs.mkdir()
+    write_message(home / "history.jsonl", "needle private history")
+    write_message(logs / "log.jsonl", "needle selected session")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    original_open, original_fstat, original_read = os.open, os.fstat, os.read
+    selected_fd = []
+    reads = []
+    swapped = []
+
+    def swap():
+        logs.rename(tmp_path / "moved-logs")
+        home.rename(logs)
+        home.symlink_to(logs, target_is_directory=True)
+        swapped.append(True)
+
+    def opened(name, *args, **kwargs):
+        if name == "logs" and not selected_fd:
+            if swap_before_pin:
+                swap()
+            fd = original_open(name, *args, **kwargs)
+            selected_fd.append(fd)
+            return fd
+        return original_open(name, *args, **kwargs)
+
+    def inspected(fd):
+        info = original_fstat(fd)
+        if not swap_before_pin and selected_fd == [fd] and not swapped:
+            swap()
+        return info
+
+    def read(fd, size):
+        data = original_read(fd, size)
+        reads.append(data)
+        return data
+
+    monkeypatch.setattr(os, "open", opened)
+    monkeypatch.setattr(os, "fstat", inspected)
+    monkeypatch.setattr(os, "read", read)
+    if swap_before_pin:
+        with pytest.raises(ValueError, match="session-log"):
+            session_history.search(logs, ["needle"], 10)
+        assert reads == []
+    else:
+        result = session_history.search(logs, ["needle"], 10)
+        assert result["matched_sessions"] == result["scanned_files"] == 1
+        assert result["results"][0]["matches"][0]["preview"] == "needle selected session"
+        assert b"needle private history" not in b"".join(reads)
+    assert swapped == [True]
+
+
+def test_root_replacement_after_protection_check_cannot_redirect_scan(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    write_message(logs / "log.jsonl", "needle selected session")
+    write_message(home / "history.jsonl", "needle private history")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    original = session_history_io.reject_protected_root
+    checked = []
+
+    def check(fd, protected):
+        original(fd, protected)
+        checked.append(os.fstat(fd).st_ino)
+        logs.rename(tmp_path / "moved")
+        home.rename(logs)
+
+    original_scan = session_history.scan_directory
+
+    def scan(fd, *args):
+        assert checked == [os.fstat(fd).st_ino]
+        return original_scan(fd, *args)
+
+    monkeypatch.setattr(session_history_io, "reject_protected_root", check)
+    monkeypatch.setattr(session_history, "scan_directory", scan)
+    result = session_history.search(logs, ["needle"], 10)
+    assert result["scanned_files"] == result["matched_sessions"] == 1
+    assert result["results"][0]["matches"][0]["preview"] == "needle selected session"
 
 
 @pytest.mark.parametrize("format_name", ["codex", "claude"])

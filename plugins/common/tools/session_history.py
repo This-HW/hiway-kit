@@ -211,17 +211,19 @@ def search(root: Path, queries: list[str], limit: int):
     budget = ScanBudget()
     session_history_io.require_secure_io()
     root = root.resolve(strict=True)
-    home = Path.home().resolve()
-    broad_roots = {home, (home / ".claude").resolve(), (home / ".codex").resolve(),
-                   Path(os.environ.get("CODEX_HOME", str(home / ".codex"))).resolve()}
-    # Reject a canonical root that would recursively include any protected tree.
-    # Descendants such as sessions/ and projects/ remain explicit selections.
-    if any(protected.is_relative_to(root) for protected in broad_roots):
-        raise ValueError("Choose a session-log directory, not a home or configuration root")
+    home = Path.home()
+    broad_roots = [home, home / ".claude", home / ".codex"]
+    for variable in ("CODEX_HOME", "CLAUDE_CONFIG_DIR"):
+        configured = os.environ.get(variable)
+        if configured:
+            broad_roots.append(Path(configured))
     results = []
     malformed = 0
     limited_files = 0
     with session_history_io.open_root(root) as root_fd:
+        # Check and scan the same pinned root, including on case-insensitive
+        # filesystems. Explicit descendants (sessions/, projects/) stay allowed.
+        session_history_io.reject_protected_root(root_fd, broad_roots)
         for record in scan_directory(root_fd, root, queries, budget):
             malformed += record["malformed_records"]
             limited_files += int(record["truncated"])

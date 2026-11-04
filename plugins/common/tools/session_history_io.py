@@ -35,19 +35,49 @@ def open_entry(name: str, parent_fd: int | None, *, directory: bool):
         os.close(fd)
 
 
+def _reject_identity(fd: int, forbidden_identity: tuple[int, int] | None):
+    if forbidden_identity is not None:
+        info = os.fstat(fd)
+        if (info.st_dev, info.st_ino) == forbidden_identity:
+            raise ValueError("Choose a session-log directory, not a home or configuration root")
+
+
 @contextmanager
-def open_root(root: Path):
-    """Open every canonical absolute component; never reopen a validated path."""
+def open_root(root: Path, *, forbidden_identity: tuple[int, int] | None = None, missing_ok: bool = False):
+    """Pin canonical components, optionally rejecting any ancestor's identity.
+
+    missing_ok is only for protection checks: absent config trees still protect
+    their existing ancestors. Other IO errors must propagate before any scan.
+    """
     require_secure_io()
     # Only the current component stays open during root pinning. Once pinned,
     # renaming an ancestor cannot redirect subsequent relative opens.
     fd = os.open(root.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
+        _reject_identity(fd, forbidden_identity)
         for component in root.parts[1:]:
-            with open_entry(component, fd, directory=True) as child_fd:
-                next_fd = os.dup(child_fd)
+            try:
+                with open_entry(component, fd, directory=True) as child_fd:
+                    next_fd = os.dup(child_fd)
+            except FileNotFoundError:
+                if not missing_ok:
+                    raise
+                break
             os.close(fd)
             fd = next_fd
+            _reject_identity(fd, forbidden_identity)
         yield fd
     finally:
         os.close(fd)
+
+
+def reject_protected_root(root_fd: int, protected_paths: list[Path]):
+    """Compare the pinned search root with real protected ancestor identities."""
+    info = os.fstat(root_fd)
+    root_identity = (info.st_dev, info.st_ino)
+    for path in protected_paths:
+        # Resolve aliases once. Even if non-strict resolution encounters an
+        # unavailable component, the NOFOLLOW opens above cannot silently pass
+        # it: only ENOENT is tolerated, and every existing ancestor is checked.
+        with open_root(path.resolve(), forbidden_identity=root_identity, missing_ok=True):
+            pass

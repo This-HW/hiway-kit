@@ -144,3 +144,83 @@ def test_fd_traversal_never_reopens_display_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "open", forbidden)
     result = session_history.search(tmp_path, ["needle"], 10)
     assert result["matched_sessions"] == 1
+
+
+@pytest.mark.parametrize("failure", ["protected", "permission", "io", "missing"])
+def test_protection_check_closes_all_descriptors(tmp_path, monkeypatch, failure):
+    home = tmp_path / "home"
+    home.mkdir()
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "absent/config"))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    original_open, original_dup, original_close = os.open, os.dup, os.close
+    owned = set()
+
+    def opened(name, *args, **kwargs):
+        if name == "home" and failure in ("permission", "io"):
+            raise PermissionError("protected metadata denied") if failure == "permission" else OSError("protected metadata unavailable")
+        fd = original_open(name, *args, **kwargs)
+        owned.add(fd)
+        return fd
+
+    def duplicated(fd):
+        duplicate = original_dup(fd)
+        owned.add(duplicate)
+        return duplicate
+
+    def closed(fd):
+        owned.remove(fd)
+        original_close(fd)
+
+    monkeypatch.setattr(os, "open", opened)
+    monkeypatch.setattr(os, "dup", duplicated)
+    monkeypatch.setattr(os, "close", closed)
+    if failure == "missing":
+        result = session_history.search(logs, ["needle"], 10)
+        assert result["status"] == "ok" and result["scanned_files"] == 0
+    else:
+        selected = home if failure == "protected" else logs
+        with pytest.raises(ValueError if failure == "protected" else OSError):
+            session_history.search(selected, ["needle"], 10)
+    assert not owned
+
+
+def test_missing_symlink_target_still_protects_real_ancestors(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(existing / "absent/config", target_is_directory=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(alias))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    with pytest.raises(ValueError, match="session-log"):
+        session_history.search(existing, ["needle"], 10)
+
+
+def test_protected_path_symlink_replacement_fails_before_scan(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    logs = tmp_path / "logs"
+    logs.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    original = os.open
+
+    def swap(name, *args, **kwargs):
+        if name == "home":
+            home.rename(tmp_path / "moved-home")
+            home.symlink_to(logs, target_is_directory=True)
+        return original(name, *args, **kwargs)
+
+    def forbidden(*args):
+        pytest.fail("Unverified protected path must fail before scanning")
+
+    monkeypatch.setattr(os, "open", swap)
+    monkeypatch.setattr(os, "scandir", forbidden)
+    with pytest.raises(OSError):
+        session_history.search(logs, ["needle"], 10)
