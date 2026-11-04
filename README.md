@@ -111,7 +111,7 @@ capability. The cells below cite the measurement they rest on; the dated records
 | Skills | ✅ `"skills": "./skills/"` — all recognized (measured 2026-10-05) | ✅ recognized by the model (measured 2026-10-05); running a skill end-to-end is unmeasured |
 | Rules | ⚠ no dedicated field → hook injection (marketplace install) or `AGENTS.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **plugin `rules/` does not arrive** (a token planted in `rules/` never reached the model, measured 2026-10-05 — although Google's plugin docs list `rules/`). Norms reach Antigravity **only** through the entrypoint file |
 | Agents | ⚠ no plugin field — files ship but are not exposed as subagents | ❌ **not recognized** — even after the 5.3.0 flat layout, `agy agents` lists none of them. The cause is the `model: haiku\|sonnet\|opus` frontmatter (an agent with `model: inherit` or no `model` is recognized — bisected 2026-10-05), not the folder layout. `agy plugin validate` counts files only (an empty `junk.txt` counts as an agent), so its green "agents processed" line is not evidence of recognition |
-| Hooks | ⚠ `session-start` and `auto-format` ship, **skipped silently until you trust them** — see *Trusting Codex hooks* below. `protect-sensitive` is not shipped (see *Automatic blocking*) | ❌ not shipped — format unverified |
+| Hooks | ⚠ `session-start` and `auto-format` ship and require native trust and an enabled state — see *Trusting and enabling Codex hooks* below. `protect-sensitive` is not shipped (see *Automatic blocking*) | ❌ not shipped — format unverified |
 | MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
 
 **Parity contract**: rules and skills (norms and procedures) work on every harness — but how the
@@ -512,15 +512,18 @@ owned by the skills themselves — read [`plan-task`](plugins/common/skills/plan
 
 ## Data handling
 
-The plugin collects nothing and sends nothing anywhere.
+The plugin has no telemetry or publisher service. Local helpers read selected project files
+and session logs; the publisher receives no data from these helpers.
 The full policy is in [PRIVACY.md](PRIVACY.md).
 
-- **No network calls.** The shipped hooks (`plugins/common/hooks/`) and skill tools
-  (`plugins/common/tools/`) make no HTTP or socket connections. They only run local commands: `git`, the formatter/linter for the edited file
-  (e.g. `ruff`), `pytest` on test files you edited, and verification commands you define in a
-  plan checklist.
-- **No telemetry, no accounts, no personal data.** The plugin does not read, store, or transmit
-  personal data.
+- **Local processes are not sandboxed by the kit.** Hooks and tools invoke installed commands,
+  including language servers, AST search, formatters, tests and verification commands. A language
+  server can execute project build scripts or macros, write caches or access the network.
+  Use code intelligence only in workspaces you trust. Its read-only queries and replacement
+  previews do not guarantee that the server or project configuration has no side effects.
+- **No telemetry or plugin accounts.** Selected session logs and project files can contain personal
+  or sensitive information. Their contents are returned locally to the calling agent; that agent's
+  provider and any external tools remain subject to their own data policies.
 - **What it writes stays on your machine.** The feedback ledger (recurring review findings) is
   kept under your repository's `.git/kit/` (untracked; outside a git repo it falls back to a
   file in the project); hook state and locks live in a per-user `0700` directory under your

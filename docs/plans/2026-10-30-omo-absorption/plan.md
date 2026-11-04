@@ -62,12 +62,12 @@ size: large
 - 소비자: 임시 CODEX_HOME에 네이티브 marketplace/add + plugin/add. ast-grep 검색/미리보기,
   clangd 네 가지 요청 및 잘못된 C 진단, JSONL 검색 모두 성공. 플러그인 트리 전후 파일 해시 동일.
   OS sandbox는 임시 디렉터리 밖 쓰기를 거부하는 음성 대조로 검증했다.
-- 소비자 증거: `/private/var/folders/gf/x3snbzqs3ql8q8vptj3z6c6r0000gn/T/hiway-absorption.mun64f8z/report.json`.
+- 소비자 증거: 당시 임시 소비자 환경의 report.json(로컬 migration 증거에 보존).
 - OMO 공식 Node 전용 제거기를 격리 실행해 절대경로 에이전트 등록 13개가 남음을 확인했다.
   실제 제거는 배포 원문과 바이트가 같은 에이전트만 식별하고, 두 config의 비관련 TOML 값이 동일함을 검사하는 방식으로 수행했다.
 - 실제 마이그레이션: 두 홈에서 각각 관리 역할 13개 등록 해제, 소유 경로 42개 및 신뢰 기록/데몬 상태 3개를 백업으로 이동.
   OMO 전용 LSP 프로세스 3개 종료. 모델/인증/다른 플러그인 설정 보존. 인증 파일은 수정하거나 복사하지 않았다.
-- 백업 및 복원 매핑: `/Users/hw/.local/share/hiway-kit/migrations/2026-10-30-omo/`.
+- 백업 및 복원 매핑: 사용자 로컬 데이터 디렉터리의 hiway-kit migration 기록(2026-10-30-omo).
   `manifest.json`·`moved.json`·`auxiliary.json`과 각 홈의 config.before/config.after가 실제 변경을 기록한다.
 - 새 app-server 두 개에서 각각 hiway 5.6.0 스킬 17개, OMO 스킬/훅 0개 확인.
   현재 세션은 이미 로드한 도구/지침을 메모리에 유지할 수 있어 재시작이 필요하다.

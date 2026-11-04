@@ -71,7 +71,17 @@ size: large
 
 ## 미결 및 다음 단계
 
-- 지정 Claude의 diff 직접 검수·독립 review-code·security-scan·재현 재실행 판정 대기. 기계 검사가 green이어도 execution_status는 in-progress로 유지한다.
-- 인증이 필요한 자연어 스킬 선택 E2E, 모델 eval 및 동일 조건 토큰·품질 비교는 미검증이다. 인증 우회 없이 지정 Claude와 처리 방식을 합의한다.
+- 지정 Claude의 1차 독립 검수는 `1b095ca`에 CONDITIONAL이다. 기존 ATK-001~005 수정과 doctor·커버리지 회귀는 독립 재현됐으나, 아래 추가 결함을 수정하고 새 HEAD로 2차 검수를 받아야 한다. execution_status는 in-progress로 유지한다.
+- Claude 기존 에이전트 행동 평가는 plan-control이 기존 로그인에서 인증 복사 없이 실행해 13개 에이전트 25/25 pass, rc=0을 확인했다(대상 `1b095ca`). 신규 스킬 자연어 선택·토큰·품질 비교를 입증하지는 않는다. Codex 자연어 E2E는 사용자 본인의 전용 홈 로그인 전까지 미검증이다.
 - 5.7 이후 상주 LSP·안전한 rename·브라우저 QA는 별도 Large 설계로 이어간다. 이번 5.6 초안에 구현됐다고 주장하지 않는다.
 - main 병합·tag·push·실 홈 변경은 수행하지 않았다.
+
+## 검수 1차 후 수정 계약
+
+- doctor: config/snapshot 심링크는 rc=2로 보고하고 읽지 않는다. plugin store 하위 위험 링크는 rc=1을 유지한다. 잘못된 인자·미지원 레이아웃을 설치 결함과 구별하고, 인증 파일 금지는 정확한 basename으로 제한한다. git worktree 소스는 지원하지 않는다는 구체 사유를 반환한다.
+- history: home·하네스 홈의 자체뿐 아니라 상위 루트도 거부한다. 결과 id/cwd 메타데이터를 각 512문자로 제한하고 잘림을 표시한다.
+- code-intel/LSP: 알려진 서버 basename 외에는 명시적 custom-server 선택을 요구하며 상대 실행 경로를 거부한다. LSP 누적 수신을 16MiB로 제한하고 비진단 알림 본문을 저장하지 않는다. LF/CRLF/CR 위치와 Unicode 구분자를 구별한다.
+- AST: ast-grep 이름만 자동 탐지하고 중립 cwd에서 실행한다. 현재 검증된 0.51.0 외에는 pattern_validated=false, 0건은 unverified로 보고한다. AST/LSP 결과에 비신뢰 알림을 붙이고 자식 환경변수를 최소 허용 목록으로 제한한다.
+- 문서: read-only는 클라이언트의 편집 요청·preview 계약이며 언어서버의 프로젝트 코드 실행·파일쓰기·통신까지 차단하지 않음을 명시한다. 신뢰한 작업 공간만 사용하고 광범위한 실행 허용 규칙을 피하도록 안내한다. 공개 계획의 개인 절대경로를 제거한다.
+- 검증: 변경별 before FAIL/after PASS, 양성 대조와 Python 3.9 검사를 남긴다. 커버리지 CLI 실행에서 skip=0을 확인하고 legacy 예외는 기존 테스트 부재가 아닌 새 게이트 미연결 부채로 정확히 기술한다. 별도 G-1 경로 길이 의존 게이트는 이번 수정 범위 밖이다.
+- 수정은 세 격리 worker의 doctor/코드 분석/history와 부모의 문서·커버리지로 나누며, 통합 후 fresh 전체 게이트와 plan-control 2차 검수를 수행한다.

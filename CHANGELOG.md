@@ -38,6 +38,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   currently require POSIX file/process primitives and do not claim full OMO feature equivalence.
 - Select logged-in browser capabilities from the current host instead of naming a personal CLI;
   public-page fetches do not establish authenticated access.
+- Reject session-log roots that contain a home/configuration root and bound displayed session metadata.
+- Clarify that code intelligence requires a trusted workspace: language servers may execute project build
+  scripts, write files or access the network. Read-only client requests do not sandbox those processes.
 
 ## [5.5.1] — 2026-10-28
 
