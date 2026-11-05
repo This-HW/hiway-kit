@@ -1,0 +1,26 @@
+[
+  {
+    "id": "D1",
+    "description": "JSON 규칙 preview·bounded 반복·rule-test와 기존 CLI 회귀",
+    "acceptance": "승인된 규칙 계약과 기존 pattern 계약이 기능 테스트에서 검증됨",
+    "verify": "python3 -B -m pytest tests/hooks/test_code_intel_rules.py tests/hooks/test_code_intel.py tests/hooks/test_skill_cli_contracts.py -q",
+    "passes": true,
+    "evidence": "verify exit 0: python3 -B -m pytest tests/hooks/test_code_intel_rules.py tests/hooks/test_code_intel.py tests/hooks/test_skill_cli_contracts.py -q"
+  },
+  {
+    "id": "D2",
+    "description": "(선행: D1) 실제 엔진 차분·고정점·중첩 검증",
+    "acceptance": "실제 설치 엔진 필수 차분 테스트 통과, skip 없음",
+    "verify": "HIWAY_REQUIRE_AST_GREP=1 python3 -B -m pytest tests/hooks/test_code_intel_rules.py -k real_engine -q",
+    "passes": true,
+    "evidence": "verify exit 0: HIWAY_REQUIRE_AST_GREP=1 python3 -B -m pytest tests/hooks/test_code_intel_rules.py -k real_engine -q"
+  },
+  {
+    "id": "D3",
+    "description": "(선행: D2) 문서·스킬 CLI 커버리지",
+    "acceptance": "기존 agent gate와 분리된 skill CLI 커버리지 검증 통과",
+    "verify": "python3 scripts/check_skill_eval_coverage.py",
+    "passes": true,
+    "evidence": "verify exit 0: python3 scripts/check_skill_eval_coverage.py"
+  }
+]

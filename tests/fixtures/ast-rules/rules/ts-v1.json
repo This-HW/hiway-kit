@@ -1,0 +1,40 @@
+[
+  {
+    "id": "legacy-format-2",
+    "language": "typescript",
+    "rule": {
+      "pattern": "legacyFormat($V, $U)",
+      "inside": {
+        "kind": "program",
+        "stopBy": "end",
+        "has": {
+          "pattern": "import { legacyFormat } from \"./legacy.ts\""
+        }
+      }
+    },
+    "fix": "formatV2($V, { unit: $U })"
+  },
+  {
+    "id": "legacy-format-1",
+    "language": "typescript",
+    "rule": {
+      "pattern": "legacyFormat($V)",
+      "inside": {
+        "kind": "program",
+        "stopBy": "end",
+        "has": {
+          "pattern": "import { legacyFormat } from \"./legacy.ts\""
+        }
+      }
+    },
+    "fix": "formatV2($V)"
+  },
+  {
+    "id": "legacy-format-import",
+    "language": "typescript",
+    "rule": {
+      "pattern": "import { legacyFormat } from \"./legacy.ts\""
+    },
+    "fix": "import { formatV2 } from \"./fmt.ts\""
+  }
+]

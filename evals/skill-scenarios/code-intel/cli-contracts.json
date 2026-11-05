@@ -29,6 +29,41 @@
       "testNode": "tests/hooks/test_skill_cli_contracts.py::test_missing_executables_are_unavailable",
       "expectation": "rc=3 and status=unavailable for both AST and LSP when PATH has no engines",
       "evidence": "synthetic-cli"
+    },
+    {
+      "id": "json-rule-preview",
+      "polarity": "positive",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_json_rule_preview_subprocess_preserves_source",
+      "expectation": "rc=0; private-copy rewrite converges after a confirm scan, diff present, original unchanged",
+      "evidence": "synthetic-cli"
+    },
+    {
+      "id": "json-rule-test-mismatch",
+      "polarity": "negative",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_json_rule_test_subprocess_distinguishes_mismatch",
+      "expectation": "positive control rc=0; actual match/non-match disagreement rc=1, executed case counts retained",
+      "evidence": "synthetic-cli"
+    },
+    {
+      "id": "json-rule-untested",
+      "polarity": "negative",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_json_rule_missing_test_is_unverified",
+      "expectation": "rc=2 untested_rule before engine discovery; missing test coverage is never pass",
+      "evidence": "synthetic-cli"
+    },
+    {
+      "id": "json-rule-empty-output",
+      "polarity": "negative",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_json_rule_empty_engine_output_is_unverified",
+      "expectation": "rc=2 schema_mismatch; successful process without JSON is not a clean scan, original unchanged",
+      "evidence": "synthetic-cli"
+    },
+    {
+      "id": "json-rule-file-name",
+      "polarity": "negative",
+      "testNode": "tests/hooks/test_skill_cli_contracts.py::test_json_rule_non_utf8_argument_stays_json",
+      "expectation": "rc=2 unsupported_file_name; surrogate-escaped argument returns JSON without traceback",
+      "evidence": "synthetic-cli"
     }
   ]
 }
