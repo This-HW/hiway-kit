@@ -258,3 +258,36 @@ jobs:
               echo "❌ $f — python 3.9에서 로드 실패 (위 트레이스백 참조)"; exit 1
             fi
           done
+
+  directory-branch:
+    # Claude 디렉토리는 command 훅을 Verified 조직에게만 받는다(2026-11-06 v5.6.0 거부).
+    # 디렉토리는 무훅 `directory` 브랜치를 추적한다 — 검증을 통과한 main push 마다 그 커밋에서
+    # 훅 선언만 뺀 트리로 fast-forward 한다(scripts/build-directory-branch.py 가 단일 소스).
+    # 손으로 만들면 잊는 날 디렉토리 사용자만 낡은 버전에 남는다.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [validate, python39-compat]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: directory-branch
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Update directory branch
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin directory >/dev/null; then
+            git fetch --no-tags origin directory:refs/heads/directory
+          fi
+          python3 scripts/build-directory-branch.py --write --source "$GITHUB_SHA"
+          # fast-forward 만 — 강제 push 는 하지 않는다(어긋나면 red 로 드러난다)
+          git push origin refs/heads/directory:refs/heads/directory
