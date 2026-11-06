@@ -34,7 +34,10 @@ qualifies); older interpreters make the hooks no-ops and the session warns you o
 ```
 
 Path A is the reviewed listing: each version reaches it after Anthropic's directory scan, so it can
-trail `main` briefly. Both paths were verified on a clean Claude Code config (no claude.ai sign-in)
+trail `main` briefly. **From 5.7.1, path A ships without hooks** — the directory accepts command
+hooks only from Verified organizations, so it tracks a `directory` branch that drops
+`hooks/hooks.json` (no rule injection, sensitive-path guard, auto-format or stop-time checks).
+For the hooks, use path B. Both paths were verified on a clean Claude Code config (no claude.ai sign-in)
 on 2026-10-05. The listing does not yet show up in claude.ai's web directory search; the install
 command above works regardless.
 
