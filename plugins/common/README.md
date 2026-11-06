@@ -14,6 +14,10 @@ Pick **one** (installing both loads every skill and hook twice):
 /plugin install hiway-kit@hiway-kit
 ```
 
+The directory install has **no hooks** (the directory accepts command hooks only from Verified
+organizations): skills, agents and rule files only. Install from the repository marketplace to get
+session-start rule injection, the sensitive-path guard, auto-format and stop-time checks.
+
 Other harnesses (Codex, Antigravity, Gemini CLI) and what each one supports:
 [repository README](https://github.com/This-HW/hiway-kit#other-harnesses-codex--antigravity--gemini-cli).
 

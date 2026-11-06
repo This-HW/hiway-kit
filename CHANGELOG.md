@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.7.1] — 2026-11-06
+
+### Changed — Anthropic's directory ships without hooks
+
+- Anthropic's directory now refuses plugins that declare command hooks unless they come from a
+  Verified organization (v5.6.0 and v5.7.0 were refused on 2026-11-06). The directory listing
+  therefore tracks a `directory` branch that is identical to `main` except that
+  `plugins/common/hooks/hooks.json` is removed. CI regenerates it after every verified push to
+  `main` (`scripts/build-directory-branch.py`).
+- **Directory installs (`hiway-kit@anthropic-plugin-directory`) no longer run hooks**: no rule
+  injection at session start, no sensitive-path guard, no auto-format and no stop-time lint/tests.
+  Skills, agents and rule files are unchanged. To keep the hooks, install from this repository as a
+  marketplace (`hiway-kit@hiway-kit`) instead — uninstall the directory copy first.
+- Installs from this repository as a marketplace are unchanged.
+
 ## [5.7.0] — 2026-11-05
 
 ### Added — Contextual AST rule previews and snippet tests
