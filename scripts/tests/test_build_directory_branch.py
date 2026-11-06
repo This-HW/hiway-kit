@@ -103,6 +103,17 @@ def test_write_is_idempotent_and_fast_forward(repo: Path) -> None:
     ]
 
 
+def test_docs_only_change_makes_no_new_commit(repo: Path) -> None:
+    """디렉토리는 추적 브랜치의 새 커밋마다 재스캔하고 심사 중 버전을 대체한다 — 문서만 바뀌면 갱신하지 않는다."""
+    mod.main(["--write", "--repo", str(repo)])
+    first = _git(repo, "rev-parse", "directory")
+    (repo / "docs").mkdir()
+    (repo / "docs" / "note.md").write_text("only docs\n")
+    _commit_all(repo, "docs")
+    mod.main(["--write", "--repo", str(repo)])
+    assert _git(repo, "rev-parse", "directory") == first
+
+
 def test_check_does_not_touch_refs(repo: Path) -> None:
     assert mod.main(["--check", "--repo", str(repo)]) == 0
     assert (
