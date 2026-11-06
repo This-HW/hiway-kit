@@ -6,6 +6,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.7.0] — 2026-11-05
+
+### Added — Contextual AST rule previews and snippet tests
+
+- Extend `code-intel` with strict inline JSON rules (`--rule-json`) and match/non-match
+  snippet tests (`--rule-tests-json`) using an existing ast-grep >=0.51.0. No engine installation,
+  YAML parser dependency, project configuration discovery or OMO runtime.
+- Preview bounded rewrites on private copies until a byte fixed point; report changed passes,
+  source hashes and diffs. Reject ambiguous same-range edits, malformed offsets, cycles and
+  resource limits. Consumer source files are never edited by the helper.
+- Run every supplied rule's positive and negative snippets with snapshots disabled; distinguish
+  genuine expectation failures from missing, skipped or unrecognized test execution.
+- Document that convergence, native differential agreement and snippet passes do not establish
+  semantic correctness. Separate editing and project execution/tests remain necessary; external
+  apply tools can leave partial changes even when they exit unsuccessfully.
+- Add native differential Python/TypeScript fixtures and deterministic CLI regression contracts.
+- Sort rule-preview matches by relative path and byte range before display limits so repeated
+  scans present the same subset even when the engine emits matches in a different order.
+  Engine 0.51.0 is tested; other supported versions carry a notice and schema checks. This does
+  not claim model token savings, faster overall development or full OMO feature parity.
+- Bound diff rendering in an isolated Python child under the same time/output budget and
+  preserve LF-based patch lines. Verify private-copy identities and bytes before accepting scans;
+  reject swapped links before writes, non-UTF-8 filenames and empty engine output.
+
 ## [5.6.0] — 2026-11-05
 
 ### Added — On-demand code intelligence and session history

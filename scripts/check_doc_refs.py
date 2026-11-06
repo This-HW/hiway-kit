@@ -101,6 +101,18 @@ ALLOWED_REFS: dict[tuple[str, str], str] = {
         "docs/api/users.md",
     ): "소비자 프로젝트 예시 경로",
     (
+        "plugins/common/agents/sync-docs.md",
+        "src/api/users.ts",
+    ): "동기화 결과 표의 소비자 API 파일 예시",
+    (
+        "plugins/common/agents/write-tests.md",
+        "tests/unit/.../Component.test.ts",
+    ): "작성 완료 표의 소비자 단위 테스트 파일 예시",
+    (
+        "plugins/common/agents/write-tests.md",
+        "tests/scratch/debug.test.ts",
+    ): "작성 완료 표의 소비자 임시 테스트 파일 예시",
+    (
         "plugins/common/agents/write-tests.md",
         "tests/unit/",
     ): "소비자 프로젝트 예시 경로",
@@ -154,7 +166,7 @@ CODE_SPAN_RE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
 URL_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
 #: 슬래시가 든 백틱 토큰이 경로 모양인가. 확장자는 **이 레포가 실제로 추적하는 것만** 경로로
 #: 본다(`Index.exts`) — 목록을 박으면 새 파일 종류가 생길 때 조용히 빠진다(§검토 절차 5).
-#: 추적하지 않는 종류(`.ts` 등)는 소비자 프로젝트의 예시 파일이다.
+#: 추적하지 않는 종류는 소비자 프로젝트의 예시 파일로 취급한다.
 PATH_TOKEN_RE = re.compile(r"^[\w.\-]+(?:/[\w.\-]+)+/?$")
 PLACEHOLDER_SEGMENTS = ("path/to/",)
 BARE_FILE_RE = re.compile(r"^[\w\-]+\.(?:sh|py)$")

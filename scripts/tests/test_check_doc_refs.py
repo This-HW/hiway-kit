@@ -212,6 +212,30 @@ def test_no_documents_is_red_not_green(tmp_path, capsys):
     assert "0개" in out
 
 
+def test_typescript_consumer_examples_have_exact_document_exceptions(tmp_path, capsys):
+    mod = load_module_by_path(SCRIPTS_DIR / "check_doc_refs.py", "doc_refs_examples")
+    examples = {
+        "plugins/common/agents/sync-docs.md": ["src/api/users.ts"],
+        "plugins/common/agents/write-tests.md": [
+            "tests/unit/.../Component.test.ts", "tests/scratch/debug.test.ts",
+        ],
+    }
+    files = {**BASE, "tests/fixtures/example.ts": "const x = 1;\n"}
+    files.update({doc: "\n".join(f"`{ref}`" for ref in refs) for doc, refs in examples.items()})
+    root = _repo(tmp_path, files)
+    rc, out = _run(root, capsys)
+    assert rc == 1 and all(ref in out for refs in examples.values() for ref in refs)
+    allowed = {(doc, ref): mod.ALLOWED_REFS[(doc, ref)] for doc, refs in examples.items() for ref in refs}
+    rc, out = _run(root, capsys, ALLOWED_REFS=allowed)
+    assert rc == 0, out
+    # A neighboring path in the same document and the same path elsewhere still fail.
+    with (root / "plugins/common/agents/sync-docs.md").open("a") as stream:
+        stream.write("\n`src/api/missing.ts`\n")
+    (root / "docs/other.md").write_text("`src/api/users.ts`\n")
+    rc, out = _run(root, capsys, ALLOWED_REFS=allowed)
+    assert rc == 1 and "src/api/missing.ts" in out and "docs/other.md:1" in out
+
+
 def test_unreadable_document_is_tallied_and_red(tmp_path, capsys):
     root = _repo(tmp_path, {**BASE, "docs/gone.md": "x\n", "docs/ok.md": "fine\n"})
     (root / "docs" / "gone.md").unlink()  # 추적 중이지만 워킹트리에 없다

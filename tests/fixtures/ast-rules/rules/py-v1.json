@@ -1,0 +1,62 @@
+[
+  {
+    "id": "old-api-kw",
+    "language": "python",
+    "rule": {
+      "pattern": "old_api($X, scale=$S)",
+      "inside": {
+        "kind": "module",
+        "stopBy": "end",
+        "has": {
+          "pattern": "from legacy import old_api"
+        }
+      }
+    },
+    "fix": "new_api($X, scale=$S)"
+  },
+  {
+    "id": "old-api-pos2",
+    "language": "python",
+    "rule": {
+      "pattern": "old_api($X, $S)",
+      "inside": {
+        "kind": "module",
+        "stopBy": "end",
+        "has": {
+          "pattern": "from legacy import old_api"
+        }
+      }
+    },
+    "constraints": {
+      "S": {
+        "not": {
+          "kind": "keyword_argument"
+        }
+      }
+    },
+    "fix": "new_api($X, scale=$S)"
+  },
+  {
+    "id": "old-api-one",
+    "language": "python",
+    "rule": {
+      "pattern": "old_api($X)",
+      "inside": {
+        "kind": "module",
+        "stopBy": "end",
+        "has": {
+          "pattern": "from legacy import old_api"
+        }
+      }
+    },
+    "fix": "new_api($X)"
+  },
+  {
+    "id": "old-api-import",
+    "language": "python",
+    "rule": {
+      "pattern": "from legacy import old_api"
+    },
+    "fix": "from newlib import new_api"
+  }
+]

@@ -112,13 +112,30 @@ def run_query(args, root: Path, paths: list[Path], budget: ProcessBudget, cwd: P
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".")
-    parser.add_argument("--lang", required=True)
-    parser.add_argument("--pattern", required=True)
+    parser.add_argument("--lang")
+    parser.add_argument("--pattern")
     parser.add_argument("--rewrite", help="Preview replacements through the trusted engine; no apply flag is sent")
+    parser.add_argument("--rule-json", help="JSON rule object or non-empty array ('-' reads non-TTY stdin); "
+                        "previews rewrites on a private copy, never the sources")
+    parser.add_argument("--rule-tests-json", help="With --rule-json: [{id, valid, invalid}] snippet tests, no paths")
+    parser.add_argument("--max-passes", type=int, help="With --rule-json preview: scans including the confirm scan (default 8, max 32)")
     parser.add_argument("--limit", type=int, choices=range(1, 501), default=50, metavar="1..500")
-    parser.add_argument("paths", nargs="+", help="Files/directories inside --root")
+    parser.add_argument("paths", nargs="*", help="Files/directories inside --root")
+    args = parser.parse_args()
+    if args.rule_json is not None:
+        import code_intel_rules
+
+        return code_intel_rules.main(args)
+    missing = [name for name, value in (("--lang", args.lang), ("--pattern", args.pattern)) if value is None]
+    if not args.paths:
+        missing.append("paths")
+    if missing:
+        parser.error("the following arguments are required: " + ", ".join(missing))
+    if args.rule_tests_json is not None or args.max_passes is not None:
+        output({"status": "error", "reason": "--rule-tests-json and --max-passes require --rule-json"})
+        return 2
     try:
-        return query(parser.parse_args())
+        return query(args)
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as exc:
         output({"status": "error", "reason": str(exc)})
         return 2

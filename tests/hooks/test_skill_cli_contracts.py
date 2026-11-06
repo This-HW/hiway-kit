@@ -73,6 +73,98 @@ def test_ast_metavariables_and_preview_preserve_source(tmp_path):
             assert file.read_text(encoding="utf-8") == source
 
 
+def rule_engine(tmp_path):
+    """Synthetic native replies; validates dispatch/argv, not AST semantics."""
+    binary_dir = tmp_path.parent / (tmp_path.name + "-rule-bin")
+    binary_dir.mkdir()
+    engine = binary_dir / "ast-grep"
+    engine.write_text(
+        f"#!{sys.executable} -B\n"
+        "import json, sys\nfrom pathlib import Path\n"
+        "if '--version' in sys.argv: print('ast-grep 0.51.0'); sys.exit(0)\n"
+        "assert '-U' not in sys.argv and '--update-all' not in sys.argv\n"
+        "if sys.argv[1] == 'test':\n"
+        "    assert '--skip-snapshot-tests' in sys.argv and '--include-off' in sys.argv\n"
+        "    config = Path(sys.argv[sys.argv.index('--config') + 1])\n"
+        "    test = json.loads((config.parent / 'tests/case-0001.yml').read_text())\n"
+        "    assert test['id'] == 'r' and test['invalid'] == ['f(x)']\n"
+        "    passed = test['valid'] == ['g(x)']\n"
+        "    print('Running 1 tests\\n')\n"
+        "    print('PASS r  ..' if passed else 'FAIL r  N.')\n"
+        "    print('test result: ok. 1 passed; 0 failed;' if passed else\n"
+        "          'Error: test failed. 0 passed; 1 failed;', file=sys.stdout if passed else sys.stderr)\n"
+        "    sys.exit(0 if passed else 1)\n"
+        "assert sys.argv[1] == 'scan' and '--hint=r' in sys.argv and '--hint' not in sys.argv\n"
+        "assert sys.argv[-2] == '--'\n"
+        "rule = json.loads(next(x.split('=', 1)[1] for x in sys.argv if x.startswith('--inline-rules=')))\n"
+        "assert rule['rule']['pattern'] == 'f($X)' and rule['fix'] == 'g($X)'\n"
+        "source = Path(sys.argv[-1]) / 'sample.py'\n"
+        "data = source.read_bytes()\n"
+        "row = {'file': str(source), 'ruleId': 'r', 'text': 'f(x)', 'replacement': 'g(x)',\n"
+        "       'range': {'byteOffset': {'start': 0, 'end': 4},\n"
+        "                 'start': {'line': 0, 'column': 0}, 'end': {'line': 0, 'column': 4}},\n"
+        "       'replacementOffsets': {'start': 0, 'end': 4}}\n"
+        "assert data in (b'f(x)\\n', b'g(x)\\n')\n"
+        "print(json.dumps([row] if data.startswith(b'f') else []))\n", encoding="utf-8")
+    engine.chmod(0o700)
+    return binary_dir
+
+
+RULE = {"id": "r", "language": "Python", "rule": {"pattern": "f($X)"}, "fix": "g($X)"}
+
+
+def test_json_rule_preview_subprocess_preserves_source(tmp_path):
+    source = tmp_path / "sample.py"
+    source.write_bytes(b"f(x)\n")
+    rc, result = cli(tmp_path, "code_intel.py", "--root", tmp_path, "--rule-json", json.dumps(RULE),
+                     source.name, path=rule_engine(tmp_path))
+    assert rc == 0 and result["mode"] == "rule-preview" and result["converged"] is True
+    assert result["iterations"] == 2 and result["changed_passes"] == 1
+    assert result["files_copied"] == 1 and result["changed_file_count"] == 1
+    assert "-f(x)\n+g(x)" in result["files"][0]["diff"]
+    assert source.read_bytes() == b"f(x)\n"
+
+
+def test_json_rule_test_subprocess_distinguishes_mismatch(tmp_path):
+    binary_dir = rule_engine(tmp_path)
+    for valid, expected_rc in (("g(x)", 0), ("f(x)", 1)):
+        cases = [{"id": "r", "valid": [valid], "invalid": ["f(x)"]}]
+        rc, result = cli(tmp_path, "code_intel.py", "--root", tmp_path, "--rule-json", json.dumps(RULE),
+                         "--rule-tests-json", json.dumps(cases), path=binary_dir)
+        assert rc == expected_rc and result["mode"] == "rule-test"
+        assert result["cases_run"] == 2 and result["cases_failed"] == expected_rc
+
+
+def test_json_rule_missing_test_is_unverified(tmp_path):
+    second = {**RULE, "id": "untested"}
+    cases = [{"id": "r", "valid": ["g(x)"], "invalid": ["f(x)"]}]
+    empty = tmp_path / "empty-path"
+    empty.mkdir()
+    rc, result = cli(tmp_path, "code_intel.py", "--root", tmp_path, "--rule-json", json.dumps([RULE, second]),
+                     "--rule-tests-json", json.dumps(cases), path=empty)
+    assert rc == 2 and result["error"] == "untested_rule"
+
+
+def test_json_rule_empty_engine_output_is_unverified(tmp_path):
+    source = tmp_path / "sample.py"
+    source.write_bytes(b"f(x)\n")
+    binary_dir = rule_engine(tmp_path)
+    engine = binary_dir / "ast-grep"
+    engine.write_text(engine.read_text().replace(
+        "print(json.dumps([row] if data.startswith(b'f') else []))", "pass"), encoding="utf-8")
+    rc, result = cli(tmp_path, "code_intel.py", "--root", tmp_path, "--rule-json", json.dumps(RULE),
+                     source.name, path=binary_dir)
+    assert rc == 2 and result["error"] == "schema_mismatch"
+    assert "files" not in result and source.read_bytes() == b"f(x)\n"
+
+
+def test_json_rule_non_utf8_argument_stays_json(tmp_path):
+    rc, result = cli(tmp_path, "code_intel.py", "--root", tmp_path, "--rule-json", json.dumps(RULE),
+                     "bad-\udcff.py")
+    assert rc == 2 and result["error"] == "unsupported_file_name"
+    assert "\\udcff" in result["reason"]
+
+
 def diagnostics(tmp_path, errors):
     source = tmp_path / "example.c"
     source.write_text("int fixture;\n", encoding="utf-8")
