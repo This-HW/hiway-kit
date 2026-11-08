@@ -226,8 +226,11 @@ jobs:
   # 훅은 소비자 머신의 `python3`로 실행되므로, 3.10 전용 문법이 들어가면 그 사용자에겐
   # 훅이 전부 죽는다(2.12.0까지 4종이 그 상태였다 — 2.12.1 에서 수정). 린트의 FA 룰이 정적 방어,
   # 이 잡이 실행 방어다.
+  # 러너는 24.04 로 고정한다 — ubuntu-latest 가 26.04 로 넘어가자 setup-python 에 3.9 빌드가 없어
+  # 이 잡이 setup 단계에서 죽었다(2026-11-09, 3.9.25 빌드는 22.04·24.04 뿐). 이 잡이 죽으면
+  # directory-branch 도 건너뛴다.
   python39-compat:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
