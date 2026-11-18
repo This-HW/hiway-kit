@@ -1,5 +1,9 @@
 #!/bin/bash
-# setup.sh: 새 환경 초기 셋업 (전역 설정 + Plugin 설치)
+# setup.sh: 새 환경 초기 셋업 (Plugin 설치 + 현재 레포 pre-commit, 전역 git 템플릿은 묻고 나서)
+#
+# 전역 설정은 묻지 않고 바꾸지 않는다(docs/conventions/consumer-footprint.md). 5.7.2 전에는 전역
+# ruff.toml·init.templateDir·~/.claude/settings.json autoMemoryDirectory 를 묻지 않고 썼다 — 앞의 둘은
+# 다른 모든 프로젝트에 닿고, 마지막은 킷과 무관한 Claude Code 동작(메모리 위치)을 바꿨다.
 # D-016: 상태 추적 + 멱등성 + 외부 도구 버전 체크
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -134,7 +138,7 @@ _check_version "ruff" "0.4.0" || true
 _check_version "gitleaks" "8.18.0" || true
 
 # 1. Plugin 설치 (common 필수)
-echo "[1/5] Plugin 설치..."
+echo "[1/3] Plugin 설치..."
 if ! _step_done "plugin-common"; then
     claude plugin marketplace add This-HW/hiway-kit 2>/dev/null || true
     claude plugin install hiway-kit@hiway-kit --scope user
@@ -153,7 +157,7 @@ echo "  ℹ 훅(protect-sensitive, auto-format 등)은 플러그인이 자동으
 # 없으므로 설치하지 않고 수동 명령만 안내한다 — EOF에서 `read`가 1을 반환해 `set -e`로
 # 셋업 전체가 중단되는 것도 이 분기가 막는다.
 if command -v codex >/dev/null 2>&1 && ! _step_done "plugin-codex"; then
-    echo "[1b/5] Codex 감지됨 — 플러그인 설치 (선택)"
+    echo "[1b/3] Codex 감지됨 — 플러그인 설치 (선택)"
     CODEX_ANSWER="n"
     if [ -t 0 ]; then
         printf "  Codex에도 hiway-kit을 설치할까요? [y/N] "
@@ -187,39 +191,66 @@ fi
 
 # (2.7.0) 도메인 플러그인은 제거됨 — core 단일 플러그인 구성.
 
-# 2. ruff.toml 전역 설치
-echo "[2/5] ruff.toml 설치..."
-RUFF_DST="$HOME/.config/ruff/ruff.toml"
-if [ ! -f "$RUFF_DST" ]; then
-    mkdir -p "$(dirname "$RUFF_DST")"
-    cp "$SCRIPT_DIR/plugins/common/setup/ruff.toml" "$RUFF_DST"
-    echo "  ✓ $RUFF_DST 설치됨"
-    echo "    ℹ 전역 '폴백'입니다 — 프로젝트에 ruff.toml/pyproject.toml이 있으면 그쪽이 이깁니다."
-    echo "      (전역 설정에만 의존하면 머신마다 린트 판정이 갈립니다 — 프로젝트에 설정을 두세요)"
-else
-    echo "  - 이미 존재, 스킵"
-fi
-
-# 3. init.templateDir 설정
-echo "[3/5] git init.templateDir 설정..."
+# 2. init.templateDir — 이후 git init·clone 하는 **모든** 레포에 pre-commit 을 심는다(선택)
+#
+# 다른 프로젝트까지 닿는 전역 변경이라 Codex 단계처럼 **묻고 나서** 한다. 비대화형이면 묻지 않고
+# 건너뛰고 수동 명령만 안내한다. 이미 다른 templateDir 이 있으면 덮지 않는다.
+echo "[2/3] git init.templateDir (선택)..."
 CURRENT_TPL="$(git config --global init.templateDir 2>/dev/null || true)"
-if [ -z "$CURRENT_TPL" ]; then
-    TPL_DIR="$HOME/.claude/git-templates/hooks"
-    mkdir -p "$TPL_DIR"
-    cp "$SCRIPT_DIR/plugins/common/setup/pre-commit" "$TPL_DIR/pre-commit"
-    chmod 755 "$TPL_DIR/pre-commit"
-    git config --global init.templateDir "$HOME/.claude/git-templates"
-    echo "  ✓ init.templateDir 설정됨"
-elif [ "$CURRENT_TPL" != "$HOME/.claude/git-templates" ]; then
-    echo "  ⚠ 이미 다른 templateDir 설정됨: $CURRENT_TPL"
-    echo "    수동으로 pre-commit을 해당 디렉토리에 복사하세요."
+TPL_ROOT="$HOME/.claude/git-templates"
+if [ "$CURRENT_TPL" = "$TPL_ROOT" ]; then
+    # 예전 판이 심은 템플릿 사본은 낡았을 수 있다 — 이후 만드는 모든 레포가 그 사본을 받는다.
+    TPL_HOOK="$TPL_ROOT/hooks/pre-commit"
+    if [ -f "$TPL_HOOK" ] && ! cmp -s "$SCRIPT_DIR/plugins/common/setup/pre-commit" "$TPL_HOOK"; then
+        if $OPT_FORCE; then
+            cp "$SCRIPT_DIR/plugins/common/setup/pre-commit" "$TPL_HOOK"
+            chmod 755 "$TPL_HOOK"
+            echo "  ✓ 템플릿 pre-commit 갱신됨 — 이미 만든 레포의 .git/hooks 사본은 그대로입니다"
+        else
+            echo "  ⚠ 템플릿 pre-commit 이 이 판과 다릅니다(낡은 사본) — ./setup.sh --force 로 갱신하거나"
+            echo "    끄세요: git config --global --unset init.templateDir"
+        fi
+    else
+        echo "  - 이미 설정됨 ($TPL_ROOT). 끄려면: git config --global --unset init.templateDir"
+    fi
+elif [ -n "$CURRENT_TPL" ]; then
+    echo "  - 다른 templateDir 이 이미 있어 건드리지 않습니다: $CURRENT_TPL"
+else
+    TPL_ANSWER="n"
+    if [ -t 0 ]; then
+        printf "  앞으로 만드는 모든 git 레포에 hiway-kit pre-commit 을 심을까요? [y/N] "
+        read -r TPL_ANSWER || TPL_ANSWER="n"
+    else
+        echo "  - 비대화형 실행이라 묻지 않고 건너뜁니다"
+    fi
+    case "$TPL_ANSWER" in
+        [yY]*)
+            mkdir -p "$TPL_ROOT/hooks"
+            cp "$SCRIPT_DIR/plugins/common/setup/pre-commit" "$TPL_ROOT/hooks/pre-commit"
+            chmod 755 "$TPL_ROOT/hooks/pre-commit"
+            git config --global init.templateDir "$TPL_ROOT"
+            echo "  ✓ init.templateDir 설정됨. 끄려면: git config --global --unset init.templateDir"
+            ;;
+        *)
+            echo "  - 건너뜀. 레포 하나에만 넣으려면 그 레포에서 이 스크립트를 다시 실행하세요(아래 3단계)."
+            ;;
+    esac
 fi
 
-# 4. 현재 repo pre-commit 설치
-echo "[4/5] 현재 repo pre-commit 설치..."
-GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || true)"
-if [ -n "$GIT_DIR" ]; then
-    HOOK_DST="$GIT_DIR/hooks/pre-commit"
+# 3. 현재 repo pre-commit 설치 — 이 스크립트를 실행한 레포 하나에만
+echo "[3/3] 현재 repo pre-commit 설치..."
+HOOKS_PATH_CFG="$(git config --get core.hooksPath 2>/dev/null || true)"
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    echo "  - git 레포가 아니라 건너뜁니다"
+elif [ -n "$HOOKS_PATH_CFG" ]; then
+    # husky 등이 core.hooksPath 를 쓰면 git 은 .git/hooks 를 보지 않는다 — 넣어도 돌지 않으면서 설치된 척한다.
+    echo "  - core.hooksPath($HOOKS_PATH_CFG)를 쓰는 레포라 설치하지 않습니다(git 이 .git/hooks 를 보지 않음)."
+    echo "    그 훅 관리자에서 $SCRIPT_DIR/plugins/common/setup/pre-commit 을 부르게 하세요."
+else
+    # --git-path: 연결된 워크트리에서도 공용 hooks 디렉토리를 가리킨다(--git-dir 은 worktrees/<이름>).
+    HOOK_DIR="$(git rev-parse --git-path hooks)"
+    mkdir -p "$HOOK_DIR"
+    HOOK_DST="$HOOK_DIR/pre-commit"
     if [ ! -f "$HOOK_DST" ]; then
         cp "$SCRIPT_DIR/plugins/common/setup/pre-commit" "$HOOK_DST"
         chmod 755 "$HOOK_DST"
@@ -231,33 +262,6 @@ if [ -n "$GIT_DIR" ]; then
     else
         echo "  ⚠ pre-commit 이미 존재, 스킵 (갱신하려면 --force)"
     fi
-fi
-
-# 5. ~/.claude/settings.json 설정 주입
-echo "[5/5] Claude Code 설정 주입..."
-if ! _step_done "settings-inject"; then
-SETTINGS_FILE="$HOME/.claude/settings.json"
-python3 - "$SETTINGS_FILE" <<'PYEOF'
-import json, pathlib, sys
-
-settings_file = pathlib.Path(sys.argv[1])
-try:
-    settings = json.loads(settings_file.read_text()) if settings_file.exists() else {}
-except Exception as e:
-    print(f"  ⚠ settings.json 파싱 실패, 스킵: {e}", file=sys.stderr)
-    sys.exit(0)
-
-# autoMemoryDirectory (이미 설정된 경우 유지)
-if "autoMemoryDirectory" not in settings:
-    settings["autoMemoryDirectory"] = str(pathlib.Path.home() / ".claude/memory")
-
-settings_file.parent.mkdir(parents=True, exist_ok=True)
-settings_file.write_text(json.dumps(settings, indent=2, ensure_ascii=False))
-print("  ✓ settings.json 업데이트됨")
-PYEOF
-    _mark_done "settings-inject"
-else
-    echo "  - 이미 완료, 스킵"
 fi
 
 echo ""

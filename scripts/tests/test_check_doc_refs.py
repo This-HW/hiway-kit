@@ -214,11 +214,9 @@ def test_no_documents_is_red_not_green(tmp_path, capsys):
 
 def test_typescript_consumer_examples_have_exact_document_exceptions(tmp_path, capsys):
     mod = load_module_by_path(SCRIPTS_DIR / "check_doc_refs.py", "doc_refs_examples")
+    # write-tests 예시는 5.7.2 에서 자리표시자 경로로 바뀌어 예외가 필요 없어졌다(예외 목록에서 지움).
     examples = {
         "plugins/common/agents/sync-docs.md": ["src/api/users.ts"],
-        "plugins/common/agents/write-tests.md": [
-            "tests/unit/.../Component.test.ts", "tests/scratch/debug.test.ts",
-        ],
     }
     files = {**BASE, "tests/fixtures/example.ts": "const x = 1;\n"}
     files.update({doc: "\n".join(f"`{ref}`" for ref in refs) for doc, refs in examples.items()})

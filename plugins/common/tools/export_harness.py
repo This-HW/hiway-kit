@@ -453,6 +453,7 @@ BLOCK_HEADER = """
 이 절은 [{kit_name}]({kit_homepage})의 규범을
 **원문 그대로** 옮긴 것이다. Codex·Antigravity·Gemini CLI·OpenCode·Copilot·Pi·Hermes·
 Claude Code 등 이 파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
+이 절 밖의 프로젝트 지침이나 사용자 지침이 이 규범과 충돌하면 **그 지침을 따른다**.
 
 ### 워크플로 체인
 

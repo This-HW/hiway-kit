@@ -8,7 +8,7 @@ the lint scope; `ruff check .` is the only command (CI, `verify-done.sh §3`, an
 the `auto-format` hook all resolve to it). Two traps it exists to close:
 
 - **No project config → ruff falls back to the developer's global
-  `~/.config/ruff/ruff.toml`** (which this kit itself installs). That masked a
+  `~/.config/ruff/ruff.toml`** (which `setup.sh` installed before 5.7.2). That masked a
   real CI failure once: local green, CI red.
 - **Ruff's *default* rule set changes between releases** (0.15 enables E402, 0.16
   does not), so relying on defaults makes two machines disagree. The rules are

@@ -54,10 +54,15 @@ ship the same skills both register, silently, because the dedup key is
 `<plugin name>:<skill name>` (measured — `docs/specs/2026-09-07-rename-probe.md`). Never run
 two kits that carry the same skills at once.
 
-## Full Mode (+ pre-commit and global setup)
+## Full Mode (+ pre-commit)
 
-`setup.sh` installs the plugin through **path B** (this repository as a marketplace) and then the
-pre-commit hook and global setup. If you already installed path A, uninstall it first
+`setup.sh` installs the plugin through **path B** (this repository as a marketplace) at user scope,
+which records it in your Claude Code user settings, and installs the git pre-commit hook into the
+repository you run it from (not under `core.hooksPath`, which git would ignore). It keeps its own
+state in `~/.claude/.setup-state.json`. It asks before setting `git init.templateDir` (every repository
+you create or clone afterwards gets the hook) and skips that question in a non-interactive run. It
+does not install a global ruff config or set `autoMemoryDirectory`.
+If you already installed path A, uninstall it first
 (`/plugin uninstall hiway-kit@anthropic-plugin-directory`) — otherwise both load.
 
 ```bash
@@ -525,8 +530,34 @@ owned by the skills themselves — read [`plan-task`](plugins/common/skills/plan
 
 ## Security
 
-- **Hooks:** `protect-sensitive.py` runs on Edit/Write/MultiEdit/NotebookEdit/Read — blocks access to sensitive file paths (`.env`, keys). It does not scan commits; secret scanning of this repository is gitleaks in CI (every commit in each push/PR range) and `scripts/verify-done.sh` §24 locally.
-- **Auto-format:** `auto-format.py` runs after edits (uses ruff for Python)
+- **Hooks:** `protect-sensitive.py` runs on Edit/Write/MultiEdit/NotebookEdit/Read and blocks
+  sensitive file **paths**: `.env`, key and certificate files, SSH/cloud credential directories,
+  `secrets/` directories, and *data or config* files named after credentials, secrets, tokens or
+  passwords (`credentials.json`, `client_secret.json`, `api_token.yaml`), including modules named
+  just that (`secrets.py`, `config.secret.ts`). Source, SQL and docs that only use such a word in a <!-- doc-ref-ok: 외부 사용자 레포의 예시 파일명 -->
+  compound name (`credential_collector.py`, `sp_rotate_secret.sql`) are not blocked, and nothing <!-- doc-ref-ok: 외부 사용자 레포의 예시 경로 -->
+  else in the kit guards what they contain.
+  It matches paths only — it does not inspect `Bash` commands or scan commits; secret scanning of
+  this repository is gitleaks in CI (every commit in each push/PR range) and
+  `scripts/verify-done.sh` §24 locally.
+- **Auto-format / stop-time checks (Python):** `auto-format.py` and `stop-validator.py` run ruff
+  **only in projects that configure it** (`ruff.toml`, `.ruff.toml`, or `[tool.ruff]` in
+  `pyproject.toml`), and leave files that config excludes alone; prettier/eslint run only when
+  the project has their config **and** has them installed in its `node_modules`; gofmt only inside a
+  Go module (`go.mod`), rustfmt only with a `rustfmt.toml`/`.rustfmt.toml`.
+  `stop-validator.py` also runs the test files you edited. Nothing checks SQL.
+- **Turning a hook off:** set `HIWAY_KIT_DISABLE_HOOKS` (comma-separated names, or `all`) in your
+  project's `.claude/settings.json` (team) or `.claude/settings.local.json` (just you) — do not edit
+  the cached `hooks.json`, an update restores it:
+
+  ```json
+  { "env": { "HIWAY_KIT_DISABLE_HOOKS": "stop-validator,auto-format" } }
+  ```
+
+  Names: `session-start`, `session-check`, `protect-sensitive`, `auto-format`, `stop-validator`.
+  A committed `.claude/settings.json` turns them off for everyone who opens the repository. On
+  Codex, which does not read these files, the variable has to be in the environment Codex starts
+  with (not verified).
 - **Policy:** Never hardcode API keys, secrets, or internal IPs
 
 ## Data handling
@@ -540,13 +571,27 @@ The full policy is in [PRIVACY.md](PRIVACY.md).
   server can execute project build scripts or macros, write caches or access the network.
   Use code intelligence only in workspaces you trust. Its read-only queries and replacement
   previews do not guarantee that the server or project configuration has no side effects.
+- **C/C++ navigation writes a per-user clangd index cache.** It uses
+  `XDG_CACHE_HOME/hiway-kit/code-intel/clangd`, or `HOME/.cache/hiway-kit/code-intel/clangd` when
+  `XDG_CACHE_HOME` is unset. The cache retains up to 16 keys with 128 MiB per key and a 512 MiB
+  aggregate cleanup target (excluding temporary files); temporary preambles use a separate 512 MiB sampled target and are
+  cleared after each query. These are sampled cleanup targets, not hard filesystem quotas. LRU
+  cleanup skips active entries. To clear the cache manually, first ensure no code-intel LSP query
+  is running, then remove that `clangd` cache directory. Set `HIWAY_CODE_INTEL_INDEX=0` to disable
+  automatic C/C++ background indexing. Indexing uses one-shot processes, not a persistent daemon;
+  a new key can use up to 30 seconds and an existing key up to 5 seconds. Large projects may return
+  partial results across several calls. Cache files remain local and are not sent to the publisher.
 - **No telemetry or plugin accounts.** Selected session logs and project files can contain personal
   or sensitive information. Their contents are returned locally to the calling agent; that agent's
   provider and any external tools remain subject to their own data policies.
 - **What it writes stays on your machine.** The feedback ledger (recurring review findings) is
-  kept under your repository's `.git/kit/` (untracked; outside a git repo it falls back to a
-  file in the project); hook state and locks live in a per-user `0700` directory under your
-  system temp dir. Delete them at any time.
+  kept under your repository's `.git/kit/` (untracked; outside a git repo nothing is recorded);
+  hook state and locks live in a per-user `0700` directory under your system temp dir. Delete
+  them at any time. The kit creates nothing in your working tree on its own: plan and spec files
+  go where you or your project's instructions say, and a missing `docs/plans/` or `docs/specs/`
+  folder is created only after asking; whether to commit them is your project's call. Agents
+  follow your existing layout (tests, docs), never install dependencies, and change CLAUDE.md or
+  AGENTS.md only when you ask — see [the consumer footprint policy](docs/conventions/consumer-footprint.md).
 - **Web access is your agent's, not the plugin's.** Skills such as `web-research` tell the agent
   to use search/browser tools *you* have installed; the plugin itself ships no connector.
 

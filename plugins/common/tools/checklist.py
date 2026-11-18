@@ -127,6 +127,10 @@ def _lock(path: Path):
 
 
 def _read(path: Path) -> list[dict]:
+    # 읽기 경로도 봉쇄한다 — 거부는 예외로 올려 exit 2 로 멈춘다(조용히 []를 돌려주면 완료 게이트가
+    # "체크리스트 없음"으로 건너뛴다).
+    if path.exists() or path.is_symlink():
+        _contained(path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -137,9 +141,33 @@ def _read(path: Path) -> list[dict]:
     return data if isinstance(data, list) else []
 
 
-def _write(path: Path, items: list[dict]) -> None:
-    """tmp + os.replace 원자 교체(심링크는 realpath로 보존)."""
+def _contained(path: Path) -> Path:
+    """checklist 경로를 **한 번만** 해석하고 봉쇄한다(docs/conventions/path-containment.md).
+
+    - `checklist.json` 자체가 심링크면 거부한다 — 같은 폴더의 plan.md 를 가리켜도 덮어쓴다.
+    - 해석한 경로가 레포 루트 밖이면 거부한다 — `docs/plans/x` 가 레포 밖을 가리키는 심링크인 경우.
+    """
+    if path.is_symlink():
+        raise ValueError(f"checklist 가 심링크다 — 따라가지 않는다: {path}")
     real = Path(os.path.realpath(path))
+    # 레포 루트는 **해석하지 않은** 경로의 조상에서 `.git` 으로 찾는다 — 심링크 폴더 안에서 git 을
+    # 조회하면 링크 너머(레포 밖)를 기준으로 판정해 검사가 빠진다.
+    for ancestor in Path(os.path.abspath(path)).parents:
+        if (ancestor / ".git").exists():
+            root = Path(os.path.realpath(ancestor))
+            if root not in real.parents:
+                raise ValueError(f"checklist 경로가 레포 밖으로 해석된다: {path} → {real}")
+            break
+    return real
+
+
+def _write(path: Path, items: list[dict]) -> None:
+    """tmp + os.replace 원자 교체. 경로는 **한 번만** 해석하고 계획 디렉토리 밖이면 거부한다.
+
+    예전에는 심링크를 realpath 로 따라가 봉쇄 없이 썼다 — `checklist.json` 이 `../../package.json`
+    을 가리키면 사용자 매니페스트를 덮어썼다(독립 자문, 2026-11-09). docs/conventions/path-containment.md.
+    """
+    real = _contained(path)
     real.parent.mkdir(parents=True, exist_ok=True)
     tmp = real.with_name(f"{real.name}.tmp.{os.getpid()}")
     tmp.unlink(missing_ok=True)

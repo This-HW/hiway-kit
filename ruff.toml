@@ -2,7 +2,7 @@
 #
 # 왜 이 파일이 필요한가:
 #   이게 없으면 ruff는 **개발자 개인의 전역 설정**(`~/.config/ruff/ruff.toml` —
-#   공교롭게도 이 kit의 `plugins/common/setup/ruff.toml`이 배포하는 파일)을 집어간다.
+#   5.7.2 전의 setup.sh 가 묻지 않고 설치하던 파일)을 집어간다.
 #   그 결과 로컬 `verify-done.sh §3`은 green인데 CI(전역 설정 없음)는 red이 될 수 있다.
 #   실제로 ruff 0.16의 기본 룰셋 확장 때 그 사고가 났다(2.12.0 push, run 30794529796).
 #   프로젝트 config가 존재하면 ruff는 전역 config를 **무시**하므로 환경 비의존이 된다.

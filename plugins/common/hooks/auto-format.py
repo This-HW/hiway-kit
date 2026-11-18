@@ -9,10 +9,15 @@ PostToolUse Hook: 파일 저장 후 자동 포맷팅 + Lint 피드백
 
 **이 훅은 모든 파일 쓰기마다 돈다** — 지연이 곧 사용자가 체감하는 비용이다. 그래서:
 
-- prettier·eslint 는 **프로젝트 로컬 바이너리**(`node_modules/.bin/<tool>`)가 있을 때만
-  부른다. `npx --no-install` 은 설치되지 않은 도구에도 npm 을 띄워 레지스트리·캐시를
+- prettier·eslint 는 **프로젝트 설정 파일과 로컬 바이너리**(`node_modules/.bin/<tool>`)가
+  둘 다 있을 때만 부른다. `npx --no-install` 은 설치되지 않은 도구에도 npm 을 띄워 레지스트리·캐시를
   뒤진다 — prettier 가 없는 프로젝트의 `.md` 편집 1회가 245ms 였다(v5.0.0 실측).
-- ruff 는 파일당 2회(`format` → `check --fix` 가 남은 오류까지 보고).
+- ruff 는 파일당 2회(`format` → `check --fix` 가 남은 오류까지 보고). **프로젝트에 ruff
+  설정(`ruff.toml`·`.ruff.toml`·`[tool.ruff]` 있는 `pyproject.toml`)이 있을 때만** 돈다 —
+  ruff 를 쓰지 않는 레포에서 돌면 손대지 않은 줄까지 바뀐다(외부 설치 실측, 2026-11-09).
+- gofmt 는 Go 모듈(`go.mod`) 안에서만, rustfmt 는 `rustfmt.toml`·`.rustfmt.toml` 이 있을 때만 —
+  PATH 에 도구가 있다는 것은 그 프로젝트의 동의가 아니다(`docs/conventions/consumer-footprint.md`).
+- `HIWAY_KIT_DISABLE_HOOKS` 에 `auto-format`(또는 `all`)이 있으면 아무것도 하지 않는다.
 - 한 번의 호출 전체가 `BUDGET_SECONDS` 안에서 끝난다 — 각 단계의 타임아웃은 남은
   예산으로 깎인다. 훅 타임아웃(hooks.json 30s)을 넘기면 하네스가 훅을 죽이고 그
   사실은 어디에도 남지 않으므로, 넘기기 전에 스스로 멈추고 stderr 에 남긴다.
@@ -37,11 +42,18 @@ from pathlib import Path
 hook_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, hook_dir)
 try:
-    from utils import debug_log, safe_path
+    from utils import debug_log, has_ruff_config, hook_disabled, safe_path
 except ImportError:
 
     def debug_log(msg, error=None):
         pass
+
+    def has_ruff_config(file_path):
+        # 판정할 수 없으면 남의 파일을 바꾸지 않는 쪽으로 — ruff 를 돌리지 않는다.
+        return False
+
+    def hook_disabled(name):
+        return False
 
     def safe_path(path):
         if not path:
@@ -72,6 +84,29 @@ _ESLINT_CONFIGS = [
     ".eslintrc.json",
     ".eslintrc.yml",
     "eslint.config.js",
+]
+
+# Prettier config — 바이너리 존재는 동의가 아니다. 간접 의존으로 node_modules/.bin/prettier 가
+# 깔린 레포에서 CLAUDE.md·README 를 다시 포맷하던 것을 막는다(독립 자문, 2026-11-09).
+_PRETTIER_CONFIGS = [
+    ".prettierrc",
+    ".prettierrc.json",
+    ".prettierrc.json5",
+    ".prettierrc.yaml",
+    ".prettierrc.yml",
+    ".prettierrc.toml",
+    ".prettierrc.js",
+    ".prettierrc.cjs",
+    ".prettierrc.mjs",
+    ".prettierrc.ts",
+    ".prettierrc.mts",
+    ".prettierrc.cts",
+    "prettier.config.js",
+    "prettier.config.cjs",
+    "prettier.config.mjs",
+    "prettier.config.ts",
+    "prettier.config.mts",
+    "prettier.config.cts",
 ]
 
 
@@ -128,6 +163,22 @@ def _has_eslint_config(file_path: str) -> bool:
     )
 
 
+def _has_prettier_config(file_path: str) -> bool:
+    """Prettier 설정 파일 또는 `package.json` 의 `"prettier"` 키 — 레포 루트에서 멈춘다."""
+    for directory in _ancestors(file_path):
+        if any(directory.joinpath(cfg).is_file() for cfg in _PRETTIER_CONFIGS):
+            return True
+        manifest = directory / "package.json"
+        if manifest.is_file():
+            try:
+                data = json.loads(manifest.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                data = None
+            if isinstance(data, dict) and "prettier" in data:
+                return True
+    return False
+
+
 def _local_node_bin(file_path: str, tool: str) -> str | None:
     """프로젝트 로컬 `node_modules/.bin/<tool>` — 없으면 None(= 부르지 않는다).
 
@@ -157,9 +208,14 @@ def _ruff(file_path, feedback, timeout):
     if not _has_tool("ruff"):
         debug_log("ruff not installed, skipping")
         return
+    # prettier·eslint 와 같은 조건 — 프로젝트가 ruff 를 쓰기로 했을 때만 돈다. 경로를 직접 넘기면
+    # ruff 는 설정의 `exclude` 를 무시하므로 `--force-exclude` 로 프로젝트의 거부도 따른다.
+    if not has_ruff_config(file_path):
+        debug_log("No ruff project config found, skipping")
+        return
     started = time.monotonic()
     result = subprocess.run(
-        ["ruff", "format", "--quiet", file_path],
+        ["ruff", "format", "--force-exclude", "--quiet", file_path],
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -172,7 +228,7 @@ def _ruff(file_path, feedback, timeout):
     if remaining < _MIN_STEP_SECONDS:
         return
     check = subprocess.run(
-        ["ruff", "check", "--fix", "--quiet", "--output-format=concise", file_path],
+        ["ruff", "check", "--fix", "--force-exclude", "--quiet", "--output-format=concise", file_path],
         capture_output=True,
         text=True,
         timeout=remaining,
@@ -187,7 +243,10 @@ def _ruff(file_path, feedback, timeout):
 
 
 def _prettier(file_path, feedback, timeout):
-    """prettier --write — 프로젝트 로컬 바이너리가 있을 때만."""
+    """prettier --write — 프로젝트 설정과 로컬 바이너리가 **둘 다** 있을 때만."""
+    if not _has_prettier_config(file_path):
+        debug_log("No prettier config found, skipping")
+        return
     prettier = _local_node_bin(file_path, "prettier")
     if prettier is None:
         debug_log("node_modules/.bin/prettier not found, skipping")
@@ -234,8 +293,43 @@ def _eslint(file_path, feedback, timeout):
             )
 
 
+def _gofmt_consented(file_path: str) -> bool:
+    """`go.mod` 가 파일에서 레포 루트 사이에 있고, 그 모듈의 `go fmt ./...` 가 이 파일을 포맷하는가.
+
+    gofmt 는 설정 파일이 없고(포맷이 하나뿐) `go` 명령에 들어 있다. 그래서 "이 프로젝트가 Go
+    툴체인을 골랐다"(go.mod)를 동의로 본다. PATH 에 gofmt 가 있다는 것만으로는 동의가 아니다.
+    범위도 툴체인을 따른다 — `./...` 는 `testdata`·`vendor` 와 `.`·`_` 로 시작하는 디렉토리를 건너뛴다
+    (의도적으로 포맷을 어긴 골든 픽스처가 `testdata/` 에 있다). 탐색은 `_ancestors` 를 따른다 — `.git` 을
+    가진 디렉토리에서 멈추고, 레포 밖이면 최대 `_MAX_PARENT_DEPTH` 단계 위까지 본다.
+    """
+    for directory in _ancestors(file_path):
+        if directory.joinpath("go.mod").is_file():
+            inside = Path(file_path).relative_to(directory).parts[:-1]
+            return not any(
+                part in ("testdata", "vendor") or part.startswith((".", "_")) for part in inside
+            )
+    return False
+
+
+def _has_rustfmt_config(file_path: str) -> bool:
+    """`rustfmt.toml`·`.rustfmt.toml` 이 파일에서 레포 루트 사이에 있는가(탐색 범위는 `_gofmt_consented` 와 같다).
+
+    rustfmt 는 설정할 수 있는 별도 컴포넌트라 ruff 와 같은 규칙을 쓴다 — 프로젝트가 설정을 둔 경우만.
+    `rustfmt <파일>` 은 그 파일이 선언한 하위 모듈(`mod x;`)까지 포맷하므로, 설정 없는 프로젝트에서는
+    편집하지 않은 파일까지 바뀔 수 있다.
+    """
+    return any(
+        directory.joinpath(name).is_file()
+        for directory in _ancestors(file_path)
+        for name in ("rustfmt.toml", ".rustfmt.toml")
+    )
+
+
 def _gofmt(file_path, feedback, timeout):
-    """gofmt -w: Go 포맷팅"""
+    """gofmt -w: Go 포맷팅 — Go 모듈(go.mod) 안에서만."""
+    if not _gofmt_consented(file_path):
+        debug_log("not in a Go module's go fmt scope, skipping gofmt")
+        return
     if not _has_tool("gofmt"):
         debug_log("gofmt not found, skipping")
         return
@@ -252,7 +346,10 @@ def _gofmt(file_path, feedback, timeout):
 
 
 def _rustfmt(file_path, feedback, timeout):
-    """rustfmt: Rust 포맷팅"""
+    """rustfmt: Rust 포맷팅 — 프로젝트에 rustfmt 설정이 있을 때만."""
+    if not _has_rustfmt_config(file_path):
+        debug_log("no rustfmt.toml up to the repo root, skipping rustfmt")
+        return
     if not _has_tool("rustfmt"):
         debug_log("rustfmt not found, skipping")
         return
@@ -413,7 +510,7 @@ def _targets_from_payload(input_data: dict) -> list[str]:
 def main():
     try:
         # stdin이 TTY면 json.load 무한 블록 방지 — 즉시 통과.
-        if sys.stdin.isatty():
+        if sys.stdin.isatty() or hook_disabled("auto-format"):
             sys.exit(0)
         input_data = json.load(sys.stdin)
 

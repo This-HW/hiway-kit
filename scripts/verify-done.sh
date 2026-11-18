@@ -877,6 +877,17 @@ else
   red "스킬 CLI 시나리오 누락 또는 정책/테스트 참조 오류 — 상세는 위 출력"
 fi
 
+hdr "30. 소비자 흔적 — 배포 지침이 설치·패키지 실행을 시키지 않는다"
+# 킷은 남의 환경에 설치하지 않고 제안만 한다(docs/conventions/consumer-footprint.md). verify-code 가
+# "읽기 전용"이라면서 npm ci·pip install·npx 를 지시했다(독립 자문 2건, 2026-11-09). 판정은
+# scripts/check_consumer_footprint.py 가 단일 소스 — CI(validate.yml)와 동일 스크립트. 이 검사가 도는
+# 조건: 항상(분기 없음) — 대상은 plugins/common 아래 모든 마크다운이다.
+if python3 scripts/check_consumer_footprint.py; then
+  green "배포 지침에 설치·패키지 실행 지시 없음 (check_consumer_footprint.py — CI와 단일 소스)"
+else
+  red "배포 지침이 설치·패키지 실행을 시킨다 — 제안으로 바꾸거나 금지문이면 footprint-ok 표시 (상세는 위 출력)"
+fi
+
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'

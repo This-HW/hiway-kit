@@ -178,6 +178,15 @@ Skills-only listings may have additional eligibility requirements."* — 재개 
 *검증기가 따라가지 못한 스크립트*(훅 5개)·노트 2건(아이콘 무검사·기존 제출 존재)은 종전과 같다. `evals/` 자체는 아무
 발견도 내지 않았다. 교훈: **픽스처 문자열도 스캔 표면이다** — 자격증명처럼 보이는 환경변수 이름은 배포물 안 픽스처에 넣지 않는다.
 
+**v5.7.2 사전 검증(2026-11-09, `probe-572` ~ `probe-572m`)** — 후보 `7707e0d` 의 무훅 트리 Validate 는 통과·경고 5·보류 2로
+`directory`(`7355879`, v5.7.1)와 개수가 같았지만, *자격증명 사용* 보류의 "send data" 근거가 종전 바닥(`protect-sensitive.py` 의
+`"ssh"]`)에서 **`agent write-tests body: a command assembled at run time: ·$`** 로 옮겨 갔다. 이분 탐색(변형 13개): write-tests 를
+v5.7.1 원문으로 되돌리면 바닥 복귀, 새 "테스트 위치" 절의 항목 1 **첫 줄만** 넣어도 재현 — 원인은
+`` `pyproject.toml`·`pytest.ini`·`setup.cfg` 의 `testpaths` `` 처럼 **에이전트 본문에서 코드 스팬을 `·` 로 잇는 줄**이다(백틱 명령
+치환을 이어 붙인 명령으로 읽는 것으로 보인다). 자리표시자·글롭·줄 끝 `·`·다른 문장은 무관했다. 항목 1 을 코드 스팬 없이 다시 쓴
+판(`probe-572m`)에서 근거가 바닥으로 돌아오고 경고·보류 구성이 v5.7.1 과 같음을 확인 — 그 문구로 5.7.2 에 싣는다. 조사용
+브랜치는 판정 후 전부 삭제.
+
 **목록 정보는 제출 시점에 고정된다.** Listing 탭이 각 행의 출처를 `plugin.json key:` 로 밝힌다 — `icon`,
 `documentationUrl`, `supportUrl`, `privacyPolicyUrl` 이 비어 있어 아이콘은 GitHub 아바타로 대체됐다. 그러나 포털 원문이
 *"Newer versions don't update them here"*, 문서가 *"name and short description follow the live version"* 이므로 지금

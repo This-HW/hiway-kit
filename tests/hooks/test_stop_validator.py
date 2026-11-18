@@ -1034,6 +1034,7 @@ def test_exhausted_budget_skips_with_warning(tmp_path, monkeypatch, capsys):
 
     f = tmp_path / "a.py"
     f.write_text("x = 1\n", encoding="utf-8")
+    (tmp_path / "ruff.toml").write_text("", encoding="utf-8")  # ruff 를 쓰는 프로젝트
     monkeypatch.setattr(_mod, "_DEADLINE", time.monotonic() - 1)
 
     def _run(cmd, **kw):
@@ -1042,3 +1043,44 @@ def test_exhausted_budget_skips_with_warning(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(_mod.subprocess, "run", _run)
     assert _mod.check_lint([str(f)]) == (True, "")
     assert "예산" in capsys.readouterr().err
+
+
+def test_lint_skips_files_outside_ruff_projects(tmp_path, monkeypatch):
+    """ruff 를 쓰지 않는 레포의 파일은 린트·자동 수정하지 않는다(외부 설치 보고 2026-11-09)."""
+    (tmp_path / ".git").mkdir()
+    f = tmp_path / "job.py"
+    f.write_text("import os, sys\n", encoding="utf-8")
+    calls = []
+
+    def _run(cmd, **kw):
+        calls.append(cmd)
+        raise AssertionError("ruff 설정 없는 프로젝트에서 ruff 를 띄웠다")
+
+    monkeypatch.setattr(_mod.subprocess, "run", _run)
+    assert _mod.check_lint([str(f)]) == (True, "")
+    assert _mod.auto_fix_lint([str(f)])[1] == []
+    assert calls == []
+
+
+def test_lint_honors_project_ruff_exclude(tmp_path, monkeypatch):
+    """경로를 직접 넘기면 ruff 는 exclude 를 무시한다 — check·--fix 둘 다 --force-exclude 로 부른다."""
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "ruff.toml").write_text('extend-exclude = ["vendor"]\n', encoding="utf-8")
+    f = tmp_path / "job.py"
+    f.write_text("import os\n", encoding="utf-8")
+    seen = []
+
+    class _Done:
+        returncode = 1
+        stdout = "job.py:1:8: F401\n"
+        stderr = ""
+
+    def _run(cmd, **kw):
+        seen.append(cmd)
+        return _Done()
+
+    monkeypatch.setattr(_mod.subprocess, "run", _run)
+    _mod.check_lint([str(f)])
+    _mod.auto_fix_lint([str(f)])
+    ruff_calls = [c for c in seen if c[0] == "ruff"]
+    assert ruff_calls and all("--force-exclude" in c for c in ruff_calls), ruff_calls

@@ -1,0 +1,27 @@
+{
+  "assertions": [
+    {
+      "type": "glob_contains",
+      "glob": "src/textkit/*_test.py",
+      "pattern": "slugify"
+    },
+    {
+      "type": "path_absent",
+      "path": "tests"
+    },
+    {
+      "type": "pytest_green",
+      "path": "."
+    },
+    {
+      "type": "file_unchanged",
+      "file": "src/textkit/textutils.py"
+    }
+  ],
+  "_designNote": "소비자 흔적(docs/conventions/consumer-footprint.md, 2026-11-09). 이 프로젝트는 테스트를 소스 옆에 `*_test.py` 로 둔다(pytest python_files·기존 numutils_test.py). task.md 는 위치를 말하지 않는다. 새 tests/ 트리를 만들면 그 관례를 무시한 것이다. 2026-11-09 이전 write-tests 정의는 tests/unit/[src 미러링] 을 '필수'로 강제했다. 양성 대조(2026-11-09): 이전 정의도 2/2 통과(src/textkit/textutils_test.py) — 관례가 뚜렷하면 이전 정의도 따랐다. 변별하지 못하며 회귀 방지용이다.",
+  "judge": {
+    "enabled": false,
+    "rubric": "write-tests 가 소스 옆 테스트 관례를 따르는가?",
+    "threshold": 7
+  }
+}

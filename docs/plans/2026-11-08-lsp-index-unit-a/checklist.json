@@ -1,0 +1,26 @@
+[
+  {
+    "id": "A1",
+    "description": "Policy/deadline and resource monitors",
+    "acceptance": "Bounds, platform failures and child sampling covered",
+    "verify": "python3 -m pytest -q tests/hooks/test_lsp_index_resources.py",
+    "passes": true,
+    "evidence": "verify exit 0: python3 -m pytest -q tests/hooks/test_lsp_index_resources.py"
+  },
+  {
+    "id": "A2",
+    "description": "(선행: A1) Private cache/locking/key lifecycle",
+    "acceptance": "Stable keys, safe filesystem and bounded shared leases",
+    "verify": "python3 -m pytest -q tests/hooks/test_lsp_index_cache.py",
+    "passes": true,
+    "evidence": "verify exit 0: python3 -m pytest -q tests/hooks/test_lsp_index_cache.py"
+  },
+  {
+    "id": "A3",
+    "description": "(선행: A2) Bounded native coverage metadata",
+    "acceptance": "URI identity and corruption/unknown/error controls",
+    "verify": "python3 -m pytest -q tests/hooks/test_lsp_index_coverage.py",
+    "passes": true,
+    "evidence": "verify exit 0: python3 -m pytest -q tests/hooks/test_lsp_index_coverage.py"
+  }
+]

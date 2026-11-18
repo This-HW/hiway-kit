@@ -191,6 +191,11 @@ jobs:
         # docs/ 문서의 지위 표기(status/as_of)와, 살아있는 문서의 제거된 이름·깨진 표.
         run: python3 scripts/check_doc_status.py
 
+      - name: Consumer footprint — shipped text never installs (§30)
+        # scripts/check_consumer_footprint.py 가 단일 소스 — 로컬 verify-done.sh §30과 동일 스크립트.
+        # 배포 지침이 남의 환경에 의존성 설치·패키지 실행을 시키지 않는다(docs/conventions/consumer-footprint.md).
+        run: python3 scripts/check_consumer_footprint.py
+
       - name: Security scan (gitleaks — 범위 안의 모든 커밋)
         # gitleaks-action 은 push 에서 `--no-merges --first-parent` 로 스캔했다 — `--no-ff` 로
         # 병합한 옆가지 커밋은 **한 번도 스캔되지 않았다**(2026-09-27 실측: main 의 49커밋,

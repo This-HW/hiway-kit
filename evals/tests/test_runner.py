@@ -2645,3 +2645,42 @@ def test_guard_catches_false_green_declaration(sc, text):
 def test_guard_passes_accurate_output_containing_the_phrase(sc, text):
     """(a) 판정이 옳은데 어구가 산문·주석·권장 조치·금지 서술에 섞인 출력은 통과."""
     assert _guard_verdict(sc, text) is True, text
+
+
+# ---------------------------------------------------------------------------
+# 소비자 흔적 어서션 — path_absent / glob_contains (2026-11-09)
+# ---------------------------------------------------------------------------
+
+
+def test_path_absent_passes_when_nothing_was_created(tmp_path):
+    ok, _ = runner.check_assertion({"type": "path_absent", "path": "tests/unit"}, "", tmp_path)
+    assert ok is True
+
+
+def test_path_absent_fails_when_the_agent_created_the_directory(tmp_path):
+    (tmp_path / "tests" / "unit").mkdir(parents=True)
+    ok, detail = runner.check_assertion({"type": "path_absent", "path": "tests/unit"}, "", tmp_path)
+    assert ok is False and "생겼다" in detail
+
+
+def test_path_absent_refuses_escape(tmp_path):
+    ok, detail = runner.check_assertion({"type": "path_absent", "path": "../x"}, "", tmp_path)
+    assert ok is False and "탈출" in detail
+
+
+def test_glob_contains_finds_a_matching_file(tmp_path):
+    (tmp_path / "qa").mkdir()
+    (tmp_path / "qa" / "test_text.py").write_text("def test_slugify():\n    pass\n")
+    ok, detail = runner.check_assertion(
+        {"type": "glob_contains", "glob": "qa/test_*.py", "pattern": r"def test_\w*slug"}, "", tmp_path
+    )
+    assert ok is True and "qa/test_text.py" in detail
+
+
+def test_glob_contains_fails_without_a_match_and_refuses_escape(tmp_path):
+    (tmp_path / "qa").mkdir()
+    (tmp_path / "qa" / "test_other.py").write_text("def test_other():\n    pass\n")
+    a = {"type": "glob_contains", "glob": "qa/test_*.py", "pattern": r"slug"}
+    assert runner.check_assertion(a, "", tmp_path)[0] is False
+    escape = {"type": "glob_contains", "glob": "../*.py", "pattern": "x"}
+    assert runner.check_assertion(escape, "", tmp_path)[0] is False

@@ -9,6 +9,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 _spec = importlib.util.spec_from_file_location(
     "protect_sensitive", HOOKS_DIR / "protect-sensitive.py"
@@ -119,13 +121,14 @@ class TestCheckProtected:
         blocked, _ = check_protected("/app/README.md")
         assert not blocked
 
-    def test_secrets_dir_in_path_but_not_secrets_subdir(self):
-        # "secrets" substring in non-directory context
+    def test_secret_named_source_file_is_not_blocked(self):
+        # 2026-11-09 뒤집음: 예전에는 이름에 'secret' 이 든 소스도 막았다. 외부 설치 보고에서
+        # secret_manager.py·credential_collector.py·SP 정의가 막혀 에이전트가 Bash cat 으로
+        # 우회했다. 소스·문서는 통과, 같은 이름의 데이터·설정 파일은 계속 차단.
         blocked, _ = check_protected("/app/src/secrets_manager.py")
-        # "secret" pattern — this contains "secret" so should be blocked
-        # secrets_manager.py matches the secret pattern (but not secrets dir)
-        # The pattern excludes "secrets/" dir and "secrets." ext, but "secrets_" is included
-        assert blocked  # "secret" literal is present without exclusion match
+        assert not blocked
+        blocked, _ = check_protected("/app/src/secrets_manager.json")
+        assert blocked
 
     def test_kube_config_blocked(self):
         blocked, _ = check_protected("/home/user/.kube/config")
@@ -510,3 +513,63 @@ class TestEnvTemplateContentScanNonStrPayload:
             }
         )
         assert code == 2
+
+
+# 외부 설치 보고(2026-11-09, Snowflake SP·PySpark 레포): 이름 키워드가 소스·SQL·문서를 막았다.
+FEEDBACK_SOURCE_PATHS = [
+    "etl/collectors/credential_collector.py",
+    "sql/sp/SP_UPDATE_USER_CREDENTIALS.sql",
+    "docs/credential-rotation.md",
+    "src/auth/secret_manager.py",
+    "sql/sp/sp_rotate_secret.sql",
+    "src/crypto/private_key_loader.py",
+    # macOS: /tmp·$TMPDIR 의 실경로가 /private/... — 'private.*key' 가 경로 전체에 걸려 막혔다
+    "/private/tmp/project/monkey.py",
+    "/private/var/folders/x/T/keymap.json",
+]
+
+STILL_BLOCKED_STORES = [
+    "credentials.json",
+    "/home/u/.aws/credentials",
+    "config/gcp-credentials.json",
+    "aws_credentials",
+    "client_secret.json",
+    "deploy/secrets.yaml",
+    "app/secrets/db.py",  # secrets 디렉토리는 확장자와 무관하게 막는다
+    "scripts/export_secrets.sh",  # 셸은 시크릿을 export 하는 자리라 제외하지 않는다
+    "infra/secrets.tf",
+    "credentials.env.template",
+    "keys/my_private_key",
+    "certs/server.key",
+    ".env",
+    # 시크릿 모듈 — 이름이 키워드·수식어뿐이면 소스 확장자여도 막는다(2026-11-09 보안 점검)
+    "secrets.py",
+    "credentials.py",
+    "settings_secrets.py",
+    "config/secrets.js",
+    "config.secret.ts",
+    "prod.secret.md",
+    "config/initializers/secret_token.rb",
+    "credentials.sql",
+    "credentials_backup.sql",
+    "credentials.json.py",
+    "api_secret.py",
+    "private_key.py",
+    # 이름 그대로인 디렉토리
+    "credentials/prod.py",
+    "secret/db.py",
+    # 노트북은 출력 셀에 값이 남는다 — 소스 예외가 아니다
+    "notebooks/credential_check.ipynb",
+]
+
+
+@pytest.mark.parametrize("path", FEEDBACK_SOURCE_PATHS)
+def test_source_and_doc_files_named_after_credentials_pass(path):
+    blocked, _ = check_protected(path)
+    assert not blocked, path
+
+
+@pytest.mark.parametrize("path", STILL_BLOCKED_STORES)
+def test_real_secret_stores_stay_blocked(path):
+    blocked, _ = check_protected(path)
+    assert blocked, path

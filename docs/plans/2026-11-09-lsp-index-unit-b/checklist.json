@@ -1,0 +1,42 @@
+[
+  {
+    "id": "B1",
+    "description": "Strict CDB/config/toolchain preflight and semantic cache inputs",
+    "acceptance": "Only contract-supported inputs enter indexed mode; fallbacks preserve existing partial behavior",
+    "verify": "python3 -m pytest -o addopts= -q tests/hooks/test_lsp_index_inputs.py tests/hooks/test_lsp_query.py",
+    "passes": true,
+    "evidence": "Included in focused suite: 256 passed / 43 subtests; Python 3.9 input preflight compatibility: 4 passed; real CDB/cross-TU native control complete at 2/2 TUs."
+  },
+  {
+    "id": "B2",
+    "description": "Absolute-deadline LSP progress transport and guarded process lifecycle",
+    "acceptance": "Progress token sequence, server requests, deadlines, pass_fds, and ResourceGuard cleanup are bounded and validated",
+    "verify": "python3 -m pytest -o addopts= -q tests/hooks/test_lsp_query.py tests/hooks/test_lsp_validation.py",
+    "passes": true,
+    "evidence": "Focused suite includes valid, unrelated, duplicate, and withheld progress; shutdown/reap single-process test passes; native Apple clangd cold and warm runs both returned complete=true and exited cleanly."
+  },
+  {
+    "id": "B3",
+    "description": "Indexed query integration, partial fallbacks, metadata, and docs",
+    "acceptance": "Complete only after readiness, exact coverage, and full response validation; all specified fallback reasons retained",
+    "verify": "python3 -m pytest -o addopts= -q tests/hooks/test_lsp_query.py tests/hooks/test_lsp_validation.py",
+    "passes": true,
+    "evidence": "Fake integration verifies progress/coverage/final-response failures preserve the validated partial; exact argv includes --limit-references=0; docs and document-count/status checks pass; real cold/warm cross-TU locations match golden."
+  },
+  {
+    "id": "B4",
+    "description": "Cross-version validation, production reversion, and independent review",
+    "acceptance": "3.12 focused suite and 3.9 compatible runtime suite pass, production reversion fails the new contract nodes, and plan-control independently accepts the frozen delta",
+    "verify": "Python 3.9 unittest-compatible LSP modules; reversion proof at migration unit-b/native-proof/reversion.*",
+    "passes": true,
+    "evidence": "Final Python 3.12 focused suite: 256 passed / 43 subtests; Python 3.9 compatible suites: 85 passed; real clangd cold/warm controls match golden with source/CDB hashes unchanged. Final production reversion rc1 failed the argv/progress nodes and restored both files byte-identically. Raw logs: unit-b/native-proof/py312-focused.*, py39-compatible.*, native-review-final.json, reversion-final.*. One prior Python 3.9 discover attempt could not import pytest-based modules (pytest is absent); a timing-sensitive PID-file test was made deterministic and the compatible suite passed on rerun. Plan-control frozen-delta review is pending. B-R1 supersedes earlier evidence: final paired runtime suites collect the same 286 nodes (3.12 pytest9.1.1, proof-only 3.9 pytest8.4.2); 14 source mutations detected; native edit/warm proof and Unit A race diagnosis/stress records are in unit-b/native-proof/r1. Independent delta ACCEPT is pending. B-R2 supersedes B-R1: runtime suites 307 nodes with collection diff0, 17 targeted source mutations, real transport protocol failures, independent tmp accounting and same-byte CDB rewrite native control. Raw r2 evidence preserves setup failures/first surviving mutation. Independent delta review pending. B-R3 supersedes B-R2: 320 matching runtime nodes; 11 mutations detected; dd42d62 deadline path reproduced with unverified cleanup but shard still present, then corrected; real guard reasons and inactive tmp tests added; preprocessing benchmark and native evidence under r3. Independent ACCEPT pending. B-R4 final narrow delta: paired runtimes339 nodes/diff0, 13 mutations, numeric timing on consumer Python3.9.6, 20x4 parallel deadline invocations (160 cases) pass after fixing only fixture cleanup polling; all earlier failed/diagnostic rounds retained under r4. Independent ACCEPT pending. Unit B independently ACCEPTED at952cb9d; explicit integration conditions prepared separately, 342 matching runtime nodes/5 mutants/20x4 positive-handshake cases/native controls pass. Final integration owner recheck remains pending (single A+B squash, full gates). Original B4 approval condition is satisfied by independent ACCEPT at952cb9d; final integration is tracked separately as INT1."
+  },
+  {
+    "id": "INT1",
+    "description": "Integration owner folds explicit conditions into the single Unit A+B squash and verifies final gates",
+    "acceptance": "Plan-control rechecks all five integration conditions plus frozen hashes, both runtimes, targeted mutations, full verify-done, Ubuntu CI, directory Validate and no old fixture blob in published history",
+    "verify": "Final integration tree: scripts/verify-done.sh plus plan-control integration evidence",
+    "passes": false,
+    "evidence": "Owner: plan-control. Follow-up source/testing prepared on lsp-index-unit-b; final squash/release checks intentionally pending."
+  }
+]

@@ -2,7 +2,7 @@
 name: sync-docs
 description: |
   코드 변경에 맞춰 기존 문서를 갱신.
-  MUST USE when: 코드 변경이 끝났고 그로 인해 사실이 달라진 README·API 문서·CHANGELOG·에이전트 지침 파일을 코드와 일치시켜야 할 때.
+  MUST USE when: 코드 변경이 끝났고 그로 인해 사실이 달라진 README·API 문서·CHANGELOG 를 코드와 일치시켜야 할 때 (에이전트 지침 파일은 사용자가 지정했을 때만).
   OUTPUT: 갱신 문서 + 변경 요약
 model: haiku
 effort: low
@@ -28,23 +28,15 @@ disallowedTools:
 
 ## 핵심 원칙
 
-### 문서 위치 규칙 (반드시 준수)
-```yaml
-문서 허용 위치:
-- 프로젝트 루트: README.md, CLAUDE.md, CHANGELOG.md 등
-- docs/: 모든 기타 문서
-
-문서 금지 위치:
-- src/: 소스 코드 내 문서 금지
-- tests/: 테스트 코드 내 문서 금지
-```
-
-### 동기화 대상 문서
-1. **CLAUDE.md** - 프로젝트 컨텍스트
-2. **README.md** - 프로젝트 소개
-3. **CHANGELOG.md** - 변경 이력
-4. **docs/api/** - API 문서
-5. **docs/architecture/** - 아키텍처 문서
+### 이미 있는 문서만, 이미 있는 자리에서 (반드시 준수)
+- 갱신 대상은 **프로젝트에 이미 있는 문서 중 이번 변경으로 사실이 달라진 것**뿐이다(README·CHANGELOG·
+  API 문서·패키지 README 등 — 위치는 프로젝트가 둔 그대로).
+- 새 문서 파일·새 문서 디렉토리(`docs/api/` 등)를 만들지 않는다. 필요해 보이면 제안만 하고 호출자에게 넘긴다. <!-- doc-ref-ok: 소비자 프로젝트의 예시 경로 -->
+- 문서를 다른 위치로 옮기거나 프로젝트의 문서 배치 규칙을 정하지 않는다(`doc.go`·패키지 README 같은
+  소스 옆 문서도 그 프로젝트의 관례다).
+- **에이전트·사용자 지침 파일(CLAUDE.md·AGENTS.md·GEMINI.md 등)은 사용자가 그 파일을 지정했을 때만**
+  고친다. 그 밖에는 바꿔야 할 문장을 "권장 변경(diff)"으로 보고만 한다 — 그 파일은 사용자의 규칙이다.
+- CHANGELOG 는 프로젝트가 이미 쓰고 있을 때만 갱신한다.
 
 ---
 
@@ -64,8 +56,8 @@ disallowedTools:
 변경 유형 → 영향 문서:
 - 새 기능 추가 → README, CHANGELOG, API 문서
 - API 변경 → API 문서, CHANGELOG
-- 설정 변경 → README, CLAUDE.md
-- 구조 변경 → CLAUDE.md, 아키텍처 문서
+- 설정 변경 → README (지침 파일은 권장 diff)
+- 구조 변경 → 이미 있는 아키텍처 문서 (지침 파일은 권장 diff)
 ```
 
 ### 3단계: 문서 업데이트
@@ -88,7 +80,7 @@ disallowedTools:
 
 ## 문서 유형별 가이드
 
-### CLAUDE.md 업데이트
+### CLAUDE.md 업데이트 (사용자가 지정했을 때만 — 아니면 권장 diff 로 보고)
 ```markdown
 업데이트 트리거:
 - 프로젝트 구조 변경
@@ -201,7 +193,8 @@ disallowedTools:
 ```
 - 공개 API 엔드포인트 추가·변경 → API 문서
 - 설치·실행 방법 변경 → README
-- 폴더 구조·프로젝트 규칙 변경 → 에이전트 지침 파일(CLAUDE.md·AGENTS.md 등 프로젝트에 있는 것)
+- 폴더 구조·프로젝트 규칙 변경 → 에이전트 지침 파일(CLAUDE.md·AGENTS.md 등)에 대한 **권장 diff 보고**
+  (사용자가 그 파일을 지정했으면 직접 갱신)
 - 릴리스 → CHANGELOG (프로젝트가 쓰는 경우)
 - Breaking change → 마이그레이션 안내
 ```

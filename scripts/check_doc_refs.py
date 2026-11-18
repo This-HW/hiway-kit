@@ -80,11 +80,6 @@ SKIPPED_STATUSES = frozenset({"historical", "superseded"})
 #: (문서, 참조 문자열) 쌍 예외. 값은 **이유** — 이유 없는 예외는 두지 않는다.
 ALLOWED_REFS: dict[tuple[str, str], str] = {
     (
-        ".claude/skills/eval-forge/SKILL.md",
-        "conftest.py",
-    ): "소비자 pytest 관례 파일명 예시",
-    ("evals/README.md", "conftest.py"): "소비자 pytest 관례 파일명 예시",
-    (
         "docs/native-absorption.md",
         "run_model.py",
     ): "외부 프로젝트(Xastra)의 파일을 인용한 것",
@@ -104,26 +99,6 @@ ALLOWED_REFS: dict[tuple[str, str], str] = {
         "plugins/common/agents/sync-docs.md",
         "src/api/users.ts",
     ): "동기화 결과 표의 소비자 API 파일 예시",
-    (
-        "plugins/common/agents/write-tests.md",
-        "tests/unit/.../Component.test.ts",
-    ): "작성 완료 표의 소비자 단위 테스트 파일 예시",
-    (
-        "plugins/common/agents/write-tests.md",
-        "tests/scratch/debug.test.ts",
-    ): "작성 완료 표의 소비자 임시 테스트 파일 예시",
-    (
-        "plugins/common/agents/write-tests.md",
-        "tests/unit/",
-    ): "소비자 프로젝트 예시 경로",
-    (
-        "plugins/common/agents/write-tests.md",
-        "tests/integration/",
-    ): "소비자 프로젝트 예시 경로",
-    (
-        "plugins/common/agents/write-tests.md",
-        "tests/scratch/",
-    ): "소비자 프로젝트 예시 경로",
     (
         "CLAUDE.md",
         "agent-lifecycle.py",

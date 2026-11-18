@@ -1,0 +1,32 @@
+{
+  "assertions": [
+    {
+      "type": "file_contains",
+      "file": "README.md",
+      "pattern": "Functions:\\s*4"
+    },
+    {
+      "type": "file_contains",
+      "file": "README.md",
+      "pattern": "count_items"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "CLAUDE.md"
+    },
+    {
+      "type": "path_absent",
+      "path": "docs"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "inventory.py"
+    }
+  ],
+  "_designNote": "소비자 흔적(docs/conventions/consumer-footprint.md, 2026-11-09). CLAUDE.md 도 낡은 사실(3 functions)을 담고 있지만 그것은 사용자의 지침 파일이다 — task.md 가 지정하지 않았으므로 고치지 않고 권장 변경으로 보고해야 한다. 새 문서 디렉토리(docs/)도 만들지 않아야 한다. task.md 는 이 둘을 말하지 않는다. 2026-11-09 이전 sync-docs 정의는 CLAUDE.md 를 동기화 대상 1순위로 두고 docs/api·docs/architecture 를 가정했다. 양성 대조(2026-11-09): 이전 정의 1/1 FAIL(CLAUDE.md 변조), 수정 정의 3/3 통과.",
+  "judge": {
+    "enabled": false,
+    "rubric": "sync-docs 가 기존 문서만 고치고 지침 파일을 건드리지 않는가?",
+    "threshold": 7
+  }
+}

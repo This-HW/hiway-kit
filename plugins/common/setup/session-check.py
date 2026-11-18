@@ -8,8 +8,9 @@
 
 경고는 stderr 가 아니라 `systemMessage` 로 낸다 — SessionStart 훅의 stderr 는 모델도
 사용자도 보지 못한다. 대상은 **정상 운영에서 거짓인 조건**뿐이다
-(`docs/conventions/warning-signal.md`): 파이썬 하한·낡은 venv·에이전트 이중 로드,
-그리고 setup.sh 를 실행한 사용자에게만 해당하는 전역 설정 누락.
+(`docs/conventions/warning-signal.md`): 파이썬 하한·낡은 venv·에이전트 이중 로드.
+(5.7.2 전에는 setup.sh 사용자에게 전역 ruff.toml·init.templateDir 누락도 알렸다 — 이제 setup.sh 가
+앞의 것은 설치하지 않고 뒤의 것은 묻고 나서만 켜므로, 그 조건은 결함이 아니라 사용자의 선택이다.)
 
 `--conflicts <프로젝트 루트>` 로 부르면 훅이 아니라 이름 충돌 목록(JSON)만 출력한다 —
 `setup.sh --migrate` 가 같은 판정을 쓰도록 한 곳에 둔다(판정이 둘로 갈라지면 경고는
@@ -221,27 +222,14 @@ def collect_warnings() -> list:
     # python floor — 훅은 이 인터프리터로 실행된다. 3.9 미만이면 다른 훅들이
     # import 시점에 죽는데, 훅은 fail-open이라 **아무 메시지 없이 조용히** 사라진다.
     # (이 파일 자체는 구버전에서도 로드되도록 3.10 문법을 쓰지 않는다.)
-    if sys.version_info < (3, 9):
+    # UP036 예외: 하한 미만 인터프리터를 잡는 것이 이 검사의 목적이다(그 규칙은 하한 이상만 가정한다).
+    # f-string 은 3.6+ 이고 이 파일은 `from __future__ import annotations`(3.7+) 로 이미 그 위에 있다.
+    if sys.version_info < (3, 9):  # noqa: UP036
+        major, minor = sys.version_info[0], sys.version_info[1]
         warnings.append(
-            "python3 %d.%d 감지 — kit 훅은 3.9+ 필요. auto-format·stop-validator 등이 "
+            f"python3 {major}.{minor} 감지 — kit 훅은 3.9+ 필요. auto-format·stop-validator 등이 "
             "동작하지 않습니다 (python3 업그레이드 또는 PATH 확인)"
-            % (sys.version_info[0], sys.version_info[1])
         )
-
-    # setup.sh 를 실행한 사용자(`~/.claude/.setup-state.json` 존재)에게만 도는 검사.
-    # plugin-only 사용자에게는 이 조건이 **항상 참**이라 경고가 죽는다(ATK-005) —
-    # 그래서 억제가 아니라 **조회 자체를 하지 않는다**.
-    if (pathlib.Path.home() / ".claude/.setup-state.json").exists():
-        if not (pathlib.Path.home() / ".config/ruff/ruff.toml").exists():
-            warnings.append("ruff.toml 미설치 — setup.sh를 다시 실행하세요")
-        try:
-            if (
-                _run_git(["config", "--global", "--get", "init.templateDir"]).returncode
-                == 1
-            ):
-                warnings.append("init.templateDir 미설정 — setup.sh를 다시 실행하세요")
-        except (OSError, subprocess.TimeoutExpired):
-            pass  # 판정 불가 — 경고하지 않는다(오탐은 전체 경고를 안 읽게 만든다)
 
     # 아래는 git 저장소 안에서만 도는 검사.
     try:
@@ -280,6 +268,13 @@ def main() -> None:
         # setup.sh --migrate 용 — 훅 출력 계약(항상 exit 0)과 무관한 CLI 모드.
         project = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else ".")
         print(json.dumps(find_name_conflicts(project / ".claude", SETUP_DIR.parent)))
+        sys.exit(0)
+    sys.path.insert(0, str(SETUP_DIR.parent / "hooks"))
+    try:
+        from utils import hook_disabled
+    except ImportError:
+        hook_disabled = None
+    if hook_disabled is not None and hook_disabled("session-check"):
         sys.exit(0)
     try:
         warnings = collect_warnings()
