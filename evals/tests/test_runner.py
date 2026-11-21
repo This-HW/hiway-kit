@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import subprocess
 import sys
 import unicodedata
@@ -1564,6 +1565,7 @@ def test_claude_code_harness_calls_are_subprocess_run_or_shutil_which_first_arg(
         "run_scenario_cmd",
         "judge_cmd",
         "is_available",
+        "child_env",
         "parse_scenario_output",
     }
 
@@ -1607,6 +1609,9 @@ def test_run_scenario_and_run_judge_use_harness_indirection(monkeypatch, tmp_pat
 
         def is_available(self):
             return True
+
+        def child_env(self):
+            return {}
 
         def parse_scenario_output(self, stdout):
             return runner.ScenarioOutput(text=stdout)
@@ -2653,18 +2658,24 @@ def test_guard_passes_accurate_output_containing_the_phrase(sc, text):
 
 
 def test_path_absent_passes_when_nothing_was_created(tmp_path):
-    ok, _ = runner.check_assertion({"type": "path_absent", "path": "tests/unit"}, "", tmp_path)
+    ok, _ = runner.check_assertion(
+        {"type": "path_absent", "path": "tests/unit"}, "", tmp_path
+    )
     assert ok is True
 
 
 def test_path_absent_fails_when_the_agent_created_the_directory(tmp_path):
     (tmp_path / "tests" / "unit").mkdir(parents=True)
-    ok, detail = runner.check_assertion({"type": "path_absent", "path": "tests/unit"}, "", tmp_path)
+    ok, detail = runner.check_assertion(
+        {"type": "path_absent", "path": "tests/unit"}, "", tmp_path
+    )
     assert ok is False and "생겼다" in detail
 
 
 def test_path_absent_refuses_escape(tmp_path):
-    ok, detail = runner.check_assertion({"type": "path_absent", "path": "../x"}, "", tmp_path)
+    ok, detail = runner.check_assertion(
+        {"type": "path_absent", "path": "../x"}, "", tmp_path
+    )
     assert ok is False and "탈출" in detail
 
 
@@ -2672,7 +2683,13 @@ def test_glob_contains_finds_a_matching_file(tmp_path):
     (tmp_path / "qa").mkdir()
     (tmp_path / "qa" / "test_text.py").write_text("def test_slugify():\n    pass\n")
     ok, detail = runner.check_assertion(
-        {"type": "glob_contains", "glob": "qa/test_*.py", "pattern": r"def test_\w*slug"}, "", tmp_path
+        {
+            "type": "glob_contains",
+            "glob": "qa/test_*.py",
+            "pattern": r"def test_\w*slug",
+        },
+        "",
+        tmp_path,
     )
     assert ok is True and "qa/test_text.py" in detail
 
@@ -2684,3 +2701,241 @@ def test_glob_contains_fails_without_a_match_and_refuses_escape(tmp_path):
     assert runner.check_assertion(a, "", tmp_path)[0] is False
     escape = {"type": "glob_contains", "glob": "../*.py", "pattern": "x"}
     assert runner.check_assertion(escape, "", tmp_path)[0] is False
+
+
+# ---------------------------------------------------------------------------
+# eval 세션 격리 (2026-11-21) — 사용자 설정·설치된 플러그인·부모 세션 환경이 새지 않는다
+# ---------------------------------------------------------------------------
+#
+# 왜 있는가: 러너가 `claude -p` 를 사용자 설정 그대로 돌려, 이 머신에 설치된 킷의
+# SessionStart 주입(=== RULES ===)·사용자 ~/.claude/CLAUDE.md·사용자 플러그인 스킬·MCP·
+# auto-memory 지침이 eval 세션 트랜스크립트에 실렸다(실측 — evals/README.md §실행 격리).
+# 아래 테스트는 격리 플래그나 환경 정리가 빠지면 red 가 된다.
+
+
+def _flag_value(cmd, flag):
+    i = cmd.index(flag)
+    return cmd[i + 1]
+
+
+def _assert_isolated(cmd):
+    sources = _flag_value(cmd, "--setting-sources").split(",")
+    assert "user" not in sources  # 사용자 플러그인·훅·CLAUDE.md·effortLevel 의 근원
+    assert set(sources) == {"project", "local"}  # 픽스처 CLAUDE.md 는 측정 대상이다
+    assert "--strict-mcp-config" in cmd
+    assert "--mcp-config" not in cmd  # 명시 MCP 도 싣지 않는다 → MCP 0개
+    assert json.loads(_flag_value(cmd, "--settings")) == {"autoMemoryEnabled": False}
+
+
+def test_run_scenario_cmd_is_isolated_from_user_config(tmp_path):
+    """되돌려-FAIL: EVAL_ISOLATION_FLAGS 를 run_scenario_cmd 에서 빼면 red."""
+    _assert_isolated(
+        runner.ClaudeCodeHarness().run_scenario_cmd(_agent(tmp_path), "과제")
+    )
+
+
+def test_judge_cmd_is_isolated_from_user_config():
+    """채점자도 같은 격리 — 설치된 킷 규범이 채점 기준에 섞이지 않는다."""
+    _assert_isolated(runner.ClaudeCodeHarness().judge_cmd("채점"))
+
+
+def test_isolated_env_strips_parent_session_and_keeps_auth():
+    """부모 세션이 물려준 변수는 걷고(플러그인 디렉토리 포함), 인증·프로바이더는 남긴다."""
+    env = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/x",
+        "ANTHROPIC_API_KEY": "x",
+        "ANTHROPIC_BASE_URL": "http://localhost",
+        "CLAUDE_CONFIG_DIR": "/cfg",
+        "CLAUDE_CODE_OAUTH_TOKEN": "x",
+        "CLAUDE_CODE_USE_BEDROCK": "1",
+        "CLAUDE_CODE_SKIP_VERTEX_AUTH": "1",
+        "CLAUDE_CODE_CLIENT_CERT": "/c.pem",
+        # 아래는 걷혀야 한다
+        "CLAUDE_CODE_PLUGIN_DIRS": "/plugins",  # 실측: --setting-sources 아래서도 로드됐다
+        "CLAUDECODE": "1",
+        "CLAUDE_PID": "1",
+        "CLAUDE_EFFORT": "high",
+        "CLAUDE_CODE_SESSION_ID": "s",
+        "CLAUDE_CODE_CHILD_SESSION": "1",
+        "CLAUDE_CODE_MAX_OUTPUT_TOKENS": "1",
+        "CLAUDE_CODE_SOMETHING_NEW": "1",  # 제외 목록 방식 — 새 변수도 기본으로 걸린다
+    }
+    out = runner.isolated_env(env)
+    assert set(out) == {
+        "PATH",
+        "HOME",
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_BASE_URL",
+        "CLAUDE_CONFIG_DIR",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "CLAUDE_CODE_USE_BEDROCK",
+        "CLAUDE_CODE_SKIP_VERTEX_AUTH",
+        "CLAUDE_CODE_CLIENT_CERT",
+    }
+    assert env["CLAUDE_CODE_PLUGIN_DIRS"] == "/plugins"  # 입력은 건드리지 않는다
+
+
+def _capture_run(monkeypatch, stdout):
+    seen = []
+
+    def fake_run(cmd, **kwargs):
+        seen.append((cmd, kwargs))
+        return _fake_completed(stdout)
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    return seen
+
+
+def test_run_scenario_and_judge_pass_isolated_env(tmp_path, monkeypatch):
+    """subprocess 에 env 를 명시해 넘긴다 — 생략하면 부모 환경을 통째로 물려받는다.
+
+    되돌려-FAIL: run_scenario 또는 run_judge 의 `env=HARNESS.child_env()` 를 지우면
+    kwargs 에 env 가 없어 red.
+    """
+    monkeypatch.setenv("CLAUDE_CODE_PLUGIN_DIRS", "/somewhere")
+    monkeypatch.setenv("CLAUDECODE", "1")
+    seen = _capture_run(
+        monkeypatch,
+        json.dumps({"subtype": "success", "is_error": False, "result": "ok"}),
+    )
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_contains_any", "values": ["ok"]}]}
+    )
+    runner.run_scenario(_agent(tmp_path), sc, timeout=5)
+    runner.run_judge("stdout", {"rubric": "r"}, timeout=5)
+    assert len(seen) == 2
+    for cmd, kwargs in seen:
+        _assert_isolated(cmd)
+        env = kwargs.get("env")
+        assert env is not None
+        assert "CLAUDE_CODE_PLUGIN_DIRS" not in env
+        assert "CLAUDECODE" not in env
+        assert env.get("PATH") == os.environ.get("PATH")
+
+
+def test_run_all_report_records_isolation(tmp_path, monkeypatch):
+    """리포트(=기준선)에 격리 방식이 실린다 — 격리 전 기준선과 축이 다름을 파일로 안다."""
+    monkeypatch.setenv("CLAUDE_CODE_PLUGIN_DIRS", "/somewhere")
+    _capture_run(
+        monkeypatch,
+        json.dumps({"subtype": "success", "is_error": False, "result": "ok"}),
+    )
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_contains_any", "values": ["ok"]}]}
+    )
+    monkeypatch.setattr(runner, "validate_all", lambda **k: [])
+    monkeypatch.setattr(runner, "discover_scenario_dirs", lambda **k: [tmp_path])
+    monkeypatch.setattr(runner, "load_scenario", lambda d: sc)
+    monkeypatch.setattr(runner, "load_agent", lambda name: _agent(tmp_path))
+    monkeypatch.setattr(runner.HARNESS, "is_available", lambda: True)
+    report, _ = runner.run_all(None, None, parallel=1, timeout=5)
+    assert report["isolation"]["flags"] == list(runner.EVAL_ISOLATION_FLAGS)
+    assert "CLAUDE_CODE_PLUGIN_DIRS" in report["isolation"]["strippedEnv"]
+    assert "/somewhere" not in json.dumps(report["isolation"])  # 값은 싣지 않는다
+
+
+def test_run_judge_runs_in_empty_temp_cwd(monkeypatch, tmp_path):
+    """judge 는 러너의 cwd 를 물려받지 않는다 — 빈 임시 디렉토리에서 돈다.
+
+    러너 cwd 를 물려받으면 `--setting-sources project,local` 의 project 소스가 러너를 띄운
+    곳(레포 루트)이 되어 이 레포의 CLAUDE.md·.claude/skills 가 채점자에게 실렸다(ATK-001).
+    되돌려-FAIL: run_judge 의 `cwd=judge_cwd` 를 지우면 kwargs 에 cwd 가 없어 red.
+    """
+    monkeypatch.chdir(tmp_path)  # 러너를 띄운 곳 — judge 가 여기서 돌면 안 된다
+    (tmp_path / "CLAUDE.md").write_text("runner-cwd instructions", encoding="utf-8")
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        cwd = kwargs.get("cwd")
+        seen["cwd"] = cwd
+        seen["cmd"] = cmd
+        seen["listing"] = sorted(os.listdir(cwd)) if cwd else None
+        return _fake_completed(json.dumps({"structured_output": {"score": 9}}))
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    res = runner.run_judge("AGENT-OUT-x1", {"rubric": "RUBRIC-y2"}, timeout=5)
+
+    cwd = seen["cwd"]
+    assert cwd is not None
+    assert Path(cwd).resolve() != tmp_path.resolve()
+    assert Path(cwd).resolve() != runner.EVALS_ROOT.parent.resolve()  # 레포 루트 아님
+    assert seen["listing"] == []  # 빈 디렉토리 — 픽스처·CLAUDE.md 없음
+    assert not Path(cwd).exists()  # 호출 뒤 정리된다
+    # 양성 대조: 채점 입력(rubric·에이전트 출력)은 그대로 실린다
+    prompt = seen["cmd"][seen["cmd"].index("-p") + 1]
+    assert "RUBRIC-y2" in prompt and "AGENT-OUT-x1" in prompt
+    assert res == {"ok": True, "score": 9, "threshold": 7}
+
+
+def test_run_judge_timeout_still_reported_with_temp_cwd(monkeypatch):
+    """임시 cwd 로 감싼 뒤에도 타임아웃은 예외가 아니라 advisory note 로 남는다."""
+
+    def fake_run(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, 5)
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    assert runner.run_judge("x", {"rubric": "r"}, timeout=5) == {
+        "ok": None,
+        "score": None,
+        "note": "judge timeout",
+    }
+
+
+def test_kept_behavior_env_records_names_not_credentials():
+    """남긴 동작 변수는 이름만, 자격증명·무관 변수는 빼고 기록한다 (ATK-009)."""
+    env = {
+        "PATH": "/usr/bin",
+        "HOME": "/home/x",
+        "ANTHROPIC_API_KEY": "secret-a",
+        "ANTHROPIC_AUTH_TOKEN": "secret-b",
+        "CLAUDE_CODE_OAUTH_TOKEN": "secret-c",
+        "CLAUDE_CODE_CLIENT_KEY": "/k.pem",
+        "ANTHROPIC_MODEL": "m",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "o",
+        "ANTHROPIC_SMALL_FAST_MODEL": "h",
+        "ANTHROPIC_BASE_URL": "http://localhost",
+        "CLAUDE_CODE_USE_BEDROCK": "1",
+        "MAX_THINKING_TOKENS": "1000",
+        "DISABLE_PROMPT_CACHING": "1",
+        "DISABLE_SOMETHING_NEW": "1",  # 계열 접두사 — 새 변수도 기본으로 걸린다
+    }
+    assert runner.kept_behavior_env(env) == [
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        "ANTHROPIC_MODEL",
+        "ANTHROPIC_SMALL_FAST_MODEL",
+        "CLAUDE_CODE_USE_BEDROCK",
+        "DISABLE_PROMPT_CACHING",
+        "DISABLE_SOMETHING_NEW",
+        "MAX_THINKING_TOKENS",
+    ]
+
+
+def test_run_all_report_records_kept_behavior_env(tmp_path, monkeypatch):
+    """리포트 isolation 블록에 남긴 동작 변수 이름이 실린다 — 값은 싣지 않는다.
+
+    되돌려-FAIL: run_all 의 `keptBehaviorEnv` 줄을 지우면 KeyError 로 red.
+    """
+    monkeypatch.setenv("ANTHROPIC_DEFAULT_SONNET_MODEL", "model-value-zz9")
+    monkeypatch.setenv("MAX_THINKING_TOKENS", "4242")
+    monkeypatch.setenv("CLAUDE_CODE_PLUGIN_DIRS", "/somewhere")  # 걷히는 쪽
+    _capture_run(
+        monkeypatch,
+        json.dumps({"subtype": "success", "is_error": False, "result": "ok"}),
+    )
+    sc = _scenario(
+        tmp_path, {"assertions": [{"type": "output_contains_any", "values": ["ok"]}]}
+    )
+    monkeypatch.setattr(runner, "validate_all", lambda **k: [])
+    monkeypatch.setattr(runner, "discover_scenario_dirs", lambda **k: [tmp_path])
+    monkeypatch.setattr(runner, "load_scenario", lambda d: sc)
+    monkeypatch.setattr(runner, "load_agent", lambda name: _agent(tmp_path))
+    monkeypatch.setattr(runner.HARNESS, "is_available", lambda: True)
+    report, _ = runner.run_all(None, None, parallel=1, timeout=5)
+    kept = report["isolation"]["keptBehaviorEnv"]
+    assert "ANTHROPIC_DEFAULT_SONNET_MODEL" in kept
+    assert "MAX_THINKING_TOKENS" in kept
+    assert "CLAUDE_CODE_PLUGIN_DIRS" not in kept  # 걷힌 변수는 남긴 목록에 없다
+    blob = json.dumps(report["isolation"])
+    assert "model-value-zz9" not in blob and "4242" not in blob

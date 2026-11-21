@@ -1,6 +1,6 @@
 ---
 status: current
-as_of: 2026-10-05
+as_of: 2026-11-21
 ---
 
 # docs/conventions/ — host-neutral project conventions
@@ -24,6 +24,7 @@ inlines a smaller, size-budgeted subset for harnesses that don't support `@` imp
 | `shell-lint.md` | yes | shellcheck over every tracked shell script, pinned and gated |
 | `warning-signal.md` | yes | Before adding a warning/check: when is it false, when does it run, what is out of scope |
 | `measurement-traps.md` | no | The evidence behind `warning-signal.md`'s measurement rules — read when doubting them |
+| `effect-measurement.md` | no | Before claiming a rule, hook or skill **improves outcomes**: pre-registration, an `off` arm, paired exact McNemar, nulls reported as "not established" |
 | `release-process.md` | no (pointer) | **Release procedure SSOT** — version bump, CHANGELOG, regeneration, eval, tag, gate |
 | `reference-vs-judgment.md` | no | Check whether this repo has a reference project's problem before porting its tool |
 | `coordination.md` | yes | This repo's own supervised-worker transport (not imposed on consumers) |
@@ -44,7 +45,7 @@ rule declares `portable:` in its own frontmatter; `plugins/common/tools/export_h
 **Stayed Claude-Code-specific (didn't clear the bar), examples:**
 
 - `/plugin` install commands and channel propagation — Claude Code's own distribution mechanics;
-  a Codex contributor installs via `codex plugin ...` (see README's "Other Harnesses" section).
+  a Codex contributor installs via `codex plugin ...` (see [`docs/harnesses.md`](../harnesses.md)).
 - Agent frontmatter schema and `isolation: worktree` — Claude Code subagent primitives. No other
   target loads the kit's `agents/` as subagents (README capability table) — a non-Claude-Code
   contributor can't act on this even if they read it.

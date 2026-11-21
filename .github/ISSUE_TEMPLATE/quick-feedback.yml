@@ -1,0 +1,25 @@
+name: Quick feedback
+description: One choice and one line. Stopping or uninstalling is useful feedback too.
+title: "[feedback] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Only what you enter here is sent: the kit has no telemetry and uploads nothing on its own.
+  - type: dropdown
+    id: verdict
+    attributes:
+      label: How is hiway-kit working for you?
+      options:
+        - It helps
+        - It gets in the way
+        - Something is confusing
+        - I stopped using it or uninstalled it
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: one-line
+    attributes:
+      label: One line on why (optional)
+      placeholder: "The stop-time check kept running tests I did not touch"

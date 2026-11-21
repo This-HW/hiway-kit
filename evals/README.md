@@ -89,6 +89,77 @@ evals/
 | `CKKIT_EVAL_TIMEOUT` | 시나리오당 타임아웃(초) — override 전용 | `evals/policy.json`의 `cost.scenarioTimeoutSeconds` (현재 600) |
 | `CKKIT_EVAL_JUDGE` | `1`이면 deterministic 전부 통과 시 LLM-judge 실행 | (미실행) |
 
+## 실행 격리 — eval 세션은 이 머신의 설치물을 보지 않는다
+
+러너는 시나리오와 judge 를 **사용자 설정 없이** 돌린다(`run.py` `EVAL_ISOLATION_FLAGS`·`isolated_env`).
+2026-11-21 전에는 `claude -p` 를 사용자 설정 그대로 돌려, 에이전트 정의 eval 이 **"정의 + 그 머신에
+설치된 것"** 을 쟀고 결과가 머신마다 달랐다. 실측(Claude Code 2.1.330, `verify-code/multiply-bug-detected`
+1회씩, 트랜스크립트 grep — 모델 자기보고가 아님):
+
+| 표지 (트랜스크립트 grep) | 격리 전 | 격리 후 |
+| --- | --- | --- |
+| `=== RULES ===` (설치된 킷 5.5.1 의 SessionStart 주입) | 3 | 0 |
+| 사용자 `~/.claude/CLAUDE.md` 문구 | 2 | 0 |
+| 사용자 플러그인 스킬(`humanize-korean`·`frontend-design`) | 2·2 | 0·0 |
+| MCP 도구(`mcp__tavily`·`mcp__claude_ai`) | 2·2 | 0·0 |
+| auto-memory 지침(`persistent file-based memory`) | 3 | 0 |
+| 훅 실행 기록(`hook_success`) | 10 | 0 |
+| **평가 대상 정의 본문** (양성 대조) | 3 | 3 |
+| Bash 도구 사용 (양성 대조 — 권한 우회가 여전히 동작) | 6 | 6 |
+
+트랜스크립트 크기는 362 KB → 185 KB 로 줄었다. 사소한 프롬프트 1회로 잰 opus 비용은
+$0.217 → $0.053 이었다. 차이는 사용자 컨텍스트의 캐시 생성 비용이다.
+
+**고른 것** — `--setting-sources project,local --strict-mcp-config --settings '{"autoMemoryEnabled":false}'`,
+그리고 자식 환경에서 `CLAUDECODE`·`CLAUDE_PID`·`CLAUDE_EFFORT`·`CLAUDE_CODE_*` 를 걷는다.
+- `user` 소스를 빼면 사용자 플러그인·훅·`~/.claude/CLAUDE.md`·`effortLevel` 이 함께 빠진다.
+- `project`·`local` 은 남긴다. 픽스처의 `CLAUDE.md`(예: `sync-docs/instruction-file-untouched`)는
+  소비자 세션에서 실제로 로드되는 것이라 측정 대상이다.
+- 평가 대상 정의는 `--append-system-prompt` 로 들어간다. 플러그인 로딩과는 무관하다.
+- 인증(OAuth·키체인)은 그대로 동작한다.
+
+`CLAUDE_CODE_*` 는 접두사로 전부 걷는다. 예외는 인증·프로바이더 선택(`OAUTH_TOKEN`·`USE_*`·`SKIP_*_AUTH`·
+`CLIENT_*`·`API_KEY_HELPER_TTL_MS`)뿐이다. 부모 세션이 넘긴 `CLAUDE_CODE_PLUGIN_DIRS` 는 `--setting-sources`
+아래서도 로드됐다(카나리 스킬 실측). 그래서 플래그만으로는 부족하다. 과하게 걷으면 인증이 깨지는데,
+이건 claude 비정상 종료 → `error` 로 시끄럽게 드러난다. 덜 걷으면 조용히 오염된다. 그래서 과하게 걷는 쪽을 골랐다.
+
+**버린 것**
+- `--bare` — OAuth·키체인을 읽지 않는다. 구독 인증 머신에서 `Not logged in` 이 난다(실측).
+- `--safe-mode` — 프로젝트 `CLAUDE.md` 까지 끈다. 픽스처 지침 파일이 측정에서 빠진다(실측: 프로젝트 카나리 0).
+- 격리 `CLAUDE_CONFIG_DIR` — 자격증명 위치가 바뀐다. 인증을 따로 실어야 한다.
+
+**judge 도 빈 임시 디렉토리에서 돈다.** 시나리오는 처음부터 임시 디렉토리를 cwd 로 썼는데, judge 는
+러너의 cwd 를 물려받았다. 그러면 `project` 소스가 *러너를 띄운 곳*이 된다. 레포 루트에서 돌리면
+이 레포의 `CLAUDE.md`(+@import)와 `.claude/skills/*` 가 채점자에게 실렸다. 상위 디렉토리 탐색 때문에
+`~/.claude/CLAUDE.md` 도 같이 실렸다. 같은 커밋이 실행 위치에 따라 다른 judge 점수를 낼 수 있었다는 뜻이다.
+실측(2026-11-21, `run_judge` 를 레포 루트에서 직접 1회씩 호출, 트랜스크립트 grep):
+
+| 표지 (judge 트랜스크립트 grep) | 수정 전 (cwd = 레포 루트) | 수정 후 (빈 임시 cwd) |
+| --- | --- | --- |
+| 레포 `CLAUDE.md` 문구(`Universal Claude Code toolkit`) | 3 | 0 |
+| 레포 전용 스킬(`native-watch`·`eval-forge`·`self-improve`) | 13·13·13 | 0·0·0 |
+| `~/.claude/CLAUDE.md` (상위 디렉토리 탐색으로 로드) | 2 | 0 |
+| **rubric·에이전트 출력** (양성 대조 — 채점 입력) | 6·6 | 6·6 |
+
+트랜스크립트 크기는 296 KB → 156 KB 로 줄었다. 시나리오의 픽스처 디렉토리는 judge 에 쓰지 않는다.
+그 `CLAUDE.md` 는 에이전트의 측정 대상이지 채점 기준이 아니다.
+
+**judge 는 현재 전 시나리오에서 비활성이다**(`enabled: false`, advisory). 그래서 이 수정은 기준선 값을
+바꾸지 않았고, 기준선도 다시 만들지 않았다. judge 를 켜는 시나리오가 생기면 그때 기준선을 재생성한다.
+
+**남는 것(격리하지 않음)**
+- 임시 디렉토리가 `$HOME` 아래에 있으면(`TMPDIR` 을 홈 안으로 둔 머신) 상위 디렉토리 탐색이
+  `~/.claude/CLAUDE.md` 를 다시 싣는다. macOS(`/var/folders`)·Linux(`/tmp`) 기본값에서는 해당하지 않는다.
+- 세션 트랜스크립트는 여전히 `~/.claude/projects/<임시 디렉토리 키>/` 에 남는다. 위 grep 증거가 바로 이 파일이다.
+- `~/.claude.json` 상태 갱신은 Claude Code 자체 동작이다. `run_all` 의 projects 증가 경고가 그대로 본다.
+- `ANTHROPIC_*`·`DISABLE_*`·`MAX_THINKING_TOKENS` 같은 동작 변수와 관리형(policy) 설정은 건드리지 않는다.
+  사용자가 일부러 건 모델 매핑·사고 예산일 수 있어서다. 대신 남긴 변수의 **이름**을 기록한다(아래).
+
+리포트와 기준선에는 `isolation` 필드가 실린다. 플래그, 걷은 변수 이름(`strippedEnv`), 남긴 동작 변수
+이름(`keptBehaviorEnv` — 자격증명 변수는 제외, 값은 싣지 않음)이 들어간다. 이 필드가 없는 기준선
+(`2026-11-08.json` 이전)은 격리 전 축에서 잰 것이다. `keptBehaviorEnv` 는 2026-11-21 기준선 생성 뒤에
+들어온 필드라 **다음 재생성부터** 기준선에 실린다.
+
 ## exit code
 
 | code | 의미 |
@@ -237,6 +308,8 @@ evals/
    상태의 코드 + red 상태 pytest 테스트.
 3. `task.md`에 에이전트에게 줄 과제를 한국어로 명확히 서술한다.
 4. `expect.json`에 assertions를 정의한다 — 최소 1개 이상, deterministic 우선.
+   결함을 심은 시나리오만 있는 것이 아니다. **결함 없는 diff 를 주는 음성 시나리오**
+   (예: `review-code/clean-refactor`)도 있다 — 거짓 경보를 잡는 쪽이다.
 5. `python3 evals/run.py --validate`로 스키마를 확인한다.
 6. `python3 evals/run.py --dry-run --agent <name> --scenario <id>`로 계획을
    확인한 뒤, 필요 시 `--agent <name> --scenario <id>`로 실제 1회 실행해 본다

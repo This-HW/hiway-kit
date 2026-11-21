@@ -43,15 +43,161 @@ PYEOF
 OPT_FORCE=false
 OPT_STATUS=false
 OPT_MIGRATE=false
+OPT_UNINSTALL=false
+OPT_DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --force)   OPT_FORCE=true; shift;;
-        --status)  OPT_STATUS=true; shift;;
-        --migrate) OPT_MIGRATE=true; shift;;
+        --force)     OPT_FORCE=true; shift;;
+        --status)    OPT_STATUS=true; shift;;
+        --migrate)   OPT_MIGRATE=true; shift;;
+        --uninstall) OPT_UNINSTALL=true; shift;;
+        --dry-run)   OPT_DRY_RUN=true; shift;;
         *) echo "Unknown option: $1"; exit 1;;
     esac
 done
+
+if $OPT_DRY_RUN && ! $OPT_UNINSTALL; then
+    echo "--dry-run 은 --uninstall 과 함께만 씁니다" >&2
+    exit 1
+fi
+if $OPT_UNINSTALL && { $OPT_FORCE || $OPT_STATUS || $OPT_MIGRATE; }; then
+    echo "--uninstall 은 --dry-run 외의 옵션과 함께 쓰지 않습니다" >&2
+    exit 1
+fi
+
+# --uninstall: setup.sh 가 쓴 것만, 쓴 그대로일 때만 되돌린다(docs/conventions/consumer-footprint.md 쓰기 등록부).
+#
+# - 실행한 레포의 pre-commit — 이 체크아웃의 배포본과 **바이트가 같을 때만** 지운다. 다르면 사용자가
+#   고쳤거나 다른 판이 깐 것이다 — 남기고 알린다(지우면 남의 수정을 잃는다).
+# - init.templateDir — 값이 정확히 setup.sh 가 넣는 경로이고, 그 디렉토리에 setup.sh 가 넣은 것
+#   (배포본과 같은 hooks/pre-commit) **밖의 파일이 없을 때만** 해제하고 사본을 지운다. 사용자 파일이
+#   있거나 사본을 고쳤으면 설정도 파일도 남기고 알린다 — 설정만 풀면 남긴 파일이 아무 데도 연결되지
+#   않은 채 "보존"으로 보고된다. 해제는 그 값 하나만(`--fixed-value --unset-all`) 하고, 실패해도
+#   (XDG 위치·git 2.30 미만) 멈추지 않고 직접 할 명령을 알린다.
+# - templateDir 로 **다른 레포에 이미 심긴** .git/hooks/pre-commit 사본은 이 스크립트가 찾을 수 없다
+#   (어느 레포가 그 뒤에 만들어졌는지 기록이 없다) — 찾을 수 없다고 적고 각 레포에서 할 일을 안내한다.
+# - ~/.claude/.setup-state.json — setup.sh 전용 상태라 지운다.
+# - 플러그인은 지우지 않고 **명령만 안내**한다. setup.sh 가 깐 직접 마켓 설치와 사용자가 따로 깐
+#   디렉토리판을 이 스크립트가 구별할 근거가 없다 — 자동으로 지우면 남의 설치까지 지울 수 있다.
+if $OPT_UNINSTALL; then
+    SHIPPED_HOOK="$SCRIPT_DIR/plugins/common/setup/pre-commit"
+    TPL_ROOT="$HOME/.claude/git-templates"
+    KEPT=0
+    if $OPT_DRY_RUN; then
+        DO="  (dry-run) 할 일:"
+        echo "=== hiway-kit 제거 (dry-run — 아무것도 바꾸지 않습니다) ==="
+    else
+        DO="  ✓"
+        echo "=== hiway-kit 제거 ==="
+    fi
+
+    # _remove_if_shipped <파일> <표시 이름> — 배포본과 같을 때만 지운다.
+    _remove_if_shipped() {
+        local target="$1" label="$2"
+        if [ -L "$target" ]; then
+            echo "  ⚠ $label 은 심링크라 건드리지 않습니다 — 직접 확인하세요"
+            KEPT=$((KEPT + 1))
+        elif [ ! -e "$target" ]; then
+            echo "  - $label 없음"
+        elif cmp -s "$SHIPPED_HOOK" "$target"; then
+            $OPT_DRY_RUN || rm -f "$target"
+            echo "$DO $label 삭제"
+        else
+            echo "  ⚠ $label 이 이 판의 배포본과 달라 남겨 둡니다(수정했거나 다른 판이 깐 사본)."
+            printf '    필요 없으면 직접 지우세요: rm -- %q\n' "$target"
+            KEPT=$((KEPT + 1))
+        fi
+    }
+
+    echo "[1/4] 현재 repo pre-commit..."
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo "  - git 레포가 아니라 건너뜁니다"
+    elif [ -n "$(git config --get core.hooksPath 2>/dev/null || true)" ]; then
+        # core.hooksPath 가 있으면 git 은 .git/hooks 를 쓰지 않는다 — 그래서 setup.sh 는 설치하지 않지만,
+        # hooksPath 를 켜기 **전에** 깐 사본이 남아 있을 수는 있다. 쓰이지 않는 파일이라 지우지 않고 알린다.
+        echo "  - core.hooksPath 를 쓰는 레포 — git 이 .git/hooks 를 쓰지 않아 setup.sh 는 여기에 설치하지 않습니다"
+        LEFT_HOOK="$(git rev-parse --git-common-dir)/hooks/pre-commit"
+        if [ -e "$LEFT_HOOK" ] || [ -L "$LEFT_HOOK" ]; then
+            echo "  ⚠ 쓰이지 않는 .git/hooks/pre-commit 이 남아 있습니다 — 예전에 깐 사본인지 직접 확인하세요:"
+            printf '    %q\n' "$LEFT_HOOK"
+            KEPT=$((KEPT + 1))
+        fi
+    else
+        _remove_if_shipped "$(git rev-parse --git-path hooks)/pre-commit" ".git/hooks/pre-commit"
+    fi
+
+    echo "[2/4] git init.templateDir..."
+    CURRENT_TPL="$(git config --global init.templateDir 2>/dev/null || true)"
+    TPL_WAS_OURS=false
+    if [ "$CURRENT_TPL" = "$TPL_ROOT" ]; then
+        TPL_WAS_OURS=true
+        TPL_HOOK="$TPL_ROOT/hooks/pre-commit"
+        # setup.sh 가 넣는 것은 hooks/pre-commit 하나뿐이다. 그 밖의 항목은 사용자 것이다.
+        TPL_EXTRA="$(find "$TPL_ROOT" -mindepth 1 ! -path "$TPL_ROOT/hooks" ! -path "$TPL_HOOK" 2>/dev/null | head -5 || true)"
+        if [ -n "$TPL_EXTRA" ]; then
+            echo "  ⚠ 템플릿 디렉토리에 setup.sh 가 넣지 않은 파일이 있어 init.templateDir 를 해제하지 않습니다"
+            echo "    (해제하면 그 파일들이 새 레포에 더는 복사되지 않습니다). 예:"
+            printf '%s\n' "$TPL_EXTRA" | while IFS= read -r extra; do printf '      %q\n' "$extra"; done
+            echo "    정리한 뒤 다시 실행하거나, 그대로 두려면 이 안내를 무시하세요."
+            KEPT=$((KEPT + 1))
+        elif [ -L "$TPL_HOOK" ] || { [ -e "$TPL_HOOK" ] && ! cmp -s "$SHIPPED_HOOK" "$TPL_HOOK"; }; then
+            echo "  ⚠ 템플릿 pre-commit 이 이 판의 배포본과 달라(수정했거나 다른 판·심링크) init.templateDir 도"
+            echo "    해제하지 않고 둘 다 남겨 둡니다 — 설정만 풀면 남긴 사본이 아무 데도 연결되지 않습니다."
+            printf '    직접 확인: %q\n' "$TPL_HOOK"
+            KEPT=$((KEPT + 1))
+        elif $OPT_DRY_RUN; then
+            echo "$DO init.templateDir 해제 ($TPL_ROOT)"
+            _remove_if_shipped "$TPL_HOOK" "템플릿 pre-commit"
+        elif git config --global --fixed-value --unset-all init.templateDir "$TPL_ROOT"; then
+            echo "$DO init.templateDir 해제 ($TPL_ROOT)"
+            _remove_if_shipped "$TPL_HOOK" "템플릿 pre-commit"
+            rmdir "$TPL_ROOT/hooks" "$TPL_ROOT" 2>/dev/null || true
+        else
+            # 값이 ~/.gitconfig 가 아닌 XDG 위치($XDG_CONFIG_HOME/git/config)에 있거나 git 이 2.30 미만이면
+            # 여기로 온다. set -e 로 조용히 멈추지 않고, 사본도 그대로 둔다(설정이 아직 가리키고 있다).
+            echo "  ⚠ init.templateDir 해제에 실패했습니다 — 템플릿 사본도 그대로 둡니다. 직접 실행하세요:"
+            printf '    git config --global --fixed-value --unset-all init.templateDir %q\n' "$TPL_ROOT"
+            echo "    (값이 \$XDG_CONFIG_HOME/git/config 에 있으면 그 파일에서 지우세요)"
+            KEPT=$((KEPT + 1))
+        fi
+    elif [ -n "$CURRENT_TPL" ]; then
+        echo "  - 다른 templateDir 이라 건드리지 않습니다: $CURRENT_TPL"
+    else
+        echo "  - 설정 없음"
+    fi
+
+    echo "[3/4] 셋업 상태 파일..."
+    if [ -f "$STATE_FILE" ]; then
+        $OPT_DRY_RUN || rm -f "$STATE_FILE"
+        echo "$DO $STATE_FILE 삭제"
+    else
+        echo "  - 없음"
+    fi
+
+    echo "[4/4] 플러그인 — 자동으로 지우지 않습니다. 남길 설치를 골라 직접 실행하세요:"
+    echo "    claude plugin uninstall hiway-kit@hiway-kit        # setup.sh 가 깐 설치(경로 B)"
+    echo "    claude plugin marketplace remove hiway-kit         # 그 마켓에서 깐 플러그인도 함께 제거됩니다"
+    echo "    claude plugin list                                 # 다른 설치(디렉토리판 등)가 남았는지 확인"
+    if command -v codex >/dev/null 2>&1; then
+        echo "    codex plugin remove hiway-kit@hiway-kit-marketplace  # Codex 에 설치했다면"
+    fi
+    if $TPL_WAS_OURS; then
+        # 탐지할 수 없는 것은 탐지할 수 없다고 적는다(warning-signal.md) — templateDir 가 켜져 있던 동안
+        # git init·clone 한 레포마다 사본이 들어갔지만, 그 목록은 어디에도 기록되지 않는다.
+        echo ""
+        echo "  ⚠ init.templateDir 가 켜져 있던 동안 만든(git init·clone) 다른 레포의 .git/hooks/pre-commit"
+        echo "    사본은 이 스크립트가 찾을 수 없어 그대로 남습니다. 각 레포에서 실행하세요:"
+        printf '    cd <그 레포> && %q --uninstall\n' "$SCRIPT_DIR/setup.sh"
+    fi
+    echo ""
+    if [ "$KEPT" -gt 0 ]; then
+        echo "=== 제거 끝 — 남긴 항목 ${KEPT}개(위 ⚠) ==="
+    else
+        echo "=== 제거 끝 ==="
+    fi
+    exit 0
+fi
 
 if $OPT_STATUS; then
     python3 - "$STATE_FILE" <<'PYEOF'

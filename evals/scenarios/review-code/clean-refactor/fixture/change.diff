@@ -1,0 +1,244 @@
+diff --git a/cli.py b/cli.py
+index d09e75c..e4add63 100644
+--- a/cli.py
++++ b/cli.py
+@@ -1,23 +1,35 @@
+ """Command line entry point: list one owner's reports."""
+ 
++from __future__ import annotations
++
+ import argparse
+ import sqlite3
+ 
+-from reports import get_reports
++from reports import PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, SORT_KEYS, human_size, list_reports
++
++
++def _limit(text: str) -> int:
++    try:
++        value = int(text)
++    except ValueError:
++        raise argparse.ArgumentTypeError(f"not an integer: {text!r}") from None
++    if not 1 <= value <= PAGE_SIZE_MAX:
++        raise argparse.ArgumentTypeError(f"must be between 1 and {PAGE_SIZE_MAX}")
++    return value
+ 
+ 
+-def main(argv=None):
++def main(argv: list[str] | None = None) -> int:
+     parser = argparse.ArgumentParser(prog="reports")
+     parser.add_argument("db")
+     parser.add_argument("owner_id", type=int)
+-    parser.add_argument("--sort", default="created", choices=["created", "size", "name"])
+-    parser.add_argument("--limit", type=int, default=20)
++    parser.add_argument("--sort", default="created", choices=SORT_KEYS)
++    parser.add_argument("--limit", type=_limit, default=PAGE_SIZE_DEFAULT)
+     args = parser.parse_args(argv)
+ 
+     conn = sqlite3.connect(args.db)
+     try:
+-        for rid, name, size in get_reports(conn, args.owner_id, args.sort, args.limit):
+-            print(f"{rid}\t{name}\t{size}")
++        for rid, name, size in list_reports(conn, args.owner_id, args.sort, args.limit):
++            print(f"{rid}\t{name}\t{human_size(size)}")
+     finally:
+         conn.close()
+     return 0
+diff --git a/reports.py b/reports.py
+index 520efef..519b276 100644
+--- a/reports.py
++++ b/reports.py
+@@ -1,22 +1,57 @@
+ """Read-only report queries over the local SQLite store."""
+ 
++from __future__ import annotations
++
+ import sqlite3
+ 
++# ORDER BY cannot take a bound parameter, so the column name comes from this
++# table and never from the caller's string.
++_SORT_COLUMNS = {
++    "created": "created_at",
++    "size": "size_bytes",
++    "name": "name",
++}
++SORT_KEYS = tuple(_SORT_COLUMNS)
++
++PAGE_SIZE_DEFAULT = 20
++PAGE_SIZE_MAX = 100
++
++_UNITS = ("B", "KiB", "MiB", "GiB", "TiB")
++
+ 
+-def get_reports(conn, owner_id, sort="created", limit=20):
+-    if sort == "created":
+-        order = "created_at"
+-    elif sort == "size":
+-        order = "size_bytes"
+-    elif sort == "name":
+-        order = "name"
+-    else:
+-        raise ValueError("unknown sort key: %r" % sort)
+-    if limit < 1 or limit > 100:
+-        raise ValueError("limit out of range: %d" % limit)
+-    sql = (
+-        "SELECT id, name, size_bytes FROM reports WHERE owner_id = ? ORDER BY "
+-        + order
+-        + " LIMIT ?"
++def list_reports(
++    conn: sqlite3.Connection,
++    owner_id: int,
++    sort: str = "created",
++    limit: int = PAGE_SIZE_DEFAULT,
++) -> list[tuple[int, str, int]]:
++    """Return (id, name, size_bytes) rows owned by ``owner_id``.
++
++    Ties on the sort column are broken by ``id`` so pages are stable.
++    """
++    column = _SORT_COLUMNS.get(sort)
++    if column is None:
++        raise ValueError(f"unknown sort key: {sort!r}")
++    if not 1 <= limit <= PAGE_SIZE_MAX:
++        raise ValueError(f"limit out of range: {limit}")
++    query = (
++        "SELECT id, name, size_bytes FROM reports "
++        f"WHERE owner_id = ? ORDER BY {column}, id LIMIT ?"
+     )
+-    return conn.execute(sql, (owner_id, limit)).fetchall()
++    return conn.execute(query, (owner_id, limit)).fetchall()
++
++
++def human_size(n: int) -> str:
++    """Format a byte count with binary units, e.g. 1536 -> '1.5 KiB'."""
++    if n < 0:
++        raise ValueError(f"negative size: {n}")
++    if n < 1024:
++        return f"{n} B"
++    size = n / 1024
++    unit = 1
++    # Compare the value as it will be printed, so 1048575 B is "1.0 MiB"
++    # rather than "1024.0 KiB".
++    while round(size, 1) >= 1024 and unit < len(_UNITS) - 1:
++        size /= 1024
++        unit += 1
++    return f"{size:.1f} {_UNITS[unit]}"
+diff --git a/test_reports.py b/test_reports.py
+index 53fb5fd..35d7003 100644
+--- a/test_reports.py
++++ b/test_reports.py
+@@ -3,42 +3,99 @@ import sqlite3
+ 
+ import pytest
+ 
+-from reports import get_reports
++import cli
++from reports import human_size, list_reports
+ 
+ SCHEMA = (pathlib.Path(__file__).parent / "schema.sql").read_text()
+ 
++_ROWS = [
++    (1, 7, "b.csv", 3000, "2026-01-02"),
++    (2, 7, "a.csv", 100, "2026-01-03"),
++    (3, 8, "c.csv", 200, "2026-01-01"),
++    (4, 7, "c.csv", 100, "2026-01-04"),
++]
++
++
++def _create(c):
++    c.executescript(SCHEMA)
++    c.executemany("INSERT INTO reports VALUES (?, ?, ?, ?, ?)", _ROWS)
++    c.commit()
++
+ 
+ @pytest.fixture
+ def conn():
+     c = sqlite3.connect(":memory:")
+-    c.executescript(SCHEMA)
+-    c.executemany(
+-        "INSERT INTO reports VALUES (?, ?, ?, ?, ?)",
+-        [
+-            (1, 7, "b.csv", 300, "2026-01-02"),
+-            (2, 7, "a.csv", 100, "2026-01-03"),
+-            (3, 8, "c.csv", 200, "2026-01-01"),
+-        ],
+-    )
++    _create(c)
+     yield c
+     c.close()
+ 
+ 
+ def test_filters_by_owner(conn):
+-    assert [r[0] for r in get_reports(conn, 7)] == [1, 2]
++    assert [r[0] for r in list_reports(conn, 7)] == [1, 2, 4]
+ 
+ 
+-def test_sort_by_size(conn):
+-    assert [r[0] for r in get_reports(conn, 7, sort="size")] == [2, 1]
++@pytest.mark.parametrize(
++    ("sort", "expected"),
++    [("created", [1, 2, 4]), ("size", [2, 4, 1]), ("name", [2, 1, 4])],
++)
++def test_sort_keys(conn, sort, expected):
++    assert [r[0] for r in list_reports(conn, 7, sort=sort)] == expected
++
++
++def test_ties_broken_by_id(conn):
++    assert [r[0] for r in list_reports(conn, 7, sort="size", limit=2)] == [2, 4]
++
++
++def test_schema_rejects_non_integer_size(conn):
++    with pytest.raises(sqlite3.IntegrityError):
++        conn.execute("INSERT INTO reports VALUES (9, 7, 'x', 'big', '2026-01-05')")
+ 
+ 
+ def test_unknown_sort_rejected(conn):
+     with pytest.raises(ValueError):
+-        get_reports(conn, 7, sort="size_bytes; DROP TABLE reports")
++        list_reports(conn, 7, sort="size_bytes; DROP TABLE reports")
+ 
+ 
+ def test_limit_bounds(conn):
++    assert len(list_reports(conn, 7, limit=1)) == 1
+     with pytest.raises(ValueError):
+-        get_reports(conn, 7, limit=0)
++        list_reports(conn, 7, limit=0)
+     with pytest.raises(ValueError):
+-        get_reports(conn, 7, limit=101)
++        list_reports(conn, 7, limit=101)
++
++
++@pytest.mark.parametrize(
++    ("n", "expected"),
++    [
++        (0, "0 B"),
++        (1023, "1023 B"),
++        (1024, "1.0 KiB"),
++        (1536, "1.5 KiB"),
++        (1048575, "1.0 MiB"),
++        (1024**5, "1024.0 TiB"),
++    ],
++)
++def test_human_size(n, expected):
++    assert human_size(n) == expected
++
++
++def test_human_size_rejects_negative():
++    with pytest.raises(ValueError):
++        human_size(-1)
++
++
++def test_cli_prints_human_sizes(tmp_path, capsys):
++    db = tmp_path / "r.db"
++    c = sqlite3.connect(db)
++    _create(c)
++    c.close()
++    assert cli.main([str(db), "7", "--sort", "size"]) == 0
++    assert capsys.readouterr().out == "2\ta.csv\t100 B\n4\tc.csv\t100 B\n1\tb.csv\t2.9 KiB\n"
++
++
++@pytest.mark.parametrize("bad", ["0", "101", "ten"])
++def test_cli_rejects_bad_limit(tmp_path, bad):
++    with pytest.raises(SystemExit) as exc:
++        cli.main([str(tmp_path / "r.db"), "7", "--limit", bad])
++    assert exc.value.code == 2
++    assert not (tmp_path / "r.db").exists()

@@ -28,10 +28,14 @@ CORE_BODY = "# Core Rule\ncore rule body\n"
 #: session-start.conditional_signals() 의 실제 키 — 픽스처 규범 이름은 이것과 같아야 켜진다.
 SIGNALLED = ("feedback-loop", "loop-engineering", "mcp-usage", "task-resume")
 HOOK_FILES = ("session-start.py", "utils.py")
-TOOL_FILES = ("feedback_ledger.py",)
+#: hidden_chars 는 훅·원장이 함께 import 한다 — 빠지면 훅이 stderr 경고 폴백으로 돌아
+#: 실물 배치가 아니라 폴백 경로를 재게 된다(W1 통합 요청).
+TOOL_FILES = ("feedback_ledger.py", "hidden_chars.py")
 
 
-def _fake_plugin_root(tmp_path: Path, *, conditional_names: tuple[str, ...]) -> Path:
+def _fake_plugin_root(
+    tmp_path: Path, *, conditional_names: tuple[str, ...], core_body: str = CORE_BODY
+) -> Path:
     root = tmp_path / "common"
     (root / "rules").mkdir(parents=True)
     (root / "hooks").mkdir(parents=True)
@@ -41,7 +45,7 @@ def _fake_plugin_root(tmp_path: Path, *, conditional_names: tuple[str, ...]) -> 
     for name in TOOL_FILES:
         shutil.copy(REPO_ROOT / "plugins" / "common" / "tools" / name, root / "tools" / name)
     (root / "rules" / "aa-core.md").write_text(
-        f"---\ntier: core\n---\n\n{CORE_BODY}", encoding="utf-8"
+        f"---\ntier: core\n---\n\n{core_body}", encoding="utf-8"
     )
     for name in conditional_names:
         (root / "rules" / f"{name}.md").write_text(
@@ -56,6 +60,61 @@ def _load(plugin_root: Path):
     )
     mod.PLUGIN_ROOT = plugin_root
     return mod
+
+
+def test_fixture_hook_runs_without_import_fallback(tmp_path):
+    """픽스처가 실물 배치를 재는가 — 훅이 폴백 경고를 내면 측정 대상이 실물이 아니다."""
+    import os
+    import subprocess
+
+    root = _fake_plugin_root(tmp_path, conditional_names=SIGNALLED)
+    project = tmp_path / "p"
+    project.mkdir()
+    r = subprocess.run(
+        [sys.executable, str(root / "hooks" / "session-start.py")], input="{}",
+        cwd=str(project), capture_output=True, text=True, timeout=30, check=False,
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": str(tmp_path),
+             "CLAUDE_PROJECT_DIR": str(project)},
+    )
+    assert r.returncode == 0 and "hidden_chars" not in r.stderr, r.stderr
+
+
+#: 실재하는 킷 경로를 가리키는 core 본문 — 훅이 `<킷 루트>` 선언(절대경로)을 내게 한다.
+PATH_BODY = "# Core Rule\n규범 원문은 `rules/aa-core.md` 다.\n"
+
+
+@pytest.mark.parametrize("short,long_", [("a", "b" * 60)])
+def test_measurement_does_not_depend_on_checkout_path(tmp_path, short, long_):
+    """체크아웃 경로 길이가 달라도 측정값은 같다(경로 의존 제거, v5.9.0).
+
+    실측 결함: 같은 커밋이 경로에 따라 7,018B(pass)·7,557B(fail) 로 갈렸다.
+    """
+    roots = [
+        _fake_plugin_root(tmp_path / d, conditional_names=SIGNALLED, core_body=PATH_BODY)
+        for d in (short, long_)
+    ]
+    mod = _load(roots[0])
+    measured = [mod.measure_scenarios(r) for r in roots]
+    for name in measured[0]:
+        assert len(measured[0][name].encode()) == len(measured[1][name].encode()), name
+
+
+def test_normalization_actually_substitutes_the_root(tmp_path):
+    """**양성 대조** — 위 동일성이 "루트가 출력에 없어서"가 아니라 치환 덕인지 확인한다."""
+    root = _fake_plugin_root(tmp_path / ("c" * 40), conditional_names=SIGNALLED,
+                             core_body=PATH_BODY)
+    mod = _load(root)
+    home = tmp_path / "home"
+    home.mkdir()
+    project = tmp_path / "proj"
+    project.mkdir()
+    raw = mod.run_session_start(root, project, home)
+    assert str(root.resolve()) in raw, "훅 출력에 실제 루트가 없다 — 대조가 성립하지 않는다"
+    normalized, count = mod.normalize_plugin_root(raw, root)
+    assert count == 1
+    assert str(root.resolve()) not in normalized
+    assert mod.REPRESENTATIVE_PLUGIN_ROOT in normalized
+    assert mod.REPRESENTATIVE_PLUGIN_ROOT in mod.measure_scenarios(root)["empty"]
 
 
 def test_conditional_rules_are_derived_not_hardcoded(tmp_path):

@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SCRIPTS_DIR))  # 스크립트가 옆의 git_tracked 를 import 한다
 
@@ -241,3 +243,136 @@ def test_unreadable_document_is_tallied_and_red(tmp_path, capsys):
     assert rc == 1
     assert "검사하지 못한 파일" in out
     assert "gone.md" in out
+
+
+# ── 도식 블록(`mermaid`·`skills` 펜스) — 5.9.0 ─────────────────────────
+
+SKILLS = {
+    "plugins/common/skills/plan-task/SKILL.md": "---\nname: plan-task\n---\n",
+    "plugins/common/skills/auto-dev/SKILL.md": "---\nname: auto-dev\n---\n",
+    # SKILL.md 없는 디렉토리는 스킬이 아니다
+    "plugins/common/skills/half/references/x.md": "x\n",
+}
+
+
+def _diagram(lang: str, body: str) -> str:
+    return f"# t\n\n```{lang}\n{body}```\n"
+
+
+def test_mermaid_skill_tokens_that_exist_are_green_and_block_is_counted(tmp_path, capsys):
+    body = 'flowchart LR\n  A["/plan-task"] -->|"approved"| B["/auto-dev"]\n'
+    root = _repo(tmp_path, {**BASE, **SKILLS, "README.md": _diagram("mermaid", body)})
+    rc, out = _run(root, capsys)
+    assert rc == 0, out
+    assert "도식 블록 1개" in out  # 양성 대조 — 검사가 블록에 닿았다
+
+
+def test_mermaid_unknown_skill_is_red_and_fixing_it_is_green(tmp_path, capsys):
+    """되돌려-FAIL: 지워진 스킬을 그린 도식은 red, 실재 스킬로 고치면 green."""
+    bad = 'flowchart LR\n  A["/brainstorming"] --> B["/half"]\n'
+    root = _repo(tmp_path, {**BASE, **SKILLS, "README.md": _diagram("mermaid", bad)})
+    rc, out = _run(root, capsys)
+    assert rc == 1
+    assert "README.md:5  [도식 스킬] /brainstorming" in out
+    assert "[도식 스킬] /half" in out  # 디렉토리만 있고 SKILL.md 가 없다
+    assert "→" in out
+
+    good = 'flowchart LR\n  A["/plan-task"] --> B["/auto-dev"]\n'
+    root2 = _repo(
+        tmp_path, {**BASE, **SKILLS, "README.md": _diagram("mermaid", good)}, "again"
+    )
+    rc2, out2 = _run(root2, capsys)
+    assert rc2 == 0, out2
+
+
+@pytest.mark.parametrize("node", ["A[/brainstorming/]", "A[/brainstorming\\]"])
+def test_mermaid_trapezoid_node_is_checked(tmp_path, capsys, node):
+    """리뷰 L-013 — 평행사변형·사다리꼴 노드(`[/x/]`·`[/x\\]`)의 `/이름` 도 명령 주장이다."""
+    body = f"flowchart LR\n  {node} --> B[/plan-task/]\n"
+    root = _repo(tmp_path, {**BASE, **SKILLS, "README.md": _diagram("mermaid", body)})
+    rc, out = _run(root, capsys)
+    assert rc == 1, out
+    assert "[도식 스킬] /brainstorming" in out
+    assert "/plan-task" not in out  # 실재 스킬은 green
+
+
+def test_path_like_slash_is_still_not_a_command(tmp_path, capsys):
+    """음성 대조 — `/]` 만 열어 줬다. `/a/b` 처럼 뒤에 경로가 이어지면 여전히 명령이 아니다."""
+    body = 'flowchart LR\n  A["/gone/sub"] --> B["x/gone/"]\n'
+    root = _repo(tmp_path, {**BASE, "docs/a.md": _diagram("mermaid", body)})
+    rc, out = _run(root, capsys)
+    assert rc == 0, out
+
+
+def test_skills_card_block_is_checked_like_mermaid(tmp_path, capsys):
+    card = "Medium change?      → /plan-task, then /auto-dev\nBug?                → /debug\n"
+    root = _repo(tmp_path, {**BASE, **SKILLS, "README.md": _diagram("skills", card)})
+    rc, out = _run(root, capsys)
+    assert rc == 1
+    assert "[도식 스킬] /debug" in out
+    assert "/plan-task" not in out
+
+
+def test_counts_inside_diagrams_are_red(tmp_path, capsys):
+    body = (
+        "flowchart LR\n"
+        '  A["17 skills"] --> B["15+ agents"]\n'
+        '  C["rules (12)"] --> D["훅 5개"]\n'
+        '  E["스킬 17개"] --> F["5개 훅"]\n'
+    )
+    root = _repo(tmp_path, {**BASE, "docs/a.md": _diagram("mermaid", body)})
+    rc, out = _run(root, capsys)
+    assert rc == 1
+    for frag in ("17 skills", "15+ agents", "rules (12)", "5개 훅"):
+        assert f"[도식 수치] {frag}" in out, out
+
+
+def test_counts_and_slash_commands_outside_diagrams_are_not_diagram_checked(tmp_path, capsys):
+    """대상은 info string 으로 고른다 — 일반 펜스·본문의 `/plugin`·개수는 이 검사 밖이다."""
+    doc = (
+        "15 agents + 17 skills in prose\n\n"
+        "```bash\n/plugin install x\n/gone-skill\n```\n\n"
+        "```text\n17 skills\n```\n"
+    )
+    root = _repo(tmp_path, {**BASE, "docs/a.md": doc})
+    rc, out = _run(root, capsys)
+    assert rc == 0, out
+    assert "도식 블록 0개" in out
+
+
+def test_diagram_markup_is_not_mistaken_for_slash_commands(tmp_path, capsys):
+    """HTML 태그·경로·URL·분수 안의 슬래시는 명령이 아니다(거짓 red 는 경고를 죽인다)."""
+    body = (
+        "flowchart LR\n"
+        '  A["<b>bold</b><br/>line"] --> B[(".git/kit/ledger.md")]\n'
+        '  B --> C["https://example.com/docs and/or 1/2"]\n'
+        '  C --> D["exit ≠ 0"]\n'
+    )
+    root = _repo(tmp_path, {**BASE, "docs/a.md": _diagram("mermaid", body)})
+    rc, out = _run(root, capsys)
+    assert rc == 0, out
+
+
+def test_diagram_check_ignores_line_opt_out_but_honours_allowed_pairs(tmp_path, capsys):
+    body = 'flowchart LR\n  A["/gone"] %% doc-ref-ok\n'
+    root = _repo(tmp_path, {**BASE, "docs/a.md": _diagram("mermaid", body)})
+    rc, out = _run(root, capsys)
+    assert rc == 1 and "[도식 스킬] /gone" in out
+    rc, out = _run(root, capsys, ALLOWED_REFS={("docs/a.md", "/gone"): "이유"})
+    assert rc == 0, out
+
+
+def test_historical_document_diagrams_are_skipped(tmp_path, capsys):
+    doc = "---\nstatus: historical\nas_of: 2026-10-05\n---\n" + _diagram(
+        "mermaid", 'flowchart LR\n  A["/gone"] --> B["17 skills"]\n'
+    )
+    rc, out = _run(_repo(tmp_path, {**BASE, "docs/a.md": doc}), capsys)
+    assert rc == 0, out
+
+
+def test_fence_info_variants_are_recognised(tmp_path, capsys):
+    """`~~~mermaid`·`` ``` Mermaid `` 도 같은 도식이다 — 표기 차이로 검사를 빠져나가지 않는다."""
+    doc = "~~~mermaid\nflowchart LR\n  A[\"/gone\"]\n~~~\n\n``` Mermaid\nflowchart LR\n  B[\"3 hooks\"]\n```\n"
+    rc, out = _run(_repo(tmp_path, {**BASE, "docs/a.md": doc}), capsys)
+    assert rc == 1
+    assert "[도식 스킬] /gone" in out and "[도식 수치] 3 hooks" in out

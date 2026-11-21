@@ -45,6 +45,24 @@ fail.** 분기가 없다 — 항상 돈다(`docs/conventions/warning-signal.md` 
 - **(파일, 참조) 쌍** — `ALLOWED_REFS` 에 이유와 함께. 파일 통째 제외는 그 파일의 *미래* 결함까지
   가리므로 쓰지 않는다.
 
+## 도식 블록 — `mermaid`·`skills` 펜스 (5.9.0)
+
+펜스는 위에서 "실재를 주장하지 않는다"고 했지만 **도식은 주장한다** — README 의 워크플로 그림과
+"상황 → 명령" 카드는 독자가 그대로 입력할 명령을 그린다. 그래서 info string 이 `mermaid` 또는
+`skills` 인 펜스에는 두 가지를 더 건다.
+
+| 검사 | 조건 | 이유 |
+| --- | --- | --- |
+| `/이름` 토큰 | `plugins/common/skills/<이름>/SKILL.md` 가 추적돼야 한다 | 스킬이 지워지거나 개명되면 그림이 없는 명령을 가르친다 |
+| 개수 | 숫자 + `skills`·`agents`·`rules`·`hooks`(한국어 포함)가 있으면 fail | 개수는 `check_doc_counts.py` 가 지키는 README 표에만 둔다 — 그림 속 수치는 게이트 밖에서 낡는다 |
+
+**이 검사가 도는 조건**: 검사 대상 문서(위 제외를 뺀 전부)에 `mermaid`·`skills` 펜스가 있으면 항상.
+대상은 info string 으로 고른다 — 파일·절 목록이 아니다. 줄 opt-out(`doc-ref-ok`)은 **듣지 않는다**:
+도식에 개수를 넣지 않는 데에 줄 단위 예외가 필요한 경우가 없고, 예외는 이유가 붙는
+`ALLOWED_REFS` 쌍으로만 둔다. `skills` 는 GitHub 가 모르는 언어라 평범한 코드블록으로 렌더된다 —
+"상황 → 명령" 카드를 이 검사에 태우려고 고른 형식이다. 성공 줄에 검사한 도식 블록 수를 찍는다
+(0 이면 대상에 닿지 않은 것이다 — `warning-signal.md` §측정 3).
+
 ## 못 읽은 파일은 집계한다
 
 `git_tracked.SkipTally` — 읽기 실패는 red(사각지대), 비-UTF-8 은 문서가 아니므로 노랑.
@@ -155,6 +173,26 @@ DEF_DECL_RE = re.compile(
 SH_FUNC_RE = re.compile(
     r"^\s*(?:function\s+)?([A-Za-z_]\w*)\s*\(\)\s*\{?", re.MULTILINE
 )
+#: 도식 블록 — 이 info string 의 펜스는 그림이 명령을 주장한다(독스트링 "도식 블록").
+DIAGRAM_LANGS = frozenset({"mermaid", "skills"})
+FENCE_INFO_RE = re.compile(r"^\s*(?:`{3,}|~{3,})\s*([^\s`{]*)")
+#: 앞이 단어·경로·URL·HTML 태그(`</b>`·`<br/>`)가 아닌 `/이름` — 슬래시 명령 모양만.
+#: 뒤의 `/` 는 경로의 일부라 막지만, `/]` 는 mermaid 평행사변형·사다리꼴 노드의 닫는 모양이다
+#: (`A[/plan-task/]`·`A[/plan-task\]`) — 그 안의 `/이름` 을 놓치지 않는다(리뷰 L-013).
+SLASH_CMD_RE = re.compile(
+    r"(?<![\w./:<-])/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)(?![\w.-])(?!/(?!\]))"
+)
+_COUNT_NOUN = r"(?:skills?|agents?|rules?|hooks?|스킬|에이전트|규칙|룰|훅)"
+DIAGRAM_COUNT_RE = re.compile(
+    rf"\d+\s*\+?\s*(?:개\s*의?\s*)?{_COUNT_NOUN}(?![A-Za-z])"
+    rf"|{_COUNT_NOUN}\s*\(\s*\d+\s*\)",
+    re.IGNORECASE,
+)
+FIX_DIAGRAM_SKILL = (
+    "도식의 `/이름` 은 plugins/common/skills/<이름>/SKILL.md 가 있어야 한다 — 스킬 이름을 고치거나, "
+    "호스트 명령이면 슬래시 없이 적어라"
+)
+FIX_DIAGRAM_COUNT = "도식에는 개수를 넣지 않는다 — 개수는 check_doc_counts.py 가 지키는 README 표에만 둔다"
 FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 STATUS_RE = re.compile(r"^status:[ \t]*(\S+)[ \t]*$", re.MULTILINE)
 BUILTINS = frozenset(dir(builtins))
@@ -282,23 +320,68 @@ def is_consumer_path(token: str) -> bool:
     )
 
 
-def iter_lines(text: str) -> list[tuple[int, str, bool]]:
-    """frontmatter 를 뺀 (줄번호, 줄, 펜스 안인가). 펜스 여닫는 줄 자체는 뺀다."""
+def _walk(text: str) -> list[tuple[int, str, str | None, bool]]:
+    """frontmatter 를 뺀 (줄번호, 줄, 펜스 info string, 펜스 여닫는 줄인가).
+
+    info string 은 펜스 밖이면 None, info 없는 펜스면 "". 여닫는 줄에는 **여는** 펜스의 값을 싣는다.
+    여닫기 판정은 이 함수 한 곳에만 둔다 — 도식 검사와 참조 검사가 같은 줄을 서로 다른 영역으로
+    보지 않게 한다.
+    """
     fm = FRONTMATTER_RE.match(text)
     skip = text[: fm.end()].count("\n") if fm else 0
-    out: list[tuple[int, str, bool]] = []
-    in_fence = False
+    out: list[tuple[int, str, str | None, bool]] = []
+    lang: str | None = None
     for lineno, line in enumerate(text.splitlines(), 1):
         if lineno <= skip:
             continue
         if FENCE_RE.match(line):
-            in_fence = not in_fence
+            if lang is None:
+                mi = FENCE_INFO_RE.match(line)
+                lang = (mi.group(1) if mi else "").lower()
+                out.append((lineno, line, lang, True))
+            else:
+                out.append((lineno, line, lang, True))
+                lang = None
             continue
-        out.append((lineno, line, in_fence))
+        out.append((lineno, line, lang, False))
     return out
 
 
+def scan_lines(text: str) -> list[tuple[int, str, str | None]]:
+    """(줄번호, 줄, 펜스 info string) — 펜스 여닫는 줄 자체는 뺀다."""
+    return [(n, line, lang) for n, line, lang, edge in _walk(text) if not edge]
+
+
+def iter_lines(text: str) -> list[tuple[int, str, bool]]:
+    """frontmatter 를 뺀 (줄번호, 줄, 펜스 안인가). 펜스 여닫는 줄 자체는 뺀다."""
+    return [(n, line, lang is not None) for n, line, lang in scan_lines(text)]
+
+
+def count_diagram_blocks(text: str) -> int:
+    """도식 블록 수 — 성공 줄에 찍어 검사가 대상에 닿았는지 보인다(§측정 3)."""
+    opened = 0
+    inside = False
+    for _, _, lang, edge in _walk(text):
+        if edge:
+            inside = not inside
+            if inside and lang in DIAGRAM_LANGS:
+                opened += 1
+    return opened
+
+
 Ref = tuple[str, str, str]  # (종류, 참조, 고치는 법)
+
+
+def _check_diagram_line(line: str, index: Index) -> list[Ref]:
+    """도식 블록 한 줄 — 없는 스킬을 가리키는 `/이름`, 그리고 개수(독스트링 "도식 블록")."""
+    out: list[Ref] = []
+    for m in SLASH_CMD_RE.finditer(line):
+        name = m.group(1)
+        if f"{SKILLS_PREFIX}{name}/SKILL.md" not in index.files:
+            out.append(("도식 스킬", f"/{name}", FIX_DIAGRAM_SKILL))
+    for m in DIAGRAM_COUNT_RE.finditer(line):
+        out.append(("도식 수치", m.group(0), FIX_DIAGRAM_COUNT))
+    return out
 
 
 def _check_links(doc: str, line: str, index: Index) -> list[Ref]:
@@ -399,7 +482,12 @@ def find_refs(
             used.update((doc, r[1]) for r in allowed)
         return [r for r in refs if r not in allowed]
 
-    for lineno, line, in_fence in iter_lines(text):
+    for lineno, line, lang in scan_lines(text):
+        in_fence = lang is not None
+        if (
+            lang in DIAGRAM_LANGS
+        ):  # 줄 opt-out 보다 먼저 — 도식 검사는 그것을 듣지 않는다
+            bad.extend((lineno, *r) for r in keep(_check_diagram_line(line, index)))
         if LINE_OPT_OUT in line:
             continue
         if in_fence:
@@ -452,6 +540,7 @@ def main() -> int:
     used: set[tuple[str, str]] = set()
     by_status = 0
     checked = 0
+    diagrams = 0
     for rel in docs:
         skipped.attempted += 1
         try:
@@ -466,6 +555,7 @@ def main() -> int:
             by_status += 1
             continue
         checked += 1
+        diagrams += count_diagram_blocks(text)
         problems.extend((rel, *r) for r in find_refs(rel, text, index, used))
     rc = skipped.report(frozenset({"비-UTF-8"}))
     # 쓰이지 않은 예외는 죽은 설정이다 — 문서가 고쳐졌다는 뜻이므로 지우라고 알린다(노랑).
@@ -483,7 +573,7 @@ def main() -> int:
         return 1
     print(
         f"[{LABEL}] {'✗' if rc else '✓'} 참조 실재 — 문서 {checked}개 검사 "
-        f"({by_status}개는 지위로 제외)"
+        f"({by_status}개는 지위로 제외) · 도식 블록 {diagrams}개"
     )
     return rc
 

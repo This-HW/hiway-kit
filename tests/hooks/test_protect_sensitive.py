@@ -573,3 +573,294 @@ def test_source_and_doc_files_named_after_credentials_pass(path):
 def test_real_secret_stores_stay_blocked(path):
     blocked, _ = check_protected(path)
     assert blocked, path
+
+
+# ── 판정 입력의 타입 혼동은 fail-closed (ECC 조사 runtime #5a, 2026-11-21) ──────────────
+# 수정 전: `{"file_path": [".env"]}` 가 `.lower()` 에서 AttributeError → blanket except → exit 0
+# (허용). 같은 경로를 문자열로 주면 exit 2 — 판정이 **타입 하나로** 열렸다. 아래는 그 경계를
+# 서브프로세스(실제 훅 실행)와 main() 양쪽에서 고정한다.
+
+_HOOK = HOOKS_DIR / "protect-sensitive.py"
+
+
+def _run_hook_process(payload: str) -> int:
+    import subprocess
+
+    env = {k: v for k, v in os.environ.items() if k != "HIWAY_KIT_DISABLE_HOOKS"}
+    return subprocess.run(
+        [sys.executable, str(_HOOK)], input=payload, text=True,
+        capture_output=True, env=env, check=False, timeout=30,
+    ).returncode
+
+
+class TestNonStringPathFailClosed:
+    def test_list_path_blocked_by_real_hook_process(self):
+        """브리프의 재현 명령 그대로 — 리스트형 file_path 는 rc=2."""
+        assert _run_hook_process('{"tool_name":"Read","tool_input":{"file_path":[".env"]}}') == 2
+
+    def test_string_path_positive_control(self):
+        """양성 대조 — 같은 경로를 문자열로 주면 원래도 막혔다(rc=2)."""
+        assert _run_hook_process('{"tool_name":"Read","tool_input":{"file_path":".env"}}') == 2
+
+    def test_harmless_list_path_also_blocked(self):
+        """경로 값이 무해해도 타입이 틀리면 판정할 수 없다 — 내용이 아니라 타입으로 막는다."""
+        assert run_main({"tool_name": "Read", "tool_input": {"file_path": ["README.md"]}}) == 2
+
+    @pytest.mark.parametrize("value", [{"p": ".env"}, 1, 0, True, False, [], {}])
+    def test_non_string_values_blocked(self, value):
+        """거짓 값([]·0·False·{})도 '없음'이 아니다 — 없음은 키 부재나 null 뿐이다."""
+        assert run_main({"tool_name": "Write", "tool_input": {"file_path": value}}) == 2
+
+    @pytest.mark.parametrize("tool", ["Edit", "MultiEdit", "Write", "Read", "NotebookEdit"])
+    def test_every_watched_tool(self, tool):
+        assert run_main({"tool_name": tool, "tool_input": {"file_path": [".env"]}}) == 2
+
+    def test_notebook_path_non_string_blocked(self):
+        assert run_main({"tool_name": "NotebookEdit", "tool_input": {"notebook_path": [".env"]}}) == 2
+
+    def test_tool_input_not_object_blocked(self):
+        assert run_main({"tool_name": "Read", "tool_input": [".env"]}) == 2
+        assert run_main({"tool_name": "Read", "tool_input": ".env"}) == 2
+
+    def test_second_path_field_is_judged_too(self):
+        """수정 전에는 `file_path or notebook_path` 로 하나만 봤다 — 앞이 무해하면 뒤는 판정 밖."""
+        assert run_main({
+            "tool_name": "NotebookEdit",
+            "tool_input": {"file_path": "notes.ipynb", "notebook_path": ".env"},
+        }) == 2
+
+    # ── 음성 대조: 경로가 없는 정상 케이스는 기존대로 허용 ──
+    @pytest.mark.parametrize("tool_input", [{}, {"file_path": None}, {"file_path": ""}, None])
+    def test_absent_path_still_allowed(self, tool_input):
+        payload = {"tool_name": "Read"}
+        if tool_input is not None:
+            payload["tool_input"] = tool_input
+        assert run_main(payload) == 0
+
+    def test_tool_input_null_allowed(self):
+        assert run_main({"tool_name": "Read", "tool_input": None}) == 0
+
+    def test_unwatched_tool_untouched(self):
+        """감시 대상 밖 도구는 타입과 무관하게 이 훅의 판정 밖이다."""
+        assert run_main({"tool_name": "Bash", "tool_input": {"file_path": [".env"]}}) == 0
+
+    def test_normal_string_path_allowed(self):
+        assert run_main({"tool_name": "Read", "tool_input": {"file_path": "README.md"}}) == 0
+
+    def test_block_message_does_not_echo_value(self, capsys):
+        """차단 메시지는 필드 이름·타입만 — 값(경로)은 찍지 않는다(warning-signal §검토 6)."""
+        assert run_main({"tool_name": "Read", "tool_input": {"file_path": ["topsecret-value"]}}) == 2
+        err = capsys.readouterr().err
+        assert "file_path" in err and "list" in err
+        assert "topsecret-value" not in err
+
+    def test_hook_errors_still_fail_open(self):
+        """훅 자체 오류의 fail-open 은 유지 — 깨진 JSON 은 허용."""
+        with patch("sys.stdin", StringIO("{not json")), pytest.raises(SystemExit) as exc:
+            _mod.main()
+        assert exc.value.code == 0
+
+    def test_docstring_states_undetectable_limits(self):
+        """한계 문서화 — Bash 경유·하드링크는 이 훅의 범위 밖이라고 적혀 있다."""
+        doc = _mod.__doc__
+        assert "탐지할 수 없는 것" in doc
+        assert "Bash" in doc and "하드링크" in doc
+
+
+# ── Grep (보안 리뷰 M-2, 5.9.0) ────────────────────────────────────────────────
+# 수정 전: Grep 은 감시 대상이 아니었다(hooks.json matcher 밖·WATCHED_TOOLS 밖) — `Grep(path=".env")`
+# 로 `.env` 내용을 읽을 수 있었다. 판정은 **파일 하나를 지목할 때만** 한다(독스트링 "탐지할 수 없는 것").
+
+
+def _grep(tmp_path, **tool_input) -> int:
+    return run_main({"tool_name": "Grep", "cwd": str(tmp_path), "tool_input": tool_input})
+
+
+class TestGrep:
+    def test_matcher_covers_every_watched_tool(self):
+        """hooks.json matcher 와 WATCHED_TOOLS 는 같은 집합이다 — 한쪽만 고치면 훅이 안 불리거나 판정이 빈다."""
+        hooks = json.loads((HOOKS_DIR / "hooks.json").read_text(encoding="utf-8"))
+        matchers = [
+            entry["matcher"]
+            for entry in hooks["hooks"]["PreToolUse"]
+            if any("protect-sensitive.py" in a for h in entry["hooks"] for a in h.get("args", []))
+        ]
+        assert len(matchers) == 1
+        assert set(matchers[0].split("|")) == set(_mod.WATCHED_TOOLS)
+        assert "Grep" in _mod.WATCHED_TOOLS
+
+    @pytest.mark.parametrize("path", [".env", ".env.local", "config/.env", "~/.ssh/id_rsa", "secrets/db.yml"])
+    def test_grep_on_sensitive_file_blocked(self, tmp_path, path):
+        assert _grep(tmp_path, pattern="KEY", path=path) == 2
+
+    def test_grep_on_existing_sensitive_file_blocked(self, tmp_path):
+        (tmp_path / ".env").write_text("A=1\n")
+        assert _grep(tmp_path, pattern="A", path=str(tmp_path / ".env")) == 2
+
+    def test_grep_symlink_to_env_blocked(self, tmp_path):
+        """realpath 2단 검사 — 무해한 이름의 링크가 `.env` 를 가리키면 막는다."""
+        (tmp_path / ".env").write_text("A=1\n")
+        (tmp_path / "notes.txt").symlink_to(tmp_path / ".env")
+        assert _grep(tmp_path, pattern="A", path=str(tmp_path / "notes.txt")) == 2
+
+    @pytest.mark.parametrize("glob", [".env", "**/.env", ".env*", "*.env", ".env.*", "[.]env",
+                                      "*.pem", "{*.md,.env}", "config/.env.production"])
+    def test_grep_glob_naming_a_sensitive_file_blocked(self, tmp_path, glob):
+        """ripgrep `--glob` 은 `.gitignore` 를 무시한다 — `path="."` + `glob=".env"` 는 Read(.env) 다."""
+        assert _grep(tmp_path, pattern="KEY", path=str(tmp_path), glob=glob) == 2
+
+    @pytest.mark.parametrize("glob", ["*", "**", "**/*", "*env", "config/*", "src/**", ".e?v", "*.*",
+                                      ".*", "*.key", ".env,*.md", "*.md .env", ".[Z-f]nv", "[^x]env",
+                                      ".ENV", "*.KEY", "secrets/*.yaml", "**/secrets/*.yaml",
+                                      "credentials/*.json", "[,.]e{n,x}v"])
+    def test_grep_glob_selecting_a_sensitive_file_blocked(self, tmp_path, glob):
+        """와일드카드 glob 이 보호 파일을 **고를 수 있으면** 막는다(5.9.0 리뷰). Claude Code 2.1.330 의
+        ripgrep 14.1.1 실측: 무시된 `.env` 를 `-g '*'`·`'**'`·`'*env'`·`'config/*'` 가 모두 읽었다.
+        수정 전에는 와일드카드를 지운 이름(`*env`→`env`, `*`→빈 이름)만 봐서 전부 통과했다.
+        `.[Z-f]nv`·`[^x]env` 는 ripgrep 이 `.env` 를 고르고(실측), `secrets/*.yaml` 은 파일 단위로 무시된
+        `secrets/prod.yaml` 을 읽었다(실측) — 디렉토리 부분까지 판정한다."""
+        assert _grep(tmp_path, pattern="KEY", path=str(tmp_path), glob=glob) == 2
+
+    @pytest.mark.parametrize(
+        "glob",
+        [".\\env", "{{.env}}", "{a,b", "[abc", "[z-a]", "}x", "{" + ",".join(f"x{i}" for i in range(300)) + "}"],
+    )
+    def test_grep_unjudgeable_glob_blocked(self, tmp_path, glob):
+        """ripgrep 과 같은 뜻으로 풀 수 없는 glob 은 막는다 — 이스케이프(`.\\env` 를 ripgrep 은 `.env`
+        로 읽었다), 중첩·짝 없는 괄호, 거꾸로 된 범위, 갈래 상한 초과(잘라 보면 뒤쪽 갈래가 열린다)."""
+        assert _grep(tmp_path, pattern="KEY", path=str(tmp_path), glob=glob) == 2
+
+    def test_grep_glob_judging_time_is_bounded(self, tmp_path):
+        """상한 안의 glob 으로 판정 시간을 키우지 못한다 — 훅 timeout(10초)은 차단이 아니라서 시간이
+        판정을 여는 길이 된다. 수정 전에는 이 입력이 약 3.8초 걸렸다(5.9.0 리뷰: `.*_rsa$` 의 이차
+        백트래킹 × 긴 갈래 256개)."""
+        import time
+
+        glob = "{" + ",".join(["b"] * 255) + "}" + "a" * 3570 + " .env"
+        start = time.monotonic()
+        assert _grep(tmp_path, pattern="KEY", path=str(tmp_path), glob=glob) == 2
+        assert time.monotonic() - start < 1.5
+
+    def test_grep_glob_check_cannot_skip_the_file_check(self, tmp_path, monkeypatch):
+        """파일 판정이 glob 판정보다 **먼저** 돈다 — glob 판정이 예외를 내도 `path=".env"` 는 막힌다.
+        수정 전에는 Python 3.9 에서 `[Z-a]` 류 glob 이 `re.error` 로 fail-open 경로에 빠져 `.env` 판정까지
+        건너뛰었다(5.9.0 리뷰)."""
+        def boom(_glob):
+            raise RuntimeError("glob judge failed")
+        monkeypatch.setattr(_mod, "glob_block_reason", boom)
+        assert _grep(tmp_path, pattern="KEY", path=".env", glob="[Z-a]") == 2
+
+    def test_grep_dir_glob_block_suggests_path(self, tmp_path, capsys):
+        assert _grep(tmp_path, pattern="x", path=str(tmp_path), glob="src/**") == 2
+        assert "path='src'" in capsys.readouterr().err
+
+    def test_glob_probes_are_protected_names(self):
+        """`GLOB_PROBES` 는 Read 판정이 막는 이름이어야 한다 — 아니면 glob 판정이 파일 판정보다 넓어진다."""
+        for probe in _mod.GLOB_PROBES:
+            assert _mod.check_protected(probe)[0], probe
+
+    @pytest.mark.parametrize("name", [".ssh", ".aws", ".gcp", ".azure", "secrets", "credentials", ".secrets"])
+    def test_grep_credential_store_directory_blocked(self, tmp_path, name):
+        """이름 자체가 보관소인 디렉토리는 디렉토리 검색도 막는다 — `Read(~/.ssh/id_rsa)` 는 막히는데
+        `Grep(path="~/.ssh")` 로 그 내용을 읽을 수 있었다(5.9.0 리뷰)."""
+        (tmp_path / name).mkdir()
+        assert _grep(tmp_path, pattern="KEY", path=str(tmp_path / name)) == 2
+
+    @pytest.mark.parametrize("name", [".ssh", ".aws", ".gcp", ".azure", "secrets", "credentials"])
+    def test_credential_store_directories_are_fully_protected_for_read(self, name):
+        """디렉토리 판정은 그 안의 파일 전부를 Read 판정이 이미 막는 이름에만 건다(판정 범위를 넓히지 않는다)."""
+        assert _mod.check_protected(f"/home/u/{name}/anything.txt")[0]
+
+    def test_grep_home_ssh_blocked(self, tmp_path, monkeypatch):
+        (tmp_path / ".ssh").mkdir()
+        monkeypatch.setenv("HOME", str(tmp_path))
+        assert _grep(tmp_path, pattern="KEY", path="~/.ssh") == 2
+
+    @pytest.mark.parametrize("store", [".ssh", ".kube", ".docker", ".config/gcloud"])
+    def test_grep_over_a_directory_holding_a_home_store_blocked(self, tmp_path, monkeypatch, store):
+        """홈의 보관소를 **품는** 디렉토리(홈·그 조상)도 막는다. Claude Code 의 Grep 은 ripgrep 을 `--hidden`
+        으로 부르고 홈에는 보통 무시 규칙이 없어 `~/.ssh` 까지 검색된다(5.9.0 리뷰)."""
+        home = tmp_path / "home"
+        (home / store).mkdir(parents=True)
+        (home / "proj").mkdir()
+        monkeypatch.setenv("HOME", str(home))
+        assert _grep(home, pattern="KEY", path="~") == 2
+        assert _grep(home, pattern="KEY", path=str(tmp_path)) == 2  # 조상
+        assert _grep(home, pattern="KEY") == 2  # path 없음 = cwd(홈)
+        assert _grep(home / "proj", pattern="KEY") == 0  # 홈 아래 프로젝트는 그대로
+        assert _grep(home, pattern="KEY", path=str(home / "proj")) == 0
+
+    def test_grep_symlink_into_credential_store_blocked(self, tmp_path):
+        """무해한 이름의 링크가 보관소 디렉토리를 가리키면 realpath 로 막는다."""
+        (tmp_path / ".ssh").mkdir()
+        (tmp_path / "keys").symlink_to(tmp_path / ".ssh")
+        assert _grep(tmp_path, pattern="KEY", path=str(tmp_path / "keys")) == 2
+
+    # ── 음성 대조: 정상 검색은 막지 않는다 ──
+    def test_grep_source_directory_allowed(self, tmp_path):
+        (tmp_path / "src").mkdir()
+        assert _grep(tmp_path, pattern="def ", path=str(tmp_path / "src")) == 0
+        assert _grep(tmp_path, pattern="def ", path="src") == 0  # cwd 기준 상대경로
+
+    def test_grep_without_path_allowed(self, tmp_path):
+        assert _grep(tmp_path, pattern="TODO") == 0
+
+    @pytest.mark.parametrize("name", ["credential_collector", "secret_manager", ".docker", "src"])
+    def test_grep_directory_named_like_secret_is_not_judged(self, tmp_path, name):
+        """보관소 이름이 아닌 디렉토리는 판정 밖(문서화된 한계) — 이름에 credential 이 든 소스 디렉토리
+        검색이 막히지 않는다."""
+        (tmp_path / name).mkdir()
+        assert _grep(tmp_path, pattern="x", path=str(tmp_path / name)) == 0
+
+    @pytest.mark.parametrize("glob", ["*.py", "**/*.{ts,tsx}", "*.md", "!.env", ".env.example",
+                                      "token-efficiency-*.md", "*.json", "*.yaml", "src/**/*.py",
+                                      "*test*", "Dockerfile*", "*.py,*.md", "*.spec.ts", "test_*.py",
+                                      "[abc]*.go", "!{.env,*.key}", "**/__tests__/**/*.ts",
+                                      "app/[locale]/**/*.tsx", "*.{h,hpp}"])
+    def test_grep_ordinary_glob_allowed(self, tmp_path, glob):
+        assert _grep(tmp_path, pattern="x", path=str(tmp_path), glob=glob) == 0
+
+    def test_grep_source_file_allowed(self, tmp_path):
+        (tmp_path / "app.py").write_text("x = 1\n")
+        assert _grep(tmp_path, pattern="x", path=str(tmp_path / "app.py")) == 0
+
+    @pytest.mark.parametrize("field", ["path", "glob"])
+    @pytest.mark.parametrize("value", [[".env"], {"p": 1}, 0])
+    def test_grep_non_string_field_blocked(self, tmp_path, field, value):
+        assert _grep(tmp_path, pattern="x", **{field: value}) == 2
+
+    def test_docstring_states_grep_limits(self):
+        doc = _mod.__doc__
+        assert "디렉토리 대상 Grep" in doc and "Glob" in doc
+
+
+# ── 파싱 실패 (보안 리뷰 L-1, 5.9.0) ──────────────────────────────────────────
+
+
+def _deep(tool: str, depth: int = 100_000) -> str:
+    return (
+        '{"tool_name":"' + tool + '","tool_input":{"file_path":".env","x":'
+        + "[" * depth + "]" * depth + "}}"
+    )
+
+
+class TestParseFailure:
+    def test_deep_nesting_on_watched_tool_blocked(self):
+        """재현: 깊은 중첩 → json.load 가 RecursionError → 예전에는 blanket except 로 허용(rc 0)."""
+        assert _run_hook_process(_deep("Read")) == 2
+
+    def test_deep_nesting_on_unwatched_tool_allowed(self):
+        assert _run_hook_process(_deep("Bash")) == 0
+
+    def test_broken_json_on_watched_tool_blocked(self):
+        assert _run_hook_process('{"tool_name":"Read","tool_input":{"file_path":".env"') == 2
+
+    def test_escaped_tool_name_inside_a_string_is_not_sniffed(self):
+        """문자열 안의 `\\"tool_name\\"` 는 최상위 키가 아니다 — 감시 밖 도구로 위장된 입력을 막지 않는다."""
+        payload = '{"tool_name":"Bash","tool_input":{"command":"echo \\"tool_name\\":\\"Read\\""'
+        assert _run_hook_process(payload) == 0
+
+    def test_internal_error_still_fails_open(self):
+        """경계: 판정 로직 자체의 예외는 기존대로 허용(fail-open)."""
+        with patch.object(_mod, "check_protected", side_effect=RuntimeError("boom")):
+            assert run_main({"tool_name": "Read", "tool_input": {"file_path": "README.md"}}) == 0
