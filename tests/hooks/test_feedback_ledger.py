@@ -4,8 +4,11 @@ import contextlib
 import importlib.util
 import os
 import stat
+import subprocess
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 TOOLS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "tools"
 
@@ -20,6 +23,19 @@ def _load_module() -> ModuleType:
 
 
 _mod = _load_module()
+
+#: git 밖 동작을 시험하는 테스트 — 나머지는 tmp_path 를 git 레포로 만든다. 원장은 git 메타데이터
+#: 안에만 쓰고, git 이 없으면 작업 트리에 쓰지 않고 건너뛴다(docs/conventions/consumer-footprint.md).
+_NON_GIT_TESTS = {
+    "test_falls_back_to_legacy_outside_git",
+    "test_upsert_outside_git_writes_nothing",
+}
+
+
+@pytest.fixture(autouse=True)
+def _git_root(request, tmp_path):
+    if request.node.name not in _NON_GIT_TESTS:
+        subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
 
 
 def _row(entry_id: str) -> dict:
@@ -283,8 +299,23 @@ def test_ledger_lives_under_shared_gitdir_not_worktree(tmp_path):
 
 
 def test_falls_back_to_legacy_outside_git(tmp_path):
-    """git 저장소가 아니면 구 위치로 물러선다 — 임의 디렉토리에서도 동작해야 한다."""
+    """git 저장소가 아니면 **읽기** 위치는 구 위치로 물러선다 — 옛 원장의 학습은 계속 읽힌다."""
     assert _mod.ledger_path(tmp_path) == _mod.legacy_ledger_path(tmp_path)
+
+
+def test_upsert_outside_git_writes_nothing(tmp_path):
+    """git 이 없으면 작업 트리에 `docs/works/` 를 만들지 않고 기록을 건너뛴다(2026-11-09)."""
+    assert _mod.upsert("test", "high", "비-git 에서 배운 것", root=tmp_path) == "skipped"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_digest_reads_legacy_without_renaming_it(tmp_path):
+    """digest 는 세션 시작에서 불린다 — 구 원장을 읽기만 하고 개명·이관하지 않는다."""
+    legacy = _mod.legacy_ledger_path(tmp_path)
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    _mod._write_ledger(legacy, [dict(_row("F-001"), pattern="옛 원장의 학습")])
+    assert "옛 원장의 학습" in _mod.load_digest(root=tmp_path)
+    assert legacy.is_file() and not legacy.with_suffix(".md.migrated").exists()
 
 
 def test_legacy_is_merged_not_overwritten(tmp_path):

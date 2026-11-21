@@ -6,6 +6,178 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.8.0] — 2026-11-18
+
+### Added
+
+- **C/C++ definition and references** automatically use clangd background indexing when a supported
+  compilation database is present. Each query starts a short-lived server and reuses a private index
+  in the user cache. Completion requires clangd readiness, verified coverage of the selected
+  compilation database and a validated response. Partial results include a reason when those checks
+  cannot finish. Set `HIWAY_CODE_INTEL_INDEX=0` to disable indexing.
+
+### Changed — the kit no longer reshapes a consumer project on its own
+
+The owner's concern after the external install review was that the kit "changes the project's folder
+structure as it likes". Two independent consultants (Claude Opus, Codex) audited every place the
+kit creates or changes files in a consumer project. Policy: `docs/conventions/consumer-footprint.md`
+(rules, enforcement, write register). Behavior changes:
+
+- **`plan-task`** decides where the plan file goes before writing it. It uses the location you name
+  or your project's instructions give. Otherwise it uses `docs/plans/` if that folder already exists.
+  If neither applies, it asks whether to create `docs/plans/`, use another path, or keep the plan in
+  the conversation. It creates no folder before you answer. Implementation now starts only after you
+  approve the plan, which is the HARD-GATE the rules already described. A planning-only request
+  stops after planning. The approval counts as given when you said to proceed without review, when
+  you came in through `/auto-dev <request>`, or when a worker's brief includes implementation.
+  Choosing "keep it in the conversation" for a Medium or Large task does not hand off to `auto-dev`,
+  which needs a plan directory. A worker never asks: it uses the location in its brief, or reports
+  the plan to its parent. `brainstorming` uses the same rule for `docs/specs/`.
+- **`write-tests`** follows the project's existing test layout: the runner config (`testpaths`,
+  `testMatch`) first, then the nearest existing tests. It falls back to the language's convention only
+  when the project has no tests, and reports before creating a new top-level folder. It no longer
+  imposes `tests/{unit,integration,e2e,scratch,__helpers__}`.
+- **`sync-docs`** updates only documents that already exist. It creates no new docs or folders, and
+  edits CLAUDE.md, AGENTS.md or GEMINI.md only when you name them. Otherwise it reports the change it
+  recommends.
+- **`verify-code`** never installs dependencies or runs `npx`, `uvx` or `pipx run`. It uses
+  project-defined commands and tools already installed. It judges dependencies by actually running
+  a command, not by whether `node_modules/` or `.venv/` exists. Missing dependencies are reported as
+  unverified. It suggests `tox`, `nox` and `uv run` instead of running them, because they build
+  environments.
+
+### Fixed — writes nobody asked for
+
+Each of these has a test that builds a fixture repository and runs the real hook or tool. Every test
+failed against the previous code (`tests/hooks/test_consumer_footprint.py`).
+
+- Opening a session renamed a tracked legacy `docs/works/feedback/ledger.md` to `.md.migrated`. The
+  digest now reads it in memory and takes the larger frequency, so entries already migrated are not
+  counted twice. Migration runs only through `feedback_ledger.py migrate`. Outside git, recording a
+  finding created `docs/works/` in the working tree. It now skips the write, resolving the ledger path
+  once so a second git lookup that times out cannot fall back to the working tree.
+- `auto-format` ran prettier whenever `node_modules/.bin/prettier` existed, for example as an indirect
+  dependency, and reformatted Markdown such as CLAUDE.md. It now also needs a prettier config.
+- The Full install's git `pre-commit` ran `ruff check --fix` and `git add` in every repository. That
+  also pulled in hunks you had deliberately left unstaged. It now runs only in ruff projects, never
+  touches a partially staged file, and honors `HIWAY_KIT_DISABLE_HOOKS`. File lists are read with
+  `core.quotePath=false`. Non-ASCII paths used to arrive quoted and fail the `.py` filter, so they
+  were never linted.
+- `tools/checklist.py` followed a symlinked `checklist.json`, so it could overwrite `package.json` or
+  the `plan.md` next to it. It now refuses a symlinked checklist, and refuses any path, read or write,
+  that resolves outside the repository. That includes a plan directory that is a symlink.
+
+- `auto-format` ran `gofmt -w` and `rustfmt` on any edited Go or Rust file whenever the tool was on
+  `PATH`. `rustfmt <file>` also formats the modules that file declares, so files nobody edited could
+  change. gofmt now runs only inside a Go module (`go.mod` between the file and the repository root;
+  gofmt has no config file) and only where `go fmt ./...` would reach, so `testdata/`, `vendor/` and
+  directories starting with `.` or `_` are left alone. rustfmt runs only when the project has
+  `rustfmt.toml` or `.rustfmt.toml`. rustfmt is checked with a stand-in binary only; no real rustfmt
+  was available to test against.
+- `setup.sh` changed settings outside the project without asking. It installed a global
+  `~/.config/ruff/ruff.toml`, set `git init.templateDir` so every repository you create or clone
+  received the kit's pre-commit, and wrote `autoMemoryDirectory` into `~/.claude/settings.json`,
+  which moves Claude Code's memory for all projects and has nothing to do with the kit. It no longer
+  installs the ruff file (the hooks now need a project config, so it had no effect on them) or writes
+  `autoMemoryDirectory`, and it asks before setting `init.templateDir`. A non-interactive run skips that
+  question. Existing settings are left as they are. If an earlier run set the template, `setup.sh` now
+  says when the template's hook is out of date and replaces it only with `--force`; hooks already
+  copied into existing repositories are not updated. Installing into the current repository now works
+  from a linked worktree (it used to stop with a copy error) and skips repositories that use
+  `core.hooksPath`, where git would never run the copy. To undo an earlier run:
+  `git config --global --unset init.templateDir`, delete `~/.config/ruff/ruff.toml`, and remove
+  `autoMemoryDirectory` from `~/.claude/settings.json` if you did not choose it. The session-start check
+  no longer warns that these are missing, since leaving them out is now a choice. The deleted file sat in
+  `plugins/common/setup/`, so ruff had been linting that folder with it instead of the repository's
+  `ruff.toml`. With the root rules applied, three findings in `session-check.py` surfaced and are fixed.
+- The git `pre-commit` rejected any staged `.json` that strict JSON parsing could not read, so a
+  `tsconfig.json` from `tsc --init`, a VS Code `.vscode/launch.json` or a `devcontainer.json`, all of
+  which carry comments, blocked the commit. Those names are now skipped. Any other file that fails
+  strict parsing is re-read with its comments and trailing commas removed, but only if it contains a
+  comment, so a commented `.eslintrc.json` passes while `{"name": "x",}` in `package.json` still blocks.
+- `/review` ran `ruff check` on changed Python files in projects that do not use ruff, so findings came
+  from your personal global config or ruff's defaults. It now runs only on files under a project ruff
+  config, with `--force-exclude`, and reports "skipped (no project ruff config)" otherwise. When the
+  project's `exclude` covers every file, ruff checks nothing yet exits 0 with "All checks passed!";
+  that is now reported as skipped, not passed. The snippet also handles non-ASCII names, absolute path
+  arguments, a run from a subdirectory, and macOS `/bin/bash` 3.2.
+
+### Added — consumer-footprint gate and eval assertions
+
+- `verify-done.sh` §30 and CI (`scripts/check_consumer_footprint.py`) fail when shipped text contains
+  an install or package-runner command (npm/yarn/pnpm/bun, `npx`/`bunx`/`dlx`, pip/conda/poetry/uv,
+  `pipx`, brew/apt/cargo/go/gem). A prohibition sentence marks its line with `footprint-ok: <reason>`;
+  the reason is required.
+- `auto-format` also recognizes `.prettierrc.mts/.cts` and `prettier.config.mts/.cts`.
+- New eval assertions `path_absent` and `glob_contains`, with scenarios
+  `sync-docs/instruction-file-untouched`, `verify-code/no-install-missing-deps`,
+  `write-tests/existing-test-layout` and `write-tests/colocated-tests`. Against the previous agent
+  definitions, sync-docs failed because it edited CLAUDE.md, and verify-code failed because it ran
+  `npm ci`, creating `node_modules`. The fixed definitions passed each scenario 3/3. Both write-tests
+  scenarios also passed with the previous definition, 1/1 and 2/2, because it followed a clear
+  existing convention anyway. They guard against regressions but do not demonstrate the write-tests
+  change.
+
+### Fixed — hooks leave projects that did not opt in alone
+
+From an install of the directory listing (v5.5.1, hooks included) on a Snowflake SP / PySpark
+repository, checked against the real hooks:
+
+- `auto-format` ran `ruff format` and `ruff check --fix` in a project with no ruff
+  configuration. On a PySpark file nobody had edited, it deleted `import os, sys` and rewrote every
+  quote (reproduced). An import kept for its side effect would have changed behavior. ruff now runs
+  only when `ruff.toml`, `.ruff.toml` or a `[tool.ruff]` section in `pyproject.toml` exists between
+  the file and the repository root. prettier and eslint already worked this way. A global
+  `~/.config/ruff/ruff.toml` does not count. ruff is called with `--force-exclude`: given a path
+  directly, ruff otherwise ignores the project's `exclude`, so `vendor/` or `migrations/` files were
+  rewritten even in ruff projects. `stop-validator` lints under the same conditions and still runs
+  the tests you edited. It also no longer runs a `ruff check --fix` with no paths when the file list
+  ends up empty, which would have rewritten the whole working directory.
+- `protect-sensitive` blocked source, SQL and docs whose names contained `credential` or `secret`
+  (`credential_collector.py`, `SP_UPDATE_USER_CREDENTIALS.sql`, `docs/credential-rotation.md`,
+  `secret_manager.py`). A false block pushes an agent to `Bash cat`, which is weaker protection.
+  Such a name in a compound word with a source or doc extension now passes. Everything else stays
+  blocked:
+  - data and config files (`credentials.json`, `client_secret.json`, `secrets.yaml`,
+    `export_secrets.sh`) and notebooks, whose output cells keep values;
+  - secret modules whose names are only those words plus qualifiers (`secrets.py`,
+    `settings_secrets.py`, `config.secret.ts`, `secret_token.rb`, `credentials_backup.sql`);
+  - `secret(s)/` and `credential(s)/` directories, SSH and cloud credential directories, `.env`
+    and key files.
+
+  `private…key` was matched across the whole path, so on macOS any file under `/private/tmp` or
+  `/private/var` with `key` later in its path was blocked. It now matches within one file name.
+  The earlier rule that `secrets_manager.py` must be blocked is reversed on purpose. Files that now
+  pass are outside this guard for both reads and writes. No other kit control covers them: the
+  content scan runs only on env-template writes, and gitleaks runs in this repository's CI, not in
+  yours. The comments that said otherwise, including the one from 2026-07-31, are corrected.
+
+### Added — `HIWAY_KIT_DISABLE_HOOKS`
+
+- A supported way to turn hooks off: a comma-separated list (`session-start`, `session-check`,
+  `protect-sensitive`, `auto-format`, `stop-validator`) or `all` in the `env` of the project's
+  `.claude/settings.json` or `.claude/settings.local.json`. A project's settings `env` reaches
+  plugin hooks (measured at SessionStart and Stop, Claude Code 2.1.319). This replaces advice to edit
+  the cached `hooks.json`, which an update restores; the `stop-validator` docstring gave that
+  advice. A repository's committed `.claude/settings.json` can therefore turn the hooks off for
+  everyone who opens it. On Codex the variable has to be in the environment Codex starts with; that
+  path is not verified.
+
+### Changed — user and project instructions win over kit rules
+
+- The injected workflow and the `AGENTS.md`/`GEMINI.md` block header now say that when user or
+  project instructions (CLAUDE.md, AGENTS.md, memory) conflict with kit rules, those instructions
+  apply. Regenerated block sha256 (the `AGENTS.md` marker):
+  `6d822b4c58966b1568ceb897249d55b3d786e8714fc493c94989ed03bf1f8dd6`.
+
+### Fixed — C/C++ navigation reports partial coverage
+
+- When project index coverage cannot be verified, C/C++ `definition` and `references` retain valid
+  locations with `status: unverified`, `complete: false`, an explanatory reason and exit code 2.
+  This includes queries with unsupported project inputs and custom background-index flags.
+  Partial locations may omit unopened translation units or point to a header declaration.
+  File-local symbols, diagnostics and navigation for other languages keep their existing contracts.
+
 ## [5.7.1] — 2026-11-06
 
 ### Changed — Anthropic's directory ships without hooks

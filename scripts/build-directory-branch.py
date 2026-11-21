@@ -18,7 +18,9 @@ blocking 0. `hooks/` 를 통째로 빼도(`probe-nohook-b`) 자격증명 보류�
 작업 트리가 아니라 **커밋**(`--source`, 기본 `HEAD`)에서 시작한다. 그 트리에서 `EXCLUDED` 를
 뺀 트리로 커밋을 만들어 `refs/heads/<branch>` 에 올린다. 부모는 *직전 브랜치 끝 + 원본 커밋*
 이라 브랜치는 fast-forward 로만 자라고, `git log <branch>` 로 어느 `main` 커밋에서 나왔는지
-추적된다. 트리가 직전 끝과 같으면 새 커밋을 만들지 않는다. push 는 하지 않는다 — 호출자 몫.
+추적된다. **플러그인 폴더(`plugins/common`)가 직전 끝과 같으면 새 커밋을 만들지 않는다** —
+디렉토리는 추적 브랜치의 새 커밋마다 다시 스캔하고 그 커밋이 심사 중인 버전을 대체하므로, 문서만
+바뀐 `main` push 가 심사 대기를 갈아엎으면 안 된다. push 는 하지 않는다 — 호출자 몫.
 
 ## 검사 조건 (한 문장)
 
@@ -139,8 +141,12 @@ def _assert_hookless(repo: Path, tree: str) -> None:
 def write_branch(repo: Path, source: str, tree: str, branch: str) -> str:
     ref = f"refs/heads/{branch}"
     prev = _rev(repo, ref)
-    if prev and _git(repo, "rev-parse", f"{prev}^{{tree}}") == tree:
-        print(f"[directory-branch] ✓ {branch} 이미 최신 ({prev[:7]})")
+    # 플러그인 폴더가 같으면 새 커밋을 만들지 않는다 — 디렉토리는 추적 브랜치의 커밋마다 새 버전으로
+    # 스캔하고, 새 커밋은 심사 중인 버전을 대체한다. 문서만 바뀐 main push 로 심사 대기를 갈아엎지 않는다.
+    if prev and _git(repo, "rev-parse", f"{prev}:{PLUGIN_ROOT}") == _git(
+        repo, "rev-parse", f"{tree}:{PLUGIN_ROOT}"
+    ):
+        print(f"[directory-branch] ✓ {branch} 플러그인 폴더 변경 없음 ({prev[:7]})")
         return prev
     version = json.loads(_git(repo, "cat-file", "-p", f"{source}:{MANIFEST}")).get(
         "version", "?"

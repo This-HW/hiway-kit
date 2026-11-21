@@ -1,0 +1,7 @@
+{
+  "name": "calc",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {"test": "node test.js"},
+  "dependencies": {"leftpad-local": "file:./vendor/leftpad-local"}
+}

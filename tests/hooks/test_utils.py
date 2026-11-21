@@ -8,7 +8,14 @@ from unittest.mock import patch
 HOOKS_DIR = Path(__file__).resolve().parents[2] / "plugins" / "common" / "hooks"
 sys.path.insert(0, str(HOOKS_DIR))
 
-from utils import debug_log, get_project_root, is_debug_mode, safe_path
+from utils import (
+    debug_log,
+    get_project_root,
+    has_ruff_config,
+    hook_disabled,
+    is_debug_mode,
+    safe_path,
+)
 
 
 class TestSafePath:
@@ -122,3 +129,68 @@ class TestGetProjectRoot:
         # Should return some valid path (either tmp_path or actual git root above it)
         assert isinstance(result, str)
         assert len(result) > 0
+
+
+def _repo(tmp_path: Path) -> Path:
+    """레포 루트(.git)와 그 아래 파일 하나 — 탐색은 루트에서 멈춘다."""
+    root = tmp_path / "repo"
+    (root / ".git").mkdir(parents=True)
+    (root / "jobs").mkdir()
+    target = root / "jobs" / "daily.py"
+    target.write_text("x = 1\n")
+    return target
+
+
+class TestHasRuffConfig:
+    """외부 설치 보고(2026-11-09): ruff 를 쓰지 않는 레포에서 훅이 ruff 를 돌려 손대지 않은
+    import 를 지웠다. 프로젝트 설정만 ruff 사용 동의로 본다."""
+
+    def test_no_config_is_not_consent(self, tmp_path):
+        assert not has_ruff_config(str(_repo(tmp_path)))
+
+    def test_ruff_toml_at_repo_root(self, tmp_path):
+        target = _repo(tmp_path)
+        (tmp_path / "repo" / "ruff.toml").write_text("")
+        assert has_ruff_config(str(target))
+
+    def test_dot_ruff_toml_next_to_file(self, tmp_path):
+        target = _repo(tmp_path)
+        (target.parent / ".ruff.toml").write_text("")
+        assert has_ruff_config(str(target))
+
+    def test_pyproject_with_tool_ruff_section(self, tmp_path):
+        target = _repo(tmp_path)
+        (tmp_path / "repo" / "pyproject.toml").write_text(
+            "[project]\nname = 'x'\n\n  [tool.ruff.lint]  # rules\nselect = ['F']\n"
+        )
+        assert has_ruff_config(str(target))
+
+    def test_pyproject_without_tool_ruff_is_not_consent(self, tmp_path):
+        target = _repo(tmp_path)
+        (tmp_path / "repo" / "pyproject.toml").write_text(
+            "[project]\nname = 'x'\n# [tool.ruff] is mentioned in a comment\n[tool.ruffle]\n"
+        )
+        assert not has_ruff_config(str(target))
+
+    def test_config_above_repo_root_is_ignored(self, tmp_path):
+        """레포 밖(상위 디렉토리)의 설정은 그 레포의 동의가 아니다."""
+        target = _repo(tmp_path)
+        (tmp_path / "ruff.toml").write_text("")
+        assert not has_ruff_config(str(target))
+
+
+class TestHookDisabled:
+    def test_unset_enables_everything(self, monkeypatch):
+        monkeypatch.delenv("HIWAY_KIT_DISABLE_HOOKS", raising=False)
+        assert not hook_disabled("auto-format")
+
+    def test_comma_list_with_spaces_and_case(self, monkeypatch):
+        monkeypatch.setenv("HIWAY_KIT_DISABLE_HOOKS", " Auto-Format , stop-validator ")
+        assert hook_disabled("auto-format")
+        assert hook_disabled("stop-validator")
+        assert not hook_disabled("protect-sensitive")
+
+    def test_all_disables_every_hook(self, monkeypatch):
+        monkeypatch.setenv("HIWAY_KIT_DISABLE_HOOKS", "all")
+        assert hook_disabled("session-start")
+        assert hook_disabled("protect-sensitive")

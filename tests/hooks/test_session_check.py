@@ -277,8 +277,8 @@ def test_stale_kit_owned_hook_is_left_alone(tmp_path, monkeypatch):
     assert hook.read_text() == stale
 
 
-def test_plugin_only_mode_skips_template_dir_query(tmp_path, monkeypatch):
-    """결과를 버리는 조회는 하지 않는다 — plugin-only 에서 init.templateDir 는 무의미하다."""
+def test_never_queries_template_dir(tmp_path, monkeypatch):
+    """결과를 버리는 조회는 하지 않는다 — init.templateDir 는 사용자의 선택이라 보지 않는다."""
     calls = []
     real_run = subprocess.run
 
@@ -288,19 +288,22 @@ def test_plugin_only_mode_skips_template_dir_query(tmp_path, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", spy)
     _init_repo(tmp_path)
+    # setup.sh 사용자 상태에서도 — 5.7.2 전에는 이 상태에서만 조회했다(이전 코드에서 이 테스트는 실패한다).
+    (tmp_path / ".claude").mkdir(exist_ok=True)
+    (tmp_path / ".claude" / ".setup-state.json").write_text("{}")
     assert _run_isolated(tmp_path, monkeypatch) == 0
     assert not [c for c in calls if "init.templateDir" in c]
 
 
-def test_full_mode_reports_missing_global_setup(tmp_path, monkeypatch, capsys):
-    """setup.sh 를 실행한 사용자에게만 전역 설정 누락을 알린다."""
+def test_full_mode_does_not_nag_about_declined_global_setup(tmp_path, monkeypatch, capsys):
+    """5.7.2 — setup.sh 는 전역 ruff.toml 을 설치하지 않고 init.templateDir 은 묻고 나서만 켠다.
+    그 둘이 없는 것은 사용자의 선택이라, 경고하면 정상 운영에서 상시 참인 경고가 된다."""
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".claude" / ".setup-state.json").write_text("{}")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "empty.gitconfig"))
     assert _run_isolated(tmp_path, monkeypatch) == 0
-    msg = _warning(capsys.readouterr())
-    assert "ruff.toml 미설치" in msg
-    assert "init.templateDir 미설정" in msg
+    out = json.loads(capsys.readouterr().out)
+    assert "systemMessage" not in out
 
 
 def test_warnings_go_to_system_message_not_stderr(tmp_path, monkeypatch, capsys):

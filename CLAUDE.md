@@ -234,7 +234,7 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   repo** (until v5.0.0 it silently installed `setup/pre-commit` in plugin-only mode —
   installation is now `setup.sh` only). Warnings go out as `systemMessage` (a
   SessionStart hook's stderr is seen by no one) and only for real defects: python below the 3.9
-  floor, missing global setup (setup.sh users only), a project `.claude/{agents,skills}` entry whose
+  floor, a project `.claude/{agents,skills}` entry whose
   **name collides** with a plugin one (project-local agents alone never warn), and a **stale venv**
   (`.venv`/`venv` console-script shebangs still pointing at the project's old
   path after a directory move/copy — `bin/python` keeps working while every
@@ -247,8 +247,10 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   does **not** otherwise scan file *content* or intercept `Bash`/`git commit` —
   secret scanning is gitleaks at push time — CI, and `verify-done.sh` §24 locally over
   unpushed commits. `setup/pre-commit` does **not** run gitleaks.
-- `auto-format.py` — auto-formats code after edits (`PostToolUse`): ruff for Python (≤2 runs);
-  prettier/eslint **only when the project has them in `node_modules/.bin`** — never `npx`
+- `auto-format.py` — auto-formats code after edits (`PostToolUse`), each tool only with the project's
+  consent (`docs/conventions/consumer-footprint.md`): ruff for Python (≤2 runs, project ruff config);
+  gofmt inside a Go module; rustfmt with `rustfmt.toml`;
+  prettier/eslint **only with their config and a copy in `node_modules/.bin`** — never `npx`
   (it looked up the registry on every Markdown edit). Whole hook fits a 25 s budget (< 30 s timeout)
 - `stop-validator.py` — on `Stop`, lints edited `.py` (ruff) and runs pytest on
   the test files this session edited (never the full suite — that's CI/`/test`'s
@@ -347,6 +349,9 @@ PRs welcome. Checklist:
 - [ ] **Consumer-first**: works in an installing user's environment, not just this repo —
       no reliance on the project cwd containing plugin files, no assumption a specific MCP
       server is installed, hooks fail-open when their assumptions don't hold
+- [ ] **Consumer footprint**: anything that creates or changes files in a consumer's project follows
+      `docs/conventions/consumer-footprint.md` (no automatic writes into the tree, follow existing
+      structure, user-owned files only on request, never install) and is listed in its write register
 - [ ] No `mcp__*` tools in any agent `tools:` allowlist (MCP lives in skills — see
       `docs/architecture/rules/mcp-usage.md` §4; absent MCP in an agent allowlist hallucinates, CC #13898)
 - [ ] Agent frontmatter has `name`, `description`, `model`, `maxTurns`

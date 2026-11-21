@@ -24,8 +24,11 @@ TOOLS_DIR = HOOK_DIR.parent / "tools"
 sys.path.insert(0, str(TOOLS_DIR))
 sys.path.insert(0, str(HOOK_DIR))
 try:
-    from utils import get_project_root
+    from utils import get_project_root, hook_disabled
 except ImportError:
+
+    def hook_disabled(name: str) -> bool:
+        return False
 
     def get_project_root() -> str:
         """Fallback: CLAUDE_PROJECT_DIR 또는 git toplevel."""
@@ -457,6 +460,8 @@ def _sanitize_subject(raw) -> str:
 
 
 def main() -> None:
+    if hook_disabled("session-start"):
+        return
     project_root = Path(get_project_root())
     active_plans_text = load_active_plans(project_root)
     legacy_text = legacy_works_notice(project_root)

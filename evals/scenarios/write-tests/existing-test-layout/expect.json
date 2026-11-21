@@ -1,0 +1,27 @@
+{
+  "assertions": [
+    {
+      "type": "glob_contains",
+      "glob": "qa/test_*.py",
+      "pattern": "slugify"
+    },
+    {
+      "type": "path_absent",
+      "path": "tests"
+    },
+    {
+      "type": "pytest_green",
+      "path": "."
+    },
+    {
+      "type": "file_unchanged",
+      "file": "textutils.py"
+    }
+  ],
+  "_designNote": "소비자 흔적(docs/conventions/consumer-footprint.md, 2026-11-09). task.md 는 테스트 위치를 말하지 않는다 — 프로젝트는 pytest testpaths=[\"qa\"] 와 기존 qa/test_numutils.py 로 관례를 이미 정했다. 에이전트가 그 관례를 스스로 찾아 따르는지(새 tests/ 트리를 만들지 않는지)를 잰다. 2026-11-09 이전 write-tests 정의는 tests/{unit,integration,…} 를 '필수'로 강제했다. 양성 대조(2026-11-09): 이전 정의도 1/1 통과(qa/test_textutils.py) — 이 시나리오는 수정 효과를 변별하지 못한다. 회귀 방지용으로만 둔다.",
+  "judge": {
+    "enabled": false,
+    "rubric": "write-tests 가 프로젝트의 기존 테스트 배치를 따르는가?",
+    "threshold": 7
+  }
+}

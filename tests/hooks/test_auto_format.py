@@ -108,6 +108,7 @@ class TestRunPipeline:
     def test_pipeline_collects_ruff_feedback(self, tmp_path):
         f = tmp_path / "test.py"
         f.write_text("import os\nx=1\n")
+        (tmp_path / "ruff.toml").write_text("")  # 프로젝트가 ruff 를 쓰기로 했다
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stdout = "test.py:1:1: F401 unused import\n"
@@ -317,6 +318,7 @@ class TestNoNpx:
 
     def test_local_prettier_is_used_directly(self, tmp_path):
         root = _repo(tmp_path)
+        (root / ".prettierrc").write_text("{}")  # 프로젝트가 prettier 를 쓰기로 했다
         exe = _fake_bin(root, "prettier")
         sub = root / "docs"
         sub.mkdir()
@@ -354,6 +356,7 @@ class TestRuffCallCount:
     def test_python_file_invokes_ruff_at_most_twice(self, tmp_path):
         f = tmp_path / "m.py"
         f.write_text("x = 1\n")
+        (tmp_path / "ruff.toml").write_text("")
         with (
             patch.object(_mod, "_has_tool", return_value=True),
             patch("subprocess.run", side_effect=_ok) as run,
@@ -383,6 +386,7 @@ class TestBudget:
 
         f = tmp_path / "m.py"
         f.write_text("x = 1\n")
+        (tmp_path / "ruff.toml").write_text("")
         with (
             patch.object(_mod, "_has_tool", return_value=True),
             patch("subprocess.run", side_effect=_ok) as run,
@@ -430,3 +434,106 @@ class TestPayloadShapes:
                 _mod.main()
             except SystemExit as e:
                 assert e.code == 0
+
+
+class TestRuffNeedsProjectConfig:
+    """외부 설치 보고(2026-11-09): ruff 를 쓰지 않는 레포에서 훅이 ruff format·check --fix 를 돌려
+    손대지 않은 `import os, sys` 를 지우고 따옴표를 전부 바꿨다. prettier·eslint 처럼 프로젝트가
+    ruff 를 쓰기로 했을 때만 돈다."""
+
+    def test_no_project_config_never_invokes_ruff(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        f = tmp_path / "job.py"
+        f.write_text("import os, sys\nx=1\n")
+        with (
+            patch.object(_mod, "_has_tool", return_value=True),
+            patch("subprocess.run", side_effect=_ok) as run,
+        ):
+            assert run_pipeline(str(f)) == 0
+        assert not [c for c in run.call_args_list if c.args[0][0] == "ruff"]
+
+    def test_pyproject_tool_ruff_enables_ruff(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        (tmp_path / "pyproject.toml").write_text("[tool.ruff]\nline-length = 100\n")
+        f = tmp_path / "job.py"
+        f.write_text("x=1\n")
+        with (
+            patch.object(_mod, "_has_tool", return_value=True),
+            patch("subprocess.run", side_effect=_ok) as run,
+        ):
+            run_pipeline(str(f))
+        assert [c for c in run.call_args_list if c.args[0][0] == "ruff"]
+
+
+
+class TestGoRustNeedProjectConsent:
+    """PATH 에 gofmt·rustfmt 가 있다는 것은 그 프로젝트의 동의가 아니다(소비자 흔적 규칙 2).
+    gofmt 는 Go 모듈(go.mod) 안에서, rustfmt 는 rustfmt.toml·.rustfmt.toml 이 있을 때만 돈다."""
+
+    @staticmethod
+    def _calls(path, tool):
+        with (
+            patch.object(_mod, "_has_tool", return_value=True),
+            patch("subprocess.run", side_effect=_ok) as run,
+        ):
+            assert run_pipeline(str(path)) == 0
+        return [c for c in run.call_args_list if c.args[0][0] == tool]
+
+    def test_go_file_outside_a_module_is_left_alone(self, tmp_path):
+        _repo(tmp_path)
+        f = tmp_path / "main.go"
+        f.write_text("package main\n")
+        assert self._calls(f, "gofmt") == []
+
+    def test_go_file_in_a_module_is_formatted(self, tmp_path):
+        """양성 대조 — 같은 파일이 go.mod 아래면 gofmt 를 부른다."""
+        _repo(tmp_path)
+        (tmp_path / "go.mod").write_text("module example.com/x\n")
+        f = tmp_path / "cmd" / "main.go"
+        f.parent.mkdir()
+        f.write_text("package main\n")
+        assert len(self._calls(f, "gofmt")) == 1
+
+    def test_go_mod_above_the_repo_root_does_not_count(self, tmp_path):
+        (tmp_path / "go.mod").write_text("module example.com/outer\n")
+        (tmp_path / "inner").mkdir()
+        repo = _repo(tmp_path / "inner")
+        f = repo / "main.go"
+        f.write_text("package main\n")
+        assert self._calls(f, "gofmt") == []
+
+    def test_go_fmt_scope_skips_testdata_vendor_and_hidden_dirs(self, tmp_path):
+        """`go fmt ./...` 가 건너뛰는 곳(골든 픽스처 testdata 등)은 고치지 않는다 — 모듈 밖 경로의
+        이름은 보지 않는다(레포 위 디렉토리 이름이 vendor 여도 포맷한다)."""
+        root = tmp_path / "vendor" / "proj"
+        root.mkdir(parents=True)
+        _repo(root)
+        (root / "go.mod").write_text("module example.com/x\n")
+        for rel in ("testdata/bad.go", "vendor/dep/d.go", "_tools/t.go", ".gen/g.go"):
+            f = root / rel
+            f.parent.mkdir(parents=True)
+            f.write_text("package x\n")
+            assert self._calls(f, "gofmt") == [], rel
+        ok = root / "pkg" / "ok.go"
+        ok.parent.mkdir()
+        ok.write_text("package pkg\n")
+        assert len(self._calls(ok, "gofmt")) == 1
+
+    def test_rust_file_without_rustfmt_config_is_left_alone(self, tmp_path):
+        _repo(tmp_path)
+        (tmp_path / "Cargo.toml").write_text('[package]\nname = "x"\n')
+        f = tmp_path / "src" / "main.rs"
+        f.parent.mkdir()
+        f.write_text("fn main(){}\n")
+        assert self._calls(f, "rustfmt") == []
+
+    def test_rust_file_with_rustfmt_config_is_formatted(self, tmp_path):
+        """양성 대조 — rustfmt.toml 이 있으면 부른다(.rustfmt.toml 도 같다)."""
+        for index, name in enumerate(("rustfmt.toml", ".rustfmt.toml")):
+            (tmp_path / f"crate{index}").mkdir()
+            root = _repo(tmp_path / f"crate{index}")
+            (root / name).write_text('edition = "2021"\n')
+            f = root / "src" / "main.rs"
+            f.parent.mkdir()
+            f.write_text("fn main(){}\n")
+            assert len(self._calls(f, "rustfmt")) == 1, name

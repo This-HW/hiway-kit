@@ -5,12 +5,42 @@
 
 set -e
 
+# 끄기 스위치 — 세션 훅과 같은 변수(HIWAY_KIT_DISABLE_HOOKS: 쉼표 목록 또는 all).
+case ",$(printf '%s' "${HIWAY_KIT_DISABLE_HOOKS:-}" | tr '[:upper:]' '[:lower:]' | tr -d ' ')," in
+    *,pre-commit,*|*,all,*) exit 0 ;;
+esac
+
+# 프로젝트가 ruff 를 쓰기로 했는가 — 파일에서 레포 루트까지 ruff.toml·.ruff.toml·[tool.ruff] 를 찾는다
+# (hooks/utils.py has_ruff_config 와 같은 규칙). 설정 없는 레포를 고치면 손대지 않은 줄까지 바뀐다.
+# 레포 상대 경로의 dirname 으로만 올라간다 — cd·심링크 해석이 없어 반드시 `.` 에서 끝나고 레포 밖
+# 설정(~/ruff.toml 등)을 집지 않는다.
+_REPO_ROOT="$(git rev-parse --show-toplevel)"
+_has_ruff_config() {
+    local dir
+    dir="$(dirname "$1")"
+    while :; do
+        if [ -f "$_REPO_ROOT/$dir/ruff.toml" ] || [ -f "$_REPO_ROOT/$dir/.ruff.toml" ]; then return 0; fi
+        if [ -f "$_REPO_ROOT/$dir/pyproject.toml" ] && grep -Eq '^[[:space:]]*\[tool\.ruff(\.[^]]*)?\][[:space:]]*(#.*)?$' "$_REPO_ROOT/$dir/pyproject.toml"; then
+            return 0
+        fi
+        case "$dir" in .|/|"") return 1 ;; esac
+        dir="$(dirname "$dir")"
+    done
+}
+
 # Python 파일 ruff check
 if command -v ruff &>/dev/null; then
     # macOS/Linux 호환: tr로 NUL→줄바꿈 변환 후 grep, 재NUL화
-    STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+    STAGED_PY=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
     if [ -n "$STAGED_PY" ]; then
         while IFS= read -r f; do
+            _has_ruff_config "$f" || continue
+            # 일부만 스테이징한 파일은 고치지도 다시 스테이징하지도 않는다 — `git add` 가
+            # 사용자가 일부러 빼 둔 수정까지 커밋에 넣는다.
+            if ! git diff --quiet -- "$f"; then
+                echo "⚠ $f: 스테이징하지 않은 변경이 있어 ruff --fix 를 건너뜀"
+                continue
+            fi
             before="$(md5 -q "$f" 2>/dev/null || md5sum "$f" 2>/dev/null | cut -d' ' -f1)"
             # --force-exclude 필수: 파일 경로를 **명시**하면 ruff는 프로젝트 설정의
             # exclude/extend-exclude를 무시한다. 그 결과 훅이 제외 대상(이 레포에선
@@ -27,10 +57,59 @@ if command -v ruff &>/dev/null; then
 fi
 
 # JSON 파일 유효성 검증
-STAGED_JSON=$(git diff --cached --name-only --diff-filter=ACM | grep '\.json$' || true)
+# 주석을 허용하는 JSONC 는 막지 않는다 — `tsc --init` 이 만든 tsconfig.json, VS Code 의 .vscode/*.json·
+# devcontainer.json, 주석 단 .eslintrc.json·biome.json 등은 엄격한 JSON 파서로는 커밋이 막힌다.
+# 두 겹이다: (1) JSONC 로 널리 쓰이는 이름은 검사하지 않는다(끝 쉼표만 있는 파일도 그 도구가 읽는다).
+# (2) 그 밖의 파일은 엄격하게 읽고, 실패하면 주석이 **있는** 경우에만 주석·끝 쉼표를 걷어 다시 읽어 본다.
+# 주석이 없는 끝 쉼표(`{"name": "x",}` 같은 깨진 package.json)는 계속 막는다.
+# 함수 + stdin 프로그램으로 둔다 — `$( )` 안의 heredoc 은 macOS bash 3.2 가 괄호를 잘못 읽을 수 있다.
+_jsonc_ok() {
+    python3 - "$1" > /dev/null 2>&1 <<'PYEOF'
+import json, re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+out, i, n, comments, in_str = [], 0, len(text), 0, False
+while i < n:
+    c = text[i]
+    if in_str:
+        out.append(c)
+        if c == "\\":
+            out.append(text[i + 1:i + 2])
+            i += 2
+            continue
+        in_str = c != '"'
+        i += 1
+        continue
+    if c == '"':
+        in_str = True
+    elif text.startswith("//", i):
+        j = text.find("\n", i)
+        i, comments = (n if j < 0 else j), comments + 1
+        continue
+    elif text.startswith("/*", i):
+        j = text.find("*/", i + 2)
+        if j < 0:
+            sys.exit(1)
+        i, comments = j + 2, comments + 1
+        continue
+    out.append(c)
+    i += 1
+if not comments:
+    sys.exit(1)
+json.loads(re.sub(r",(\s*[}\]])", r"\1", "".join(out)))
+PYEOF
+}
+STAGED_JSON=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM | grep '\.json$' || true)
 if [ -n "$STAGED_JSON" ]; then
     while IFS= read -r f; do
+        case "/$f" in
+            */tsconfig.json|*/tsconfig.*.json|*/tsconfig-*.json|*/jsconfig.json|*/jsconfig.*.json \
+            | */.vscode/*.json|*/devcontainer.json|*/.devcontainer.json|*/.devcontainer/*.json) continue ;;
+        esac
         if ! python3 -m json.tool "$f" > /dev/null 2>&1; then
+            if _jsonc_ok "$f"; then
+                echo "  · $f: 주석 있는 JSONC 로 보고 통과(엄격한 JSON 은 아님)"
+                continue
+            fi
             echo "❌ Invalid JSON: $f"
             exit 1
         fi
@@ -40,13 +119,13 @@ fi
 # 에이전트(plugins/*/agents/*.md) frontmatter 필수값 검증 — 비-에이전트 .md 는 대상이 아니다.
 # 판정 정본은 scripts/check_agent_frontmatter.py(CI·verify-done §2). 이 훅은 scripts/ 가 없는
 # 레포에도 설치되므로 인라인으로 둔다.
-STAGED_MD=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^plugins/[^/]+/agents/[^/]+\.md$' || true)
+STAGED_MD=$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM | grep -E '^plugins/[^/]+/agents/[^/]+\.md$' || true)
 if [ -n "$STAGED_MD" ]; then
     python3 - <<'PYEOF'
 import sys, re, pathlib, subprocess
 
 result = subprocess.run(
-    ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
+    ["git", "-c", "core.quotePath=false", "diff", "--cached", "--name-only", "--diff-filter=ACM"],
     capture_output=True, text=True
 )
 files = [f for f in result.stdout.splitlines() if re.match(r"^plugins/[^/]+/agents/[^/]+\.md$", f)]
@@ -88,7 +167,7 @@ fi
 # 접미사 패턴 룰이 하나도 잡지 못했다(정밀도 4%, 재현율 0%).
 NAMES_FILE="$(git rev-parse --show-toplevel)/.private-names"
 if [ -f "$NAMES_FILE" ]; then
-  STAGED="$(git diff --cached --name-only --diff-filter=ACM)"
+  STAGED="$(git -c core.quotePath=false diff --cached --name-only --diff-filter=ACM)"
   # 목록 파일 자체가 스테이징된 경우를 먼저 잡는다 — 이름이 그 안에 있는 것은 정상이므로
   # 아래 루프에 맡기면 "b.md 가 아니라 .private-names 가 걸렸다"는 혼란스러운 메시지가 난다.
   if printf '%s\n' "$STAGED" | grep -qx '\.private-names'; then

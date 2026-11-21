@@ -1198,6 +1198,39 @@ def _check_file_unchanged(
     return ok, "file_unchanged" + ("" if ok else f" — {rel_f} 변조됨 (게이밍 의심)")
 
 
+def _check_path_absent(
+    a: dict, stdout: str, fx: Path, src_fx: Path | None
+) -> tuple[bool, str]:
+    """에이전트가 **만들지 말아야 할** 경로 — 소비자 흔적(docs/conventions/consumer-footprint.md).
+
+    기존 어서션은 특정 파일의 내용·불변만 봐서, 에이전트가 프로젝트에 없던 디렉토리(`tests/unit/`·
+    `docs/api/`·`node_modules/`)를 새로 만들어도 아무것도 red 가 되지 않았다(독립 자문, 2026-11-09).
+    """
+    rel = a["path"]
+    target = _resolve_in_repo(fx, rel)
+    if target is None:
+        return False, f"path_absent — 경로 탈출 차단: {rel}"
+    present = target.exists() or target.is_symlink()
+    return not present, "path_absent" + (f" — {rel} 가 생겼다" if present else "")
+
+
+def _check_glob_contains(
+    a: dict, stdout: str, fx: Path, src_fx: Path | None
+) -> tuple[bool, str]:
+    """`glob` 에 맞는 파일 중 하나라도 `pattern` 을 담는가 — 파일 이름을 에이전트에게 맡길 때."""
+    pattern = a["glob"]
+    if Path(pattern).is_absolute() or ".." in Path(pattern).parts:
+        return False, f"glob_contains — 경로 탈출 차단: {pattern}"
+    root = fx.resolve()
+    for candidate in sorted(root.glob(pattern)):
+        real = candidate.resolve()
+        if root not in real.parents or not real.is_file():
+            continue
+        if re.search(a["pattern"], real.read_text(encoding="utf-8", errors="replace"), re.MULTILINE):
+            return True, f"glob_contains — {candidate.relative_to(root)}"
+    return False, f"glob_contains — {pattern} 중 패턴을 담은 파일 없음"
+
+
 def _check_git_assertion(
     assertion: dict, t: str, fixture_dir: Path
 ) -> tuple[bool, str]:
@@ -1287,6 +1320,9 @@ ASSERTION_REGISTRY: dict[str, tuple[set[str], object]] = {
     "pytest_green": ({"path"}, _check_pytest_green),
     "file_contains": ({"file", "pattern"}, _check_file_contains),
     "file_unchanged": ({"file"}, _check_file_unchanged),
+    # 소비자 흔적 2종(2026-11-09) — 에이전트가 프로젝트 구조를 스스로 바꾸지 않는가.
+    "path_absent": ({"path"}, _check_path_absent),
+    "glob_contains": ({"glob", "pattern"}, _check_glob_contains),
     # git 상태 어서션 3종 (W-023 D-5). expect:false로 부정을 표현한다 —
     # *_not_* 타입은 만들지 않는다(타입 표가 읽기 어려워지면 시나리오 작성자가
     # 틀린 타입을 고른다).

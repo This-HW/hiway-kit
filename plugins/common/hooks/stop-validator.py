@@ -26,8 +26,14 @@ kept below the Stop hook timeout in hooks.json (120s) — a hook the harness kil
 leaves no trace, so this one stops itself first and says so. The pytest timeout
 is min(CLAUDE_STOP_TEST_TIMEOUT, remaining budget).
 
-To disable: in plugins/common/hooks/hooks.json, replace the Stop section with
-the prompt-based hook (see CHANGELOG.md [2.2.0]) or remove it entirely.
+Lint (ruff) runs only for files inside a project that configured ruff
+(ruff.toml, .ruff.toml, or pyproject.toml with [tool.ruff]) — running it on a
+repository that never chose ruff rewrites lines nobody touched (external install
+report, 2026-11-09). Edited tests still run either way.
+
+To disable: set HIWAY_KIT_DISABLE_HOOKS=stop-validator (or "all") in the
+project's .claude/settings.json "env" — never edit the cached hooks.json, an
+update silently restores it.
 """
 from __future__ import annotations
 
@@ -41,6 +47,18 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from utils import has_ruff_config, hook_disabled
+except ImportError:
+
+    def has_ruff_config(file_path):
+        # 판정할 수 없으면 남의 파일을 바꾸지 않는 쪽으로 — 린트하지 않는다.
+        return False
+
+    def hook_disabled(name):
+        return False
 
 
 # ── 프로젝트 루트 결정 ───────────────────────────────────────────
@@ -474,7 +492,7 @@ def _resolve_paths(target_files: list[str]) -> list[str]:
 
 
 def check_lint(target_files: list[str]) -> tuple[bool, str]:
-    existing = _resolve_paths(target_files)
+    existing = [f for f in _resolve_paths(target_files) if has_ruff_config(f)]
     if not existing:
         return True, ""
     timeout = _remaining(_RUFF_TIMEOUT)
@@ -483,7 +501,7 @@ def check_lint(target_files: list[str]) -> tuple[bool, str]:
         return True, ""
     try:
         result = subprocess.run(
-            ["ruff", "check", *existing],
+            ["ruff", "check", "--force-exclude", *existing],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -507,8 +525,11 @@ def auto_fix_lint(target_files: list[str]) -> tuple[bool, list[str], str]:
         existing = [
             f
             for f in _resolve_paths(target_files)
-            if Path(f).stat().st_size < _MAX_FILE_SIZE
+            if Path(f).stat().st_size < _MAX_FILE_SIZE and has_ruff_config(f)
         ]
+        if not existing:
+            # 경로 없이 `ruff check --fix` 를 띄우면 cwd 전체를 고친다 — 대상이 없으면 아무것도 안 한다.
+            return True, [], ""
         before = {
             f: Path(f).read_text(encoding="utf-8", errors="replace") for f in existing
         }
@@ -517,7 +538,7 @@ def auto_fix_lint(target_files: list[str]) -> tuple[bool, list[str], str]:
             print("[WARN] stop-validator 예산 소진 — auto-fix skipped", file=sys.stderr)
             return True, [], ""
         subprocess.run(
-            ["ruff", "check", "--fix", *existing],
+            ["ruff", "check", "--fix", "--force-exclude", *existing],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -710,6 +731,10 @@ def main():
     #    (Claude는 직전 block 후 한 턴 수정을 시도했고, 그 턴의 Stop에서
     #     stop_hook_active=true로 들어온다. 여기서 멈추지 않으면 무한 반복.)
     data = _read_input()
+    # 꺼져 있으면 상태(재시도 카운터 포함)를 건드리지 않고 끝낸다 — allow()는 카운터를
+    # 리셋하는데, 세션 스코프 적용 전 리셋은 공유 카운터를 지운다(ATK-001).
+    if hook_disabled("stop-validator"):
+        sys.exit(0)
 
     # 0.1. retry 카운터 세션 스코프를 **모든 allow()/reset 경로보다 먼저** 적용.
     #      stop_hook_active 가드보다 늦으면 그 경로의 reset_retry()가 스코프

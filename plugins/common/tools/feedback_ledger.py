@@ -13,11 +13,14 @@ session-start가 주입할 digest를 제공하는 학습 루프의 SSOT (Spec 3 
   - auto-dev T-merge가 CLI로 upsert (쓰기):
       python3 feedback_ledger.py upsert <category> <severity> <pattern...>
       python3 feedback_ledger.py digest [K]
+  - 사용자가 직접 구 원장을 옮길 때:
+      python3 feedback_ledger.py migrate
 
-ledger 경로: <git-common-dir>/kit/ledger.md — **모든 워크트리가 공유**한다.
-  구 위치(<project_root>/docs/works/feedback/ledger.md)는 작업 트리 안이라
-  워크트리마다 갈라졌다. 남아 있으면 첫 실행이 **병합 이관**하고 .migrated 로 개명한다.
-  이 이관 경로는 4.x → 5.x 업그레이드용이다 — **6.0.0 에서 제거한다**(2026-09-28 결정).
+ledger 경로: <git-common-dir>/kit/ledger.md — **모든 워크트리가 공유**한다. git 메타데이터가 없으면
+  기록하지 않는다(작업 트리에 쓰지 않는다).
+  구 위치(<project_root>/docs/works/feedback/ledger.md)는 작업 트리 안이라 워크트리마다 갈라졌다.
+  남아 있으면 digest 가 **읽기만** 해서 합쳐 보여 주고, 옮기는 것은 `migrate` 를 실행할 때뿐이다
+  (2026-11-09 — 예전에는 첫 실행이 자동으로 병합·개명했다). 이 경로는 6.0.0 에서 제거한다.
 ledger 부재/파싱 실패 시 전 구간 무동작 (fail-open, opt-in).
 
 ## 레지스트리 승격 경로는 없다 (v5.0.0 삭제)
@@ -106,16 +109,21 @@ def ledger_path(root: Path | None = None) -> Path:
     return common / "kit" / "ledger.md"
 
 
-def _merge_entries(base: list[dict], incoming: list[dict]) -> list[dict]:
-    """dedupe 키가 같으면 frequency 합산·최근 날짜 채택. 이관용 병합."""
-    index = {_normalize(e["category"], e["pattern"]): e for e in base}
+def _merge_entries(base: list[dict], incoming: list[dict], *, combine: str = "sum") -> list[dict]:
+    """dedupe 키가 같으면 frequency 를 합치고(`sum`, 이관) 또는 큰 값을 쓰고(`max`, 읽기 전용 표시)
+    최근 날짜를 채택한다. 읽기 병합이 합산하면 이미 이관된 항목이 다른 워크트리의 구 원장과 매 세션
+    다시 더해져 순위가 부푼다(리뷰 ATK-005)."""
+    index = {_normalize(e["category"], e["pattern"]): dict(e) for e in base}
     for src in incoming:
         key = _normalize(src["category"], src["pattern"])
         hit = index.get(key)
         if hit is None:
             index[key] = dict(src)
             continue
-        hit["frequency"] += src["frequency"]
+        if combine == "max":
+            hit["frequency"] = max(hit["frequency"], src["frequency"])
+        else:
+            hit["frequency"] += src["frequency"]
         hit["last_seen"] = max(hit["last_seen"], src["last_seen"])
     merged = list(index.values())
     # id 재채번 — 두 원장의 F-번호가 충돌할 수 있다.
@@ -128,6 +136,8 @@ def migrate_legacy_ledger(root: Path | None = None) -> str:
     """구 위치 원장을 정본으로 **병합** 이관한다. 반환: 'merged' | 'noop'.
 
     4.x → 5.x 업그레이드 경로다 — **6.0.0 에서 제거한다**(2026-09-28 결정).
+    **자동으로 부르지 않는다**(2026-11-09) — 사용자가 `feedback_ledger.py migrate` 로 실행할 때만
+    돈다. 예전에는 digest·upsert 가 매번 불러 세션 시작만으로 tracked 파일이 개명됐다.
 
     **이동이 아니라 병합인 이유**: 워크트리마다 원장이 갈려 있었으므로 먼저 도착한
     하나만 채택하면 나머지의 학습이 사라진다. 각 워크트리가 자기 것을 병합해 올린다.
@@ -486,8 +496,17 @@ def upsert(category: str, severity: str, pattern: str, root: Path | None = None)
     if severity not in VALID_SEVERITIES:
         severity = ""
     pattern = _sanitize(pattern)
-    _try_migrate(root)
-    path = ledger_path(root)
+    # 이관은 자동으로 하지 않는다 — 사용자 파일 개명은 명시 실행(`migrate`)만 한다.
+    # git 이 없으면(또는 조회 실패) 작업 트리에 `docs/works/` 를 만드는 대신 기록을 건너뛴다:
+    # 킷은 소비자 트리에 스스로 구조를 만들지 않는다(docs/conventions/consumer-footprint.md).
+    # 경로는 **한 번만** 구한다 — 확인과 쓰기가 각자 git 을 조회하면 두 번째 조회가 실패(타임아웃)했을 때
+    # 작업 트리의 구 위치로 물러선다(리뷰 ATK-004, path-containment 규칙 1).
+    common = _git_common_dir(root or _project_root())
+    if common is None:
+        print("[feedback_ledger] git 메타데이터를 찾지 못해(저장소가 아니거나 git 조회 실패) 원장 기록을 "
+              "건너뛴다 — 작업 트리에는 쓰지 않는다.", file=sys.stderr)
+        return "skipped"
+    path = common / "kit" / "ledger.md"
     # 로컬 날짜를 유지하되 tz를 명시(naive 시각 금지) — 원장 날짜는 사용자 기준일이다.
     today = datetime.now().astimezone().date().isoformat()
     with _ledger_lock(path):
@@ -528,7 +547,7 @@ def upsert(category: str, severity: str, pattern: str, root: Path | None = None)
         return "added"
 
 
-def _try_migrate(root: Path | None) -> None:
+def _try_migrate(root: Path | None) -> str:
     """이관은 **본 작업을 막지 않는다** — 실패하면 조용히 구 위치 그대로 동작한다.
 
     학습 루프는 opt-in·fail-open 이 원칙이다(rules/feedback-loop.md). 이관 실패로
@@ -544,14 +563,14 @@ def _try_migrate(root: Path | None) -> None:
     한 번도 발화하지 않는다 — 상시 참인 경고가 아니다.
     """
     try:
-        migrate_legacy_ledger(root)
+        return migrate_legacy_ledger(root)
     except Exception as ex:
         print(
             f"[feedback_ledger] warning: 구 원장 이관 실패 — 구 위치 그대로 진행합니다 "
-            f"({type(ex).__name__}: {ex}). 반복되면 구 원장이 매 세션 재병합돼 "
-            f"frequency 가 부풀 수 있습니다.",
+            f"({type(ex).__name__}: {ex}). 구 원장은 그대로이고 digest 는 계속 읽는다.",
             file=sys.stderr,
         )
+        return "failed"
 
 
 def load_digest(top_k: int = DEFAULT_DIGEST_K, root: Path | None = None) -> str:
@@ -560,9 +579,16 @@ def load_digest(top_k: int = DEFAULT_DIGEST_K, root: Path | None = None) -> str:
     **읽기 전용 경로라 실패를 삼켜도 안전하다** — 쓰기 경로(`upsert`)와 달리 여기서는
     "못 읽음"이 데이터를 파괴하지 않는다. 다만 조용히 넘기지는 않는다.
     """
-    _try_migrate(root)
+    # **읽기만 한다.** 세션 시작에서 불리므로 부수효과가 없어야 한다 — 예전에는 여기서 구 원장을
+    # 개명·병합해, 세션을 열기만 해도 tracked 파일이 지워지고 `.md.migrated` 가 생겼다
+    # (외부 설치 검토·독립 자문 2건, 2026-11-09). 구 원장은 메모리에서만 합쳐 보여 주고,
+    # 옮기는 것은 사용자가 `feedback_ledger.py migrate` 로 한다.
+    root = root or _project_root()
     try:
         entries = parse_ledger(ledger_path(root))
+        legacy = legacy_ledger_path(root)
+        if legacy != ledger_path(root) and legacy.is_file() and not legacy.is_symlink():
+            entries = _merge_entries(entries, parse_ledger(legacy), combine="max")
     except LedgerUnreadable as err:
         print(f"[feedback_ledger] 원장을 읽지 못해 digest 를 비운다 — {err}", file=sys.stderr)
         return ""
@@ -610,7 +636,7 @@ def _main(argv: list[str]) -> int:
     if not argv:
         print(
             "usage: feedback_ledger.py upsert <category> <severity> <pattern> "
-            "| digest [K]",
+            "| digest [K] | migrate",
             file=sys.stderr,
         )
         return 2
@@ -625,6 +651,10 @@ def _main(argv: list[str]) -> int:
     if cmd == "digest":
         k = int(argv[1]) if len(argv) > 1 and argv[1].isdigit() else DEFAULT_DIGEST_K
         print(load_digest(k))
+        return 0
+    if cmd == "migrate":
+        # 구 원장(docs/works/feedback/ledger.md)을 공용 gitdir 로 옮긴다 — 사용자가 직접 실행할 때만.
+        print(_try_migrate(None))
         return 0
     print(f"unknown command: {cmd}", file=sys.stderr)
     return 2

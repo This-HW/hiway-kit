@@ -8,10 +8,11 @@ env 템플릿(.env.example 등) 쓰기는 허용하되, 실제 형식의 시크�
 차단되는 파일:
 - .env* (환경 변수)
 - **/secrets/** (시크릿 디렉토리)
-- **/*credential* (인증 정보)
-- **/*secret* (시크릿)
+- **/*credential*, **/*secret* — 데이터·설정 파일만. 소스·문서(.py·.sql·.md 등)는 통과
 - ~/.ssh/** (SSH 키)
 - ~/.aws/** (AWS 인증)
+
+끄기: HIWAY_KIT_DISABLE_HOOKS 에 protect-sensitive(또는 all) — 프로젝트 .claude/settings.json 의 env.
 
 env 템플릿 쓰기 콘텐츠 스캔 (형식-확정 패턴만):
 - API 키 패턴 (sk-, pk_, AKIA 등)
@@ -35,8 +36,11 @@ import sys
 hook_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, hook_dir)
 try:
-    from utils import debug_log, is_debug_mode
+    from utils import debug_log, hook_disabled, is_debug_mode
 except ImportError:
+
+    def hook_disabled(name):
+        return False
 
     def debug_log(msg, error=None):
         pass
@@ -61,8 +65,6 @@ PROTECTED_PATTERNS = [
     r"\.env($|\.)",  # .env, .env.local, .env.production 등
     # 시크릿/인증 디렉토리
     r"/secrets/",  # secrets 디렉토리
-    r"credential",  # credential 포함 파일
-    r"secrets?(?=[._/\d-]|$)",  # 'secret(s)' 토큰: mysecret.txt·secrets_manager·api_secret 포함, 'secretary' 제외
     # SSH
     r"\.ssh/",  # SSH 키 디렉토리
     r"id_rsa",  # SSH 개인키
@@ -85,21 +87,90 @@ PROTECTED_PATTERNS = [
     r"\.key$",  # 키 파일
     r"\.p12$",  # PKCS#12 파일
     r"\.pfx$",  # PFX 파일
-    r"private.*key",  # 개인 키
     r".*_rsa$",  # RSA 키
     r".*_ecdsa$",  # ECDSA 키
     # 기타 민감 파일 — 자격증명 관례 결합만 차단 (외부 사용 보고 2026-07-31: 산문
     # 복합어 파일명 'token-efficiency-discipline.md'가 substring 매치로 오차단).
     # 차단: 정확명(token, token.json, .token) + 접미 결합(api_token.json, github-token.txt).
     # 통과: 산문 복합어(token-efficiency-*.md), 소스 파일(tokenizer.py, oauth/token.py).
-    # 좁힌 만큼의 잔여 리스크(예: token_prod.json 같은 접두 복합)는 콘텐츠 스캔
-    # (HIGH_CONFIDENCE_CONTENT_PATTERNS) + 커밋 시 gitleaks가 최종 방어선.
+    # 좁힌 만큼의 잔여(예: token_prod.json 같은 접두 복합)는 **이 훅이 보호하지 않는다** —
+    # 콘텐츠 스캔은 env 템플릿 쓰기에만 돌고 Read 에는 없다. gitleaks 는 이 레포의 CI 에서만 돈다.
     r"(^|/)\.?tokens?(\.(json|ya?ml|txt|env|cfg|conf|ini|toml|properties))?$",
     r"[_-]tokens?(\.(json|ya?ml|txt|env|cfg|conf|ini|toml|properties))?$",
     r"(^|/)\.?passwords?(\.(json|ya?ml|txt|env|cfg|conf|ini|toml|properties))?$",
     r"[_-]passwords?(\.(json|ya?ml|txt|env|cfg|conf|ini|toml|properties))?$",
     r"\.htpasswd$",  # Apache htpasswd
 ]
+
+# 이름 키워드 — 데이터·설정 파일만 막고 **소스·문서는 통과**시킨다.
+# 외부 설치 보고(2026-11-09): 키워드가 경로 어디에 있든 막자 수집기 코드
+# (credential_collector.py)·SP 정의(SP_UPDATE_USER_CREDENTIALS.sql)·운영 문서
+# (credential-rotation.md)·secret_manager.py 가 막혔고, 오탐은 에이전트를 Bash `cat`
+# 우회로 민다 — 보호가 오히려 약해진다. token/password 를 좁힌 2026-07-31 과 같은 판단이다.
+# **통과시킨 소스·문서는 읽기·쓰기 모두 이 훅의 보호 밖이다** — 콘텐츠 스캔은 env 템플릿
+# 쓰기에만 돌고, gitleaks 는 소비자 레포가 아니라 이 레포의 CI 에서만 돈다. 그래서 통과 범위를
+# 좁게 잡는다:
+# - 제외는 확장자 **나열**(SOURCE_DOC_EXTENSIONS) — 모르는 확장자는 기본 차단. 셸·Terraform·
+#   노트북(출력 셀에 값이 남는다)은 시크릿이 놓이는 자리라 제외하지 않는다.
+# - 이름이 키워드와 수식어로만 된 **시크릿 모듈**(secrets.py·config.secret.ts·secret_token.rb·
+#   credentials_backup.sql)과 secret(s)/credential(s) **디렉토리**는 확장자와 무관하게 막는다.
+#   통과하는 것은 키워드가 다른 낱말을 꾸미는 복합어(credential_collector·secret_manager·
+#   SP_UPDATE_USER_CREDENTIALS)뿐이다.
+STRICT_KEYWORD_PATTERNS = [
+    r"(^|/)\.?(secrets?|credentials?)/",  # 이름 그대로인 디렉토리
+]
+
+#: 시크릿 모듈 판정 — 이름의 낱말이 전부 이 둘(+수식어)이고 키워드가 하나 이상이면 모듈이다.
+_STORE_KEYWORDS = frozenset({"secret", "secrets", "credential", "credentials"})
+_STORE_PARTS = _STORE_KEYWORDS | {
+    "token", "tokens", "key", "keys", "api", "client", "master", "private", "auth",
+}
+_STORE_QUALIFIERS = frozenset({
+    "dev", "development", "prod", "production", "local", "staging", "stage", "test", "testing",
+    "settings", "config", "app", "default", "base", "my", "env",
+    "backup", "bak", "dump", "old", "orig", "copy",
+    "json", "yaml", "yml", "toml", "ini", "cfg", "conf", "txt",
+})
+
+
+def _is_secret_store_name(path_lower: str) -> bool:
+    name = path_lower.rsplit("/", 1)[-1].lstrip(".")
+    stem = name.rpartition(".")[0] if "." in name else name
+    core = {t for t in re.split(r"[._-]+", stem) if t and t not in _STORE_QUALIFIERS}
+    return bool(core) and core <= _STORE_PARTS and (
+        bool(core & _STORE_KEYWORDS) or {"private", "key"} <= core
+    )
+
+
+NAME_KEYWORD_PATTERNS = [
+    r"credential",  # credential 포함 파일·디렉토리
+    r"secrets?(?=[._/\d-]|$)",  # 'secret(s)' 토큰: mysecret.txt·api_secret 포함, 'secretary' 제외
+    # 개인 키 — 한 파일 이름 안에서만. 경로 전체에 걸면 macOS 의 /private/tmp·/private/var
+    # 아래 이름에 'key' 가 든 모든 파일(monkey.py·keymap.json)이 막혔다.
+    r"(^|/)[^/]*private[^/]*key[^/]*$",
+]
+
+SOURCE_DOC_EXTENSIONS = frozenset(
+    {
+        # 문서
+        "md", "mdx", "rst", "adoc",
+        # 데이터 질의
+        "sql",
+        # 소스
+        "py", "pyi", "java", "kt", "kts", "scala", "groovy", "go", "rs",
+        "js", "jsx", "mjs", "cjs", "ts", "tsx", "vue", "svelte",
+        "rb", "php", "cs", "fs", "swift", "dart", "m", "mm",
+        "c", "h", "cc", "cpp", "cxx", "hpp", "hh",
+        "r", "jl", "lua", "ex", "exs", "erl", "hs", "clj",
+        "html", "css", "scss",
+    }
+)
+
+
+def _is_source_or_doc(path_lower: str) -> bool:
+    name = path_lower.rsplit("/", 1)[-1]
+    stem, dot, extension = name.lstrip(".").rpartition(".")
+    return bool(dot and stem) and extension in SOURCE_DOC_EXTENSIONS
 
 # 콘텐츠 내 민감 정보 패턴 — env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔용.
 # 형식-확정 패턴만: 실제 시크릿 형식(sk-, AKIA, PEM 블록 등)에만 매치되어
@@ -189,7 +260,10 @@ def check_protected(file_path: str) -> tuple[bool, str]:
     if ENV_TEMPLATE_RE.search(path_lower):
         return False, ""
 
-    for pattern in PROTECTED_PATTERNS:
+    patterns = list(PROTECTED_PATTERNS) + STRICT_KEYWORD_PATTERNS
+    if not _is_source_or_doc(path_lower) or _is_secret_store_name(path_lower):
+        patterns += NAME_KEYWORD_PATTERNS
+    for pattern in patterns:
         if re.search(pattern, path_lower):
             debug_log(f"Pattern matched: {pattern} for {file_path}")
 
@@ -230,7 +304,7 @@ def check_protected(file_path: str) -> tuple[bool, str]:
 def main():
     try:
         # stdin이 TTY면(파이프 입력 없음) json.load가 무한 블록한다 — 즉시 통과.
-        if sys.stdin.isatty():
+        if sys.stdin.isatty() or hook_disabled("protect-sensitive"):
             sys.exit(0)
         # stdin에서 JSON 입력 읽기
         input_data = json.load(sys.stdin)

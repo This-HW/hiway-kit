@@ -4,7 +4,7 @@
 > 재생성: `./scripts/export-harness.sh` (플러그인 사용자는 `/harness-export` 스킬 참조)
 > 마커 블록 **밖의 내용은 생성기가 건드리지 않는다** — 프로젝트 고유 규약을 자유롭게 적어라.
 
-<!-- kit:begin rules-v1.4.0 sha256:354f3da0b3f8ff1a083439eb5eb78eb7cd18ddc30847477d5b82f1e6be6ade67 -->
+<!-- kit:begin rules-v1.4.0 sha256:6d822b4c58966b1568ceb897249d55b3d786e8714fc493c94989ed03bf1f8dd6 -->
 
 ## hiway-kit — 하네스 중립 규범
 
@@ -15,6 +15,7 @@
 이 절은 [hiway-kit](https://hiway.thishw.com/)의 규범을
 **원문 그대로** 옮긴 것이다. Codex·Antigravity·Gemini CLI·OpenCode·Copilot·Pi·Hermes·
 Claude Code 등 이 파일을 읽는 **모든 에이전트**에 동일하게 적용된다.
+이 절 밖의 프로젝트 지침이나 사용자 지침이 이 규범과 충돌하면 **그 지침을 따른다**.
 
 ### 워크플로 체인
 

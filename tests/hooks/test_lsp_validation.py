@@ -169,9 +169,15 @@ def test_invalid_wire_responses_are_unverified(wire, case, action):
     ("definition", None),
     ("symbols", []),
 ])
-def test_valid_wire_navigation_remains_successful(wire, action, result):
+def test_valid_wire_navigation_retains_results(wire, action, result):
     rc, response = wire({"result": result}, action)
-    assert rc == 0
+    if action in ("definition", "references"):
+        assert rc == 2
+        assert response["status"] == "unverified"
+        assert response["complete"] is False
+        assert response["reason"] == "project_index_not_verified"
+    else:
+        assert rc == 0
     assert response["result"] == result
 
 
@@ -245,7 +251,8 @@ def test_source_special_files_do_not_block(tmp_path, kind):
 def test_utf16_position_contract(wire):
     rc, response = wire({"expected_position": {"line": 0, "character": 3}, "result": LOCATION},
                         "definition", text="😀xy\n", column=3)
-    assert rc == 0
+    assert rc == 2
+    assert response["reason"] == "project_index_not_verified"
     assert response["result"] == LOCATION
 
 
@@ -256,7 +263,8 @@ def test_utf16_position_contract(wire):
 ])
 def test_only_lsp_line_endings_split_source(wire, text, line, column, position):
     rc, response = wire({"expected_position": position, "result": LOCATION}, "definition", text=text, line=line, column=column)
-    assert rc == 0
+    assert rc == 2
+    assert response["reason"] == "project_index_not_verified"
     assert response["result"] == LOCATION
 
 
