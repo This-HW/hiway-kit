@@ -3,6 +3,8 @@ name: control-loop
 description: Multi-session control discipline for delegating work to worker sessions — investigate, decide, dispatch, verify, and merge. Use when a session is coordinating separate worker sessions or worktrees and needs to know when to delegate versus decide, and how to verify before merging.
 ---
 
+> **디렉토리판 — 훅·도구 없음.** 이 설치에는 킷의 `hooks/`·`setup/`·`tools/` 와 `code-intel`·`session-history`·`harness-export` 스킬이 없다. 아래에서 그 파일을 실행하거나 켜라는 단계, 그 스킬을 쓰라는 단계는 **건너뛰고**(없음으로 처리), 다른 설치나 플러그인 캐시에서 같은 이름의 파일을 찾아 쓰지 않는다 — 버전이 다른 도구다. 그 기능이 필요하면 전체판(이 레포를 마켓플레이스로 설치)을 안내한다.
+
 # Control Loop 스킬
 
 축은 *기획 대 컨트롤*이 아니라 **결정 대 조사**다. 판별식: 브리프를 전제·범위/계약·

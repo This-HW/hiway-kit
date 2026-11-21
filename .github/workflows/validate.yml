@@ -273,9 +273,10 @@ jobs:
           done
 
   directory-branch:
-    # Claude 디렉토리는 command 훅을 Verified 조직에게만 받는다(2026-11-06 v5.6.0 거부).
-    # 디렉토리는 무훅 `directory` 브랜치를 추적한다 — 검증을 통과한 main push 마다 그 커밋에서
-    # 훅 선언만 뺀 트리로 fast-forward 한다(scripts/build-directory-branch.py 가 단일 소스).
+    # Claude 디렉토리는 비 Verified 조직에게서 command 훅(2026-11-06)·스크립트 파일·일부 frontmatter
+    # 키(2026-11-21)를 받지 않는다. 디렉토리는 `directory` 브랜치(디렉토리판)를 추적한다 — 검증을 통과한
+    # main push 마다 그 커밋에서 만든 디렉토리판 트리로 fast-forward 한다(scripts/build-directory-branch.py
+    # 가 단일 소스: 뺄 경로·지울 키·머리말·검사).
     # 손으로 만들면 잊는 날 디렉토리 사용자만 낡은 버전에 남는다.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [validate, python39-compat]

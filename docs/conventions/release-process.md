@@ -20,8 +20,10 @@ push is never fetched, so users never get the fix.
 - Keep README/docs version-agnostic (link to CHANGELOG) so they can't drift
 - **Claude 디렉토리는 `main` 이 아니라 `directory` 브랜치를 추적한다**(5.7.1~, 디렉토리가 command 훅을
   Verified 조직에게만 받는다). 그 브랜치는 CI `directory-branch` 작업이 검증을 통과한 `main` push 마다
-  `scripts/build-directory-branch.py` 로 다시 만든다 — 손으로 만들거나 고치지 않는다. 훅 선언 파일의
-  이름·위치를 바꾸면 그 스크립트의 `EXCLUDED` 도 같이 고친다(안 고치면 스크립트가 exit 1 로 멈춘다)
+  `scripts/build-directory-branch.py` 로 다시 만든다 — 손으로 만들거나 고치지 않는다. 디렉토리판에서
+  빼는 경로(`EXCLUDED`)·지우는 키(`STRIP_FRONTMATTER`)는 그 스크립트가 소유한다 — 뺄 경로의 이름을 바꾸거나,
+  `hooks/`·`setup/`·`tools/` 밖에 새 스크립트·허용 형식 밖 파일을 넣거나, 뺀 도구·스킬을 가리키는 새 문서를
+  넣으면 스크립트가 exit 1 로 멈추고, 그때 같이 고친다(그 세 폴더 안의 새 파일 자체는 통째 제외라 조용히 빠진다)
 - **버전은 `scripts/bump-version.sh <version>` 로 올린다** (수동으로 SSOT를 직접 고치지 마라).
   SSOT 갱신 → 타겟 매니페스트 재생성 → 자기 검증을 한 명령으로 묶어, "SSOT만 올리고 생성물
   재생성을 잊는" 실수(v2.15.0에서 실제로 밟았다)를 예방한다. (낡은 버전 문자열 감사 도구도

@@ -7,7 +7,6 @@ description: |
 model: sonnet
 effort: medium
 maxTurns: 20
-isolation: worktree
 tools:
   - Read
   - Write
@@ -19,6 +18,8 @@ tools:
 disallowedTools:
   - Task
 ---
+
+> **디렉토리판 — worktree 격리 없음.** 이 설치(Anthropic 디렉토리판)에서는 파일을 고치는 에이전트(implement-code·fix-bugs·write-tests·sync-docs)가 격리 worktree 가 아니라 **사용자의 작업 트리**에서 돈다. 아래의 worktree 절차(격리 트리에서 커밋하고 돌아오기)는 적용되지 않는다 — 그 에이전트는 **커밋하지 말고** 바꾼 파일과 요약만 반환하고, 커밋·병합은 호출자가 한다. 같은 트리를 함께 고치지 않도록 그 에이전트들은 **병렬이 아니라 순차로** 부른다. 격리가 필요하면 전체판(이 레포를 마켓플레이스로 설치)을 쓴다.
 
 # 역할: 코드 구현 전문가
 

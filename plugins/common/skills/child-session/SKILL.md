@@ -3,6 +3,8 @@ name: child-session
 description: Discipline a worker session loads at dispatch time — verify the brief's premises before implementing, work only on its own branch, and report in the fixed completion format. Use when a session has been dispatched as a worker (child) with a brief from a parent control session.
 ---
 
+> **디렉토리판 — 훅·도구 없음.** 이 설치에는 킷의 `hooks/`·`setup/`·`tools/` 와 `code-intel`·`session-history`·`harness-export` 스킬이 없다. 아래에서 그 파일을 실행하거나 켜라는 단계, 그 스킬을 쓰라는 단계는 **건너뛰고**(없음으로 처리), 다른 설치나 플러그인 캐시에서 같은 이름의 파일을 찾아 쓰지 않는다 — 버전이 다른 도구다. 그 기능이 필요하면 전체판(이 레포를 마켓플레이스로 설치)을 안내한다.
+
 # Child Session 스킬
 
 `control-loop`을 쓰는 부모 세션이 워커를 디스패치할 때 함께 로드하는 스킬이다. 부모와

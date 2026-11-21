@@ -3,6 +3,10 @@ name: debug
 description: Investigate a failure whose cause is not evident from the error itself - flaky or intermittent failures, failures that only happen in CI or one environment, or errors with several plausible causes across files - by reproducing, isolating, fixing and verifying. Skip it when the message already shows the fix (a missing variable, a typo, a wrong import); just fix that directly.
 ---
 
+> **디렉토리판 — 훅·도구 없음.** 이 설치에는 킷의 `hooks/`·`setup/`·`tools/` 와 `code-intel`·`session-history`·`harness-export` 스킬이 없다. 아래에서 그 파일을 실행하거나 켜라는 단계, 그 스킬을 쓰라는 단계는 **건너뛰고**(없음으로 처리), 다른 설치나 플러그인 캐시에서 같은 이름의 파일을 찾아 쓰지 않는다 — 버전이 다른 도구다. 그 기능이 필요하면 전체판(이 레포를 마켓플레이스로 설치)을 안내한다.
+
+> **디렉토리판 — worktree 격리 없음.** 이 설치(Anthropic 디렉토리판)에서는 파일을 고치는 에이전트(implement-code·fix-bugs·write-tests·sync-docs)가 격리 worktree 가 아니라 **사용자의 작업 트리**에서 돈다. 아래의 worktree 절차(격리 트리에서 커밋하고 돌아오기)는 적용되지 않는다 — 그 에이전트는 **커밋하지 말고** 바꾼 파일과 요약만 반환하고, 커밋·병합은 호출자가 한다. 같은 트리를 함께 고치지 않도록 그 에이전트들은 **병렬이 아니라 순차로** 부른다. 격리가 필요하면 전체판(이 레포를 마켓플레이스로 설치)을 쓴다.
+
 # 디버깅 실행
 
 > 4-Phase Debugging

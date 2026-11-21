@@ -6,6 +6,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.9.1] — 2026-11-22
+
+Nothing changes for installs from this repository; Anthropic's directory gets a reduced edition so
+that it can move past 5.5.1.
+
+### Changed — directory edition
+
+- Anthropic's directory now refuses two more things from organizations that are not Verified:
+  files that are not Markdown, text, JSON, YAML or an allowed image (or that start with `#!`), and
+  frontmatter keys outside an allowed list it does not publish. v5.8.0 and v5.9.0 were refused on
+  both. The `directory` branch it tracks is now built without `hooks/`, `setup/`, `tools/`,
+  `rules/CHECKSUMS.sha256` and `rules/VERSION`, without the three skills that need those tools
+  (`code-intel`, `session-history`, `harness-export`), and with `isolation` removed from agent
+  frontmatter. Pages that lean on what was removed get a note at the top in that edition only: the
+  four file-changing agents and the pages that dispatch them say to return changes without
+  committing and to run those agents one at a time, and pages that run `tools/`, `hooks/` or
+  `setup/` files say to skip those steps rather than use a copy from another install. The rule files
+  ship, but without hooks nothing loads them. A check-only Validate of that tree in the directory portal passed with no blocking
+  finding and no policy hold (warnings only); `model`, `effort`, `maxTurns`, `tools`,
+  `disallowedTools` and `disable-model-invocation` were accepted. Until a version passes the
+  directory's review, the directory keeps serving 5.5.1.
+- `scripts/build-directory-branch.py` now fails when the directory tree would hold a file the
+  directory refuses — by type and by content (a `#!` start, also after a BOM; NUL bytes; invalid
+  UTF-8 or JSON; an image whose bytes are not that image; a symlink or an executable file) — so a
+  new script outside `hooks/`, `setup/` and `tools/` has to be listed in `EXCLUDED` on purpose, and a
+  new page that points at a removed tool or skill stops the build until it is either excluded or
+  listed as one that still works without it. Frontmatter that does not open and close with an exact
+  `---` line, or a stripped key written in a form it cannot remove safely (a block value, a quoted or
+  indented key), stops the build; a separate scan that does not share the stripping parser fails if
+  the key is still there, and a page that needs a note but lacks it fails too. Git output is read NUL-separated, a source older than
+  the branch's last source no longer rolls the branch back, and `--source` other than `HEAD` works.
+- README, the plugin README and `CLAUDE.md` describe path A as that reduced edition.
+
 ## [5.9.0] — 2026-11-21
 
 `review-code` must now prove a finding before reporting it, `write-tests` and `fix-bugs` must show a failing test before fixing anything, and with the hooked install (path B) the kit warns at session start if it is installed twice and strips hidden characters from what it injects.

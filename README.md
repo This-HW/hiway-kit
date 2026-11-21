@@ -58,11 +58,15 @@ qualifies); older interpreters make the hooks no-ops and the session warns you o
 /plugin marketplace update hiway-kit   # later, to pick up a new version
 ```
 
-Path A is the reviewed listing, and it is behind: **it serves 5.5.1** (with that version's hooks).
-Later versions have not gone live there — the directory now accepts command hooks, script files and
-some agent frontmatter keys only from Verified organizations, and this kit's publisher is not one
-yet. For the current release, use path B. Both paths were verified on a clean Claude Code config
-(no claude.ai sign-in) on 2026-10-05. The listing does not yet show up in claude.ai's web directory search; the install
+Path A is the reviewed listing, and **from 5.9.1 it is a reduced edition**: Anthropic's directory
+accepts command hooks, script files and some agent frontmatter keys only from Verified
+organizations, and this kit's publisher is not one yet. That edition has the skills and agents; the
+rule files ship too, but without hooks nothing loads them. It has no Python tools and no
+`code-intel`, `session-history` or `harness-export` (they need those tools), and agents run without
+worktree isolation — file-changing agents return their changes without committing and run one at a
+time. Pages that call a missing tool or rely on isolation say so at the top. Until a newer version
+passes the directory's review, path A serves 5.5.1. For the full kit, use path B. Path B and the
+5.5.1 path A were verified on a clean Claude Code config (no claude.ai sign-in) on 2026-10-05. The listing does not yet show up in claude.ai's web directory search; the install
 command above works regardless.
 
 ### Installing changes the whole machine, not just this project
@@ -193,7 +197,7 @@ norms arrive differs, and on some paths they arrive only if you export them:
 
 | | Claude Code | Codex | Antigravity |
 | --- | --- | --- | --- |
-| Rules | hook injection (install path B — path A is behind, see Quick Install) | hook injection (marketplace install, after hook trust) — `AGENTS.md` is the fallback | `AGENTS.md` / `GEMINI.md` only — Antigravity reads **both**, so identical copies load twice |
+| Rules | hook injection (install path B — path A's edition has no hooks, see Quick Install) | hook injection (marketplace install, after hook trust) — `AGENTS.md` is the fallback | `AGENTS.md` / `GEMINI.md` only — Antigravity reads **both**, so identical copies load twice |
 | Ledger digest (memory) | hook injection (path B only) | hook injection; rules also tell the agent to fetch it itself | self-fetch per the rule (unmeasured) |
 | Skills | native | recognized | recognized |
 | Subagents | ✅ | **not exposed** — skills degrade to in-session execution | not recognized (`model:` frontmatter, see above) |
@@ -373,7 +377,7 @@ sequenceDiagram
   CC->>K: Stop
   K-->>CC: decision block if lint or the edited tests fail
   CC->>CC: keeps fixing, then stops again
-  Note over U,K: These are the path B hooks. Path A (Anthropic directory) is behind, see Quick Install. Turn any hook off with HIWAY_KIT_DISABLE_HOOKS.
+  Note over U,K: These are the path B hooks. Path A (Anthropic directory) is a reduced edition, see Quick Install. Turn any hook off with HIWAY_KIT_DISABLE_HOOKS.
 ```
 
 - **Hooks:** `protect-sensitive.py` runs on Edit/Write/MultiEdit/NotebookEdit/Read/Grep and blocks

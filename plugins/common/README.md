@@ -14,15 +14,16 @@ Pick **one** (installing both loads every skill twice and mixes versions):
 /plugin install hiway-kit@hiway-kit
 ```
 
-The directory install is behind: it serves **5.5.1** (with that version's hooks). Later versions
-have not gone live there — the directory now accepts command hooks, script files and some agent
-frontmatter keys only from Verified organizations. Install from the repository marketplace for the
-current release.
+From 5.9.1 the directory gets a **reduced edition**: Anthropic's directory accepts command hooks,
+script files and some agent frontmatter keys only from Verified organizations, so that edition has
+no hooks, no Python tools, no `code-intel`, `session-history` or `harness-export` skills (they need
+those tools), and agents run without worktree isolation. Until a newer version passes the
+directory's review it serves 5.5.1. Install from the repository marketplace for the full kit.
 
 Other harnesses (Codex, Antigravity, Gemini CLI) and what each one supports:
 [repository README](https://github.com/This-HW/hiway-kit#where-it-runs).
 
-> The published plugin is **`hiway-kit`** (15 agents + 17 skills + 12 rules + hooks).
+> The published plugin is **`hiway-kit`** — the full kit is 15 agents + 17 skills + 12 rules + hooks.
 > Project-specific extensions live in a user's own `project-local/` tier, not as separate
 > published plugins.
 
