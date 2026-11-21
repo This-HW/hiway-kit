@@ -1,0 +1,24 @@
+{
+  "assertions": [
+    {
+      "type": "glob_contains",
+      "glob": "test_*.py",
+      "pattern": "parse_duration"
+    },
+    {
+      "type": "file_unchanged",
+      "file": "duration.py"
+    },
+    {
+      "type": "output_regex",
+      "pattern": "\\b\\d+ failed\\b|^[ \\t>`*-]*FAILED[ \\t]+\\S*test_\\w+\\.py::",
+      "flags": "m"
+    }
+  ],
+  "_designNote": "TDD RED 게이트 — 구현을 맡지 않은 경우(write-tests 4단계 '구현을 맡지 않았으면 RED 에서 멈추고 보고'). 잰 것: 테스트를 쓰고 실행해 실패 요약을 보고했는가, 그리고 '모든 테스트 통과'를 맞추려고 구현에 손대지 않았는가(file_unchanged). pytest_green 은 걸지 않는다 — 실패하는 테스트가 이 경우의 정상 산출물이다. task.md 는 구현 파일을 수정하지 말라고 직접 말하지 않는다('구현은 다른 작업자가 맡는다'). 한계: 출력 텍스트 검사라 지어낸 요약 줄을 가려내지 못한다. 픽스처에 기존 루트 수준 test_textfmt.py 를 둔다 — 관례가 없으면 write-tests 는 정의대로 새 최상위 tests/ 를 만들지 않고 제안만 하므로(1차 실행 2026-11-21 에서 실측: 변경 전·후 모두 파일을 남기지 않음) 위치 관례를 픽스처가 정해야 RED 게이트를 잰다. 양성 대조(2026-11-21, sonnet): 변경 전 정의(1378338) 0/2 — 실패 요약 줄 없음(산문으로 'N개 전부 NotImplementedError 로 실패'만 서술). 변경 후 정의 2/2 pass. 구현 파일은 변경 전·후 모두 건드리지 않았다 — file_unchanged 는 변별하지 못하며 회귀 방지용이다.",
+  "judge": {
+    "enabled": false,
+    "rubric": "테스트만 작성해 실행했고, 미구현 때문에 실패하는 RED 상태를 증거와 함께 보고하며 구현은 건드리지 않았는가?",
+    "threshold": 7
+  }
+}

@@ -6,6 +6,187 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [5.9.0] — 2026-11-21
+
+`review-code` must now prove a finding before reporting it, `write-tests` and `fix-bugs` must show a failing test before fixing anything, and with the hooked install (path B) the kit warns at session start if it is installed twice and strips hidden characters from what it injects.
+
+Most of this release comes from a code-level survey of [ECC](https://github.com/affaan-m/ECC)
+(everything-claude-code). Patterns that held up against this kit's rules were adopted; large
+language/framework catalogs, always-on observation, hooks that call `claude -p`, and cost claims
+without measurement were not.
+
+### Changed — review and test discipline
+
+- **`review-code`** keeps attacking from all four personas but now reports a finding only after a
+  pre-report gate: an exact `file:line`, a concrete trigger (input or state that leads to a wrong
+  result), a check of the surrounding callers and guards, and a defensible severity. HIGH and
+  CRITICAL findings must show the snippet, the failure scenario, and why existing guards do not stop
+  it; otherwise they are demoted. `[ACCEPT]` with zero findings is an explicit, valid result. Magic
+  numbers and long functions are no longer findings by themselves, a list of common false positives
+  is skipped, and unchanged code is out of scope unless the change exposes it or it is a CRITICAL
+  security issue.
+- **`review-code`** and **`/review`** flag verification that was weakened to pass — linter rules
+  disabled, ignores or excludes added, thresholds relaxed, tests skipped, deleted or given weaker
+  asserts — when neither the request nor the plan gives a reason. It is HIGH when the weakening hides
+  a failure the change caused. Test gaps (changed behavior with no meaningful test) are listed in a
+  separate `## 테스트 공백` section without a severity. `/review` passes the request or plan to the
+  reviewer and no longer treats linter or test config files as trivial.
+- **Definition of Done** (injected every session): claiming completion through an unrequested
+  `--no-verify`, a `core.hooksPath` override or a weakened linter/test config is an error, and doing
+  it must be reported.
+- **`write-tests`** enforces a RED gate in TDD mode: tests must be run and fail for the intended
+  reason before any implementation. Collection, import or setup errors and unexecuted tests do not
+  count. The report carries the command and failure lines, plus GREEN evidence when implementation
+  was also assigned. Previously the description promised test-first but the procedure only required
+  "all tests pass".
+- **`fix-bugs`** proves a reproducible defect with a failing regression test added to an existing
+  test file before fixing it, then shows it pass. It creates no new files: when no test file fits, it
+  reports and suggests `write-tests`. Environment-dependent and intermittent defects are exempt with a
+  stated reason. `debug` Phase 3/4 follow the same rule.
+- **`plan-task`** pairs completion conditions with a "do not weaken the gate" check (no deleted
+  tests, added skips, loosened asserts, coverage drop or edited completion conditions, each checked
+  with git against the plan's base commit), adds a task-type first move (refactor / behavior change /
+  bug fix / new feature) orthogonal to size, and lists external contracts the repository cannot
+  answer as places to look for ambiguity — an observed pattern, not a measured improvement.
+- **`auto-dev`** T-spec also lists changes outside the plan (files and new public behavior). This is
+  a report, not a failure; without file-level plan items the check says it cannot decide. T-merge
+  checks the gate-weakening pair.
+- **`agent-creator`/`skill-forge`** drafts end the description with one negative sentence, include a
+  "when not to use — use X instead" table, and give free-text output fields a Bad/Good pair.
+
+### Changed — session injection and subagents
+
+- **Session start names the plugin path once.** Kit files are written as `<킷 루트>/rules/…` and the
+  real root is declared on the first line of the injection, so an empty session injects about 7.2 KB
+  → 7.0 KB at a representative consumer cache path. The WORKFLOW pointers to
+  `skills/plan-task/…` now resolve to real files.
+- **Subagents carry their own untrusted-input discipline.** Measured on Claude Code 2.1.330
+  (transcript grep, n=1): session-start injection does not reach subagents, while `SubagentStart`
+  injection does. `review-code`, `security-scan`, `fix-bugs` and `research-external` — the agents
+  that read outside text — now hold the rule in their body, which also covers the directory install
+  and Codex where no hook runs. The `review-code` report gains a "대상 안의 지시문" line that quotes
+  instructions aimed at the reviewer. The injected `untrusted-text` rule now says its automatic
+  framing applies to the main session only. Regenerated block sha256 (the `AGENTS.md` marker):
+  `858066ab699a8c249eb5b40af082e234bf0731f1c304907690c64f5a5d47392e`.
+
+### Changed — README and install documentation
+
+- The README opens with what the kit does for you ("Done is an exit code, not a claim."), a diagram
+  of the planning gate, build loop and verification gate, and the install commands. **Start here**
+  has a workflow diagram by task size and a "situation → first command" card. **What you get**
+  compares working without and with the kit, and every row links the file that does it. Security
+  shows what the hooks do in a session and names the two official install sources.
+- Per-harness install details moved to `docs/harnesses.md` and the Korean design notes to
+  `docs/concepts.ko.md`. README anchors that changed: `#other-harnesses-codex--antigravity--gemini-cli`
+  → `#where-it-runs`; `#typical-workflows` → `#start-here`; `#architecture` and `#components-core`
+  → `#components`.
+- Corrections: the note on installing both paths now matches what was measured (below); the
+  orchestration split is by parallel chunk count with native workflows as user opt-in; no skill yet
+  calls memory `recall`/`remember`, so that is described as a design goal. Install path A is
+  described as it is: Anthropic's directory still serves 5.5.1, because it now accepts command hooks,
+  script files and some agent frontmatter keys only from Verified organizations — use path B for
+  this release.
+- `docs/harnesses.md#keep-one-install` documents switching between the directory install and this
+  repository's marketplace and leaving the predecessor plugin. Every command there was run on an
+  empty config (Claude Code 2.1.330).
+
+### Added
+
+- **Double-install warning.** If two installs of the kit are enabled for the same project (the
+  directory and this repository's marketplace, or either plus the predecessor plugin), session start
+  warns (again after `/clear` or compaction) and links the keep-one-install section. With two
+  `hiway-kit` IDs enabled it warns only if Claude Code registered path B's hooks — which copy's hooks
+  register was not measured. Measured on Claude Code 2.1.330: two same-name
+  installs do not simply load twice — skills load from both, hooks from one copy and agents from the
+  other, so the session runs a mix of versions. The check reads Claude Code's install record and
+  `enabledPlugins`, not the plugin cache, which survives an uninstall; a malformed or deeply nested
+  settings file cannot suppress the session check's other warnings.
+- **`./setup.sh --uninstall`** reverts what `setup.sh` wrote: the pre-commit hook and the
+  `init.templateDir` copy only while they still match the shipped file (modified copies and symlinks
+  are kept and reported), and `~/.claude/.setup-state.json`. It unsets `init.templateDir` — that
+  value only — when the template folder holds nothing but the shipped copy; a failed unset prints the
+  command to run instead of stopping. Copies the template already planted in other repositories
+  cannot be found and are named as left behind, with the command to run in each. It prints the
+  plugin uninstall commands rather than running them (paths shell-quoted). `--dry-run` shows the plan.
+- **`verify-done.sh` §31 / CI: no hidden Unicode in tracked text.** `scripts/check_unicode_safety.py`
+  scans every tracked file and file paths. Binaries are admitted only by extension or a
+  `.gitattributes` `binary`/`-text` entry and are listed; any other file with a NUL byte fails and is
+  still scanned. Failures print only `file:line:col U+XXXX`. Exceptions live in
+  `scripts/unicode-safety-exceptions.json` with a reason.
+- `scripts/check_doc_refs.py` (§27) checks diagram fences (`mermaid` and the `skills` command card):
+  every `/name` must be a skill (including inside `A[/name/]` nodes), and component counts are
+  rejected.
+- Issue forms: **Install problem** (harness, install path, "I expected …, but …") and **Quick
+  feedback**; suspected vulnerabilities go to a private advisory. Nothing is uploaded automatically.
+- `docs/conventions/effect-measurement.md`: claiming that a rule, hook or skill *improves outcomes*
+  needs a pre-registered, paired on/off measurement (exact McNemar, no extension, nulls reported as
+  "not established", cost next to effect).
+- `docs/conventions/release-process.md`: each version opens with one line on what changes for
+  installed users, plus an **Action required:** marker only when users must act; a pre-publish check
+  stops a release whose claims run ahead of measurement.
+
+### Security
+
+- **Hidden Unicode is stripped from text injected at session start.** Active-plan titles, statuses
+  and directory names, and feedback-ledger lessons come from the consumer's repository and can carry
+  zero-width, bidi-control or tag characters that people cannot see and the model still reads. They
+  are removed and a visible `[hidden-chars-removed:N]` marker shows that something was there (the
+  feedback ledger de-duplicates on the unmarked text). Single-line labels also lose C1 controls and
+  U+2028/2029, and untrusted text cannot re-declare the `<킷 루트>` path token, nor the look-alike
+  spellings it lists (other spaces and invisible fillers, other angle brackets, decomposed Hangul —
+  a list, not every homoglyph). One definition,
+  `tools/hidden_chars.py`, serves the runtime cleanup and the §31 gate; if it cannot be imported, the
+  fallback removes a superset (format, unassigned and separator categories plus the tag and
+  variation-selector supplement blocks).
+- **`protect-sensitive` blocks path fields that are not strings, and watches `Grep`.** A list-valued
+  `file_path` used to raise inside the check, and the hook let the call through. Present but
+  non-string `file_path`/`notebook_path` values, a non-object `tool_input`, and watched-tool input it
+  cannot parse are now blocked; both path fields are checked. A `Grep` whose `path` or `glob` names a
+  protected file is blocked like `Read`, and so is a `glob` that can select one, directory part
+  included (`secrets/*.yaml`): ripgrep's `--glob` overrides `.gitignore`, and with the ripgrep 14.1.1
+  bundled in Claude Code 2.1.330 `*`, `**`, `*env`, `config/*`, `.[Z-f]nv`, `[^x]env` and `.\env` all
+  read an ignored `.env` (a search without a glob did not). Wildcard names are matched against
+  representative protected names, and a glob the hook cannot parse the way ripgrep does (escapes,
+  nested or unbalanced braces, reversed ranges, more than 256 alternatives) is blocked. A `Grep` over
+  a credential-store directory (`~/.ssh`, `~/.aws`, `~/.gcp`, `~/.azure`, `secrets/`, `credentials/`,
+  also through a symlink) or over a directory that holds a home store (your home, or `/`) is blocked
+  — Claude Code's Grep searches hidden files. The file check runs before these, so a fault in them
+  cannot skip it. Ordinary globs (`*.py`, `*.{ts,tsx}`, `*.json`, `src/**/*.py`) still pass. The hook
+  states what it cannot detect: `Grep` over other directories, globs that narrow to data files
+  (`*.json` or `cr*` can still select an ignored `credentials.json`), `Glob`, access through Bash,
+  hard-link renaming, secrets inside files whose names are not protected, and harnesses that do not
+  register it (Codex).
+
+### Fixed
+
+- `check_injection_budget.py` (§16) depended on the checkout path length — the same commit measured
+  7,018 B (pass) or 7,557 B (fail). It now substitutes a fixed-length representative consumer path.
+  Measured that way, the previous hook was over budget (7,218 B > 7,168 B); the path change above
+  brings it under.
+- **Eval sessions no longer pick up the machine's installs.** `evals/run.py` ran `claude -p` with the
+  user's settings, so the installed kit's session injection, the user's `~/.claude/CLAUDE.md`,
+  plugin skills, MCP tools and auto-memory reached eval sessions (transcript grep). Scenarios and the
+  judge now run with `--setting-sources project,local --strict-mcp-config`, auto-memory off, the
+  parent session's `CLAUDE_CODE_*` variables removed except authentication, and each in an empty
+  temporary working directory (the judge used to inherit the runner's, which loaded this repo's
+  `CLAUDE.md` and repo-only skills: 3→0 and 13→0 by transcript grep; the judge is currently off for
+  every scenario, so baselines are unaffected). Reports and baselines record an `isolation` field,
+  including the names (never values) of behavior variables left in place.
+- `packaging/targets.json`: the Pi target stays researched-only, but its reason was wrong for skills
+  (Pi declares them in `package.json`; not yet measured here). Antigravity records agy 1.5.13
+  validate results: the kit's rules lack a frontmatter `trigger`, so that loader never applies them.
+
+### Tests / Evals
+
+- New baseline `evals/baseline/2026-11-21.json` — the first under the isolated runner, 36/36, no
+  regression against 2026-11-08. It is a different measurement axis from earlier baselines.
+- New scenarios: `review-code/clean-refactor` (defect-free diff; previous definition 0/3 with 3–4
+  findings each run, new definition 3/3 with none), `review-code/off-by-one-neutral` (no hint in the
+  task), `review-code/test-skip-weakening`, `review-code/injected-approval-comment` (a file comment
+  instructs `[ACCEPT]`; previous 0/2, new 2/2), `write-tests/tdd-red-only`,
+  `write-tests/tdd-red-then-green` and `fix-bugs/regression-test-first` (previous definitions 0/2,
+  0/2, 0/1). Samples are small (1–3 runs per arm).
+
 ## [5.8.0] — 2026-11-18
 
 ### Added

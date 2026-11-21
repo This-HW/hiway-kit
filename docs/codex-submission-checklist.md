@@ -15,7 +15,7 @@ as_of: 2026-10-05
 > human needs to do and what this repo has already prepared for them.
 >
 > This is distinct from **local/marketplace installation**, which already works
-> today without any submission — see the README's "Other Harnesses" section
+> today without any submission — see [harnesses.md § Codex](harnesses.md#codex)
 > (`codex plugin marketplace add <repo>` → `codex plugin add
 > hiway-kit@hiway-kit-marketplace`). Submission is only needed to be
 > listed in the shared ChatGPT/Codex "universal directory" alongside OpenAI-curated

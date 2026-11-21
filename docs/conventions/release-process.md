@@ -1,6 +1,6 @@
 ---
 status: current
-as_of: 2026-10-05
+as_of: 2026-11-21
 ---
 
 # 릴리스 절차 (정본)
@@ -16,6 +16,7 @@ push is never fetched, so users never get the fix.
 - Patch bump (x.y.Z) for bug fixes and hook changes; minor bump (x.Y.0) for new agents, skills, or features
 - Add a matching `## [x.y.z]` entry to `CHANGELOG.md` (the completion gate fails if the SSOT
   version and the CHANGELOG top entry diverge)
+- **The entry opens with what changes for the user** — see [사용자에게 알리기](#사용자에게-알리기) below
 - Keep README/docs version-agnostic (link to CHANGELOG) so they can't drift
 - **Claude 디렉토리는 `main` 이 아니라 `directory` 브랜치를 추적한다**(5.7.1~, 디렉토리가 command 훅을
   Verified 조직에게만 받는다). 그 브랜치는 CI `directory-branch` 작업이 검증을 통과한 `main` push 마다
@@ -63,3 +64,46 @@ push is never fetched, so users never get the fix.
 - Run `scripts/verify-done.sh` (green) before claiming a release ready (definition-of-done)
 - 배포 채널(직접 마켓플레이스·Claude 디렉토리·OpenAI 디렉토리)별 전파와 상태는
   `docs/marketplace-submission.md` 상단 요약표가 소유한다
+
+## 사용자에게 알리기
+
+CHANGELOG 는 정확하지만 밀도가 높다 — 소비자는 자기에게 닿는 변화를 본문 속에서 놓친다.
+5.7.1 이 그 사례다: 디렉토리판에서 훅이 통째로 빠졌는데, 그 사실은 `### Changed` 의 두 번째
+불릿에 있었다. 그래서 버전 머리를 두 줄로 연다.
+
+1. **사용자 요약 한 줄** — `## [x.y.z]` 바로 아래, 첫 `###` 보다 먼저. *설치한 사람에게 무엇이
+   달라지나*를 사용자 언어로 한 문장. 내부 리팩터·게이트·문서만 바뀐 릴리스는
+   *"No change in behavior for installed users."* 라고 그렇게 쓴다 — 줄을 빼지 않는다.
+2. **`**Action required:**` 표지** — 사용자가 무언가를 **해야** 이전과 같은 결과를 얻는 릴리스에만.
+   무엇을, 누가(어느 설치 경로·하네스), 어떤 명령으로 하는지 적는다. 할 일이 없으면 표지를 달지
+   않는다 — 매번 붙는 표지는 상시 참인 경고와 같아서 진짜 표지를 죽인다
+   (`warning-signal.md` §검토 1).
+
+```markdown
+## [5.7.1] — 2026-11-06
+
+Directory installs no longer run the kit's hooks; skills, agents and rule files are unchanged.
+
+**Action required:** if you installed from Anthropic's directory and want rule injection, the
+sensitive-path guard, auto-format or stop-time checks, uninstall it and install from this repository
+(`/plugin uninstall hiway-kit@anthropic-plugin-directory`, then `/plugin install hiway-kit@hiway-kit`).
+```
+
+(위는 형식 예시다 — 5.7.1 의 실제 항목은 이 규약 이전에 쓰였고 고쳐 쓰지 않는다.)
+
+## 발행 직전 체크 — 주장이 실측보다 앞서면 발행하지 않는다
+
+태그·push·디렉토리 제출·사이트 반영 **직전에** 이번 릴리스가 사용자에게 하는 주장을 훑는다:
+CHANGELOG 요약 줄, README·`docs/` 에서 바뀐 문장, 그리고 제품 사이트(`thishw/hiway`, 이 레포 밖)가
+같은 기능을 어떻게 말하는지.
+
+- **주장마다 근거가 있는가.** 측정(날짜·버전·n), 테스트, 게이트 출력, 코드 경로 중 하나를 댈 수
+  있어야 한다. 못 대면 문장을 고치거나 *미측정* 이라고 쓴다 — 발행은 그 뒤다.
+- **설치 경로마다 참인가.** 경로 A(디렉토리판, 훅 없음)에서 거짓인 문장을 경로를 밝히지 않고 쓰지
+  않는다. 5.7.1 이후 사이트가 디렉토리 설치를 권하면서 *"훅이 python3 로 돈다"* 고 적은 것이 이
+  결함이다 — 그 시점에 공개 디렉토리판이 아직 훅 있는 버전이라 참이었고, 갱신이 승인되는 순간
+  거짓이 된다. **승인 시점에 거짓이 되는 문장**도 앞선 주장이다.
+- **효과 주장인가.** 규칙·훅·스킬이 결과를 *좋게 한다* 는 문장은 정확성 주장과 다르다 —
+  [`effect-measurement.md`](effect-measurement.md) 의 절차를 밟은 결과가 없으면 "효과" 를 쓰지 않는다.
+- **사이트는 이 레포의 게이트가 보지 않는다.** `check_doc_refs.py` 는 레포 안 문서만 본다. 사이트 문장의
+  확인은 이 체크에서 사람이 한다 — 사이트 쪽 게이트가 생기기 전까지 이 한계를 그대로 적어 둔다.

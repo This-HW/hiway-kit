@@ -2,8 +2,24 @@
 """
 PreToolUse Hook: 민감한 파일 보호
 
-Edit/MultiEdit/Write/NotebookEdit/Read 도구가 민감한 파일에 접근하려 할 때 차단합니다.
+Edit/MultiEdit/Write/NotebookEdit/Read/Grep 도구가 민감한 파일에 접근하려 할 때 차단합니다.
 env 템플릿(.env.example 등) 쓰기는 허용하되, 실제 형식의 시크릿을 기록하면 차단합니다.
+
+Grep(5.9.0, 보안 리뷰 M-2)은 파일 판정을 먼저 하고, 그다음 Grep 이 **닿는** 곳을 본다:
+- `path` 가 디렉토리가 아닌 민감 파일(realpath 포함) — Read 와 같은 판정
+- 검색 디렉토리가 **이름 자체가 자격증명 보관소**일 때(`~/.ssh`·`~/.aws`·`secrets/`·`credentials/` —
+  `SENSITIVE_DIR_PATTERNS`, 그 안의 파일 전부를 Read 판정이 이미 막는 이름만. `path` 문자열로 보고
+  심링크면 realpath 도 본다 — path 가 없으면 `.` 이라 이름이 보이지 않는다), 또는 검색 디렉토리
+  (`path`, 없으면 cwd)가 **홈의 보관소를 품을 때**(홈·그 조상 — `HOME_CREDENTIAL_STORES`, realpath 로
+  본다). Claude Code 의 Grep 은 ripgrep 을 `--hidden` 으로 부른다(2.1.330 바이너리에서 확인)
+- `glob` 이 보호 파일을 지목하거나 **고를 수 있을 때**. ripgrep 의 `--glob` 은 `.gitignore` 를 무시하고
+  고른 파일을 읽는다 — Claude Code 2.1.330 에 든 ripgrep 14.1.1 실측: 무시된 `.env` 를 `-g '*'`·`'**'`·
+  `'*env'`·`'config/*'`·`'.[Z-f]nv'`·`'[^x]env'`·`'.\\env'` 가 모두 읽었고 glob 없는 검색은 읽지 않았다.
+  판정은 갈래마다 (1) 디렉토리 부분까지 남긴 대표 경로를 Read 판정에 넣고(`secrets/*.yaml`), (2) 이름
+  부분이 와일드카드면 `GLOB_PROBES`(대표 보호 이름)와 맞춘다. ripgrep 과 같은 뜻으로 풀 수 없는 glob
+  (이스케이프·중첩/짝 없는 괄호·거꾸로 된 범위·상한 초과)은 **막는다**.
+  의도대로 막히는 흔한 형태: 디렉토리 범위 glob(`src/**`·`tests/*` — `path` 로 옮기면 된다)과 대표
+  이름에 겹치는 glob(`server.*`·`cert*`·`*.h*`·`.*rc` — 확장자까지 적으면 된다: `*.{h,hpp}`).
 
 차단되는 파일:
 - .env* (환경 변수)
@@ -25,8 +41,42 @@ env 템플릿 쓰기 콘텐츠 스캔 (형식-확정 패턴만):
 종료 코드:
   0: 허용
   2: 차단 (Claude에게 피드백)
+
+실패 모드:
+  훅 자체의 오류(예기치 않은 예외)는 허용(fail-open) — 훅이 세션을 막으면 안 된다.
+  **입력 파싱 실패는 도구로 가른다**: 원문에서 최상위 `tool_name` 을 읽어 감시 대상 도구면 **차단**,
+  감시 대상 밖이거나 도구를 알 수 없으면 허용한다. 예전에는 깊게 중첩된 `tool_input` 하나가
+  `json.load` 에서 `RecursionError` 를 내고 blanket except 로 빠져 `Read(.env)` 가 허용됐다(보안 리뷰
+  L-1). 런타임은 `tool_name` 을 `tool_input` 보다 앞에 싣고, 문자열 안의 `"tool_name"` 은 이스케이프돼
+  있어(`\\"`) 최상위 키로 읽히지 않는다.
+  단 **판정 입력의 타입 혼동은 그 길로 빠지지 않는다**: 감시 대상 도구에서 경로 필드
+  (`file_path`·`notebook_path`)가 있는데 문자열이 아니거나(리스트·dict·숫자 …) `tool_input`
+  자체가 객체가 아니면 **차단**한다. 예전에는 `{"file_path": [".env"]}` 가 `.lower()` 에서
+  예외를 내고 blanket except 로 빠져 허용됐다(타입 하나로 판정이 조용히 열렸다).
+  경로 필드가 아예 없거나 null·빈 문자열인 것은 정상 — 판정할 경로가 없으니 허용한다.
+
+탐지할 수 없는 것 (이 훅의 범위 밖 — 없는 보호를 있다고 믿지 않도록 적는다):
+  - **Bash 경유 접근.** 이 훅은 Edit/MultiEdit/Write/NotebookEdit/Read/Grep 만 본다. `cat .env`,
+    `cp .env x` 처럼 셸로 읽고 쓰는 것은 가로채지 않는다(셸 명령 파싱은 오탐이 Bash 우회를 부르고,
+    정확히 하려면 셸 해석기를 다시 써야 한다).
+  - **하드링크 이름 세탁.** `ln .env notes.txt` 뒤 `notes.txt` 를 Read 하면 통과한다. 하드링크는
+    realpath 로 드러나지 않는다(두 이름이 동등한 원본이다). 심링크는 realpath 2단 검사로 잡는다.
+  - **이름이 아닌 내용.** 보호 패턴에 안 걸리는 이름의 파일에 든 시크릿은 막지 않는다 — 내용 스캔은
+    env 템플릿 쓰기에만 돈다. 시크릿 스캔은 gitleaks(이 레포의 CI·verify-done §24)의 몫이다.
+  - **디렉토리 대상 Grep.** `Grep(path=".")`·`Grep(path="config/")` 는 그 아래 민감 파일까지 검색할
+    수 있지만 경로 매칭으로는 막을 수 없다(디렉토리 이름은 무엇을 읽을지 말해 주지 않는다 — 막으면
+    정상 검색이 전부 막힌다). 이름 자체가 보관소인 디렉토리와 홈의 보관소를 품는 디렉토리만 막는다.
+    ripgrep 이 `.gitignore` 를 따르므로 무시된 `.env` 는 보통 빠지지만, 추적되는 민감 파일·무시 규칙이
+    없는 레포는 그대로 검색된다. 프로젝트 안의 보관소 디렉토리를 cwd 로 두고 `path="."` 로 부르면(경로
+    문자열에 그 이름이 없고 심링크도 아니다) 보지 않는다.
+  - **데이터 파일로 좁히는 glob.** `*.json`·`*.yaml`·`cr*`·`t*` 도 무시된 `credentials.json`·
+    `token.json` 을 고를 수 있지만 막지 않는다 — 막으면 그 형식의 검색이 전부 막힌다. `GLOB_PROBES` 는
+    대표 이름이라 거기 없는 보호 이름을 고르는 glob 은 놓친다. `type` 필드(언어 필터)도 보지 않는다.
+  - **Glob.** 파일 **이름**만 돌려주고 내용을 읽지 않으므로 감시 대상이 아니다(민감 파일의 존재는 드러난다).
+  - **Codex 등 다른 하네스.** `hooks-codex.json` 은 이 훅을 등록하지 않는다(PreToolUse 없음).
 """
 
+import fnmatch
 import json
 import os
 import re
@@ -87,8 +137,8 @@ PROTECTED_PATTERNS = [
     r"\.key$",  # 키 파일
     r"\.p12$",  # PKCS#12 파일
     r"\.pfx$",  # PFX 파일
-    r".*_rsa$",  # RSA 키
-    r".*_ecdsa$",  # ECDSA 키
+    r"_rsa$",  # RSA 키 — `re.search` 라 앞의 `.*` 는 뜻이 같고 긴 입력에서 이차 백트래킹만 낳는다(5.9.0 리뷰)
+    r"_ecdsa$",  # ECDSA 키
     # 기타 민감 파일 — 자격증명 관례 결합만 차단 (외부 사용 보고 2026-07-31: 산문
     # 복합어 파일명 'token-efficiency-discipline.md'가 substring 매치로 오차단).
     # 차단: 정확명(token, token.json, .token) + 접미 결합(api_token.json, github-token.txt).
@@ -301,107 +351,454 @@ def check_protected(file_path: str) -> tuple[bool, str]:
     return False, ""
 
 
+#: 경로로 판정하는 도구. NotebookEdit 는 `notebook_path` 를, Grep 은 `path`·`glob` 을, 나머지는
+#: `file_path` 를 쓴다. `hooks.json` 의 PreToolUse matcher 와 같은 집합이어야 한다(테스트가 대조한다).
+WATCHED_TOOLS = ("Edit", "MultiEdit", "Write", "Read", "NotebookEdit", "Grep")
+PATH_FIELDS = ("file_path", "notebook_path")
+GREP_FIELDS = ("path", "glob")
+
+#: 와일드카드 Grep `glob` 이 **고를 수 있는지** 맞춰 볼 대표 보호 이름(5.9.0 리뷰). 이름 부분이 하나라도
+#: 고르면 막는다(대문자 이름도 맞춘다 — ripgrep glob 은 대소문자를 가린다). 확장자가 흔한 데이터
+#: 이름(credentials.json·secrets.yaml·token.txt)은 넣지 않는다 — `*.json` 같은 정상 검색이 전부
+#: 막힌다(독스트링 "탐지할 수 없는 것").
+GLOB_PROBES = (
+    ".env", ".env.local", ".env.production",
+    ".npmrc", ".yarnrc", ".pypirc", ".netrc", ".htpasswd",
+    "id_rsa", "id_ed25519", "id_ecdsa",
+    "server.pem", "server.key", "cert.p12", "cert.pfx",
+)
+
+#: 이름 자체가 자격증명 보관소인 디렉토리 — 디렉토리 대상 Grep 은 이 이름일 때 막는다(5.9.0 리뷰).
+#: 그 안의 파일 전부를 Read 판정(`PROTECTED_PATTERNS`·`STRICT_KEYWORD_PATTERNS`)이 이미 막는 이름만
+#: 둔다. 이름 키워드(credential_collector/·secret_manager/ 같은 소스 디렉토리)는 넣지 않는다.
+SENSITIVE_DIR_PATTERNS = (
+    (r"\.ssh/", "ssh"),
+    (r"\.aws/", "cloud"),
+    (r"\.gcp/", "cloud"),
+    (r"\.azure/", "cloud"),
+    (r"(^|/)\.?secrets?/", "secrets"),
+    (r"(^|/)\.?credentials?/", "credential"),
+)
+
+#: 홈의 자격증명 보관소 — 디렉토리 대상 Grep 이 이것을 **품으면**(그 디렉토리이거나 조상이면) 막는다.
+#: Claude Code 의 Grep 은 ripgrep 을 `--hidden` 으로 부르고(2.1.330 바이너리에서 확인) 홈에는 보통
+#: 무시 규칙이 없어, `Grep(path="~")` 는 `~/.ssh/id_rsa` 까지 검색한다(5.9.0 리뷰).
+HOME_CREDENTIAL_STORES = (".ssh", ".aws", ".gcp", ".azure", ".kube", ".docker", ".config/gcloud")
+
+#: glob 판정 비용 상한 — 넘으면 판정 불가로 막는다. ripgrep 에는 이 상한이 없어서, 잘라서 보면 뒤쪽
+#: 갈래가 판정 없이 열린다(5.9.0 리뷰: 대안 65개의 마지막 `.env` 를 ripgrep 은 읽었다).
+_MAX_GLOB_LENGTH = 4096
+_MAX_GLOB_ALTERNATIVES = 256
+#: 판정할 갈래 문자 총량 — 길이·갈래 상한을 둘 다 지나도 곱이 커지면(긴 갈래 256개) 판정 시간이 훅
+#: timeout(10초)에 다가간다. timeout 은 차단이 아니므로 시간으로 판정을 여는 길이 된다(5.9.0 리뷰).
+_MAX_GLOB_TOTAL_CHARS = 65536
+
+
+class GlobUnjudgeable(ValueError):
+    """Grep `glob` 을 ripgrep 과 같은 뜻으로 풀 수 없다 — 판정 불가는 막는다."""
+
+
+#: 파싱하지 못한 입력에서 최상위 도구 이름을 읽는다. 문자열 안의 `"tool_name"` 은 `\\"` 로
+#: 이스케이프돼 있으므로 이 패턴(따옴표로 시작·끝나는 키)에 걸리지 않는다.
+_TOOL_NAME_SNIFF_RE = re.compile(r'(?<!\\)"tool_name"\s*:\s*"([A-Za-z_][\w-]*)"')
+
+
+def _sniff_tool_names(raw: str) -> list[str]:
+    """원문에 보이는 `"tool_name": "<이름>"` 전부 — 하나라도 감시 대상이면 감시 대상으로 본다(보수)."""
+    return _TOOL_NAME_SNIFF_RE.findall(raw)
+
+
+def _glob_alternatives(glob: str) -> list[str]:
+    """Grep `glob` 을 ripgrep(globset)과 같은 뜻의 **갈래**로 푼다. 제외 glob(`!…`)은 뺀다.
+
+    - 중괄호·문자 클래스 밖의 콤마·공백은 glob 구분으로 본다 — ripgrep 에서 `a,b` 는 하나의 glob
+      이지만 하네스가 여러 glob 을 한 값에 실어 넘길 수 있고, 나누면 갈래가 늘 뿐이라(막는 쪽으로만
+      움직인다) 보수적으로 나눈다. 클래스 안의 콤마(`[,.]`)는 글자다.
+    - `{a,b}` 는 펼친다(곱). ripgrep 은 중첩 중괄호를 오류로 거부한다 — 여기서도 판정 불가.
+    - **판정 불가(`GlobUnjudgeable`)**: 이스케이프 `\\`(globset 은 `\\e` 를 `e` 로 본다), 중첩·짝 없는
+      중괄호, 닫히지 않은 클래스, 거꾸로 된 범위(`[z-a]`), 길이·갈래 상한 초과.
+    """
+    if len(glob) > _MAX_GLOB_LENGTH:
+        raise GlobUnjudgeable("너무 길다")
+    if "\\" in glob:
+        raise GlobUnjudgeable("이스케이프 문자")
+    out: list[str] = []
+    current = [""]  # 지금 glob 의 갈래들
+    group = None  # 열린 중괄호 안의 조각들
+    piece: list[str] = []
+    in_class = False
+    class_body: list[str] = []
+
+    def emit(ch: str) -> None:
+        nonlocal current
+        if group is not None:
+            piece.append(ch)
+        else:
+            current = [c + ch for c in current]
+
+    def finish() -> None:
+        nonlocal current
+        for alt in current:
+            if alt and not alt.startswith("!"):  # 제외 glob 은 무엇도 고르지 않는다
+                out.append(alt)
+        if len(out) > _MAX_GLOB_ALTERNATIVES:
+            raise GlobUnjudgeable("갈래가 너무 많다")
+        current = [""]
+
+    for ch in glob:
+        if in_class:
+            emit(ch)
+            if ch == "]" and class_body and class_body != ["!"] and class_body != ["^"]:
+                body = "".join(class_body).lstrip("!^")
+                for k in range(len(body) - 2):
+                    if body[k + 1] == "-" and body[k] > body[k + 2]:
+                        raise GlobUnjudgeable("거꾸로 된 범위")
+                in_class = False
+                continue
+            class_body.append(ch)
+            continue
+        if ch == "[":
+            emit(ch)
+            in_class = True
+            class_body = []
+        elif ch == "{":
+            if group is not None:
+                raise GlobUnjudgeable("중첩 중괄호")
+            group = []
+            piece = []
+        elif ch == "}":
+            if group is None:
+                raise GlobUnjudgeable("짝 없는 중괄호")
+            group.append("".join(piece))
+            current = [c + g for c in current for g in group]
+            if len(current) > _MAX_GLOB_ALTERNATIVES:
+                raise GlobUnjudgeable("갈래가 너무 많다")
+            group = None
+        elif ch == "," and group is not None:
+            group.append("".join(piece))
+            piece = []
+        elif group is None and (ch == "," or ch.isspace()):
+            finish()
+        else:
+            emit(ch)
+    if in_class or group is not None:
+        raise GlobUnjudgeable("닫히지 않은 괄호")
+    finish()
+    return out
+
+
+def _glob_representatives(alt: str) -> list[str]:
+    """갈래 하나를 판정용 **경로** 로 바꾼다 — 와일드카드를 지운 것과 `x` 로 채운 것 둘.
+
+    `*.pem`→`.pem`·`x.pem`, `.env*`→`.env`, `secrets/*.yaml`→`secrets/x.yaml`, `[.]env`→`.env`.
+    디렉토리 부분까지 남긴다 — 이름만 보면 `secrets/*.yaml` 이 `x.yaml` 이 되어 보관소 판정을 빠져나간다
+    (5.9.0 리뷰, ripgrep 실측: 파일 단위로 무시된 `secrets/prod.yaml` 을 읽었다).
+    """
+    def classes(text: str, negated_as: str) -> str:
+        return re.sub(
+            r"\[([!^]?)(\]?[^\]]*)\]",
+            lambda m: negated_as if m.group(1) else (m.group(2)[:1] or "x"),
+            text,
+        )
+    stripped = classes(alt, "").replace("*", "").replace("?", "")
+    filled = classes(alt, "x").replace("*", "x").replace("?", "x")
+    return [r for r in dict.fromkeys((stripped, filled)) if r.strip("/")]
+
+
+def _probe_hit(alt: str) -> str:
+    """갈래의 이름 부분이 와일드카드면 `GLOB_PROBES` 중 고르는 이름(없으면 "")."""
+    name = alt.rstrip("/").rsplit("/", 1)[-1]
+    if not any(ch in name for ch in "*?["):
+        return ""  # 와일드카드 없는 이름은 _glob_representatives 판정으로 충분하다
+    pattern = name.replace("[^", "[!")  # globset 은 `[^…]` 도 부정이다 — fnmatch 표기로
+    for probe in GLOB_PROBES:
+        for candidate in (probe, probe.upper()):
+            try:
+                if fnmatch.fnmatchcase(candidate, pattern):
+                    return probe
+            except re.error as err:  # 범위 검사를 지나온 해석 차이 — 판정 불가
+                raise GlobUnjudgeable(f"해석 불가({err})") from err
+    return ""
+
+
+def glob_block_reason(glob: str) -> tuple[str, str]:
+    """Grep `glob` 이 보호 파일을 지목하거나 고를 수 있으면 (갈래, 이유), 아니면 ("", "").
+
+    판정 불가(`GlobUnjudgeable`)도 막는 이유로 돌려준다 — 갈래는 원문 전체.
+    """
+    try:
+        alternatives = _glob_alternatives(glob.strip())
+        if sum(len(a) for a in alternatives) > _MAX_GLOB_TOTAL_CHARS:
+            raise GlobUnjudgeable("판정할 갈래가 너무 길다")
+        for alt in alternatives:
+            for rep in _glob_representatives(alt):
+                protected, message = check_protected(rep)
+                if protected:
+                    return alt, message
+            probe = _probe_hit(alt)
+            if probe:
+                return alt, f"{probe} 같은 보호 파일을 고른다."
+    except GlobUnjudgeable as err:
+        return glob, f"이 glob 은 판정할 수 없다({err})."
+    return "", ""
+
+
+def sensitive_dir_message(path: str, cwd: str) -> str:
+    """디렉토리 대상 Grep 이 자격증명 보관소에 닿으면 차단 메시지, 아니면 "". 파일·없는 경로는 "".
+
+    - 이름 자체가 보관소인 디렉토리(`SENSITIVE_DIR_PATTERNS`): 경로 문자열을 보고, 심링크로 들어간
+      경우에만 realpath 도 본다 — 파일 판정의 원본→realpath 2단과 같은 규칙이다.
+    - 홈의 보관소(`HOME_CREDENTIAL_STORES`)를 품는 디렉토리(그 디렉토리이거나 조상) — realpath 로 본다.
+    """
+    try:
+        base = cwd if isinstance(cwd, str) and cwd else os.getcwd()
+        expanded = os.path.expanduser(path)
+        full = os.path.join(base, expanded)
+        if not os.path.isdir(full):
+            return ""
+        real = os.path.realpath(full)
+        candidates = [expanded]
+        if real != os.path.abspath(full):
+            candidates.append(real)
+    except (ValueError, OSError):
+        return ""
+    for candidate in candidates:
+        d = candidate.lower().rstrip("/") + "/"
+        for pattern, kind in SENSITIVE_DIR_PATTERNS:
+            if re.search(pattern, d):
+                return BLOCK_MESSAGES[kind]
+    try:
+        home = os.path.expanduser("~")
+        root = real.rstrip(os.sep) + os.sep
+        for store in HOME_CREDENTIAL_STORES:
+            store_path = os.path.join(home, store)
+            if os.path.exists(store_path) and (os.path.realpath(store_path) + os.sep).startswith(root):
+                kind = "ssh" if store == ".ssh" else "cloud"
+                return f"{BLOCK_MESSAGES[kind]} (이 디렉토리 아래에 ~/{store} 가 있다)"
+    except (ValueError, OSError):
+        return ""
+    return ""
+
+
+def extract_grep_targets(tool_input, cwd: str) -> tuple[list[str], str]:
+    """Grep 이 **파일 하나로 지목하는** 판정 대상과 타입 오류(없으면 "").
+
+    - `path` 가 디렉토리면 대상이 아니다(독스트링 "탐지할 수 없는 것" — 보관소 디렉토리는
+      `_check_grep_reach` 가 따로 막는다). 디렉토리가 아닌 값(파일·아직 없는 경로)은 그대로 판정한다.
+      상대경로는 입력의 `cwd` 기준으로 디렉토리 여부만 본다.
+    - `glob` 은 여기서 판정하지 않는다 — `_check_grep_reach`(`glob_block_reason`)의 몫이다.
+    - 두 필드가 문자열이 아니면 타입 오류 — `extract_paths` 와 같은 fail-closed.
+    """
+    if tool_input is None:
+        return [], ""
+    if not isinstance(tool_input, dict):
+        return [], f"tool_input 이 객체가 아니다({type(tool_input).__name__})"
+    for field in GREP_FIELDS:
+        value = tool_input.get(field)
+        if value is not None and not isinstance(value, str):
+            return [], f"경로 필드 '{field}' 가 문자열이 아니다({type(value).__name__})"
+    targets: list[str] = []
+    path = tool_input.get("path") or ""
+    if path:
+        try:
+            base = cwd if isinstance(cwd, str) and cwd else os.getcwd()
+            is_dir = os.path.isdir(os.path.join(base, os.path.expanduser(path)))
+        except (ValueError, OSError):
+            is_dir = False
+        if not is_dir:
+            targets.append(path)
+    return targets, ""
+
+
+def extract_paths(tool_input) -> tuple[list[str], str]:
+    """판정할 경로 목록과 **타입 오류**(없으면 "").
+
+    - `tool_input` 이 없거나 null → 경로 없음(정상)
+    - `tool_input` 이 객체가 아님 → 타입 오류
+    - 경로 필드가 없거나 null·"" → 그 필드는 건너뜀(정상)
+    - 경로 필드가 문자열이 아님 → 타입 오류. `[]`·`0` 처럼 거짓인 값도 오류다 — "없음"은 키가
+      없거나 null 일 때뿐이다. 거짓 값을 없음으로 읽으면 판정 입력이 다시 타입에 따라 열린다.
+
+    두 필드를 **모두** 본다. 예전에는 `file_path or notebook_path` 로 하나만 골라, 앞 필드가
+    무해하면 뒤 필드는 판정하지 않았다.
+    """
+    if tool_input is None:
+        return [], ""
+    if not isinstance(tool_input, dict):
+        return [], f"tool_input 이 객체가 아니다({type(tool_input).__name__})"
+    paths: list[str] = []
+    for field in PATH_FIELDS:
+        value = tool_input.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            return [], f"경로 필드 '{field}' 가 문자열이 아니다({type(value).__name__})"
+        if value:
+            paths.append(value)
+    return paths, ""
+
+
+def _parse_failed(raw: str, err: BaseException) -> None:
+    """입력을 파싱하지 못했다 — 감시 대상 도구면 차단, 아니면(알 수 없음 포함) 허용."""
+    watched = [t for t in _sniff_tool_names(raw) if t in WATCHED_TOOLS]
+    debug_log(f"stdin parse failure ({type(err).__name__}) watched={watched!r}")
+    if watched:
+        tool = watched[0]
+        print(
+            f"🔒 차단됨: {tool} 입력을 해석하지 못했다({type(err).__name__}) — "
+            "민감 경로 판정을 할 수 없어 막는다.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    sys.exit(0)
+
+
 def main():
     try:
         # stdin이 TTY면(파이프 입력 없음) json.load가 무한 블록한다 — 즉시 통과.
         if sys.stdin.isatty() or hook_disabled("protect-sensitive"):
             sys.exit(0)
-        # stdin에서 JSON 입력 읽기
-        input_data = json.load(sys.stdin)
+        raw = sys.stdin.read()
+        try:
+            input_data = json.loads(raw)
+        except (ValueError, RecursionError) as err:
+            # JSONDecodeError 는 ValueError 다. RecursionError 는 깊은 중첩(보안 리뷰 L-1) — 예전에는
+            # 아래 blanket except 로 빠져 허용됐다. 판정은 도구로 가른다(독스트링 "실패 모드").
+            _parse_failed(raw, err)
 
+        if not isinstance(input_data, dict):
+            sys.exit(0)  # 도구를 알 수 없다 — 감시 대상인지조차 판정할 수 없으니 훅 오류와 같이 허용
         tool_name = input_data.get("tool_name", "")
-        tool_input = input_data.get("tool_input", {})
+        tool_input = input_data.get("tool_input")
 
         # 파일 경로 기반 도구만 검사. MultiEdit/NotebookEdit도 편집 도구이므로 포함해야
         # 시크릿 파일 우회를 막는다(MultiEdit로 .env 편집 우회 방지, 적대적 리뷰 P1).
-        if tool_name not in ("Edit", "MultiEdit", "Write", "Read", "NotebookEdit"):
+        if tool_name not in WATCHED_TOOLS:
             sys.exit(0)
 
-        # NotebookEdit는 file_path 대신 notebook_path를 쓴다 — 둘 다에서 경로를 취한다.
-        file_path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
-        if not file_path:
-            sys.exit(0)
-
-        # 원본 경로부터 검사 — syscall 없는 순수 문자열 검사를 먼저 실행해, 뒤의
-        # realpath(syscall)가 ValueError(널바이트 등)로 예외를 던져도 이 게이트가
-        # 건너뛰어지지 않게 한다(적대적 리뷰 P2: 순서 fail-open 방지).
-        is_protected, message = check_protected(file_path)
-        if is_protected:
-            print(f"🔒 차단됨: {file_path}", file=sys.stderr)
-            print(f"   {message}", file=sys.stderr)
-            sys.exit(2)  # 2 = 차단
-
-        # 실제 경로(resolved) 항상 검사 — 중간 경로 symlink 우회 방지 (ATK-007)
-        try:
-            real_path = os.path.realpath(file_path)
-        except (ValueError, OSError):
-            real_path = file_path  # realpath 실패 시에도 위 원본 검사는 이미 통과함
-        if real_path != os.path.abspath(file_path):
-            is_protected_real, message_real = check_protected(real_path)
-            if is_protected_real:
-                print(
-                    f"🔒 차단됨 (심볼릭 링크 대상): {file_path} → {real_path}",
-                    file=sys.stderr,
-                )
-                print(f"   {message_real}", file=sys.stderr)
-                sys.exit(2)
-
-        # env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔 (2.10.5).
-        # 예외로 통과한 경로라도 실제 형식의 시크릿을 기록하는 쓰기는 차단한다.
-        # placeholder(API_KEY=your_key_here)와 충돌하지 않도록 HIGH_CONFIDENCE 패턴만 사용.
-        # 원본 경로뿐 아니라 realpath도 확인 — symlink(foo.txt → .env.example)를
-        # 경유한 쓰기가 스캔을 우회하지 못하게 한다.
-        if tool_name in ("Edit", "MultiEdit", "Write", "NotebookEdit") and (
-            ENV_TEMPLATE_RE.search(file_path.lower())
-            or ENV_TEMPLATE_RE.search(real_path.lower())
-        ):
-            write_contents = []
-            if tool_name == "Write":
-                write_contents.append(tool_input.get("content", ""))
-            elif tool_name == "Edit":
-                write_contents.append(tool_input.get("new_string", ""))
-            elif tool_name == "MultiEdit":
-                edits = tool_input.get("edits", []) or []
-                if isinstance(edits, list):
-                    for edit in edits:
-                        # 비-dict 항목도 스캔 대상에 포함 — 건너뛰면 payload 조작 우회
-                        write_contents.append(
-                            edit.get("new_string", "")
-                            if isinstance(edit, dict)
-                            else edit
-                        )
-                else:
-                    # 스키마 밖 형태(dict/str 등)는 통짜 직렬화로 스캔 — dict 키 순회나
-                    # 문자 단위 순회로 페이로드가 쪼개져 스캔이 무력화되는 것을 방지
-                    write_contents.append(edits)
-            elif tool_name == "NotebookEdit":
-                write_contents.append(tool_input.get("new_source", ""))
-
-            # str() 강제: 비-str payload(list 형태 NotebookEdit source, dict content 등)가
-            # join에서 TypeError → blanket except → fail-open으로 스캔을 우회하지 못하게
-            # 한다(ATK-002 — check_content_sensitive의 P1 직렬화 방어와 동일 정책).
-            combined_content = "\n".join(str(c) for c in write_contents if c)
-            is_sensitive, content_msg = check_content_sensitive(
-                combined_content, patterns=HIGH_CONFIDENCE_CONTENT_PATTERNS
-            )
-            if is_sensitive:
-                print(
-                    f"🔒 차단됨 (env 템플릿에 실제 시크릿 기록 시도): {file_path}",
-                    file=sys.stderr,
-                )
-                print(f"   {content_msg}", file=sys.stderr)
-                sys.exit(2)
-
+        if tool_name == "Grep":
+            file_paths, type_error = extract_grep_targets(tool_input, input_data.get("cwd", ""))
+        else:
+            file_paths, type_error = extract_paths(tool_input)
+        if type_error:
+            # **판정 입력의 타입 혼동은 fail-closed.** 아래 blanket except(fail-open)로 빠지기
+            # 전에 여기서 막는다 — 값은 찍지 않는다(경로 자체가 민감할 수 있다).
+            print(f"🔒 차단됨: {type_error}", file=sys.stderr)
+            print("   민감 경로 판정을 할 수 없는 입력이라 막는다 — 경로는 문자열 하나로 넘겨라.",
+                  file=sys.stderr)
+            sys.exit(2)
+        for file_path in file_paths:
+            _check_path(tool_name, tool_input, file_path)
+        if tool_name == "Grep":
+            # 파일 판정 **다음에** 돈다 — 새 판정의 결함이 기존 판정을 건너뛰게 하지 못한다(5.9.0 리뷰).
+            _check_grep_reach(tool_input, input_data.get("cwd", ""))
         sys.exit(0)  # 0 = 허용
 
-    except json.JSONDecodeError:
-        # fail-open: stdin 파싱 실패 시 허용 (Claude Code 런타임 제공 JSON이므로 실제 위험 낮음)
-        debug_log("JSON decode error in stdin")
-        sys.exit(0)
     except Exception as e:
-        # fail-open: 예기치 않은 오류 시 허용 (가용성 우선 설계)
+        # fail-open: 예기치 않은 오류 시 허용 (가용성 우선 설계). 타입 혼동·감시 도구의 파싱 실패는
+        # 위에서 이미 막았다 — 여기로 오는 것은 판정 로직 자체의 결함뿐이다.
         debug_log(f"Hook error: {e}", e)
         sys.exit(0)
+
+
+def _check_grep_reach(tool_input, cwd: str) -> None:
+    """파일 하나를 지목하지 않아도 Grep 이 **닿는** 보호 대상 — 보관소 디렉토리(경로가 없으면 cwd),
+    보호 파일을 지목하거나 고를 수 있는 glob, 판정할 수 없는 glob. 막아야 하면 exit 2."""
+    if not isinstance(tool_input, dict):
+        return
+    path = tool_input.get("path") or ""
+    message = sensitive_dir_message(path or ".", cwd)
+    if message:
+        print(f"🔒 차단됨: Grep {path or '(cwd)'}", file=sys.stderr)
+        print(f"   {message}", file=sys.stderr)
+        print("   자격증명 보관소에 닿는 디렉토리 검색은 막는다 — 검색할 하위 디렉토리를 path 로 좁혀라.",
+              file=sys.stderr)
+        sys.exit(2)
+    glob = tool_input.get("glob") or ""
+    alt, reason = glob_block_reason(glob)
+    if reason:
+        shown = alt if len(alt) <= 120 else alt[:117] + "…"
+        print(f"🔒 차단됨: Grep glob '{shown}' — {reason}", file=sys.stderr)
+        hint = ("glob 을 빼거나(디렉토리 검색은 .gitignore 를 따른다) 파일 형식까지 적어라"
+                "(예: *.py, **/__tests__/**/*.ts)")
+        m = re.match(r"^([^*?\[\]{}!]+)/\*{1,2}/?$", alt)
+        if m:
+            hint = f"디렉토리로 좁히려면 glob 대신 path='{m.group(1)}' 를 써라(디렉토리 검색은 .gitignore 를 따른다)"
+        print(f"   ripgrep 의 glob 은 .gitignore 를 무시하고 고른 파일을 읽는다 — {hint}.", file=sys.stderr)
+        sys.exit(2)
+
+
+def _check_path(tool_name: str, tool_input: dict, file_path: str) -> None:
+    """경로 하나를 판정한다 — 막아야 하면 exit 2, 아니면 돌아온다."""
+    # 원본 경로부터 검사 — syscall 없는 순수 문자열 검사를 먼저 실행해, 뒤의
+    # realpath(syscall)가 ValueError(널바이트 등)로 예외를 던져도 이 게이트가
+    # 건너뛰어지지 않게 한다(적대적 리뷰 P2: 순서 fail-open 방지).
+    is_protected, message = check_protected(file_path)
+    if is_protected:
+        print(f"🔒 차단됨: {file_path}", file=sys.stderr)
+        print(f"   {message}", file=sys.stderr)
+        sys.exit(2)  # 2 = 차단
+
+    # 실제 경로(resolved) 항상 검사 — 중간 경로 symlink 우회 방지 (ATK-007)
+    try:
+        real_path = os.path.realpath(file_path)
+    except (ValueError, OSError):
+        real_path = file_path  # realpath 실패 시에도 위 원본 검사는 이미 통과함
+    if real_path != os.path.abspath(file_path):
+        is_protected_real, message_real = check_protected(real_path)
+        if is_protected_real:
+            print(
+                f"🔒 차단됨 (심볼릭 링크 대상): {file_path} → {real_path}",
+                file=sys.stderr,
+            )
+            print(f"   {message_real}", file=sys.stderr)
+            sys.exit(2)
+
+    # env 템플릿(.env.example 등) 쓰기 콘텐츠 스캔 (2.10.5).
+    # 예외로 통과한 경로라도 실제 형식의 시크릿을 기록하는 쓰기는 차단한다.
+    # placeholder(API_KEY=your_key_here)와 충돌하지 않도록 HIGH_CONFIDENCE 패턴만 사용.
+    # 원본 경로뿐 아니라 realpath도 확인 — symlink(foo.txt → .env.example)를
+    # 경유한 쓰기가 스캔을 우회하지 못하게 한다.
+    if tool_name in ("Edit", "MultiEdit", "Write", "NotebookEdit") and (
+        ENV_TEMPLATE_RE.search(file_path.lower())
+        or ENV_TEMPLATE_RE.search(real_path.lower())
+    ):
+        write_contents = []
+        if tool_name == "Write":
+            write_contents.append(tool_input.get("content", ""))
+        elif tool_name == "Edit":
+            write_contents.append(tool_input.get("new_string", ""))
+        elif tool_name == "MultiEdit":
+            edits = tool_input.get("edits", []) or []
+            if isinstance(edits, list):
+                for edit in edits:
+                    # 비-dict 항목도 스캔 대상에 포함 — 건너뛰면 payload 조작 우회
+                    write_contents.append(
+                        edit.get("new_string", "")
+                        if isinstance(edit, dict)
+                        else edit
+                    )
+            else:
+                # 스키마 밖 형태(dict/str 등)는 통짜 직렬화로 스캔 — dict 키 순회나
+                # 문자 단위 순회로 페이로드가 쪼개져 스캔이 무력화되는 것을 방지
+                write_contents.append(edits)
+        elif tool_name == "NotebookEdit":
+            write_contents.append(tool_input.get("new_source", ""))
+
+        # str() 강제: 비-str payload(list 형태 NotebookEdit source, dict content 등)가
+        # join에서 TypeError → blanket except → fail-open으로 스캔을 우회하지 못하게
+        # 한다(ATK-002 — check_content_sensitive의 P1 직렬화 방어와 동일 정책).
+        combined_content = "\n".join(str(c) for c in write_contents if c)
+        is_sensitive, content_msg = check_content_sensitive(
+            combined_content, patterns=HIGH_CONFIDENCE_CONTENT_PATTERNS
+        )
+        if is_sensitive:
+            print(
+                f"🔒 차단됨 (env 템플릿에 실제 시크릿 기록 시도): {file_path}",
+                file=sys.stderr,
+            )
+            print(f"   {content_msg}", file=sys.stderr)
+            sys.exit(2)
 
 
 if __name__ == "__main__":

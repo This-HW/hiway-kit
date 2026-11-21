@@ -1,0 +1,4 @@
+{
+  "_doc": "scripts/check_unicode_safety.py (verify-done.sh §31) 의 예외. 항목 = {path, codepoint: 'U+XXXX', reason, line?}. 사유 없는 예외·범위 밖 코드포인트·아무것도 가리지 않는 예외·레포 밖 경로는 전부 fail. 문자 자체는 여기 쓰지 않는다(코드포인트만).",
+  "exceptions": []
+}

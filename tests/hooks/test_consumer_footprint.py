@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -367,3 +368,210 @@ def test_setup_sh_reports_and_refreshes_a_stale_template_copy(tmp_path):
     forced = _run_setup(repo, env, "--force")
     assert forced.returncode == 0, forced.stdout + forced.stderr
     assert (tpl / "hooks" / "pre-commit").read_bytes() == PRE_COMMIT.read_bytes()
+
+
+# ── setup.sh --uninstall: 쓴 것만, 쓴 그대로일 때만 되돌린다 (5.9.0) ─────────────
+
+
+def _uninstall_env(tmp: Path) -> dict:
+    """_setup_env 와 같되 가짜 `claude` 가 받은 인자를 기록한다 — 플러그인을 지우려 했는지 본다."""
+    fake = tmp / "fakebin"
+    _fake_bin(fake, "claude", 'printf "%s\\n" "$*" >> "$HOME/claude-calls.log"\nexit 0\n')
+    return _env(tmp, PATH=f"{fake}:/usr/bin:/bin")
+
+
+def _claude_calls(env: dict) -> list:
+    log = Path(env["HOME"]) / "claude-calls.log"
+    return log.read_text().splitlines() if log.exists() else []
+
+
+def _global_template_dir(env: dict) -> str:
+    r = subprocess.run(["git", "config", "--global", "--get", "init.templateDir"], env=env,
+                       capture_output=True, text=True, check=False)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def _accept_template(env: dict) -> Path:
+    """대화형 y 응답으로 setup.sh 가 만드는 상태를 그대로 재현한다(비대화형 테스트는 물을 수 없다)."""
+    tpl = Path(env["HOME"]) / ".claude" / "git-templates"
+    (tpl / "hooks").mkdir(parents=True)
+    shutil.copy(PRE_COMMIT, tpl / "hooks" / "pre-commit")
+    subprocess.run(["git", "config", "--global", "init.templateDir", str(tpl)], env=env, check=True)
+    return tpl
+
+
+def test_setup_sh_uninstall_round_trip_reverts_what_setup_wrote(tmp_path):
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    installed = _run_setup(repo, env)
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    state = Path(env["HOME"]) / ".claude" / ".setup-state.json"
+    assert hook.exists() and state.exists()
+    tpl = _accept_template(env)
+    calls_before = _claude_calls(env)
+
+    removed = _run_setup(repo, env, "--uninstall")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert not hook.exists()
+    assert not state.exists()
+    assert _global_template_dir(env) == ""
+    assert not tpl.exists()
+    # 플러그인은 지우지 않고 명령만 안내한다
+    assert _claude_calls(env) == calls_before
+    assert "claude plugin uninstall hiway-kit@hiway-kit" in removed.stdout
+    assert "남긴 항목" not in removed.stdout
+    # templateDir 로 다른 레포에 심긴 사본은 찾을 수 없다 — 그렇다고 적고 각 레포에서 할 일을 안내한다
+    assert "찾을 수 없어" in removed.stdout and "--uninstall" in removed.stdout
+
+
+def test_setup_sh_uninstall_keeps_a_modified_pre_commit(tmp_path):
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    assert _run_setup(repo, env).returncode == 0
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text(PRE_COMMIT.read_text() + "\n# 내 프로젝트 전용 검사\n")
+    tpl = _accept_template(env)
+    (tpl / "hooks" / "pre-commit").write_text("#!/bin/sh\n# 예전 판 사본\n")
+
+    removed = _run_setup(repo, env, "--uninstall")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert hook.read_text().endswith("# 내 프로젝트 전용 검사\n")
+    assert (tpl / "hooks" / "pre-commit").read_text() == "#!/bin/sh\n# 예전 판 사본\n"
+    # 사본을 남기면 설정도 남긴다 — 설정만 풀면 남긴 사본이 아무 데도 연결되지 않은 채 "보존"된다(리뷰 L-004)
+    assert _global_template_dir(env) == str(tpl)
+    assert "남겨 둡니다" in removed.stdout
+    assert "남긴 항목 2개" in removed.stdout
+
+
+def test_setup_sh_uninstall_leaves_a_foreign_template_dir_and_symlinked_hook(tmp_path):
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    mine = tmp_path / "my-templates"
+    mine.mkdir()
+    subprocess.run(["git", "config", "--global", "init.templateDir", str(mine)], env=env, check=True)
+    hooks = repo / ".git" / "hooks"
+    hooks.mkdir(exist_ok=True)
+    (hooks / "pre-commit").symlink_to(PRE_COMMIT)  # 내용은 같아도 링크는 사용자가 만든 것
+
+    removed = _run_setup(repo, env, "--uninstall")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert _global_template_dir(env) == str(mine)
+    assert (hooks / "pre-commit").is_symlink()
+    assert PRE_COMMIT.exists()
+
+
+def test_setup_sh_uninstall_dry_run_changes_nothing(tmp_path):
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    assert _run_setup(repo, env).returncode == 0
+    tpl = _accept_template(env)
+    home = Path(env["HOME"])
+    before = sorted((str(p), p.read_bytes() if p.is_file() else b"") for p in home.rglob("*"))
+    hook_before = (repo / ".git" / "hooks" / "pre-commit").read_bytes()
+
+    dry = _run_setup(repo, env, "--uninstall", "--dry-run")
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert "(dry-run)" in dry.stdout and "pre-commit 삭제" in dry.stdout
+    assert sorted((str(p), p.read_bytes() if p.is_file() else b"") for p in home.rglob("*")) == before
+    assert (repo / ".git" / "hooks" / "pre-commit").read_bytes() == hook_before
+    assert _global_template_dir(env) == str(tpl)
+
+
+def test_setup_sh_uninstall_under_core_hooks_path_touches_nothing(tmp_path):
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    _git(repo, env, "config", "core.hooksPath", ".husky")
+    (repo / ".husky").mkdir()
+    shutil.copy(PRE_COMMIT, repo / ".husky" / "pre-commit")  # 사용자가 훅 관리자에 직접 넣은 사본
+    removed = _run_setup(repo, env, "--uninstall")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert (repo / ".husky" / "pre-commit").exists()
+
+
+def test_setup_sh_uninstall_keeps_template_dir_holding_user_files(tmp_path):
+    """보안 L-4·리뷰 L-004 — 템플릿 디렉토리에 사용자 파일이 있으면 해제하지 않는다(그 파일의 복사가 끊긴다)."""
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    assert _run_setup(repo, env).returncode == 0
+    tpl = _accept_template(env)
+    (tpl / "hooks" / "commit-msg").write_text("#!/bin/sh\n# 내 훅\n")
+    (tpl / "description").write_text("mine\n")
+
+    removed = _run_setup(repo, env, "--uninstall")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert _global_template_dir(env) == str(tpl)
+    assert (tpl / "hooks" / "pre-commit").exists()  # 연결된 채로 남는다
+    assert (tpl / "hooks" / "commit-msg").exists() and (tpl / "description").exists()
+    assert "setup.sh 가 넣지 않은 파일" in removed.stdout
+    assert "commit-msg" in removed.stdout
+
+
+def test_setup_sh_uninstall_continues_when_unset_fails(tmp_path):
+    """리뷰 L-003 — `git config --unset` 실패가 set -e 로 스크립트를 조용히 멈추지 않는다."""
+    env = _uninstall_env(tmp_path)
+    cfg_dir = tmp_path / "ro-config"
+    cfg_dir.mkdir()
+    env["GIT_CONFIG_GLOBAL"] = str(cfg_dir / ".gitconfig")
+    repo = _repo(tmp_path, env)
+    assert _run_setup(repo, env).returncode == 0
+    tpl = _accept_template(env)
+    state = Path(env["HOME"]) / ".claude" / ".setup-state.json"
+    assert state.exists()
+    cfg_dir.chmod(0o555)  # 락 파일을 만들 수 없다 → unset 실패
+    try:
+        removed = _run_setup(repo, env, "--uninstall")
+    finally:
+        cfg_dir.chmod(0o755)
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert "해제에 실패" in removed.stdout
+    assert "--fixed-value --unset-all init.templateDir" in removed.stdout
+    assert (tpl / "hooks" / "pre-commit").exists()  # 설정이 아직 가리키므로 사본도 둔다
+    assert not state.exists()  # 뒤 단계까지 진행했다
+    assert "제거 끝" in removed.stdout
+
+
+def test_setup_sh_uninstall_quotes_paths_in_the_manual_command(tmp_path):
+    """보안 L-5 — 안내하는 명령의 경로는 셸에 그대로 붙여 넣어도 경로 하나로 읽혀야 한다(`%q`)."""
+    env = _uninstall_env(tmp_path)
+    home = tmp_path / "my home $x"
+    home.mkdir()
+    env["HOME"] = str(home)
+    env["GIT_CONFIG_GLOBAL"] = str(home / ".gitconfig")
+    repo = _repo(tmp_path, env)
+    assert _run_setup(repo, env).returncode == 0
+    hook = repo / ".git" / "hooks" / "pre-commit"
+    hook.write_text(PRE_COMMIT.read_text() + "\n# 수정\n")
+    tpl = _accept_template(env)
+    (tpl / "hooks" / "pre-commit").write_text("#!/bin/sh\n# 고친 사본\n")
+
+    removed = _run_setup(repo, env, "--uninstall")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    lines = removed.stdout.splitlines()
+    rm_line = next(ln for ln in lines if "rm -- " in ln).split("직접 지우세요: ", 1)[1]
+    assert shlex.split(rm_line) == ["rm", "--", ".git/hooks/pre-commit"]
+    check_line = next(ln for ln in lines if "직접 확인: " in ln).split("직접 확인: ", 1)[1]
+    assert shlex.split(check_line) == [str(tpl / "hooks" / "pre-commit")]
+
+
+def test_setup_sh_uninstall_under_core_hooks_path_points_at_a_leftover_copy(tmp_path):
+    """리뷰 L-012 — hooksPath 레포에서 '지울 것도 없다'고 단정하지 않는다. 남은 .git/hooks 사본을 알린다."""
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    assert _run_setup(repo, env).returncode == 0  # hooksPath 를 켜기 전에 깐 사본
+    _git(repo, env, "config", "core.hooksPath", ".husky")
+    removed = _run_setup(repo, env, "--uninstall")
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert "지울 것도 없습니다" not in removed.stdout
+    assert "쓰이지 않는 .git/hooks/pre-commit" in removed.stdout
+    assert (repo / ".git" / "hooks" / "pre-commit").exists()  # 지우지 않고 알린다
+
+
+@pytest.mark.parametrize("args", [("--dry-run",), ("--uninstall", "--force"), ("--uninstall", "--migrate")])
+def test_setup_sh_rejects_ambiguous_uninstall_flags(tmp_path, args):
+    env = _uninstall_env(tmp_path)
+    repo = _repo(tmp_path, env)
+    r = _run_setup(repo, env, *args)
+    assert r.returncode == 1
+    assert not (repo / ".git" / "hooks" / "pre-commit").exists()  # 설치로 넘어가지 않았다
+    assert _claude_calls(env) == []

@@ -888,6 +888,18 @@ else
   red "배포 지침이 설치·패키지 실행을 시킨다 — 제안으로 바꾸거나 금지문이면 footprint-ok 표시 (상세는 위 출력)"
 fi
 
+hdr "31. 보이지 않는 Unicode 0건 — 추적 텍스트 전량 (zero-width·bidi·tag)"
+# 킷의 배포물은 LLM 이 읽는 프롬프트다. zero-width·bidi 제어·tag 문자(U+E0000–E007F)는 diff 화면에서
+# 보이지 않고 모델은 읽는다 — 사람이 리뷰로 잡을 수 없다. 판정은 scripts/check_unicode_safety.py 가 단일
+# 소스 — CI(validate.yml)와 동일 스크립트, 범위는 plugins/common/tools/hidden_chars.py(런타임 정제와 같은 표).
+# 이 검사가 도는 조건: 항상(분기 없음) — 대상은 git 이 추적하는 모든 파일(NUL 이 든 바이너리 제외)이고,
+# 예외는 scripts/unicode-safety-exceptions.json 에 사유와 함께만 둔다(제외 나열 방식).
+if python3 scripts/check_unicode_safety.py; then
+  green "보이지 않는 Unicode 0건 (check_unicode_safety.py — CI와 단일 소스)"
+else
+  red "보이지 않는 Unicode 가 실렸다 — 지우거나 정당하면 사유와 함께 예외 등재 (상세는 위 출력의 file:line:col)"
+fi
+
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'

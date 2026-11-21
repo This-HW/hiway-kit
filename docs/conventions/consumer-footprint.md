@@ -31,13 +31,20 @@ as_of: 2026-11-09
 정책 본문은 세션 주입에 넣지 않는다(상시 주입 예산 7,168B 에 거의 닿아 있다). 규칙은 이 문서, 강제는 아래
 기계 검사, 기여자 확인은 `CLAUDE.md` Contributing 체크리스트가 맡는다.
 
+이 예산은 **소비자 세션 기준**으로 잰다. 주입 출력은 플러그인 루트 절대경로를 머리 한 줄에서만 밝히고
+나머지 킷 경로는 `<킷 루트>/…` 로 쓴다(v5.9.0 — 전에는 빈 세션에서 7회 반복). 게이트는 측정 전에 실제 루트를
+경로 B(직접 마켓플레이스) 캐시 형태의 고정 길이 대표값(`check_injection_budget.py::REPRESENTATIVE_PLUGIN_ROOT`, 78자)
+으로 바꾼다. 경로 B 를 고른 이유: Claude Code 에서 세션 훅이 도는 설치는 경로 B 뿐이다(경로 A 디렉토리판은 훅이
+없다). 그래서 판정은 이 레포가 어디 체크아웃됐는지와 무관하다. 소비자마다 실제 바이트는 사용자 이름·버전 길이만큼
+±수십 B 움직인다.
+
 ## 강제
 
 | 수단 | 무엇을 잡나 |
 |---|---|
 | `tests/hooks/test_consumer_footprint.py` | 픽스처 레포에서 훅·도구를 실제 프로세스로 돌린 전후 트리·index 불변 — 세션 시작의 구 원장 개명, 비-git 원장 쓰기, 설정 없는 prettier, pre-commit 의 무설정 수정·부분 스테이징 재스테이징·JSONC 거부(macOS `/bin/bash` 3.2 포함), checklist 심링크 탈출 |
 | `tests/hooks/test_auto_format.py` | 설정·`go.mod` 없는 ruff·gofmt·rustfmt 미호출, `testdata`·`vendor` 의 gofmt 미호출(양성 대조 포함) |
-| `setup.sh` 격리 실행(`test_consumer_footprint.py`) | 비대화형에서 전역 무변경, 워크트리·`core.hooksPath` 레포 처리, 낡은 템플릿 사본 |
+| `setup.sh` 격리 실행(`test_consumer_footprint.py`) | 비대화형에서 전역 무변경, 워크트리·`core.hooksPath` 레포 처리, 낡은 템플릿 사본, `--uninstall` 설치→제거 왕복·수정본·심링크·남의 templateDir 보존·`--dry-run` 무변경·플러그인 자동 제거 없음 |
 | `scripts/check_consumer_footprint.py` (verify-done §30·CI) | 배포 지침(`plugins/common/**/*.md`)의 설치·패키지 실행 명령. 금지·설명 문장은 그 줄에 `footprint-ok` 표시 |
 | 행동 eval (`evals/`) | 에이전트가 실제로 만든 경로 — 기존 테스트 배치 존중, 지침 파일 무수정, 설치 없음 |
 
@@ -59,9 +66,9 @@ as_of: 2026-11-09
 | `<git-common-dir>/cross-engine/<slug>/` | `cross-engine-review` | 사용자 호출 | 호출 자체 | 디렉토리 삭제 |
 | `<git-dir>/kit/child.json`·워크트리·브랜치 | `control-loop`·`child-session`·`isolation: worktree` 에이전트 | 위임 | 위임 자체 | `git worktree remove` |
 | `$TMPDIR/claude-<uid>/` | 훅 상태·잠금 | 자동 | — (트리 밖) | 디렉토리 삭제 |
-| 플러그인 user 범위 설치(Claude Code 사용자 설정의 `enabledPlugins`)·`~/.claude/.setup-state.json` | `setup.sh` | 사용자 실행(Full 설치) | 설치 실행 | `/plugin uninstall`·파일 삭제 |
-| 실행한 레포의 공용 hooks 디렉토리 `pre-commit`(`core.hooksPath` 레포는 설치하지 않음) | `setup.sh` | 사용자 실행(Full 설치) | 설치 실행 | 파일 삭제 |
-| `git init.templateDir`(→ `~/.claude/git-templates`) | `setup.sh` | 사용자 실행 | 대화형 질문에 y(비대화형은 건너뜀). 낡은 사본은 `--force` 때만 갱신 | `git config --global --unset init.templateDir` |
+| 플러그인 user 범위 설치(Claude Code 사용자 설정의 `enabledPlugins`)·`~/.claude/.setup-state.json` | `setup.sh` | 사용자 실행(Full 설치) | 설치 실행 | 상태 파일은 `./setup.sh --uninstall`. 플러그인은 그 명령이 **안내만** 한다 — `claude plugin uninstall hiway-kit@hiway-kit` |
+| 실행한 레포의 공용 hooks 디렉토리 `pre-commit`(`core.hooksPath` 레포는 설치하지 않음) | `setup.sh` | 사용자 실행(Full 설치) | 설치 실행 | `./setup.sh --uninstall` — 배포본과 바이트가 같을 때만 지우고, 다르면 남기고 알린다 |
+| `git init.templateDir`(→ `~/.claude/git-templates`) | `setup.sh` | 사용자 실행 | 대화형 질문에 y(비대화형은 건너뜀). 낡은 사본은 `--force` 때만 갱신 | `./setup.sh --uninstall` — 값이 그 경로일 때만 해제, 템플릿 사본은 배포본과 같을 때만 삭제. 손으로는 `git config --global --unset init.templateDir` |
 
 구 원장(`docs/works/feedback/ledger.md`)은 읽기 호환만 남는다 — 옮기는 것은 사용자가 <!-- doc-status-ok: 구 원장 읽기 호환을 설명한다 -->
 `tools/feedback_ledger.py migrate` 로 할 때뿐이다.

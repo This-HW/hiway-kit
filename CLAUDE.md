@@ -22,7 +22,7 @@ otherwise). Guidance lives in skills, never in agent `tools:` allowlists.
 
 ```bash
 # Anthropic 디렉토리 — Claude Code 내장 마켓플레이스(추가 불필요). 아래 직접 경로와 **둘 중 하나만**
-# 5.7.1 부터 훅 없음 — 디렉토리는 command 훅을 Verified 조직에게만 받아 `directory` 브랜치(hooks.json 제외)를 추적한다
+# 공개본은 5.5.1(훅 있음)에서 멈췄다 — 비 Verified 조직의 훅·스크립트를 거부. 상태: docs/marketplace-submission.md
 /plugin install hiway-kit@anthropic-plugin-directory
 # 직접 마켓플레이스 — main HEAD 즉시 반영
 /plugin marketplace add This-HW/hiway-kit
@@ -33,6 +33,8 @@ git clone https://github.com/This-HW/hiway-kit && cd hiway-kit && ./setup.sh
 ```
 
 > 디렉토리 경로는 **로그인 없는 빈 설정에서 실측**한 뒤 적었다(2026-10-05) — 확인 전 명령을 적는 것은 "약속 ≠ 실물" 결함이다.
+> 채널 전환·전임 플러그인 정리: `docs/harnesses.md#keep-one-install`(빈 설정 실측, 2.1.330). `setup.sh` 가 쓴 것만
+> 되돌리기: `./setup.sh --uninstall`(배포본과 같은 사본만 삭제, 다른 레포에 심긴 템플릿 사본·플러그인 제거는 안내만).
 
 ## Structure
 
@@ -177,6 +179,9 @@ cache), but `scripts/`, `evals/` and `tests/` (hook tests live in `tests/hooks/`
 5. Add it to the roster in `plugins/common/rules/agent-system.md` (CHECKSUMS + mirror), classify it
    in `evals/policy.json` `tiers`, and add the scenario + baseline its tier requires
    (`scripts/check_eval_coverage.py` is the gate). `/agent-creator` is for consumer agents, not this
+6. If it reads outside text (web, logs, issues, others' diffs), put the untrusted-input discipline in its
+   **body** — session-start injection does not reach subagents (measured, Claude Code 2.1.330; see
+   `review-code`·`security-scan`·`fix-bugs`·`research-external`)
 
 ### Adding a New Skill
 
@@ -186,6 +191,18 @@ cache), but `scripts/`, `evals/` and `tests/` (hook tests live in `tests/hooks/`
 4. Add positive and negative CLI contracts under `evals/skill-scenarios/`, backed by actual pytest
    functions. `scripts/check_skill_eval_coverage.py` discovers all skills; only the fixed legacy
    cohort in `evals/policy.json` is exempt. Model-driven skill selection is a separate evaluation.
+
+### Writing a New Agent/Skill — trigger and output conventions
+
+For **new** components only — a description change moves the trigger rate, so existing ones are
+not bulk-edited (agent descriptions also sit near `check_injection_budget.py`'s cap).
+
+- Description ends with **one** negative sentence (`Do not use for …` / `쓰지 않는다: …`) — always-exposed bytes.
+- Body has a `| 이럴 때 | 대신 |` routing table naming the sibling to use instead.
+- Free-text output fields (evidence, reason, verdict) get one Bad/Good pair —
+  `Bad: tests pass` / `Good: pytest tests/test_x.py -q → rc 0, 12 passed`.
+
+`/agent-creator` and `/skill-forge` draft consumer components the same way.
 
 ### Naming Conventions
 
@@ -238,15 +255,26 @@ Located in `plugins/common/hooks/` (except `session-check.py`, which lives in
   **name collides** with a plugin one (project-local agents alone never warn), and a **stale venv**
   (`.venv`/`venv` console-script shebangs still pointing at the project's old
   path after a directory move/copy — `bin/python` keeps working while every
-  script dies with `bad interpreter`, or silently runs the old site-packages)
-- `session-start.py` — injects rules + active plan status (`docs/plans/*/plan.md`, status≠done) at `SessionStart`
-- `protect-sensitive.py` — `PreToolUse` on Edit/Write/MultiEdit/NotebookEdit/Read:
-  blocks access to **sensitive file paths** (`.env`, keys, `.pem`) by path. env
+  script dies with `bad interpreter`, or silently runs the old site-packages), and **two kit
+  installs enabled together** (directory + direct, or either + the predecessor plugin — read from Claude
+  Code's install record and `enabledPlugins`, not the cache, which survives uninstall; measured on
+  2.1.330: skills load from both, hooks from one, agents from the other)
+- `session-start.py` — injects rules + active plan status (`docs/plans/*/plan.md`, status≠done) at `SessionStart`.
+  Untrusted strings it injects (plan titles·status·directory names, LESSONS) lose hidden Unicode
+  (zero-width·bidi·tag — `tools/hidden_chars.py`) and are marked `[hidden-chars-removed:N]`
+- `protect-sensitive.py` — `PreToolUse` on Edit/Write/MultiEdit/NotebookEdit/Read/Grep:
+  blocks access to **sensitive file paths** (`.env`, keys, `.pem`) by path (Grep also: credential-store
+  dirs or home, and globs that can select a protected file or cannot be parsed — see its docstring). env
   templates (`.env.example`/`.sample`/`.template`/`.dist`) are exempt; writes to
   them get a best-effort high-confidence secret-format content scan. It
   does **not** otherwise scan file *content* or intercept `Bash`/`git commit` —
   secret scanning is gitleaks at push time — CI, and `verify-done.sh` §24 locally over
-  unpushed commits. `setup/pre-commit` does **not** run gitleaks.
+  unpushed commits. `setup/pre-commit` does **not** run gitleaks. A path field that is not a
+  string (list·dict), or unparseable input for a watched tool, is **blocked** (fail-closed) — only
+  the hook's own errors fail open. Out of reach (undetectable here): access via `Bash`, hardlink
+  renaming (`ln .env x`), contents of files outside the protected names, other Grep directories,
+  data-file globs (`*.json`), Glob.
+  Codex does not register this hook (`hooks-codex.json`).
 - `auto-format.py` — auto-formats code after edits (`PostToolUse`), each tool only with the project's
   consent (`docs/conventions/consumer-footprint.md`): ruff for Python (≤2 runs, project ruff config);
   gofmt inside a Go module; rustfmt with `rustfmt.toml`;
@@ -306,7 +334,9 @@ actually loads every hook under 3.9). Four hooks were silently dead on 3.9 until
   (config `.gitleaks.toml`, per-finding ignores `.gitleaksignore`, pin `.gitleaks-version`);
   `verify-done.sh` §24 runs the same scan on unpushed commits before you push
 - Never hardcode secrets, API keys, internal IPs, or project names
-- `protect-sensitive.py` runs as a `PreToolUse` hook on Edit/Write/MultiEdit/NotebookEdit/Read — path-based (plus a best-effort content scan only for env-template writes), not commit-based (see Hooks section)
+- `protect-sensitive.py` runs as a `PreToolUse` hook on Edit/Write/MultiEdit/NotebookEdit/Read/Grep — path-based (plus a best-effort content scan only for env-template writes), not commit-based (see Hooks section)
+- `verify-done.sh` §31 (`scripts/check_unicode_safety.py`, CI identical) — zero hidden Unicode across all tracked
+  text. Exceptions only in `scripts/unicode-safety-exceptions.json`, each with a reason
 
 ## CI/CD
 
@@ -334,6 +364,8 @@ most steps call the same scripts as `verify-done.sh`.
 ### 경고는 상시 참이 되면 죽는다
 
 @docs/conventions/warning-signal.md
+
+효과(개선) 주장은 `docs/conventions/effect-measurement.md` 의 사전등록·off 팔 절차를 밟은 결과가 있을 때만 쓴다.
 
 ## Release Checklist
 

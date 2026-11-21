@@ -93,8 +93,10 @@ Codex 의 32 KiB 는 이 상한보다 크므로 따로 경고를 두지 않는�
 v5.0.0 에서 규칙 14→12(code-quality·ssot 삭제, loop-engineering conditional,
 parallel-worktree reference), STALE TASKS 삭제, 에이전트 32→15 를 **한 뒤** 잡았다.
 통합 트리 실측(컨트롤 브랜치 규칙·스킬 + 이 훅, 레포 경로에서): 빈 레포 6,587B · 최악 20,909B.
-출력의 킷 경로는 절대경로로 렌더되므로 **설치 경로 길이만큼 수치가 움직인다**(수십 바이트 ×
-경로 수) — 여유는 그 변동을 흡수할 만큼 둔다.
+그때는 출력의 킷 경로가 자리마다 절대경로로 렌더돼 **설치 경로 길이만큼 수치가 움직였다**(경로 7곳 ×
+1자당 7B). v5.9.0 부터 훅은 루트를 한 번만 밝히고(`<킷 루트>/…`), 게이트는 그 루트를
+`REPRESENTATIVE_PLUGIN_ROOT`(경로 B 캐시 형태, 고정 길이)로 바꿔 잰다 — 판정이 체크아웃 경로와 무관하다.
+같은 규칙·스킬에서 정규화 측정: 옛 훅 7,218B(초과) → 새 훅 6,992B.
 
 - 항상 7 KiB — 여유 581B. 짧은 규범 하나가 겨우 들어간다: 규범을 core 로 더하려면 이 질문을
   먼저 해야 한다 — *"매 세션 이 비용을 낼 값어치가 있는가."*
@@ -286,6 +288,35 @@ def _hook_env(project: Path, home: Path) -> dict[str, str]:
     }
 
 
+#: 측정용 **대표 소비자 플러그인 루트**. 훅 출력에는 플러그인 루트 절대경로가 들어가므로
+#: (v5.9.0 부터 `kit_root_line()` 의 한 곳), 실물 경로로 재면 수치가 체크아웃 경로 길이를 따라
+#: 움직인다 — 같은 커밋이 7,018B(pass)·7,557B(fail)로 갈린 실측이 있다(그때는 7곳 × 1자당 7B).
+#: 그래서 측정 전에 실제 루트 문자열을 이 고정 길이 값으로 바꿔 잰다.
+#:
+#: 고른 값 = **경로 B**(직접 마켓플레이스, macOS) 캐시 배치 `~/.claude/plugins/cache/<마켓>/<플러그인>/
+#: <버전>-<sha12>` 형태. 근거: 훅이 도는 Claude Code 설치는 경로 B 뿐이다(경로 A 디렉토리판은
+#: 5.7.1 부터 훅이 없다 — CLAUDE.md Installation). 사용자 이름 8자·버전 7자(`10.10.10` 미만)는
+#: 대표값이고 실측이 아니다 — 소비자마다 실제 바이트는 이 값에서 ±수십 B 움직인다.
+REPRESENTATIVE_PLUGIN_ROOT = (
+    "/Users/" + "u" * 8 + "/.claude/plugins/cache/hiway-kit/hiway-kit/"
+    + "9.99.99" + "-" + "0" * 12
+)
+
+
+def normalize_plugin_root(text: str, plugin_root: Path) -> tuple[str, int]:
+    """출력 속 실제 플러그인 루트를 `REPRESENTATIVE_PLUGIN_ROOT` 로 바꾼다. (텍스트, 치환 수).
+
+    훅은 `__file__` 을 resolve 한 경로를 쓰므로 resolve 형과 원형(`/tmp` ↔ `/private/tmp`
+    같은 심링크 차이)을 둘 다 본다 — 긴 쪽부터 바꿔야 짧은 쪽이 긴 쪽의 꼬리를 먹지 않는다.
+    """
+    forms = sorted({str(plugin_root.resolve()), str(plugin_root)}, key=len, reverse=True)
+    count = 0
+    for form in forms:
+        count += text.count(form)
+        text = text.replace(form, REPRESENTATIVE_PLUGIN_ROOT)
+    return text, count
+
+
 def run_session_start(plugin_root: Path, project: Path, home: Path) -> str:
     """훅을 **하네스가 부르는 그대로** 실행해 `additionalContext` 를 돌려준다."""
     r = subprocess.run(
@@ -303,6 +334,8 @@ def measure_scenarios(plugin_root: Path | None = None) -> dict[str, str]:
 
     예전에는 `load_rules()` 를 직접 불러 규범만 쟀다 — LESSONS·ACTIVE PLANS 는 측정 밖이었고
     조합 방식(main 의 신호 계산)이 게이트와 따로 놀았다. 이제 훅 프로세스를 그대로 돌린다.
+    출력 속 플러그인 루트는 `normalize_plugin_root` 로 대표 소비자 경로로 바꾼 뒤 돌려준다 —
+    판정이 이 레포가 체크아웃된 경로에 의존하지 않게.
     """
     root = plugin_root or PLUGIN_ROOT
     with tempfile.TemporaryDirectory(prefix="injection-budget-") as tmp:
@@ -322,7 +355,7 @@ def measure_scenarios(plugin_root: Path | None = None) -> dict[str, str]:
         (peak / ".mcp.json").write_text("{}", encoding="utf-8")
         (peak / "docs" / "works" / "active" / "legacy").mkdir(parents=True)
         return {
-            name: run_session_start(root, repo, home)
+            name: normalize_plugin_root(run_session_start(root, repo, home), root)[0]
             for name, repo in (
                 ("empty", empty), ("ledger", ledger), ("plan", plan),
                 ("worktree", worktree), ("peak", peak),
@@ -570,6 +603,10 @@ def main() -> int:
     print(
         "[injection-budget] · 실제 main() 출력 — "
         + " · ".join(f"{name} {size:,}B" for name, size in sizes.items())
+    )
+    print(
+        f"[injection-budget] · 플러그인 루트는 대표 소비자 경로({len(REPRESENTATIVE_PLUGIN_ROOT)}자)로 "
+        f"바꿔 쟀다 — 빈 레포 출력 {outputs['empty'].count(REPRESENTATIVE_PLUGIN_ROOT)}곳"
     )
     problems = check_conditional_coverage(outputs)
     for problem in problems:

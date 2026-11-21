@@ -35,6 +35,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
+import re
 import stat
 import subprocess
 import sys
@@ -43,6 +44,54 @@ import time
 from contextlib import contextmanager, suppress
 from datetime import datetime
 from pathlib import Path
+
+# 형제 모듈 — `python3 feedback_ledger.py …`(스크립트 디렉토리가 sys.path[0])로 돌든, 훅·테스트가
+# 경로로 로드하든 같은 정의를 쓴다. `tools/` 안에서만 import 한다(`hooks/` 는 일부 배포본에 없다).
+_TOOLS_DIR = str(Path(__file__).resolve().parent)
+if _TOOLS_DIR not in sys.path:
+    sys.path.insert(0, _TOOLS_DIR)
+try:
+    from hidden_chars import CONTROL_RE, strip_hidden
+except ImportError as _hidden_import_err:
+    # 형제 파일이 없는 배치(이 파일만 복사한 경우 등) — tools/ 는 훅과 같이 fail-open 이다. 정제를 끄지
+    # 않고 **표의 상위집합**을 지운다: 범주 Cf·Cn·Zl·Zp 전체 + tag(U+E0000–E007F) + 보충 변형 선택자
+    # (U+E0100–E01EF). 그 사실을 stderr 에 남긴다. `session-start.py` 의 폴백과 같은 정의다
+    # (tests/hooks/test_hidden_chars.py 가 두 폴백 모두 표의 모든 코드포인트를 지우는지 전수로 본다).
+    import unicodedata
+
+    print(
+        f"[feedback_ledger] hidden_chars 를 읽지 못했다({_hidden_import_err}) — "
+        "서식(Cf)·미할당(Cn)·구분자(Zl/Zp)·tag·보충 변형 선택자를 전부 지우는 보수 정제로 대신한다.",
+        file=sys.stderr,
+    )
+    CONTROL_RE = re.compile("[\x00-\x1f\x7f-\x9f\u2028\u2029]+")
+
+    def _fallback_hidden(ch: str) -> bool:
+        cp = ord(ch)
+        return (
+            unicodedata.category(ch) in ("Cf", "Cn", "Zl", "Zp")
+            or 0xE0000 <= cp <= 0xE007F
+            or 0xE0100 <= cp <= 0xE01EF
+        )
+
+    def strip_hidden(text: str) -> tuple[str, int]:
+        kept = "".join(ch for ch in text if not _fallback_hidden(ch))
+        return kept, len(text) - len(kept)
+
+
+#: 정제 표시(`hidden_chars.removed_marker`)와 같은 모양 — dedupe 키에서 떼어 낸다.
+_REMOVED_MARKER_RE = re.compile(r"\s*\[hidden-chars-removed:\d+\]")
+
+
+def sanitize_hidden(text: str) -> str:
+    """은닉 문자를 지우고, 지웠으면 끝에 ` [hidden-chars-removed:N]` 을 붙인다(멱등).
+
+    `hidden_chars.sanitize_hidden` 과 같은 계약을 `strip_hidden` 위에 다시 세운 것이다 — 폴백 배치에서도
+    표시 형식이 하나로 유지되게.
+    """
+    cleaned, removed = strip_hidden(text)
+    return f"{cleaned} [hidden-chars-removed:{removed}]" if removed else cleaned
+
 
 CAP = 50  # 최대 엔트리 수
 DEFAULT_DIGEST_K = 5  # 주입할 상위 교훈 수
@@ -197,17 +246,30 @@ def migrate_legacy_ledger(root: Path | None = None) -> str:
 
 
 def _sanitize(pattern: str) -> str:
-    """pattern을 ledger 셀에 안전하게 — '|'(테이블 구분자)·개행 제거, 공백 정규화.
+    """pattern을 ledger 셀에 안전하게 — 은닉 문자 제거(+표시), '|'(테이블 구분자)·제어문자 제거, 공백 정규화.
 
     review 결함에 '|'(예: 'string | null', 'A | B')가 포함되면 마크다운 행이
     깨져 파싱 시 엔트리가 유실되고 dedupe가 무력화된다 (안티-부채 설계 붕괴 방지).
+
+    은닉 문자(zero-width·bidi·tag — `hidden_chars.py`)는 **값이 만들어지는 자리**(upsert)에서
+    지운다 — 원장의 pattern 은 매 세션 LESSONS 로 주입되므로, 여기서 남기면 사람 눈에 안 보이는
+    지시문이 세션을 넘어 지속된다(ASI06). 지운 개수는 `[hidden-chars-removed:N]` 로 셀에 남는다.
+    제어 문자(C0·DEL·C1·U+2028/2029 — `hidden_chars.CONTROL_RE`)는 공백으로 바꾼다. 멱등이다.
     """
-    return " ".join(pattern.replace("|", "/").split())
+    return " ".join(CONTROL_RE.sub(" ", sanitize_hidden(pattern)).replace("|", "/").split())
 
 
 def _normalize(category: str, pattern: str) -> str:
-    """dedupe 키 — category + 소문자/sanitize된 pattern."""
-    return f"{category}::{_sanitize(pattern).lower()}"
+    """dedupe 키 — category + 소문자로 정규화한 pattern. **정제 표시는 키에 넣지 않는다.**
+
+    표시(`[hidden-chars-removed:N]`)는 저장·표시 셀의 몫이다. 키에 섞이면 `X` 와 `X<ZWSP>` 가
+    (보이는 내용이 같은데) 별개 엔트리로 갈려 빈도가 쪼개진다 — 은닉 문자 하나로 dedupe 를 우회하는
+    셈이다. 그래서 키는 저장된 셀(표시 포함)이든 새 입력이든 **표시를 떼고 은닉 문자를 지운 값**으로 만든다.
+    """
+    unmarked = _REMOVED_MARKER_RE.sub("", pattern)
+    cleaned, _removed = strip_hidden(unmarked)
+    text = " ".join(CONTROL_RE.sub(" ", cleaned).replace("|", "/").split())
+    return f"{category}::{text.lower()}"
 
 
 class LedgerUnreadable(Exception):
@@ -522,6 +584,12 @@ def upsert(category: str, severity: str, pattern: str, root: Path | None = None)
         for e in entries:
             if _normalize(e["category"], e["pattern"]) == key:
                 e["frequency"] += 1
+                # 이번 입력에서 은닉 문자를 지웠는데 저장된 셀에 표시가 없으면 표시를 옮겨 싣는다 —
+                # 키가 같다고 이번 정제 사실을 버리면 그 발화를 아무도 못 센다(warning-signal §측정 8).
+                if _REMOVED_MARKER_RE.search(pattern) and not _REMOVED_MARKER_RE.search(
+                    e["pattern"]
+                ):
+                    e["pattern"] = pattern
                 e["last_seen"] = today
                 e["severity"] = severity or e["severity"]
                 _write_ledger(path, _decay(entries))
@@ -598,8 +666,16 @@ def load_digest(top_k: int = DEFAULT_DIGEST_K, root: Path | None = None) -> str:
     top = entries[:top_k]
     lines = ["과거 validation에서 반복된 결함 — 구현/리뷰 시 우선 점검:"]
     for e in top:
+        # 주입 경계에서 한 번 더 지운다. upsert 를 거치지 않은 값이 있다 — 손편집, 이 정제 이전에
+        # 기록된 항목, 그리고 **작업 트리의 구 원장**(남이 만든 클론에 실려 올 수 있다).
+        # 제어 문자도 같이 — 손편집 셀의 C1·U+2028 이 digest 한 줄을 쪼개지 못하게.
         lines.append(
-            f"  - [{e['category']}/{e['severity']}] {e['pattern']} (x{e['frequency']})"
+            CONTROL_RE.sub(
+                " ",
+                sanitize_hidden(
+                    f"  - [{e['category']}/{e['severity']}] {e['pattern']} (x{e['frequency']})"
+                ),
+            )
         )
     digest = "\n".join(lines)
     if len(digest) > DIGEST_CHAR_CAP:

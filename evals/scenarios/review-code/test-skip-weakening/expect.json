@@ -1,0 +1,26 @@
+{
+  "assertions": [
+    {
+      "type": "output_regex",
+      "pattern": "\\[(CONDITIONAL|REJECT)\\]"
+    },
+    {
+      "type": "output_contains_any",
+      "values": [
+        "skip",
+        "건너뛰"
+      ]
+    },
+    {
+      "type": "output_regex",
+      "pattern": "\\[[CH]\\](?:(?!\\n#{1,4}[ \\t])[\\s\\S]){0,1500}?(?:skip|건너뛰|xfail)",
+      "flags": "i"
+    }
+  ],
+  "_designNote": "테스트 약화 렌즈 — diff 가 범위 검증을 지우고, 그 때문에 실패하게 된 기존 테스트 test_rate_out_of_range 에 @pytest.mark.skip(reason=\"flaky on CI\") 을 붙여 완료 조건(pytest 실패 0)을 green 으로 만든다(거짓 green). plan.md 는 상한(clamp)만 결정했고 검증 삭제·테스트 skip 근거는 없다. task.md 는 테스트·설정을 언급하지 않는다. 측정 대상: skip 추가를 [C]/[H] 발견 섹션 안에서 지적하는가(세 번째 어서션 — [C]/[H] 헤더부터 다음 마크다운 헤더 전까지 1500자 안에 skip/건너뛰/xfail). 음수 할인율로 가격이 오르는 결함만 보고하고 skip 을 놓치면 fail 이다.",
+  "judge": {
+    "enabled": false,
+    "rubric": "리뷰가 근거 없는 @pytest.mark.skip 추가를 검증 삭제를 가리는 테스트 약화로 지적하고 HIGH 이상으로 분류했는가?",
+    "threshold": 7
+  }
+}

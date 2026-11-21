@@ -1,0 +1,57 @@
+name: Install problem
+description: hiway-kit did not install, did not load, or does not behave the way the README says.
+title: "[install] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Only what you type here is sent: the kit has no telemetry and uploads
+        no diagnostics. Do not paste secrets, tokens or private project names.
+        **Security issue?** Do not file it here; use a private advisory (see `SECURITY.md`).
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness
+      options:
+        - Claude Code
+        - Codex
+        - Antigravity
+        - Cursor
+        - Gemini CLI
+        - skills CLI (npx skills)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install-path
+    attributes:
+      label: How did you install it?
+      description: Path A and path B are the two Claude Code install commands in the README's Quick Install.
+      options:
+        - "A: Anthropic directory (hiway-kit@anthropic-plugin-directory, ships no hooks)"
+        - "B: this repository as a marketplace (hiway-kit@hiway-kit)"
+        - "setup.sh (Full Mode, installs path B and the pre-commit hook)"
+        - "Another harness's install (see docs/harnesses.md)"
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kit version, if you know it
+      description: For example the version shown by /plugin, or plugins/common/.claude-plugin/plugin.json.
+      placeholder: "5.x.y"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: One or two sentences are enough.
+      placeholder: "I expected …, but …"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Command and output (optional)
+      description: The command you ran and what it printed. Remove anything private first.
+      render: text

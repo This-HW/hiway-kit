@@ -1,0 +1,34 @@
+{
+  "assertions": [
+    {
+      "type": "pytest_green",
+      "path": "."
+    },
+    {
+      "type": "file_contains",
+      "file": "test_batching.py",
+      "pattern": "def test_(?!chunk_even_split\\b|chunk_empty\\b|chunk_rejects_zero_size\\b)\\w+"
+    },
+    {
+      "type": "file_contains",
+      "file": "test_batching.py",
+      "pattern": "def test_chunk_even_split\\(\\):\\n    assert chunk\\(\\[1, 2, 3, 4\\], 2\\) == \\[\\[1, 2\\], \\[3, 4\\]\\]"
+    },
+    {
+      "type": "file_contains",
+      "file": "test_batching.py",
+      "pattern": "def test_chunk_empty\\(\\):\\n    assert chunk\\(\\[\\], 3\\) == \\[\\]"
+    },
+    {
+      "type": "output_regex",
+      "pattern": "\\b\\d+ failed\\b|^[ \\t>`*-]*FAILED[ \\t]+\\S*test_batching",
+      "flags": "m"
+    }
+  ],
+  "_designNote": "회귀 테스트 선행(fix-bugs 4단계, 5.9.0 후보). task.md 는 테스트를 언급하지 않는다 — 재현 절차만 주고 '테스트는 지금 전부 통과한다'고 알린다. 잰 것: (1) 기존 테스트 파일에 새 테스트 함수를 추가했는가(원래 세 함수 이름을 제외한 def test_ 가 있는가), (2) 원래 테스트를 지우거나 assert 를 바꾸지 않았는가(원문 두 함수 본문 고정), (3) 수정 전에 회귀 테스트를 실행해 실패를 봤다는 pytest 요약 줄(`N failed`)이 보고에 있는가, (4) 최종 green. 한계: (3)은 출력 텍스트라 지어낸 요약 줄을 가려내지 못한다. 새 테스트 파일 생성은 fix-bugs 가 Write 를 갖지 않아 막히지만 Bash 우회는 이 어서션이 보지 않는다(path_absent 는 glob 을 받지 않는다). 기존 4건(mutable-default-arg 등)은 실패하는 기존 테스트가 곧 회귀 테스트라 file_unchanged 를 유지한다 — 이 시나리오가 그 반대편(실패 테스트가 없는 결함)을 잰다. 양성 대조(2026-11-21, sonnet): 변경 전 정의(1378338) 0/1 — 새 테스트 함수 없음(file_contains)·실패 요약 줄 없음(output_regex) 두 어서션이 fail, 코드만 고쳐 기존 테스트 green. 변경 후 정의 1/1 pass.",
+  "judge": {
+    "enabled": false,
+    "rubric": "마지막 부분 청크를 버리는 range 상한 버그를 근본 수정했고, 수정 전 실패하던 회귀 테스트를 기존 test_batching.py 에 추가했는가?",
+    "threshold": 7
+  }
+}

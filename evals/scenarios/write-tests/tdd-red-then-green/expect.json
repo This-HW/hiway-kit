@@ -1,0 +1,28 @@
+{
+  "assertions": [
+    {
+      "type": "glob_contains",
+      "glob": "test_*.py",
+      "pattern": "parse_duration"
+    },
+    {
+      "type": "pytest_green",
+      "path": "."
+    },
+    {
+      "type": "output_regex",
+      "pattern": "\\b\\d+ failed\\b|^[ \\t>`*-]*FAILED[ \\t]+\\S*test_\\w+\\.py::",
+      "flags": "m"
+    },
+    {
+      "type": "output_regex",
+      "pattern": "\\b\\d+ passed\\b"
+    }
+  ],
+  "_designNote": "TDD RED 게이트(write-tests 4단계, 5.9.0 후보). task.md 는 'TDD 로 진행하라'만 말하고 실패 출력을 보여 달라고 하지 않는다 — RED 증거(구현 전 실행의 pytest 실패 요약 `N failed` 또는 `FAILED …::` 줄)가 보고에 있는지가 정의의 효과다. 구현도 맡겼으므로 끝은 green 이어야 하고(pytest_green), GREEN 증거(`N passed`)도 보고에 있어야 한다. 이전 정의(1378338)는 4단계가 '모든 테스트 통과'뿐이라 테스트와 구현을 함께 쓰고 green 만 보고할 수 있다 — 양성 대조 결과는 CHANGELOG 조각·worker 보고에 기록. 한계: 출력 텍스트 검사라 지어낸 요약 줄을 가려내지 못한다. collection error(ImportError)는 pytest 가 `N failed` 가 아니라 `N error` 로 요약하므로 이 패턴에 걸리지 않는다. 픽스처에 기존 루트 수준 test_textfmt.py 를 둔다 — 관례가 없으면 write-tests 는 정의대로 새 최상위 tests/ 를 만들지 않고 제안만 하므로(1차 실행 2026-11-21 에서 실측: 변경 전·후 모두 파일을 남기지 않음) 위치 관례를 픽스처가 정해야 RED 게이트를 잰다. 양성 대조(2026-11-21, sonnet): 변경 전 정의(1378338) 0/2 — 둘 다 출력에 실패 요약 줄이 없어 fail. 단 두 번 모두 산문으로는 '먼저 전부 실패하는 것을 봤다'고 주장했다. 이 시나리오가 변별하는 것은 RED 실행 여부 자체가 아니라 **RED 를 증거(명령·실패 줄)로 보고하는가**다. 변경 후 정의 2/2 pass.",
+  "judge": {
+    "enabled": false,
+    "rubric": "구현 전에 테스트를 실행해 미구현 때문에 실패하는 것을 확인했고, 구현 후 같은 테스트가 통과했는가?",
+    "threshold": 7
+  }
+}

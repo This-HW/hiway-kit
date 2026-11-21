@@ -9,6 +9,7 @@
 알리는 유일한 통로다 — 훅이 fail-open이라 그 죽음 자체는 아무 흔적을 남기지 않는다.
 """
 
+import importlib.util
 import json
 import runpy
 import subprocess
@@ -33,6 +34,9 @@ def _run_isolated(tmp_path, monkeypatch, script=SCRIPT):
     관련 검사가 돌지 않는다.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
+    # 개발자 세션의 실제 Claude 설정·프로젝트를 읽지 않게 한다(이중 설치 검사가 그 둘을 본다).
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit) as exc:
         runpy.run_path(str(script), run_name="__ckkit_test__")
@@ -295,7 +299,9 @@ def test_never_queries_template_dir(tmp_path, monkeypatch):
     assert not [c for c in calls if "init.templateDir" in c]
 
 
-def test_full_mode_does_not_nag_about_declined_global_setup(tmp_path, monkeypatch, capsys):
+def test_full_mode_does_not_nag_about_declined_global_setup(
+    tmp_path, monkeypatch, capsys
+):
     """5.7.2 — setup.sh 는 전역 ruff.toml 을 설치하지 않고 init.templateDir 은 묻고 나서만 켠다.
     그 둘이 없는 것은 사용자의 선택이라, 경고하면 정상 운영에서 상시 참인 경고가 된다."""
     (tmp_path / ".claude").mkdir()
@@ -473,3 +479,230 @@ def test_migrate_does_not_overwrite_existing_backup(tmp_path):
     assert r.returncode == 1
     assert src.is_file()
     assert old.read_text() == "previous backup"
+
+
+# ── 킷 이중 설치 (5.9.0) ──────────────────────────────────────────────────
+#
+# 판정 근거는 Claude Code 가 쓰는 `plugins/installed_plugins.json`(version 2)과 `enabledPlugins` 다.
+# 형식은 2.1.330 에서 빈 CLAUDE_CONFIG_DIR 에 `claude plugin install/uninstall/disable/marketplace
+# remove --json` 을 돌려 실측했다 — 아래 픽스처는 그때 관측한 모양을 그대로 쓴다.
+
+DIRECT = "hiway-kit@hiway-kit"
+DIRECTORY = "hiway-kit@anthropic-plugin-directory"
+PREDECESSOR = "claude-code-kit@claude-code-kit"  # old-name-ok: 전임 설치 탐지 테스트
+
+
+def _claude_config(tmp_path, installs, user_enabled=None, project_settings=None,
+                   local_settings=None, version=2, project=None):
+    """installs: {id: [(scope, projectPath|None), ...]} → 실측 형식의 설정 디렉토리."""
+    config = tmp_path / "claude-config"
+    (config / "plugins").mkdir(parents=True, exist_ok=True)
+    plugins = {
+        pid: [
+            {"scope": scope, **({"projectPath": str(path)} if path else {}),
+             "installPath": str(config / "plugins" / "cache" / pid.split("@")[1]
+                                / pid.split("@")[0] / "1.0.0"),
+             "version": "1.0.0"}
+            for scope, path in entries
+        ]
+        for pid, entries in installs.items()
+    }
+    (config / "plugins" / "installed_plugins.json").write_text(
+        json.dumps({"version": version, "plugins": plugins}), encoding="utf-8")
+    enabled = user_enabled if user_enabled is not None else dict.fromkeys(installs, True)
+    (config / "settings.json").write_text(json.dumps({"enabledPlugins": enabled}))
+    project = project or tmp_path
+    for name, data in (("settings.json", project_settings), ("settings.local.json", local_settings)):
+        if data is not None:
+            (project / ".claude").mkdir(parents=True, exist_ok=True)
+            (project / ".claude" / name).write_text(json.dumps({"enabledPlugins": data}))
+    return config
+
+
+def _run_with_config(tmp_path, monkeypatch, config, project=None):
+    project = project or tmp_path
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config))
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(project))
+    monkeypatch.chdir(project)
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_path(str(SCRIPT), run_name="__ckkit_test__")
+    return exc.value.code
+
+
+def test_no_dual_install_warning_for_a_single_install(tmp_path, monkeypatch, capsys):
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], "other@mp": [("user", None)]})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" not in _warning(capsys.readouterr())
+
+
+def test_warns_when_directory_and_direct_installs_are_both_enabled(tmp_path, monkeypatch, capsys):
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    msg = _warning(capsys.readouterr())
+    assert "설치 ID 2개로 겹쳐" in msg
+    assert DIRECT in msg and DIRECTORY in msg
+    assert "docs/harnesses.md#keep-one-install" in msg
+    assert str(tmp_path) not in msg  # 캐시 경로·사용자 홈을 출력하지 않는다(§검토 6)
+
+
+def test_warns_when_the_predecessor_install_is_still_enabled(tmp_path, monkeypatch, capsys):
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], PREDECESSOR: [("user", None)]})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert PREDECESSOR in _warning(capsys.readouterr())
+
+
+def test_same_id_at_user_and_project_scope_is_one_install(tmp_path, monkeypatch, capsys):
+    """Claude Code 는 같은 ID 를 두 범위에 깔아도 한 번만 로드한다(2.1.330 실측: 훅 1회)."""
+    config = _claude_config(tmp_path, {DIRECT: [("user", None), ("project", tmp_path)]},
+                            project_settings={DIRECT: True})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" not in _warning(capsys.readouterr())
+
+
+def test_a_disabled_second_install_is_not_a_dual_install(tmp_path, monkeypatch, capsys):
+    """`claude plugin disable` 은 installed_plugins.json 을 남기고 enabledPlugins 만 false 로 바꾼다."""
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]},
+                            user_enabled={DIRECT: True, DIRECTORY: False})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" not in _warning(capsys.readouterr())
+
+
+def test_project_local_setting_overrides_user_enable(tmp_path, monkeypatch, capsys):
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]},
+                            local_settings={DIRECTORY: False})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" not in _warning(capsys.readouterr())
+    # 양성 대조 — 반대로 프로젝트에서 켜면 user 에서 꺼도 겹친다
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]},
+                            user_enabled={DIRECT: True, DIRECTORY: False},
+                            local_settings={DIRECTORY: True})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" in _warning(capsys.readouterr())
+
+
+def test_project_scope_install_of_another_project_does_not_apply(tmp_path, monkeypatch, capsys):
+    other = tmp_path / "other-project"
+    other.mkdir()
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("project", other)]},
+                            user_enabled={DIRECT: True})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" not in _warning(capsys.readouterr())
+    # 양성 대조 — 그 프로젝트에서 세션을 열면 겹친다
+    (other / ".claude").mkdir()
+    (other / ".claude" / "settings.json").write_text(json.dumps({"enabledPlugins": {DIRECTORY: True}}))
+    assert _run_with_config(tmp_path, monkeypatch, config, project=other) == 0
+    assert "겹쳐" in _warning(capsys.readouterr())
+
+
+def test_leftover_cache_directories_are_not_installs(tmp_path, monkeypatch, capsys):
+    """uninstall·marketplace remove 뒤에도 캐시 디렉토리는 남는다(2.1.330 실측) — 캐시로 판정하면
+    문서대로 채널을 바꾼 사용자에게 상시 참인 경고가 된다."""
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)]})
+    for mp in ("anthropic-plugin-directory", "claude-code-kit"):  # old-name-ok: 남은 캐시 재현
+        (config / "plugins" / "cache" / mp / "hiway-kit" / "5.5.1").mkdir(parents=True)
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" not in _warning(capsys.readouterr())
+
+
+@pytest.mark.parametrize("body", [
+    json.dumps({"version": 3, "plugins": {DIRECT: [{"scope": "user"}], DIRECTORY: [{"scope": "user"}]}}),
+    json.dumps({"version": 2, "plugins": [DIRECT, DIRECTORY]}),
+    json.dumps({"version": 2, "plugins": {DIRECT: "user", DIRECTORY: None}}),
+    "{not json",
+    "",
+])
+def test_unknown_install_record_format_is_silent(tmp_path, monkeypatch, capsys, body):
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]})
+    (config / "plugins" / "installed_plugins.json").write_text(body)
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "겹쳐" not in out.get("systemMessage", "")
+    assert "내부 오류" not in out.get("systemMessage", "")
+
+
+def test_similar_plugin_names_are_not_the_kit(tmp_path, monkeypatch, capsys):
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], "hiway-kit-extras@mp": [("user", None)],
+                                       "x@hiway-kit": [("user", None)]})
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" not in _warning(capsys.readouterr())
+
+
+def test_dual_install_check_runs_outside_a_git_repo(tmp_path, monkeypatch, capsys):
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]})
+    assert not (tmp_path / ".git").exists()
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    assert "겹쳐" in _warning(capsys.readouterr())
+
+
+def test_dual_install_check_in_a_real_process_on_the_default_config_dir(tmp_path):
+    """CLAUDE_CONFIG_DIR 이 없으면 ~/.claude 를 본다 — 실제 프로세스로(import-time 오류 포함)."""
+    home = tmp_path / "home"
+    config = _claude_config(tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]})
+    home.mkdir()
+    config.rename(home / ".claude")
+    r = subprocess.run([sys.executable, str(SCRIPT)], capture_output=True, text=True, timeout=30,
+                       cwd=str(tmp_path), check=False,
+                       env={"HOME": str(home), "PATH": "/usr/bin:/bin:/usr/local/bin"})
+    assert r.returncode == 0, r.stderr
+    assert "겹쳐" in json.loads(r.stdout).get("systemMessage", "")
+
+
+# ── 깊게 중첩된 설정 JSON (리뷰 L-005, 5.9.0) ──────────────────────────────────
+# 수정 전: `_read_json` 이 RecursionError 를 잡지 않아 `collect_warnings()` 가 통째로 죽고, main() 의
+# 바깥 except 가 "내부 오류" 한 줄로 바꿨다 — python 하한·낡은 venv·이름 충돌 경고가 전부 사라졌다.
+
+_DEEP_JSON = "[" * 100_000 + "]" * 100_000  # 200 KB — 1 MiB 상한 안
+
+
+@pytest.mark.parametrize("victim", ["installed_plugins", "user_settings", "project_settings"])
+def test_deeply_nested_settings_do_not_hide_other_warnings(tmp_path, monkeypatch, capsys, victim):
+    _init_repo(tmp_path)
+    _make_venv(tmp_path, "/old/path/former-location/.venv/bin/python")
+    config = _claude_config(
+        tmp_path, {DIRECT: [("user", None)], DIRECTORY: [("user", None)]}, project_settings={}
+    )
+    target = {
+        "installed_plugins": config / "plugins" / "installed_plugins.json",
+        "user_settings": config / "settings.json",
+        "project_settings": tmp_path / ".claude" / "settings.json",
+    }[victim]
+    target.write_text(_DEEP_JSON)
+    assert _run_with_config(tmp_path, monkeypatch, config) == 0
+    msg = _warning(capsys.readouterr())
+    assert "/old/path/former-location/.venv/bin/python" in msg  # 다른 경고가 살아 있다
+    assert "session-check 내부 오류" not in msg
+
+
+def _module_without_main():
+    """스크립트는 끝에서 main() 을 무조건 부르고 exit 한다 — 그 SystemExit 만 삼켜 정의가 채워진 모듈을 얻는다."""
+    spec = importlib.util.spec_from_file_location("session_check_mod", SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    with pytest.raises(SystemExit):
+        spec.loader.exec_module(mod)
+    return mod
+
+
+def test_read_json_treats_deep_nesting_as_broken(tmp_path):
+    deep = tmp_path / "deep.json"
+    deep.write_text(_DEEP_JSON)
+    assert _module_without_main()._read_json(deep) is None
+
+
+def test_dual_install_check_failure_is_isolated_and_named(tmp_path, monkeypatch):
+    """이중 설치 검사가 예기치 않게 터져도 그 검사만 빠지고, 빠졌다는 사실이 그 이름으로 보인다."""
+    _init_repo(tmp_path)
+    _make_venv(tmp_path, "/old/path/former-location/.venv/bin/python")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    mod = _module_without_main()
+
+    def boom(*_a, **_k):
+        raise RuntimeError("boom")
+
+    mod.find_kit_installs = boom
+    warnings = mod.collect_warnings()
+    assert any("이중 설치 검사 내부 오류" in w for w in warnings)
+    assert any("/old/path/former-location/.venv/bin/python" in w for w in warnings)
