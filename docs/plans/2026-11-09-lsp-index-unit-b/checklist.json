@@ -36,7 +36,7 @@
     "description": "Integration owner folds explicit conditions into the single Unit A+B squash and verifies final gates",
     "acceptance": "Plan-control rechecks all five integration conditions plus frozen hashes, both runtimes, targeted mutations, full verify-done, Ubuntu CI, directory Validate and no old fixture blob in published history",
     "verify": "Final integration tree: scripts/verify-done.sh plus plan-control integration evidence",
-    "passes": false,
-    "evidence": "Owner: plan-control. Follow-up source/testing prepared on lsp-index-unit-b; final squash/release checks intentionally pending."
+    "passes": true,
+    "evidence": "Closed by plan-control 2026-11-21 after release. Single squash 1378338 (v5.8.0) fast-forwarded main 82f0cd3..1378338, tag v5.8.0 pushed. Full verify-done at 1378338: 38 pass / 2 fail = this INT1 item (self-referential, local-only) and §16 only when run from a 124-char scratch path (7,571B); the same check from a 19-char path passes 6,843B<=7,168B (path dependence, fixed in 5.9.0). Ubuntu CI run 44885840273: validate, python39-compat, directory-branch all success; directory branch 5082df3 = 1378338 minus hooks/hooks.json. Old fixture blobs 3db0b04/d2a7f15 absent from main, directory and tags. Directory Validate on directory@5082df3: no finding new relative to a same-day v5.7.1 control (identical UNREAD_ASSET_REFERENCED and MCP_FORWARDS_CREDENTIAL_ENV evidence); its 2 blocking findings (LOCAL_CODE_FILE_TYPE hooks/auto-format.py, LOCAL_CODE_FRONTMATTER_KEY agents/fix-bugs.md isolation) also appear on the v5.7.1 control and come from a directory policy for non-Verified organizations introduced after 2026-11-06, tracked in docs/marketplace-submission.md."
   }
 ]

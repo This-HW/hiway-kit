@@ -1,8 +1,8 @@
 ---
 title: "LSP index Unit B: lsp_query and transport integration"
-status: current
-execution_status: in-progress
-as_of: 2026-11-09
+status: historical
+execution_status: done
+as_of: 2026-11-21
 created: 2026-11-09
 size: large
 ---
@@ -113,3 +113,11 @@ Plan-control independently ACCEPTED Unit B at 952cb9d (plan-control-review-r4.md
 5. ResourceGuard docstring states cooperative work uses work time; reserve is for forced kill+verified reap.
 
 Evidence under migration unit-b/native-proof/integration-conditions: both runtimes 342 nodes pass (3.12 includes43 subtests), collection diff0; 5 targeted mutations detected; 20x4 parallel target invocations all pass (160 cases, all80 positive handshakes reached); native5 controls complete/golden with one key and source/CDB restored. Source hashes preserve tested bytes for the follow-up commit. Final full verify-done/Ubuntu/directory Validate/no-old-blob and squash checks are still plan-control's integration gates; no release action here.
+
+## 통합·릴리스 기록 (2026-11-21, plan-control)
+
+- Unit A+B 단일 squash `1378338` 을 v5.8.0 으로 main 에 fast-forward(82f0cd3..1378338)하고 `v5.8.0` 태그를 push 했다.
+- Full `scripts/verify-done.sh` @1378338: 38 pass / 2 fail — INT1 자신(로컬 전용·자기참조)과 §16(124자 스크래치 경로에서만 7,571B; 19자 경로에서 6,843B≤7,168B 통과 — 경로 의존, 5.9.0 에서 수정).
+- Ubuntu CI run 44885840273: validate·python39-compat·directory-branch 모두 success. `directory` = 5082df3(1378338 에서 `hooks/hooks.json` 만 뺀 트리).
+- 옛 픽스처 blob `3db0b04`·`d2a7f15` 는 main·directory·태그 어디에도 없다.
+- 디렉토리 Validate(directory@5082df3): 같은 날 v5.7.1 대조군 대비 새 발견 0. 차단 2건(`LOCAL_CODE_FILE_TYPE`·`LOCAL_CODE_FRONTMATTER_KEY`)은 대조군에도 있는 11-06 이후 신설된 비 Verified 조직 규칙이다 — 채널 상태는 `docs/marketplace-submission.md` 가 소유한다.

@@ -1,8 +1,8 @@
 ---
 title: "LSP index Unit A: cache, coverage and resource primitives"
-status: current
-execution_status: in-progress
-as_of: 2026-11-08
+status: historical
+execution_status: done
+as_of: 2026-11-21
 created: 2026-11-08
 size: large
 ---
@@ -40,3 +40,7 @@ Repository document-status convention takes precedence over generic plan-format 
 - Base lacks all four new production modules: literal absence yields collection rc2 only. Five separate production-invariant defeats (semantic env key, durable grant, locking, coverage truthfulness, RSS guard) yield assertion rc1 and restore byte-identically; this distinction is preserved in evidence.
 - Ruff and document reference/status checks passed. Existing project doc-status vocabulary is retained with execution_status for progress.
 - Independent A review pending; Linux fake contracts executed locally, actual Ubuntu CI unverified. Unit B, full frozen product gate, minor bump and release are not complete.
+
+## 통합·릴리스 기록 (2026-11-21, plan-control)
+
+- Unit B 와 함께 단일 squash `1378338`(v5.8.0)로 main 에 들어갔다. 최종 통합 게이트(verify-done·Ubuntu CI·directory Validate·옛 blob 부재) 기록은 `docs/plans/2026-11-09-lsp-index-unit-b/plan.md` 의 같은 절이 소유한다.
