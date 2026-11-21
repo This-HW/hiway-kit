@@ -22,7 +22,7 @@ otherwise). Guidance lives in skills, never in agent `tools:` allowlists.
 
 ```bash
 # Anthropic 디렉토리 — Claude Code 내장 마켓플레이스(추가 불필요). 아래 직접 경로와 **둘 중 하나만**
-# 공개본은 5.5.1(훅 있음)에서 멈췄다 — 비 Verified 조직의 훅·스크립트를 거부. 상태: docs/marketplace-submission.md
+# 5.9.1 부터 축소판을 낸다(훅·도구·도구 의존 스킬 3종·isolation 없음), 심사 통과 전엔 공개본 5.5.1. 상태: docs/marketplace-submission.md
 /plugin install hiway-kit@anthropic-plugin-directory
 # 직접 마켓플레이스 — main HEAD 즉시 반영
 /plugin marketplace add This-HW/hiway-kit
