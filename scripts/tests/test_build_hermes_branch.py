@@ -926,6 +926,8 @@ def test_disable_model_invocation_compared_explicitly() -> None:
     assert not mod._same_scalar(mod._NonStr("true"), mod._NonStr("True"))
     assert not mod._same_scalar(mod._NonStr("true"), "true")
     assert not mod._same_scalar("1", mod._NonStr("1"))
+    # repr 이 같아도 타입이 다르면 다르다 — str()/repr 비교는 이것을 같다고 본다(ATK-010)
+    assert not mod._same_scalar(repr(mod._NonStr("true")), mod._NonStr("true"))
 
 
 def test_disable_model_invocation_value_change_stops(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
