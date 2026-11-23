@@ -450,3 +450,68 @@ Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조�
 `tools/checklist.py`와 `tools/export_harness.py`가 각각 같은 것을 확인했다. 이 경로를
 해석하는 P6의 별도 함수 대조는 원 판 결과를 유지한다. 내장 verify-on-stop·스킬 자동 생성·메모리
 공존은 모델 실행이 필요해 미측정이다.
+
+## 2단계 최종 재측정 — 게시 후보
+
+`tree_sha: 392f203d028b201c6f5044daf148964921749843`
+
+원본 커밋 `20dd2c81744876155da077f2a7e85ad1bc680081`, 파일 83개, 스킬 15종.
+`cp -Rp /private/tmp/hermes-edition-out-final "$R/src/edition-final"`와 `diff -qr` (각 rc 0)로
+판을 복사하고 대조했다. 로컬 bare 저장소에서
+`git -C "$R/git/edition-final.git" rev-parse HEAD HEAD:plugins/common` (rc 0)으로 하위 트리 SHA를
+확인했다. 후보에는 evals가 없고, README는 H1 관측에 맞춰 갱신됐다. 측정은 같은 프로필의
+네트워크 차단 모드에서 했다.
+
+### 게시 후보 P1 보안 판정과 첫 설치
+
+`sb off "$H" plugins validate "$R/src/edition-final" --json`은 rc 0으로 AP v1 `portable`,
+`host_ready: true`, 보안 스캔 **caution**을 반환했다.
+`sb off "$R/venv-main-314/bin/python" "$R/phase2/scan.py" "$R/src/edition-final"` (rc 0)의
+발견은 **87건**이었다. 수정 판 대비 high 5 → 3, medium 18 → 18, low 64 → 66, critical 0 → 0이다.
+
+| 파일 | 줄 | high 규칙 ID |
+| --- | ---: | --- |
+| agents/review-code.md | 392 | `destructive_root_rm` |
+| agents/review-code.md | 391 | `system_passwd_access` |
+| skills/auto-dev/SKILL.md | 255 | `python_os_environ` |
+
+호스트에서 `/opt/homebrew/bin/python3.11 -B "$R/phase2/final_findings_lines.py"` (rc 0)로
+수정 판과 후보의 발견을 대조했다. evals 삭제로 해당 평가 파일의 high `python_os_environ` 두 건이
+빠졌다. README의 low `agent_config_ref`는 재작성 전 19행 한 건에서 재작성 후 60·65·70행 세 건으로
+늘었다. 두 변화가 상쇄돼 총 발견 수는 87건으로 같았다. 전체 발견의 파일·규칙·매칭 원문은
+`~/.cache/hiway-research/hermes/h1/phase2/phase2-final-p1-findings.log`에 보존했다.
+
+### 게시 후보 P2 스킬 노출
+
+`sb off "$H" profile create h1-phase2-final --no-alias --no-credentials --no-skills` (rc 0)로
+새 프로필을 만들었다. 아래 `h2final`은 `sb off "$H" --profile h1-phase2-final`을 뜻한다.
+`url="file://$R/git/edition-final.git#plugins/common"`,
+`rev=e42a4a368f860f313cd4283b7dfa55b653fb9e4f`를 사용했다.
+
+| 명령 | rc | 관측 |
+| --- | --- | --- |
+| `h2final plugins install "$url" --ref "$rev" --no-enable` | 1 | `Decision: BLOCKED — Blocked (community source + caution verdict, 87 findings). Use --force to override.` |
+| `h2final plugins install "$url" --ref "$rev" --force --no-enable` | 0 | 후보 트리에 한해 승인한 설치. 설치 트리와 판 복사본의 `diff -qr`는 rc 0이었다. |
+| `h2final plugins enable hiway-kit`, `h2final plugins disable hiway-kit` | 각 0 | 활성화와 비활성화에 성공했다. |
+| `h2final plugins list --plain --no-bundled` | 각 0 | `not enabled` → `enabled` → `disabled`. 제거 후 목록은 비었다. |
+| `sb off "$R/venv-main-314/bin/python" "$R/phase2/skills_probe.py" "$R/hermes-home/profiles/h1-phase2-final"` | 각 0 | 에이전트 스킬 목록과 `<available_skills>` 모두 설치 전 0, 비활성 설치 직후 0, 활성화 후 15, 비활성화 후 0. |
+| `h2final plugins remove hiway-kit` | 0 | 설치 트리가 제거됐다. |
+
+비대화형 커뮤니티 설치에는 첫 설치부터 `--force`가 필요했다. 활성화된 이름은 앞 P2와 같은
+`hiway-kit:` 스킬 15종이다. `using-hiway-kit`은 양쪽 목록에 나왔고
+`harness-export`와 `skill-forge`는 빠졌다. 제거 뒤 프로필에는 빈 활성·비활성 목록과
+`_config_version: 54`가 적힌 설정, 설치 메타데이터와 그 잠금 파일이 남았다.
+
+### 게시 후보 P4 프로젝트 규칙과 실제 홈 대조
+
+`sb off "$R/venv-main-314/bin/python" "$R/src/edition-final/tools/export_harness.py" --plugin-root "$R/src/edition-final" --target "$R/proj-edition-final" --entrypoints AGENTS.md`
+는 rc 0이었다. 후보 트리 그대로 AGENTS.md를 생성했고 규범 마커 앞자리 `858066ab699a`를 출력했다.
+`sb off "$R/venv-main-314/bin/python" "$R/phase2/context_probe.py" "$R/proj-edition-final"` (rc 0)은
+AGENTS.md 7,206자가 `loaded`이며 프롬프트에 마커가 실렸음을 확인했다. 컨텍스트 인젝션 발견은 0건이었다.
+
+`sb off /opt/homebrew/bin/python3.11 "$R/probe.py" phase2-final-off "$outside" "$secret_paths"…`
+(rc 0)에서 실제 홈 쓰기, 비밀 경로 열기, 루프백 연결이 `EPERM`으로 거부됐다.
+호스트의 `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py"`로 실험 전후 파일 메타데이터를
+기록하고 비교했다(각 rc 0). 승인된 Hermes 데몬 관리 파일 6건이 바뀌었고
+그 밖의 변경과 Claude 플러그인 파일 변경은 각각 0건이었다. 원 로그와 프로브는
+`~/.cache/hiway-research/hermes/h1/phase2/`에 보존했다.
