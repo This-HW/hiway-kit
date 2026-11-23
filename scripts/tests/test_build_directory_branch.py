@@ -404,3 +404,73 @@ def test_real_repo_head_passes(capsys: pytest.CaptureFixture[str]) -> None:
     assert mod.main(["--check", "--repo", str(REPO_ROOT)]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert re.fullmatch(r"\[directory-branch\] plugin tree: [0-9a-f]{40}", lines[-1])
+
+
+# --- --write 의 브랜치 허용 목록·원본 계보 (Hermes 판 리뷰 ATK-006 의 디렉토리 빌더 몫) -----------------
+
+
+def _clone_like_ci(repo: Path, dest: Path) -> Path:
+    """CI `directory-branch` job 의 체크아웃 모양 — `fetch-depth: 0` 클론, `main` 이 `origin/main` 을 따른다."""
+    subprocess.run(["git", "clone", "-q", str(repo), str(dest)], check=True)
+    assert _git(dest, "rev-parse", "HEAD") == _git(dest, "rev-parse", "refs/remotes/origin/main")
+    return dest
+
+
+def test_write_refuses_other_branches(repo: Path) -> None:
+    with pytest.raises(SystemExit) as exc:
+        mod.main(["--write", "--branch", "main", "--repo", str(repo)])
+    assert exc.value.code == 2
+    assert _git(repo, "rev-parse", "HEAD") == _git(repo, "rev-parse", "refs/heads/main")
+
+
+def test_write_refuses_source_outside_main(repo: Path) -> None:
+    _git(repo, "checkout", "-q", "-b", "side")
+    (repo / "plugins/common/rules/r.md").write_text("---\ntier: core\n---\nside\n")
+    side = _commit_all(repo, "side")
+    _git(repo, "checkout", "-q", "main")
+    with pytest.raises(SystemExit, match="main 에 들어간 커밋이 아니다"):
+        mod.main(["--write", "--source", side, "--repo", str(repo)])
+    assert _git(repo, "branch", "--list", "directory") == ""
+
+
+def test_write_refuses_when_no_lineage_ref_exists(repo: Path) -> None:
+    _git(repo, "checkout", "-q", "--detach")
+    _git(repo, "branch", "-D", "main")
+    with pytest.raises(SystemExit, match="확인한 ref: 없음"):
+        mod.main(["--write", "--repo", str(repo)])
+
+
+def test_ci_checkout_head_equals_origin_main(repo: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """CI: main push 직후 HEAD == origin/main(로컬 main 도 같다)에서 `--write --source $GITHUB_SHA` 가 통과한다."""
+    ci = _clone_like_ci(repo, tmp_path_factory.mktemp("ci") / "co")
+    sha = _git(ci, "rev-parse", "HEAD")
+    assert mod.main(["--write", "--source", sha, "--repo", str(ci)]) == 0
+    assert _git(ci, "rev-list", "--parents", "-n1", "refs/heads/directory").split()[1:] == [sha]
+
+
+def test_ci_checkout_with_only_origin_main(repo: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """로컬 main 없이 origin/main 만 있는 체크아웃(분리 HEAD)에서도 origin/main 으로 계보를 판정한다."""
+    ci = _clone_like_ci(repo, tmp_path_factory.mktemp("ci") / "co")
+    sha = _git(ci, "rev-parse", "HEAD")
+    _git(ci, "checkout", "-q", "--detach")
+    _git(ci, "branch", "-D", "main")
+    assert mod.main(["--write", "--source", sha, "--repo", str(ci)]) == 0
+
+
+def test_origin_main_ahead_of_stale_local_main(repo: Path, tmp_path_factory: pytest.TempPathFactory) -> None:
+    """origin/main 이 로컬 main 보다 앞선(fetch 만 한) 체크아웃 — 새 원본은 origin/main 으로 통과한다."""
+    ci = _clone_like_ci(repo, tmp_path_factory.mktemp("ci") / "co")
+    (repo / "plugins/common/rules/r.md").write_text("---\ntier: core\n---\nnext\n")
+    newer = _commit_all(repo, "next")
+    _git(ci, "fetch", "-q", "origin")
+    assert _git(ci, "rev-parse", "refs/heads/main") != newer
+    assert mod.main(["--write", "--source", newer, "--repo", str(ci)]) == 0
+
+
+def test_local_main_without_origin(repo: Path) -> None:
+    """origin/main 을 아직 fetch 하지 않은(원격 없음) 로컬 — 로컬 main 의 조상이면 통과한다."""
+    assert _git(repo, "remote") == ""
+    older = _git(repo, "rev-parse", "HEAD")
+    (repo / "plugins/common/rules/r.md").write_text("---\ntier: core\n---\nnext\n")
+    _commit_all(repo, "next")
+    assert mod.main(["--write", "--source", older, "--repo", str(repo)]) == 0

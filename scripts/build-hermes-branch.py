@@ -83,10 +83,10 @@ from edition_tree import (
     _frontmatter_span,
     _git,
     _git_bytes,
-    _is_ancestor,
     _note_marker,
     _rev,
     _with_note,
+    in_lineage,
 )
 from edition_tree import write_branch as _write_edition_branch
 
@@ -1123,8 +1123,8 @@ def main(argv: list[str] | None = None) -> int:
                 f" (enabled={target.get('enabled')!r}). 사유: {reason}"
             )
             return 1
-        lineage = [sha for ref in WRITE_LINEAGE_REFS if (sha := _rev(args.repo, ref))]
-        if not any(_is_ancestor(args.repo, source, sha) for sha in lineage):
+        ok, _present = in_lineage(args.repo, source, WRITE_LINEAGE_REFS)
+        if not ok:
             sys.exit(
                 f"[{_LOG_LABEL}] ✗ --write 거부 — 원본 {source[:7]} 이 {', '.join(WRITE_LINEAGE_REFS)} 어느 것의"
                 " 조상도 아니다(없는 ref 는 건너뜀) — main 에 들어간 커밋만 판으로 낸다"

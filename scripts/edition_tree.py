@@ -188,6 +188,16 @@ def _is_ancestor(repo: Path, older: str, newer: str) -> bool:
     )
 
 
+def in_lineage(repo: Path, source: str, refs: tuple[str, ...]) -> tuple[bool, list[str]]:
+    """`source` 가 `refs` 중 **있는** ref 하나의 조상(같은 커밋 포함)인가 — (판정, 있던 ref 목록).
+
+    없는 ref 는 건너뛴다(예: 아직 fetch 하지 않은 `refs/remotes/origin/main`, CI 체크아웃에 없는 로컬
+    `main`). 하나도 없으면 판정할 수 없으므로 False 다. 허용할 ref 와 거부 문구는 호출자(빌더)가 정한다.
+    """
+    present = [ref for ref in refs if _rev(repo, ref)]
+    return any(_is_ancestor(repo, source, ref) for ref in present), present
+
+
 def write_branch(
     repo: Path,
     source: str,

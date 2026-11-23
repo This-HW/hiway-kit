@@ -66,6 +66,9 @@ Codex·Cursor 매니페스트는 디렉토리가 읽지 않는다), (2) 디렉�
 원본이 게시될 수 있고(조상 검사는 실행된 작업끼리만 본다), 되돌림 커밋이 "변경 없음"으로 건너뛴 뒤 그 앞
 커밋이 게시될 수도 있다. 둘 다 다음 main push 에서 바로잡힌다 — 그 사이 디렉토리판이 한 push 뒤처진다.
 
+`--write` 는 `--branch directory` 만 받고, 원본이 `main` 또는 `origin/main`(있는 것)의 조상일 때만 쓴다 —
+main 에 들어가지 않은 곁가지를 디렉토리판으로 내지 않는다(판정은 공용 배관 `edition_tree.in_lineage`).
+
 `--check` 는 결과 트리 요약 다음 줄에 `[directory-branch] plugin tree: <sha>` 형식으로
 플러그인 하위 트리의 전체 SHA 를 출력한다.
 
@@ -94,6 +97,7 @@ from edition_tree import (
     _rev,
     _strip_keys,
     _with_note,
+    in_lineage,
 )
 from edition_tree import write_branch as _write_edition_branch
 
@@ -176,6 +180,12 @@ _MISSING_PATH_RE = re.compile(
 _ISOLATED_AGENT_RE = re.compile(r"(?<![\w-])(?:implement-code|fix-bugs|write-tests|sync-docs)(?![\w-])")
 
 DEFAULT_BRANCH = "directory"
+#: `--write` 가 받는 브랜치 — 이 빌더의 판 브랜치뿐이다(Hermes 판 리뷰 ATK-006: 임의 ref 를 덮어쓰지 않는다).
+ALLOWED_BRANCHES = (DEFAULT_BRANCH,)
+#: `--write` 의 원본은 이 ref 중 하나(있는 것)의 조상이어야 한다 — main 에 들어가지 않은 곁가지를 디렉토리판으로
+#: 내지 않는다. CI(`directory-branch` job)는 main push 직후 `fetch-depth: 0` 체크아웃에서 `$GITHUB_SHA` 로 돈다 —
+#: 그 커밋은 `refs/remotes/origin/main`(과 로컬 `main`)과 같거나 그 조상이다.
+WRITE_LINEAGE_REFS = ("refs/heads/main", "refs/remotes/origin/main")
 _LOG_LABEL = "directory-branch"
 
 
@@ -375,7 +385,10 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--write", action="store_true", help="refs/heads/<branch> 갱신")
     parser.add_argument("--source", default="HEAD", help="원본 커밋 (기본 HEAD)")
     parser.add_argument(
-        "--branch", default=DEFAULT_BRANCH, help=f"대상 브랜치 (기본 {DEFAULT_BRANCH})"
+        "--branch",
+        default=DEFAULT_BRANCH,
+        choices=ALLOWED_BRANCHES,
+        help=f"대상 브랜치 (기본·유일 {DEFAULT_BRANCH})",
     )
     parser.add_argument("--repo", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -383,6 +396,13 @@ def main(argv: list[str] | None = None) -> int:
     source = _rev(args.repo, args.source)
     if source is None:
         sys.exit(f"[directory-branch] ✗ 원본 커밋을 찾지 못했다: {args.source}")
+    if args.write:
+        ok, present = in_lineage(args.repo, source, WRITE_LINEAGE_REFS)
+        if not ok:
+            sys.exit(
+                f"[directory-branch] ✗ --write 거부 — 원본 {source[:7]} 이 main 에 들어간 커밋이 아니다"
+                f" (확인한 ref: {', '.join(present) or '없음'} / 후보: {', '.join(WRITE_LINEAGE_REFS)})"
+            )
     tree = derive_tree(args.repo, source)
     if args.check:
         plugin_tree = _git(args.repo, "rev-parse", f"{tree}:{PLUGIN_ROOT}", label=_LOG_LABEL)
