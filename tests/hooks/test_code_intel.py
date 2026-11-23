@@ -299,7 +299,15 @@ def test_real_ast_bad_pattern_is_not_a_clean_result(tmp_path, capsys):
     args = argparse.Namespace(root=str(tmp_path), paths=["example.c"], pattern="\\w+",
                               lang="c", rewrite=None, limit=5)
     assert code_intel.query(args) == 2
-    assert json.loads(capsys.readouterr().out)["status"] == "error"
+    result = json.loads(capsys.readouterr().out)
+    # code_intel trusts ast-grep's invalid-pattern diagnostic only on the engine version it was
+    # verified with. On that version a bad pattern is an error; on any other version the same
+    # warning is not trusted, so the result must be "unverified" — never a clean zero-match "ok".
+    # (ast-grep 0.51.3 prints the warning and exits 0, which made the old error-only assertion red.)
+    if result["status"] != "error":
+        assert result["status"] == "unverified"
+        assert result["pattern_validated"] is False
+        assert result["match_count"] == 0
 
 
 @pytest.mark.skipif(not shutil.which("ast-grep"), reason="optional ast-grep binary")
