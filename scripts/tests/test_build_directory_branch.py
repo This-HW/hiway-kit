@@ -49,7 +49,7 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("GIT_AUTHOR_EMAIL", "t@example.com")
     monkeypatch.setenv("GIT_COMMITTER_NAME", "t")
     monkeypatch.setenv("GIT_COMMITTER_EMAIL", "t@example.com")
-    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "init", "-q", "-b", "main", "--object-format=sha1")
     root = tmp_path / "plugins" / "common"
     files = {
         ".claude-plugin/plugin.json": json.dumps({"name": "kit", "version": "1.0.0"}),
@@ -349,6 +349,22 @@ def test_manifest_hooks_field_fails(repo: Path) -> None:
     )
     _commit_all(repo, "inline hooks")
     _check_fails(repo, "hooks 필드")
+
+
+def test_fixture_tree_golden(repo: Path) -> None:
+    source = _git(repo, "rev-parse", "HEAD")
+    assert mod.derive_tree(repo, source) == "a6fa60585fba1a326650c63b5cec8f48db0eea9f"
+
+
+def test_real_repo_plugin_tree_oracle() -> None:
+    source = "ab468bf3ff576ac349f1af1de6d21009626d3faa"
+    assert mod._rev(REPO_ROOT, source) == source, (
+        f"Directory oracle source commit {source} is missing. "
+        "Fetch history containing this commit (CI uses fetch-depth: 0)."
+    )
+    tree = mod.derive_tree(REPO_ROOT, source)
+    plugin_tree = _git(REPO_ROOT, "rev-parse", f"{tree}:plugins/common")
+    assert plugin_tree == "364f51e6d4ef8ba952ae91301a935a3d5e70689c"
 
 
 def test_real_repo_head_passes() -> None:
