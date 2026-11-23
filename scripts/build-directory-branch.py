@@ -66,6 +66,9 @@ Codex·Cursor 매니페스트는 디렉토리가 읽지 않는다), (2) 디렉�
 원본이 게시될 수 있고(조상 검사는 실행된 작업끼리만 본다), 되돌림 커밋이 "변경 없음"으로 건너뛴 뒤 그 앞
 커밋이 게시될 수도 있다. 둘 다 다음 main push 에서 바로잡힌다 — 그 사이 디렉토리판이 한 push 뒤처진다.
 
+`--check` 는 결과 트리 요약 다음 줄에 `[directory-branch] plugin tree: <sha>` 형식으로
+플러그인 하위 트리의 전체 SHA 를 출력한다.
+
 사용:
   scripts/build-directory-branch.py --check              # 결과 트리와 플러그인 하위 트리 sha 출력
   scripts/build-directory-branch.py --write              # refs/heads/directory 갱신
@@ -386,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[directory-branch] ✓ 디렉토리판 트리 {tree[:12]} (원본 {source[:7]}, 제외 {len(EXCLUDED)}개)"
         )
-        print(f"plugin tree: {plugin_tree}")
+        print(f"[{_LOG_LABEL}] plugin tree: {plugin_tree}")
         return 0
     write_branch(args.repo, source, tree, args.branch)
     return 0

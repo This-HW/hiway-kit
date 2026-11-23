@@ -14,7 +14,7 @@ def _git(
     *args: str,
     env: dict[str, str] | None = None,
     check: bool = True,
-    label: str = "edition-tree",
+    label: str,
 ) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -35,7 +35,7 @@ def _git_bytes(
     *args: str,
     env: dict[str, str] | None = None,
     data: bytes | None = None,
-    label: str = "edition-tree",
+    label: str,
 ) -> bytes:
     proc = subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -74,6 +74,7 @@ def _entries(raw: bytes) -> list[tuple[str, str, str]]:
     """`ls-files -s -z`·`ls-tree -r -z` 출력 → (모드, 종류 또는 단계, sha, 경로) 중 (모드, sha, 경로).
 
     `-z` 라 경로의 따옴표·이스케이프가 없다(한글·공백·탭 경로도 그대로).
+    서브모듈은 파싱 결과에 포함한다. 허용 여부는 호출자가 판정한다.
     """
     out = []
     for record in raw.split(b"\0"):
@@ -89,9 +90,7 @@ def _entries(raw: bytes) -> list[tuple[str, str, str]]:
     return out
 
 
-def _frontmatter_span(
-    text: str, path: str = "", *, label: str = "edition-tree"
-) -> tuple[int, int] | None:
+def _frontmatter_span(text: str, path: str = "", *, label: str) -> tuple[int, int] | None:
     """frontmatter 블록의 (시작, 닫는 `---` 줄의 시작) 위치. 첫 줄이 `---` 로 시작하지 않으면 None.
 
     **정확한** `---` 줄만 경계로 인정한다. 첫 줄이나 닫는 줄이 `---` 처럼 보이는데 정확하지
@@ -118,7 +117,7 @@ def _frontmatter_span(
 
 
 def _strip_keys(
-    text: str, keys: tuple[str, ...], path: str = "", *, label: str = "edition-tree"
+    text: str, keys: tuple[str, ...], path: str = "", *, label: str
 ) -> str:
     """frontmatter 의 `key: 값` 한 줄만 지운다. 블록 밖과 다른 줄은 바이트 그대로.
 
@@ -161,7 +160,7 @@ def _note_marker(note: str) -> str:
     return note.split("\n", 1)[0][:40]
 
 
-def _with_note(text: str, note: str, path: str = "", *, label: str = "edition-tree") -> str:
+def _with_note(text: str, note: str, path: str = "", *, label: str) -> str:
     """frontmatter 바로 뒤(없으면 맨 앞)에 머리말을 넣는다. 이미 있으면 그대로. 뒤에 빈 줄을 보장한다 —
     빈 줄 없이 문단이 이어지면 Markdown 이 그 문단을 인용 블록에 흡수한다."""
     if _note_marker(note) in text:
@@ -197,7 +196,7 @@ def write_branch(
     *,
     plugin_root: str,
     commit_details: Callable[[Path, str], tuple[str, str]],
-    label: str = "edition-tree",
+    label: str,
 ) -> str:
     """Update the edition ref, computing the version and commit message only if needed."""
     ref = f"refs/heads/{branch}"

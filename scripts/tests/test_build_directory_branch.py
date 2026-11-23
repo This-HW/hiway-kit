@@ -9,6 +9,8 @@ frontmatter 키(2026-11-21)를 받지 않는다. 디렉토리가 추적할 브�
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -17,6 +19,11 @@ from module_loader import load_module_by_path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "build-directory-branch.py"
+GOLDEN_UPDATE_GUIDANCE = (
+    "플러그인 출력이 달라지면 main push 시 directory 브랜치에 새 커밋이 생겨 "
+    "Anthropic 심사 중인 버전이 교체된다. 의도한 변경이면 Hermes 판 계획의 "
+    "`## 결정`에 근거를 기록하고 기대 SHA를 갱신하라."
+)
 
 with pytest.MonkeyPatch.context() as monkeypatch:
     monkeypatch.syspath_prepend(str(SCRIPT.parent))
@@ -47,6 +54,7 @@ def _commit_all(repo: Path, message: str) -> str:
 
 @pytest.fixture()
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     monkeypatch.setenv("GIT_AUTHOR_NAME", "t")
     monkeypatch.setenv("GIT_AUTHOR_EMAIL", "t@example.com")
     monkeypatch.setenv("GIT_COMMITTER_NAME", "t")
@@ -152,8 +160,9 @@ def test_notes_on_documents_that_lean_on_removed_parts(repo: Path) -> None:
 
 def test_strip_keys_only_touches_top_frontmatter() -> None:
     text = "---\na: 1\nisolation: worktree\nb: 2\n---\nisolation: y\n"
-    assert mod._strip_keys(text, ("isolation",)) == "---\na: 1\nb: 2\n---\nisolation: y\n"
-    assert mod._strip_keys("no frontmatter\nisolation: z\n", ("isolation",)) == "no frontmatter\nisolation: z\n"
+    assert mod._strip_keys(text, ("isolation",), label=mod._LOG_LABEL) == "---\na: 1\nb: 2\n---\nisolation: y\n"
+    no_frontmatter = "no frontmatter\nisolation: z\n"
+    assert mod._strip_keys(no_frontmatter, ("isolation",), label=mod._LOG_LABEL) == no_frontmatter
 
 
 @pytest.mark.parametrize(
@@ -315,7 +324,13 @@ def test_new_file_the_directory_refuses_fails(repo: Path, rel: str, data: bytes)
 
 def test_reference_to_removed_path_without_note_fails(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """머리말을 넣는 변환이 빠지면(회귀) 뺀 경로를 가리키는 문서·격리를 지운 에이전트가 그대로 나가지 않는다."""
-    monkeypatch.setattr(mod, "_transform", lambda rel, text: mod._strip_keys(text, ("isolation",)) if rel.startswith("agents/") else text)
+    monkeypatch.setattr(
+        mod,
+        "_transform",
+        lambda rel, text: mod._strip_keys(text, ("isolation",), label=mod._LOG_LABEL)
+        if rel.startswith("agents/")
+        else text,
+    )
     _check_fails(repo, "머리말이 있어야 하는데 없는 문서")
 
 
@@ -344,6 +359,15 @@ def test_symlink_or_executable_file_fails(repo: Path) -> None:
     _check_fails(repo, "받지 않는 파일")
 
 
+def test_submodule_fails_with_a_message(repo: Path) -> None:
+    """서브모듈을 blob으로 읽기 전에 디렉토리판 정책으로 거부한다."""
+    source = _git(repo, "rev-parse", "HEAD")
+    path = "plugins/common/skills/a/sub"
+    _git(repo, "update-index", "--add", "--cacheinfo", f"160000,{source},{path}")
+    _git(repo, "commit", "-q", "-m", "submodule")
+    _check_fails(repo, f"서브모듈은 받지 않는다: {path}$")
+
+
 def test_manifest_hooks_field_fails(repo: Path) -> None:
     manifest = repo / "plugins/common/.claude-plugin/plugin.json"
     manifest.write_text(
@@ -354,11 +378,16 @@ def test_manifest_hooks_field_fails(repo: Path) -> None:
 
 
 def test_fixture_tree_golden(repo: Path) -> None:
+    """픽스처에서 제외 경로·frontmatter·머리말 변환의 전체 결과를 고정한다."""
     source = _git(repo, "rev-parse", "HEAD")
-    assert mod.derive_tree(repo, source) == "a6fa60585fba1a326650c63b5cec8f48db0eea9f"
+    tree = mod.derive_tree(repo, source)
+    assert tree == "a6fa60585fba1a326650c63b5cec8f48db0eea9f", (
+        f"디렉토리판 픽스처 트리가 바뀌었다. {GOLDEN_UPDATE_GUIDANCE}"
+    )
 
 
 def test_real_repo_plugin_tree_oracle() -> None:
+    """실제 원본 커밋에서 심사 중인 v5.9.1의 플러그인 트리를 재현한다."""
     source = "ab468bf3ff576ac349f1af1de6d21009626d3faa"
     assert mod._rev(REPO_ROOT, source) == source, (
         f"Directory oracle source commit {source} is missing. "
@@ -366,8 +395,12 @@ def test_real_repo_plugin_tree_oracle() -> None:
     )
     tree = mod.derive_tree(REPO_ROOT, source)
     plugin_tree = _git(REPO_ROOT, "rev-parse", f"{tree}:plugins/common")
-    assert plugin_tree == "364f51e6d4ef8ba952ae91301a935a3d5e70689c"
+    assert plugin_tree == "364f51e6d4ef8ba952ae91301a935a3d5e70689c", (
+        f"실레포 오라클이 v5.9.1의 플러그인 트리와 다르다. {GOLDEN_UPDATE_GUIDANCE}"
+    )
 
 
-def test_real_repo_head_passes() -> None:
+def test_real_repo_head_passes(capsys: pytest.CaptureFixture[str]) -> None:
     assert mod.main(["--check", "--repo", str(REPO_ROOT)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert re.fullmatch(r"\[directory-branch\] plugin tree: [0-9a-f]{40}", lines[-1])
