@@ -18,7 +18,9 @@ from module_loader import load_module_by_path
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "build-directory-branch.py"
 
-mod = load_module_by_path(SCRIPT, "build_directory_branch_t")
+with pytest.MonkeyPatch.context() as monkeypatch:
+    monkeypatch.syspath_prepend(str(SCRIPT.parent))
+    mod = load_module_by_path(SCRIPT, "build_directory_branch_t")
 
 
 def _git(repo: Path, *args: str) -> str:

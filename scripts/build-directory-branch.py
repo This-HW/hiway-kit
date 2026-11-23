@@ -83,6 +83,17 @@ import sys
 import tempfile
 from pathlib import Path
 
+from edition_tree import (
+    _entries,
+    _git,
+    _git_bytes,
+    _note_marker,
+    _rev,
+    _strip_keys,
+    _with_note,
+)
+from edition_tree import write_branch as _write_edition_branch
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PLUGIN_ROOT = "plugins/common"
@@ -162,175 +173,15 @@ _MISSING_PATH_RE = re.compile(
 _ISOLATED_AGENT_RE = re.compile(r"(?<![\w-])(?:implement-code|fix-bugs|write-tests|sync-docs)(?![\w-])")
 
 DEFAULT_BRANCH = "directory"
-
-
-def _git(
-    repo: Path, *args: str, env: dict[str, str] | None = None, check: bool = True
-) -> str:
-    proc = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        capture_output=True,
-        text=True,
-        env=env,
-        check=False,
-    )
-    if check and proc.returncode != 0:
-        sys.exit(
-            f"[directory-branch] ✗ git {' '.join(args)} 실패: {proc.stderr.strip()}"
-        )
-    return proc.stdout.strip()
-
-
-def _git_bytes(
-    repo: Path, *args: str, env: dict[str, str] | None = None, data: bytes | None = None
-) -> bytes:
-    proc = subprocess.run(
-        ["git", "-C", str(repo), *args],
-        input=data,
-        capture_output=True,
-        env=env,
-        check=False,
-    )
-    if proc.returncode != 0:
-        sys.exit(
-            f"[directory-branch] ✗ git {' '.join(args)} 실패: "
-            f"{proc.stderr.decode(errors='replace').strip()}"
-        )
-    return proc.stdout
-
-
-def _rev(repo: Path, rev: str) -> str | None:
-    proc = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo),
-            "rev-parse",
-            "--verify",
-            "--quiet",
-            f"{rev}^{{commit}}",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return proc.stdout.strip() if proc.returncode == 0 else None
-
-
-def _entries(raw: bytes) -> list[tuple[str, str, str]]:
-    """`ls-files -s -z`·`ls-tree -r -z` 출력 → (모드, 종류 또는 단계, sha, 경로) 중 (모드, sha, 경로).
-
-    `-z` 라 경로의 따옴표·이스케이프가 없다(한글·공백·탭 경로도 그대로).
-    """
-    out = []
-    for record in raw.split(b"\0"):
-        if not record:
-            continue
-        meta, path = record.split(b"\t", 1)
-        fields = meta.decode().split()
-        if len(fields) == 3 and fields[1] in ("blob", "tree", "commit"):  # ls-tree: 모드 종류 sha
-            mode, kind, sha = fields
-            if kind == "commit":
-                sys.exit(
-                    f"[directory-branch] ✗ 서브모듈은 받지 않는다: {path.decode(errors='replace')}"
-                )
-        else:  # ls-files -s: 모드 sha 단계
-            mode, sha, _stage = fields
-        out.append((mode, sha, path.decode("utf-8", errors="surrogateescape")))
-    return out
+_LOG_LABEL = "directory-branch"
 
 
 def _decode(repo: Path, sha: str, path: str) -> str:
-    data = _git_bytes(repo, "cat-file", "blob", sha)
+    data = _git_bytes(repo, "cat-file", "blob", sha, label=_LOG_LABEL)
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
         sys.exit(f"[directory-branch] ✗ UTF-8 이 아니다 — 디렉토리는 받지 않는다: {path}")
-
-
-def _frontmatter_span(text: str, path: str = "") -> tuple[int, int] | None:
-    """frontmatter 블록의 (시작, 닫는 `---` 줄의 시작) 위치. 첫 줄이 `---` 로 시작하지 않으면 None.
-
-    디렉토리 규칙("a first line of exactly ---")에 맞게 **정확한** `---` 줄만 경계로 인정한다. 첫 줄이나
-    닫는 줄이 `---` 처럼 보이는데 정확하지 않으면(BOM·뒤 공백·CRLF) 변환하지 않고 exit 1 — 엄격하게만 읽고
-    넘어가면 머리말이 frontmatter 위나 본문 수평선 뒤에 들어간다(5.9.1 리뷰).
-    """
-    if not text.lstrip("\ufeff").startswith("---"):
-        return None
-    if not text.startswith("---\n"):
-        sys.exit(
-            f"[directory-branch] ✗ {path}: frontmatter 첫 줄이 정확히 `---` 가 아니다(BOM·뒤 공백·CRLF)"
-            " — 원본을 고쳐라"
-        )
-    pos = 4
-    for line in text[4:].split("\n"):
-        if line.rstrip() == "---":
-            if line != "---":
-                sys.exit(
-                    f"[directory-branch] ✗ {path}: frontmatter 닫는 줄이 정확히 `---` 가 아니다 — 원본을 고쳐라"
-                )
-            return 0, pos
-        pos += len(line) + 1
-    sys.exit(f"[directory-branch] ✗ {path}: frontmatter 닫는 `---` 줄이 없다")
-
-
-def _strip_keys(text: str, keys: tuple[str, ...], path: str = "") -> str:
-    """frontmatter 의 `key: 값` 한 줄만 지운다. 블록 밖과 다른 줄은 바이트 그대로.
-
-    지울 키가 **한 줄짜리 스칼라**가 아니면(값이 비었거나 다음 줄이 들여쓴 이어짐 — 지우면 옆 키에 값이
-    붙는다, 따옴표 키, 들여쓴 키) 손으로 고치게 exit 1. 조용히 남기거나 반쯤 지우지 않는다.
-    """
-    span = _frontmatter_span(text, path)
-    if span is None:
-        return text
-    start, end = span
-    lines = text[start:end].split("\n")
-    out = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        # 느슨하게 찾고(들여쓴·따옴표 키 포함) 엄격하게 지운다 — 들여쓴 줄은 블록 값 속 글일 수도 있지만
-        # YAML 을 풀지 않고는 가를 수 없다. 모호하면 지우지도 남기지도 않고 멈춘다(원본을 고치게).
-        loose = re.match(r"^\s*[\"']?([\w-]+)[\"']?\s*:", line)
-        if loose and loose.group(1) in keys:
-            exact = re.match(r"^([\w-]+):[ \t]*(\S.*)$", line)
-            nxt = lines[i + 1] if i + 1 < len(lines) else ""
-            if line[:1] in (" ", "\t"):
-                sys.exit(
-                    f"[directory-branch] ✗ {path}: 들여쓴 `{loose.group(1)}:` 줄이 있다 — 블록 값 속 글일 수"
-                    " 있지만 YAML 을 풀지 않고는 가를 수 없다. 표현을 바꿔라(한 줄짜리 키가 아닌 형태)"
-                )
-            if not exact or exact.group(1) != loose.group(1) or nxt[:1] in (" ", "\t"):
-                sys.exit(
-                    f"[directory-branch] ✗ {path}: `{loose.group(1)}` 를 한 줄짜리 `키: 값` 이 아닌 형태로"
-                    " 썼다 — 지우면 옆 키가 오염된다. 원본을 한 줄로 고쳐라"
-                )
-            i += 1
-            continue
-        out.append(line)
-        i += 1
-    return "\n".join(out) + text[end:]
-
-
-def _note_marker(note: str) -> str:
-    return note.split("\n", 1)[0][:40]
-
-
-def _with_note(text: str, note: str, path: str = "") -> str:
-    """frontmatter 바로 뒤(없으면 맨 앞)에 머리말을 넣는다. 이미 있으면 그대로. 뒤에 빈 줄을 보장한다 —
-    빈 줄 없이 문단이 이어지면 Markdown 이 그 문단을 인용 블록에 흡수한다."""
-    if _note_marker(note) in text:
-        return text
-    span = _frontmatter_span(text, path)
-    if span is None:
-        rest = text
-        return note + ("" if rest.startswith("\n") else "\n") + rest
-    _start, end = span
-    line_end = text.find("\n", end)  # 닫는 `---` 줄의 끝 — 파일이 그 줄로 끝나면 줄바꿈이 없다
-    close = len(text) if line_end == -1 else line_end + 1
-    head = text[:close] if text[:close].endswith("\n") else text[:close] + "\n"
-    rest = text[close:]
-    return head + "\n" + note + ("" if not rest or rest.startswith("\n") else "\n") + rest
 
 
 def _transform(rel: str, text: str) -> str:
@@ -338,15 +189,15 @@ def _transform(rel: str, text: str) -> str:
     new = text
     for folder, keys in STRIP_FRONTMATTER.items():
         if rel.startswith(folder + "/"):
-            new = _strip_keys(new, keys, rel)
+            new = _strip_keys(new, keys, rel, label=_LOG_LABEL)
     stripped_here = new != text
     if rel == "README.md":
         return new  # 플러그인 README 는 디렉토리판을 본문에서 직접 설명한다
     body = new
     if stripped_here or _ISOLATED_AGENT_RE.search(body):
-        new = _with_note(new, ISOLATION_NOTE, rel)
+        new = _with_note(new, ISOLATION_NOTE, rel, label=_LOG_LABEL)
     if _MISSING_PATH_RE.search(body):
-        new = _with_note(new, MISSING_PATHS_NOTE, rel)
+        new = _with_note(new, MISSING_PATHS_NOTE, rel, label=_LOG_LABEL)
     return new
 
 
@@ -372,13 +223,15 @@ def derive_tree(repo: Path, source: str) -> str:
         )
     with tempfile.TemporaryDirectory() as tmp:
         env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
-        _git(repo, "read-tree", source, env=env)
+        _git(repo, "read-tree", source, env=env, label=_LOG_LABEL)
         # `git rm` 이 아니라 update-index — 임시 인덱스만 고치므로 HEAD·작업 트리 기준 안전검사는 필요
         # 없고, `--source` 가 HEAD 와 다르면 그 검사가 엉뚱하게 실패한다(5.9.1 리뷰).
-        paths = _git_bytes(repo, "ls-files", "-z", "--", *EXCLUDED, env=env)
-        _git_bytes(repo, "update-index", "--force-remove", "-z", "--stdin", env=env, data=paths)
+        paths = _git_bytes(repo, "ls-files", "-z", "--", *EXCLUDED, env=env, label=_LOG_LABEL)
+        _git_bytes(
+            repo, "update-index", "--force-remove", "-z", "--stdin", env=env, data=paths, label=_LOG_LABEL
+        )
         for mode, sha, path in _entries(
-            _git_bytes(repo, "ls-files", "-s", "-z", "--", PLUGIN_ROOT, env=env)
+            _git_bytes(repo, "ls-files", "-s", "-z", "--", PLUGIN_ROOT, env=env, label=_LOG_LABEL)
         ):
             if not path.endswith(".md"):
                 continue
@@ -387,10 +240,12 @@ def derive_tree(repo: Path, source: str) -> str:
             new = _transform(rel, text)
             if new != text:
                 new_sha = _git_bytes(
-                    repo, "hash-object", "-w", "--stdin", data=new.encode("utf-8")
+                    repo, "hash-object", "-w", "--stdin", data=new.encode("utf-8"), label=_LOG_LABEL
                 ).decode().strip()
-                _git(repo, "update-index", "--cacheinfo", f"{mode},{new_sha},{path}", env=env)
-        tree = _git(repo, "write-tree", env=env)
+                _git(
+                    repo, "update-index", "--cacheinfo", f"{mode},{new_sha},{path}", env=env, label=_LOG_LABEL
+                )
+        tree = _git(repo, "write-tree", env=env, label=_LOG_LABEL)
     _assert_directory_safe(repo, tree)
     return tree
 
@@ -424,15 +279,20 @@ def _assert_directory_safe(repo: Path, tree: str) -> None:
     leftover_keys: list[str] = []
     unnoted: list[str] = []
     unlisted: list[str] = []
-    for mode, sha, path in _entries(
-        _git_bytes(repo, "ls-tree", "-r", "-z", tree, "--", PLUGIN_ROOT)
-    ):
+    entries = _entries(
+        _git_bytes(repo, "ls-tree", "-r", "-z", tree, "--", PLUGIN_ROOT, label=_LOG_LABEL)
+    )
+    submodule = next((path for mode, _, path in entries if mode == "160000"), None)
+    if submodule is not None:
+        path = submodule.encode("utf-8", errors="surrogateescape").decode(errors="replace")
+        sys.exit(f"[directory-branch] ✗ 서브모듈은 받지 않는다: {path}")
+    for mode, sha, path in entries:
         rel = path[len(PLUGIN_ROOT) + 1 :]
         if rel == "hooks/hooks.json":
             sys.exit("[directory-branch] ✗ 결과 트리에 hooks/hooks.json 이 남았다")
         name = rel.rsplit("/", 1)[-1]
         ext = os.path.splitext(name)[1].lower()
-        data = _git_bytes(repo, "cat-file", "blob", sha)
+        data = _git_bytes(repo, "cat-file", "blob", sha, label=_LOG_LABEL)
         if mode != "100644" or not _content_ok(name, ext, data):  # 심링크(120000)·실행 비트(100755)도
             bad.append(rel)
             continue
@@ -476,7 +336,7 @@ def _assert_directory_safe(repo: Path, tree: str) -> None:
         sys.exit(
             "[directory-branch] ✗ 머리말이 있어야 하는데 없는 문서: " + ", ".join(sorted(set(unnoted)))
         )
-    raw = _git(repo, "cat-file", "-p", f"{tree}:{MANIFEST}")
+    raw = _git(repo, "cat-file", "-p", f"{tree}:{MANIFEST}", label=_LOG_LABEL)
     try:
         manifest = json.loads(raw)
     except json.JSONDecodeError as exc:
@@ -487,53 +347,22 @@ def _assert_directory_safe(repo: Path, tree: str) -> None:
         )
 
 
-def _is_ancestor(repo: Path, older: str, newer: str) -> bool:
-    return (
-        subprocess.run(
-            ["git", "-C", str(repo), "merge-base", "--is-ancestor", older, newer],
-            capture_output=True,
-            check=False,
-        ).returncode
-        == 0
-    )
-
-
-def write_branch(repo: Path, source: str, tree: str, branch: str) -> str:
-    ref = f"refs/heads/{branch}"
-    prev = _rev(repo, ref)
-    if prev:
-        parents = _git(repo, "rev-list", "--parents", "-n1", prev).split()[1:]
-        prev_source = parents[-1] if parents else None
-        # 원본이 직전 끝의 원본보다 오래됐으면(조상) 되돌리지 않는다 — CI 작업이 push 순서와 다르게
-        # 끝나도 디렉토리가 옛 트리로 돌아가지 않게(5.9.1 리뷰).
-        if prev_source and prev_source != source and _is_ancestor(repo, source, prev_source):
-            print(
-                f"[directory-branch] ✓ {branch} 원본 {source[:7]} 은 직전 원본 {prev_source[:7]} 의 조상 — 건너뜀"
-            )
-            return prev
-    # 플러그인 폴더가 같으면 새 커밋을 만들지 않는다 — 디렉토리는 추적 브랜치의 커밋마다 새 버전으로
-    # 스캔하고, 새 커밋은 심사 중인 버전을 대체한다. 문서만 바뀐 main push 로 심사 대기를 갈아엎지 않는다.
-    if prev and _git(repo, "rev-parse", f"{prev}:{PLUGIN_ROOT}") == _git(
-        repo, "rev-parse", f"{tree}:{PLUGIN_ROOT}"
-    ):
-        print(f"[directory-branch] ✓ {branch} 플러그인 폴더 변경 없음 ({prev[:7]})")
-        return prev
-    version = json.loads(_git(repo, "cat-file", "-p", f"{source}:{MANIFEST}")).get(
-        "version", "?"
-    )
-    parents_args = ["-p", prev] if prev else []
+def _commit_details(repo: Path, source: str) -> tuple[str, str]:
+    manifest = _git(repo, "cat-file", "-p", f"{source}:{MANIFEST}", label=_LOG_LABEL)
+    version = json.loads(manifest).get("version", "?")
     message = (
         f"directory: v{version} from {source[:7]}\n\n"
         f"Claude 디렉토리판 — 스크립트·훅·도구 의존 스킬 {len(EXCLUDED)}개 경로 제외, "
         f"frontmatter {', '.join(k for ks in STRIP_FRONTMATTER.values() for k in ks)} 제거, "
         "뺀 것에 기대는 문서에 머리말 (scripts/build-directory-branch.py)."
     )
-    commit = _git(repo, "commit-tree", tree, *parents_args, "-p", source, "-m", message)
-    _git(repo, "update-ref", ref, commit, *([prev] if prev else ["0" * 40]))
-    print(
-        f"[directory-branch] ✓ {branch} → {commit[:7]} (v{version}, 원본 {source[:7]})"
+    return version, message
+
+
+def write_branch(repo: Path, source: str, tree: str, branch: str) -> str:
+    return _write_edition_branch(
+        repo, source, tree, branch, plugin_root=PLUGIN_ROOT, commit_details=_commit_details, label=_LOG_LABEL
     )
-    return commit
 
 
 def main(argv: list[str] | None = None) -> int:
