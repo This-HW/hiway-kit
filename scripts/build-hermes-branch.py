@@ -13,7 +13,7 @@ Hermes 는 `plugin.json` 을 **Agent Plugins(AP) v1 `$schema`** 일 때만 받�
 
 1. **빼기** — `EXCLUDED`: `hooks/`·`setup/`, 사용자 파일을 쓰는 `harness-export`, Hermes 내장 스킬 생성과
    경합하는 `skill-forge`, 훅만 읽는 `rules/CHECKSUMS.sha256`, Hermes 가 읽지 않는 다른 하네스 파일
-   (`.codex-plugin/`·`.cursor-plugin/`·`skills/*/agents/openai.yaml`). 항목마다 원본에서 하나 이상 걸려야 한다
+   (`.codex-plugin/`·`.cursor-plugin/`·`skills/*/agents/openai.yaml`), 저자용 행동 평가 `evals/`. 항목마다 원본에서 하나 이상 걸려야 한다
    (아니면 이름이 바뀐 것이다 — 아무것도 빼지 않은 트리를 판이라 부르지 않는다). `tools/` 와 `rules/VERSION`
    (export_harness.py 가 필수로 읽는다)은 **싣는다**.
 2. **루트 매니페스트** — `plugins/common/plugin.json` 을 `build-targets.py` 의 `load_policy`·`load_ssot`·
@@ -25,7 +25,8 @@ Hermes 는 `plugin.json` 을 **Agent Plugins(AP) v1 `$schema`** 일 때만 받�
    `HERMES_AGENT_NOTE` 는 모든 `agents/*.md`, `HERMES_ISOLATION_NOTE` 는 수정 에이전트 4종과 그들을
    부르는 문서(`ISOLATION_NOTE_DOCS`), `HERMES_MISSING_PATHS_NOTE` 는 뺀 경로를 가리키는 문서
    (`MISSING_PATHS_DOCS`)에 단다. 대상은 **허용 목록**이 정하고, 스캔은 판정만 쓴다.
-5. **판 README** — `plugins/common/README.md` 를 `HERMES_README` 로 교체한다.
+5. **판 README** — `plugins/common/README.md` 를 `HERMES_README` 로 교체한다. H1 실측에 묶인 사실(`H1_*` 상수 —
+   caution·`--force`·스킬 수·스캐너 원인 문서)은 판정이 README 에 그대로 있는지 본다.
 
 ## 검사 조건 (한 문장)
 
@@ -137,6 +138,10 @@ EXCLUDED = {
     f"{PLUGIN_ROOT}/skills/*/agents/openai.yaml": (
         "Codex 스킬 메타데이터 — Hermes 는 읽지 않고, using-hiway-kit 것은 아직 'hook-injected' 문구다"
     ),
+    f"{PLUGIN_ROOT}/evals": (
+        "저자용 행동 평가 사례(case.yaml) — Hermes 런타임이 쓰지 않는다. H1 P1 설치 스캐너 high 5건 중 2건이"
+        " evals/debug-obvious-no-skill/case.yaml 에서 나왔다"
+    ),
     # assets/icon.png 는 **남긴다**: 판에 남는 `.claude-plugin/plugin.json`(export_harness.py 의 루트 확인용)의
     # `icon` 필드가 가리킨다 — 빼면 판 안 매니페스트가 판에 없는 경로를 가리킨다(사후 판정이 막는다).
 }
@@ -168,8 +173,8 @@ HERMES_ISOLATION_NOTE = (
     " 본문의 worktree·커밋 지시보다 우선한다.**\n"
 )
 HERMES_MISSING_PATHS_NOTE = (
-    "> **Hermes 판 — 훅·설치 스크립트·일부 스킬 없음.** 이 판에는 킷의 `hooks/`·`setup/` 과 `harness-export`·"
-    "`skill-forge` 스킬이 없다. 아래에서 그것을 실행하거나 켜라는 단계는 건너뛴다(없음으로 처리). 규칙"
+    "> **Hermes 판 — 훅·설치 스크립트·일부 스킬 없음.** 이 판에는 킷의 `hooks/`·`setup/`·`evals/` 와"
+    " `harness-export`·`skill-forge` 스킬이 없다. 아래에서 그것을 실행하거나 켜라는 단계는 건너뛴다(없음으로 처리). 규칙"
     " 내보내기는 CLI 로 한다: `python3 <설치 루트>/tools/export_harness.py --plugin-root <설치 루트> --target"
     " <프로젝트> --entrypoints AGENTS.md`. 다른 설치(예: `~/.claude/plugins/cache`)에서 같은 이름의 파일·도구를"
     " 찾아 쓰지 않는다 — 버전이 다른 도구다.\n"
@@ -217,11 +222,11 @@ _MISSING_PATH_RE = re.compile(
     r"(?<![\w.-])(?:hooks|setup)/[\w.*-]|(?<![\w-])(?:harness-export|skill-forge)(?![\w-])"
 )
 #: 판정용 **넓은** 스캔(리뷰 ATK-002) — 변환과 같은 정규식을 재사용하면 독립 판정이 아니다. 느슨하게 찾고
-#: (`hooks/`·`setup/` 뒤 글자 조건 없음, 뺀 훅·설치 스크립트의 이름만 쓴 참조, `CHECKSUMS`, "훅 예시")
+#: (`hooks/`·`setup/`·`evals/` 뒤 글자 조건 없음, 뺀 훅·설치 스크립트의 이름만 쓴 참조, `CHECKSUMS`, "훅 예시")
 #: 엄격하게 판정한다(`MISSING_PATHS_DOCS` 또는 사유 붙은 `MISSING_PATHS_EXEMPT`). `EXCLUDED` 가 바뀌면
 #: 그 이름도 여기 넣는다.
 _REMOVED_WIDE_RE = re.compile(
-    r"(?<![\w.-])(?:hooks|setup)/"
+    r"(?<![\w.-])(?:hooks|setup|evals)/"
     r"|(?<![\w-])(?:session-start|session-check|stop-validator|protect-sensitive|auto-format|pre-commit"
     r"|harness-export|skill-forge|child-git-guard|verify-mutate-split|reference-transaction|pre-push)(?![\w-])"
     r"|CHECKSUMS|훅 ?예시|hooks? examples?"
@@ -239,49 +244,101 @@ SKILL_DESCRIPTION_MAX = 1024
 SKILL_COMPATIBILITY_MAX = 500
 SKILL_STRING_FIELDS = ("license", "compatibility", "allowed-tools")
 
-HERMES_README = """\
+#: H1 실측(`docs/specs/2026-11-24-hermes-edition/h1-measurement.md`, Hermes @352b249 오프라인 샌드박스)에
+#: 묶인 README 사실. **실측이 바뀌면 사람이 다시 정한다** — 판정(`_assert_hermes_edition`)과 테스트가 README 에
+#: 이 값이 그대로 있는지 본다. 스캐너 원인 문서는 줄 번호 없이 경로만 쓴다(본문이 바뀌면 낡는다). 원인 설명은
+#: 스캐너 규칙에 걸리는 원문(파괴적 명령·시스템 경로·환경변수 API)을 README 에 다시 옮기지 않는다.
+H1_SCAN_VERDICT = "caution"  # P1: plugins validate·install 스캐너 판정, critical 0
+H1_BLOCK_MESSAGE = "Use --force to override."  # P2: community 출처 + caution 의 비대화형 첫 설치 거부 문구
+H1_FORCE_FLAG = "--force"  # P2: 첫 설치, P5′: 고정 sha 교체(활성 상태 유지)
+H1_SCAN_CAUSES = ("agents/review-code.md", "skills/auto-dev/SKILL.md")  # evals/ 제거 뒤 남는 high 출처
+H1_REPLACE_MESSAGE = "Replacement installed; plugin selection was not changed."  # P5′
+H1_INSTALL_ROOT = "<HERMES_HOME>/profiles/<profile>/plugins/hiway-kit"  # P6: 측정한 프로필의 설치 위치
+
+HERMES_README = f"""\
 # hiway-kit — Hermes edition
 
-This is the **Hermes Agent edition** of hiway-kit, generated from `main` by
-`scripts/build-hermes-branch.py` onto the `hermes` branch. It is an Agent Plugins v1 package:
-`plugin.json` here carries the Agent Plugins schema, while `main` keeps a manifest Hermes refuses, so
-installing without a pinned ref stops instead of loading the wrong tree.
+The **Hermes Agent edition** of hiway-kit: an Agent Plugins v1 package generated from `main` by
+`scripts/build-hermes-branch.py` onto the `hermes` branch. `main` keeps a manifest Hermes refuses, so an
+install that is not pinned to this branch stops instead of loading the wrong tree.
 
-**Status: researched, not yet measured.** Nothing below has been observed in a running Hermes yet;
-the sandbox measurement (H1) decides whether this edition is published.
-
-## What is in it
-
-- **15 skills**, **no hooks**. `hooks/` and `setup/` are not shipped, and neither are
-  `harness-export` (it writes the user's files) and `skill-forge` (Hermes creates skills itself).
-- `agents/` are shipped as **brief documents**, not subagents: Hermes has no agent-definition loader,
-  so a skill may pass an agent body to `delegate_task` as context. Their frontmatter is not enforced,
-  and there is no automatic worktree isolation — see the note at the top of each agent.
-- `rules/` and `tools/` are shipped. Export the rules into a project with the CLI:
-  `python3 <install root>/tools/export_harness.py --plugin-root <install root> --target <project> --entrypoints AGENTS.md`
-- **No behavioral evals** have been run for this edition.
+What this page states was **observed** in a sandboxed, offline Hermes (`NousResearch/hermes-agent@352b249`,
+the H1 measurement). Anything not measured is marked as such.
 
 ## Install (pinned to a commit)
 
-Install only by a full 40-character commit sha of the `hermes` branch. A branch name or tree URL as
-the ref is refused or dropped, and there is **no automatic update**.
+`--ref` takes only a full 40-character commit sha of the `hermes` branch.
 
 ```bash
-sha=$(git ls-remote https://github.com/This-HW/hiway-kit refs/heads/hermes | cut -f1)
-test ${#sha} -eq 40 || { echo "no hermes branch sha"; exit 1; }
-hermes plugins install This-HW/hiway-kit/plugins/common --ref "$sha" --no-enable
+SHA="$(git ls-remote https://github.com/This-HW/hiway-kit refs/heads/hermes | cut -f1)"
+test -n "$SHA" || {{ echo "hermes branch not found"; exit 1; }}
+hermes plugins install This-HW/hiway-kit/plugins/common --ref "$SHA" {H1_FORCE_FLAG} --no-enable
+hermes plugins enable hiway-kit
 ```
 
-Hermes asks you to confirm the install; its security review is expected to report **caution**
-(pending the H1 verdict). Enable the plugin yourself after reviewing it.
+H1 ran these steps against a local Git mirror of the same tree; the GitHub address is confirmed once the
+branch is published.
 
-Update by installing a newer sha over it — `hermes plugins update` refuses pinned installs:
+**Why `{H1_FORCE_FLAG}` is needed.** Hermes' install scanner rates this edition **{H1_SCAN_VERDICT}**
+(critical 0). For a community source, a {H1_SCAN_VERDICT} verdict blocks a non-interactive first install
+with `{H1_BLOCK_MESSAGE}` The findings that drive it are **defensive example text** in documents, not
+code that runs:
+
+- `{H1_SCAN_CAUSES[0]}` — the security reviewer's examples of what to flag (access to a system password
+  file, a recursive delete of the root directory)
+- `{H1_SCAN_CAUSES[1]}` — a mention of reading environment variables
+
+## Update
+
+There is **no automatic update**, and `hermes plugins update` refuses pinned installs. Install the new
+sha over the old one:
 
 ```bash
-hermes plugins install This-HW/hiway-kit/plugins/common --force --ref <new 40-char sha>
+hermes plugins install This-HW/hiway-kit/plugins/common --ref <new 40-char sha> {H1_FORCE_FLAG} --no-enable
 ```
 
-Details, caveats and the measurement plan: `docs/harnesses.md#hermes-agent` in the repository.
+Hermes replaces the files and keeps the plugin enabled (`{H1_REPLACE_MESSAGE}`).
+
+## What is in it
+
+- **{EXPECTED_SKILL_COUNT} skills** under the `hiway-kit:` namespace (for example `hiway-kit:plan-task`). They
+  appear in the agent's skill list once the plugin is enabled, and disappear when it is disabled.
+- `rules/` and `tools/`.
+- `agents/` as **brief documents**: a skill may pass an agent body to `delegate_task` as context. Each
+  agent starts with a note on what Hermes does not enforce (frontmatter, worktree isolation).
+
+## What is not
+
+- **No hooks.**
+- **No agent loader** — agents are used only as `delegate_task` context.
+- No `harness-export` and no `skill-forge` skill.
+- No MCP servers.
+- No behavioral evals (`evals/` is not shipped).
+
+## Project rules (`AGENTS.md`)
+
+Export the kit's rules into a project with the shipped CLI:
+
+```bash
+python3 <install root>/tools/export_harness.py --plugin-root <install root> --target <project> --entrypoints AGENTS.md
+```
+
+The install root is `hiway-kit` under the Hermes profile's `plugins/` directory — measured as
+`{H1_INSTALL_ROOT}`. Use that copy, not a same-named tool from another install. Hermes loaded the
+generated `AGENTS.md`; a `.hermes.md` in the project **shadowed** it (measured). By Hermes' source,
+`HERMES.md` and `AGENTS.override.md` take precedence the same way.
+
+## `using-hiway-kit`
+
+Hermes does not read the manual-only flag (`disable-model-invocation`), so the model can list and read
+this skill on its own.
+
+## Not measured
+
+- Coexistence with Hermes' built-ins (verify-on-stop, automatic skill creation, memory) — needs a model run.
+- No behavioral evals for this edition.
+
+Details and caveats: `docs/harnesses.md#hermes-agent` in the repository.
 """
 
 
@@ -814,8 +871,25 @@ def _assert_hermes_edition(
             f"[{_LOG_LABEL}] ✗ {ROOT_MANIFEST} AP v1 판정 실패 또는 계산값과 다름 — "
             + "; ".join(problems)
         )
-    if text_of("README.md") != HERMES_README:
+    readme_text = text_of("README.md")
+    if readme_text != HERMES_README:
         sys.exit(f"[{_LOG_LABEL}] ✗ {README} 가 HERMES_README 로 교체되지 않았다")
+    h1_facts = [
+        f"**{H1_SCAN_VERDICT}**",
+        H1_BLOCK_MESSAGE,
+        f'--ref "$SHA" {H1_FORCE_FLAG}',
+        f"**{EXPECTED_SKILL_COUNT} skills**",
+        H1_REPLACE_MESSAGE,
+        *H1_SCAN_CAUSES,
+    ]
+    lost = [f for f in h1_facts if f not in readme_text]
+    if lost:
+        sys.exit(f"[{_LOG_LABEL}] ✗ 판 README 에서 H1 실측 사실이 빠졌다: {lost}")
+    gone_causes = [c for c in H1_SCAN_CAUSES if c not in files]
+    if gone_causes:
+        sys.exit(
+            f"[{_LOG_LABEL}] ✗ README 가 스캐너 원인으로 적은 문서가 판에 없다 — H1 사실을 다시 정하라: {gone_causes}"
+        )
 
     skill_dirs = {
         r.split("/")[1] for r in files if r.startswith("skills/") and r.count("/") >= 2

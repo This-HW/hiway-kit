@@ -143,12 +143,13 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         f"{P}/rules/chain.md": "---\ntier: reference\n---\nSee `hooks/session-start.py`.\n",
         f"{P}/skills/harness-export/SKILL.md": _skill("harness-export"),
         f"{P}/skills/skill-forge/SKILL.md": _skill("skill-forge"),
-        f"{P}/agents/review-code.md": "---\nname: review-code\nmodel: opus\n---\n\nReview.\n",
         f"{P}/.codex-plugin/plugin.json": json.dumps({"hooks": "./hooks/hooks-codex.json"}),
         f"{P}/.cursor-plugin/plugin.json": json.dumps({"name": "hiway-kit"}),
         f"{P}/skills/review/agents/openai.yaml": "interface:\n  short_description: x\n",
         f"{P}/skills/using-hiway-kit/agents/openai.yaml": "interface:\n  short_description: hook-injected\n",
         f"{P}/assets/icon.png": "png",
+        f"{P}/evals/debug/case.yaml": "prompt: x\n",
+        f"{P}/agents/review-code.md": "---\nname: review-code\nmodel: opus\n---\n\nReview.\n",
     }
     for name in KEPT_SKILLS:
         files[f"{P}/skills/{name}/SKILL.md"] = _skill(name)
@@ -225,6 +226,7 @@ def test_check_builds_the_hermes_edition(
         "hooks/session-start.py",
         "setup/pre-commit",
         "rules/CHECKSUMS.sha256",
+        "evals/debug/case.yaml",
         "skills/harness-export/SKILL.md",
         "skills/skill-forge/SKILL.md",
         ".codex-plugin/plugin.json",
@@ -332,15 +334,33 @@ def test_readme_is_the_hermes_edition_readme(repo: Path) -> None:
     assert text == mod.HERMES_README
     for needle in (
         "Hermes",
-        "15 skills",
-        "no hooks",
-        "--ref",
-        "--force --ref",
-        "caution",
-        "behavioral eval",
+        "**15 skills**",
+        "hiway-kit:",
+        "No hooks",
+        "No agent loader",
+        "No MCP servers",
+        '--ref "$SHA" --force --no-enable',
+        "hermes plugins enable hiway-kit",
+        "--ref <new 40-char sha> --force",
+        "**caution**",
+        "critical 0",
+        "Use --force to override.",
+        "agents/review-code.md",
+        "skills/auto-dev/SKILL.md",
+        "no automatic update",
+        "disable-model-invocation",
+        ".hermes.md",
+        "Not measured",
+        "verify-on-stop",
+        "behavioral evals",
         "docs/harnesses.md#hermes-agent",
     ):
         assert needle in text, needle
+    # 스캐너 규칙에 걸리는 원문을 README 로 옮기지 않는다(판 README 가 새 high 를 만들지 않게)
+    for raw in ("rm -rf", "/etc/passwd", "os.environ"):
+        assert raw not in text, raw
+    # 원인 문서는 줄 번호 없이 — 본문이 바뀌면 낡는다
+    assert re.search(r"(review-code\.md|SKILL\.md):\d", text) is None
 
 
 # --- 판 변환: 음성 -------------------------------------------------------------------------------
@@ -356,6 +376,7 @@ def test_readme_is_the_hermes_edition_readme(repo: Path) -> None:
         "rules/CHECKSUMS.sha256",
         ".codex-plugin",
         ".cursor-plugin",
+        "evals",
         "skills/review/agents/openai.yaml skills/using-hiway-kit/agents/openai.yaml",
     ],
 )
@@ -961,3 +982,43 @@ def test_write_refuses_source_outside_main(repo: Path) -> None:
 
 def test_isolation_note_states_precedence() -> None:
     assert "이 머리말이 아래 본문의 worktree·커밋 지시보다 우선한다" in mod.HERMES_ISOLATION_NOTE
+
+
+# --- 수정 4: evals/ 제외와 H1 실측 README ---------------------------------------------------------
+
+
+def test_h1_facts_are_constants_in_the_readme() -> None:
+    """실측에 묶인 사실(caution·--force·15)은 상수 — README 가 그 값을 그대로 담는다. 실측이 바뀌면 사람이 고친다."""
+    assert mod.H1_SCAN_VERDICT == "caution"
+    assert mod.H1_FORCE_FLAG == "--force"
+    assert mod.EXPECTED_SKILL_COUNT == 15
+    assert mod.H1_BLOCK_MESSAGE == "Use --force to override."
+    for fact in (
+        f"**{mod.H1_SCAN_VERDICT}**",
+        mod.H1_BLOCK_MESSAGE,
+        f'--ref "$SHA" {mod.H1_FORCE_FLAG}',
+        f"**{mod.EXPECTED_SKILL_COUNT} skills**",
+        mod.H1_REPLACE_MESSAGE,
+        mod.H1_INSTALL_ROOT,
+        *mod.H1_SCAN_CAUSES,
+    ):
+        assert fact in mod.HERMES_README, fact
+
+
+def test_readme_losing_an_h1_fact_stops(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mod, "HERMES_README", mod.HERMES_README.replace(" --force --no-enable\nhermes", " --no-enable\nhermes"))
+    _check_fails(repo, "H1 실측 사실이 빠졌다")
+
+
+def test_readme_scan_cause_doc_check(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mod, "H1_SCAN_CAUSES", ("agents/review-code.md", "skills/gone/SKILL.md"))
+    monkeypatch.setattr(
+        mod, "HERMES_README", mod.HERMES_README + "\nskills/gone/SKILL.md\n"
+    )
+    _check_fails(repo, "스캐너 원인으로 적은 문서가 판에 없다")
+
+
+def test_real_repo_edition_has_no_evals(real_repo_out: Path) -> None:
+    assert not (real_repo_out / "evals").exists()
+    assert (real_repo_out / "agents/review-code.md").is_file()
+    assert (real_repo_out / "skills/auto-dev/SKILL.md").is_file()
