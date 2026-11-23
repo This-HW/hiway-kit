@@ -1,0 +1,25 @@
+(version 1)
+(allow default)
+
+; H1 local fixture. Keep these paths literal and run with an empty environment.
+(deny file-write*)
+(allow file-write*
+    (subpath "/private/tmp/hermes-h1")
+    (literal "/dev/null")
+    (literal "/dev/tty")
+    (subpath "/dev/fd"))
+
+; The live Hermes home contains credentials and user configuration.
+(deny file-read*
+    (subpath "/Users/hw/.hermes")
+    (subpath "/System/Volumes/Data/Users/hw/.hermes"))
+
+; Cover the rest of the real home, including other credentials and the checkout.
+(deny file-read*
+    (subpath "/Users/hw")
+    (subpath "/System/Volumes/Data/Users/hw"))
+
+; Use -D HERMES_NETWORK=install only for installation and the GitHub control.
+; Measurement uses -D HERMES_NETWORK=off. Other values also deny networking.
+(if (not (equal? (param "HERMES_NETWORK") "install"))
+    (deny network*))
