@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "_comment": "다중 하네스 타겟 매니페스트 생성 정책의 단일 소스. 이 파일 밖(스크립트·문서)에 필드 매핑이나 문구를 중복 기재하지 말 것.",
   "source": {
     "pluginRoot": "plugins/common",
@@ -232,6 +232,36 @@
       "_specSummary": "공식 문서(cursor.com/docs/plugins, cursor.com/docs/reference/plugins)와 공개 스펙 저장소(github.com/cursor/plugins) 확인 [researched: 검색 결과, n=3 이상 독립 출처, 2026-08-27]. 매니페스트는 .cursor-plugin/plugin.json(필수), 다중 플러그인 저장소는 .cursor-plugin/marketplace.json. 컴포넌트 타입이 skills/agents/rules/hooks/commands/mcpServers 6종으로 전부 1급 지원 — codex(skills만)·antigravity(skills·rules, agents 비지원)와 달리 kit의 33 에이전트 + 13 rules를 전부 실을 수 있는 유일한 후보다. 스키마 검증이 엄격하다(additionalProperties:false, kebab-case 패턴, URI·email 포맷 검사). superpowers 실물(.cursor-plugin/plugin.json)이 skills + hooks: \"./hooks/hooks-cursor.json\"(훅을 타겟 전용 파일로 분리)을 실제로 쓰는 것도 확인했다 [confirmed: superpowers 원문].",
       "_previousDisabledReason": "두 가지 독립적인 이유로 비활성 상태다. (1) 공개 게재: Cursor Marketplace는 큐레이션 파트너 한정이라 오픈 제출이 안 된다 [researched: n=2] — 로컬/Git 마켓플레이스 설치는 이 제약과 무관하다. (2) 검증 수준: 로컬에 cursor CLI가 없어 스키마는 확인했어도 install→list→remove 런타임 왕복을 못 했다(spec-verified, runtime-verified 아님) — Antigravity agents/ 사건이 보여주듯 스키마가 맞아도 실제 발견·인식은 별개일 수 있다.",
       "_enableWhen": "cursor CLI(또는 동등 도구)로 실물 install→list→remove 왕복 검증이 가능해지거나, 사용자가 수용 테스트 트랜스크립트를 제공하면 — runtime-verified로 승격 후 재검토 (superpowers의 새 하네스 지원 기준과 동일)."
+    },
+    {
+      "id": "hermes",
+      "enabled": false,
+      "delivery": "edition",
+      "editionBuilder": "scripts/build-hermes-branch.py",
+      "verificationLevel": "researched-only",
+      "schemaUrl": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+      "requiredFields": [
+        "name",
+        "version",
+        "description"
+      ],
+      "passthroughFields": [
+        "author",
+        "homepage",
+        "repository",
+        "license",
+        "keywords"
+      ],
+      "_deliveryNote": "`delivery: \"edition\"` 은 **main 트리에 파일을 만들지 않는** 배포다. Hermes 판은 생성 브랜치 `hermes` 의 Agent Plugins(AP) v1 축소판이고, 사용자는 40자 커밋 sha 로 고정 설치한다(판정 D1). 그래서 이 타겟에는 `manifestPath` 가 없다 — AP v1 은 매니페스트 위치가 패키지 루트로 고정이라 경로는 판 빌더(`editionBuilder`)의 상수다(판정 '남은 작은 불합의', controller 결정). `scripts/build-targets.py` 는 이 정책으로 매니페스트를 **계산만** 해 AP v1 정적 제약을 판정한다 — `enabled` 와 무관하게 `--check` 마다 돌아 정책 파손을 병합 전에 잡는다. 판 트리를 실제로 만들고 쓰는 것은 판 빌더다. `--only hermes` 는 판 빌더로 안내하는 오류다(검사한 척 성공하지 않는다).",
+      "_apV1Source": "필드 정책의 근거: Hermes `hermes_cli/agent_plugins.py:46-262 @352b249` — `$schema` 는 정확히 위 URL 이어야 하고(아니면 `unsupported or missing Agent Plugins schema`), 허용 최상위 필드는 `$schema, name, version, description, author, homepage, repository, license, keywords, extensions`(그 밖은 경고 후 버림), `name` 은 정규식 + 1~64자, `author` 는 `{name,email,url}` 문자열만. `extensions` 는 SSOT 에 대응 필드가 없어 싣지 않는다. 판정 상수는 `build-targets.py` 에 **정책과 독립된 오라클**로 둔다 — 이 파일의 값을 그대로 다시 읽어 비교하면 정책이 망가질 때 판정도 같이 망가진다. 상수 출처: docs/specs/2026-11-24-hermes-edition/research-integrated.md §1.",
+      "_failClosedInvariant": "main 트리를 ref 없이 설치하는 Hermes 사용자는 `manifest_invalid` 로 막혀야 한다(판정 D1). `build-targets.py --check` 가 정적 대리 검사로 지킨다: `<pluginRoot>/plugin.json` 의 `$schema` 가 AP v1 URL 이 **아니고**, `<pluginRoot>/plugin.yaml`(`.yml`)이 **없어야** 한다(`plugin.yaml` 이 있으면 Hermes 는 네이티브로 읽고 `plugin.json` 을 보지 않는다 — `plugins_discovery.py:143-187`). 런타임 확인(P0 음성 대조)은 H1 실측 몫이다.",
+      "_disabledReason": "researched-only — Hermes 를 아무도 실행하지 않았다(판정 기준 7). 소스·문서 정적 판정뿐이고, 판 빌더(`editionBuilder`)도 아직 없다. H1 격리 실측(P0~P6·내장 기능 공존)을 통과하고 사용자가 H2(게시)를 승인할 때 `enabled:true` 로 올린다. 그때도 main 생성물은 생기지 않는다 — `enabled` 는 판 빌더의 `--write` 허용만 가른다.",
+      "_unverified": {
+        "_meta": "판정문 `docs/specs/2026-11-24-hermes-edition/design-verdict.md` '미충족 기준' 원문 요약. H1 에서만 닫힌다.",
+        "criterion5": "소비자 우선·상호운용 **미확인**. 소스로 확인한 것: 프로필 설치 경로, 사용자 명령 없이는 `config.yaml` 에 쓰지 않는다. 런타임 미관측: 스킬 노출→호출, 도구 발견(P6), 이중 로드, Hermes 내장 기능(verify-on-stop·스킬 생성·메모리) 공존, 격리 실패 시 경로.",
+        "criterion3": "설치 가능성 근거는 헌장 원문 기준으로 충족('실측 전에는 지원이라 쓰지 않는 게이트'가 설계에 있다). 단 실제 설치 보안 판정은 **미측정**(caution 예상, 정적).",
+        "others": "기준 1·2·4·6·7 은 '설계상 충족' — 구현과 테스트로만 실물이 된다."
+      }
     },
     {
       "id": "pi",

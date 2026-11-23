@@ -62,16 +62,39 @@ plugin.json`)을 갖는다. 이 값(name·version·description 등)을 손으로
 생성물이므로 `--check` 의 드리프트·미생성 판정을 그대로 받는다. frontmatter 는 한 줄
 `key: value` 만 읽는다 — 블록 스칼라(`|`·`>`)나 읽을 수 없는 형태는 추측하지 않고 exit 1.
 
+edition 배포 타겟 (Hermes 판, 2026-11-24)
+-----------------------------------------
+`delivery: "edition"` 타겟은 **main 트리에 파일을 만들지 않는다** — 생성 브랜치의 축소판으로
+배포되고, 판 트리는 판 빌더(정책의 `editionBuilder`)가 만든다. 이 스크립트는 그 타겟의
+매니페스트를 `build_manifest()` 로 **계산만** 해 Agent Plugins v1 정적 제약을 판정한다
+(`ap_v1_violations`). `enabled` 와 무관하게 전체 `--check` 마다 돈다 — 정책 파손을 판 빌더가
+생기기 전에, 병합 전에 잡기 위해서다. `--only <edition>` 은 판 빌더로 안내하는 오류다(검사한
+척 성공하지 않는다). 판정 근거: docs/specs/2026-11-24-hermes-edition/design-verdict.md D1·D3.
+
+전체 `--check` 는 fail-closed 불변식의 정적 대리 검사도 한다: `<pluginRoot>/plugin.json` 의
+`$schema` 가 AP v1 URL 이 아니고 `<pluginRoot>/plugin.yaml`(`.yml`)이 없어야 한다. main 트리를
+ref 없이 설치한 Hermes 사용자가 `manifest_invalid` 로 막히게 하는 장치다(판정 D1).
+
+출력 경로 충돌
+--------------
+main 에 생성하는 활성 타겟들의 출력 경로가 겹치면(같은 파일, 또는 한쪽이 다른 쪽의 상위
+디렉토리) `--check`·`--write` 모두 **아무것도 쓰기 전에** exit 1 이다. 비교는 `_resolve_in_repo`
+가 정규화한 경로로 한다 — `./`·`..`·심링크 별칭이 서로 다른 문자열로 같은 파일을 가리킬 수
+있다. `--only` 로 좁혀도 비교는 활성 타겟 전체로 한다(좁힌 타겟의 쓰기가 다른 타겟의
+생성물을 덮을 수 있다). 대소문자 무시 파일시스템에서 철자만 다른 경로는 잡지 못한다.
+
 exit code:
   0 = 성공 (또는 --check 드리프트 없음)
   1 = --check 드리프트(미생성 포함) / SSOT 부재 / 알 수 없는 --only id / 정책 파싱 실패 /
-      스킬 frontmatter 를 읽지 못함
+      스킬 frontmatter 를 읽지 못함 / edition AP v1 판정 실패 / fail-closed 불변식 위반 /
+      출력 경로 충돌 / `manifestPath` 없는 main 타겟 / `--only <edition 타겟>`
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import sys
@@ -85,6 +108,40 @@ DEFAULT_POLICY = REPO_ROOT / "packaging" / "targets.json"
 #: 명령으로 조립하지 않는다. 인용·치환·구분자를 깰 수 있는 문자를 원천 배제한다.
 _HOOK_ARG_RE = re.compile(r"--[A-Za-z0-9][A-Za-z0-9._-]*(=[A-Za-z0-9._-]+)?")
 _HOOK_INTERPRETER_RE = re.compile(r"[A-Za-z0-9_./ -]+")
+
+#: Agent Plugins v1 정적 제약 — Hermes 가 포터블 `plugin.json` 을 받는 조건.
+#: 출처: `hermes_cli/agent_plugins.py:46-262 @352b249`
+#: (docs/specs/2026-11-24-hermes-edition/research-integrated.md §1).
+#: 정책(`packaging/targets.json`)에서 읽지 않는다 — **정책과 독립된 오라클**이어야 정책이 망가질
+#: 때 판정이 같이 망가지지 않는다. 정책의 `_apV1Source` 가 이 위치를 가리킨다.
+AP_V1_SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+AP_V1_TOP_LEVEL = frozenset(
+    {
+        "$schema",
+        "name",
+        "version",
+        "description",
+        "author",
+        "homepage",
+        "repository",
+        "license",
+        "keywords",
+        "extensions",
+    }
+)
+AP_V1_NAME_RE = re.compile(r"(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?")
+AP_V1_NAME_MAX = 64
+AP_V1_AUTHOR_FIELDS = frozenset({"name", "email", "url"})
+#: Hermes 가 플러그인 디렉토리에서 네이티브 매니페스트로 읽는 이름. 있으면 `plugin.json` 을 보지
+#: 않는다(`hermes_cli/plugins_discovery.py:143-187 @352b249`).
+HERMES_NATIVE_MANIFESTS = ("plugin.yaml", "plugin.yml")
+#: AP v1 매니페스트는 패키지 루트에 고정이다.
+AP_V1_MANIFEST_NAME = "plugin.json"
+
+#: `delivery` 의 허용 값. 키가 없으면 main 생성(기존 동작)이다.
+DELIVERY_EDITION = "edition"
+#: edition 타겟에 있으면 main 생성물을 뜻하게 되는 키 — 조용히 무시하지 않고 거부한다.
+_EDITION_FORBIDDEN_KEYS = ("manifestPath", "marketplace", "skillInterface", "hooks")
 
 
 class PolicyError(Exception):
@@ -190,6 +247,78 @@ def build_manifest(ssot: dict, target: dict, present_dirs: set[str]) -> dict:
             interface[field] = ssot[src]
         out["interface"] = interface
     return out
+
+
+def ap_v1_violations(manifest: dict) -> list[str]:
+    """계산된 매니페스트가 Agent Plugins v1 정적 제약을 어기는 이유 목록(빈 목록 = 통과).
+
+    판정 항목: `$schema` 정확 일치, 허용 최상위 필드만, `name` 정규식 + 1~64자,
+    `author` 는 `{name,email,url}` 문자열만 담은 객체. 스킬 frontmatter·심링크 같은 판 트리
+    판정은 판 빌더의 몫이다(이 스크립트는 매니페스트만 계산한다).
+    """
+    out: list[str] = []
+    schema = manifest.get("$schema")
+    if schema != AP_V1_SCHEMA_URL:
+        out.append(
+            f"$schema 가 AP v1 URL 과 다르다 — {schema!r} (기대: {AP_V1_SCHEMA_URL})"
+        )
+    extra = sorted(set(manifest) - AP_V1_TOP_LEVEL)
+    if extra:
+        out.append(f"AP v1 이 허용하지 않는 최상위 필드 — {extra}")
+    name = manifest.get("name")
+    if (
+        not isinstance(name, str)
+        or not 1 <= len(name) <= AP_V1_NAME_MAX
+        or not AP_V1_NAME_RE.fullmatch(name)
+    ):
+        out.append(
+            f"name 이 AP v1 규칙(소문자·숫자·.·-, 1~{AP_V1_NAME_MAX}자, "
+            f"--·.. 금지, 영숫자로 시작·끝)을 어긴다 — {name!r}"
+        )
+    if "author" in manifest:
+        author = manifest["author"]
+        if not isinstance(author, dict):
+            out.append(f"author 는 객체여야 한다 — {type(author).__name__}")
+        else:
+            bad = sorted(
+                k
+                for k, v in author.items()
+                if k not in AP_V1_AUTHOR_FIELDS or not isinstance(v, str)
+            )
+            if bad:
+                out.append(
+                    f"author 는 {sorted(AP_V1_AUTHOR_FIELDS)} 문자열만 허용한다 — 위반 키 {bad}"
+                )
+    return out
+
+
+def is_edition(target: dict) -> bool:
+    """`delivery` 해석. 키가 없으면 main 생성, `"edition"` 이면 판 배포, 그 밖은 정책 오류."""
+    delivery = target.get("delivery")
+    if delivery is None:
+        return False
+    if delivery == DELIVERY_EDITION:
+        return True
+    raise PolicyError(
+        f"타겟 '{target.get('id')}': 알 수 없는 delivery 값 {delivery!r} "
+        f"(허용: 키 생략 = main 생성, {DELIVERY_EDITION!r})"
+    )
+
+
+def _edition_builder(target: dict) -> str:
+    """edition 타겟의 정책 모순을 거부하고 판 빌더 경로(안내 문구용)를 돌려준다."""
+    for key in _EDITION_FORBIDDEN_KEYS:
+        if target.get(key) is not None:
+            raise PolicyError(
+                f"타겟 '{target['id']}': delivery:edition 인데 {key} 가 있다 — edition 은 main 에 "
+                f"생성물을 만들지 않는다(판 경로는 판 빌더 상수)"
+            )
+    builder = target.get("editionBuilder")
+    if not isinstance(builder, str) or not builder:
+        raise PolicyError(
+            f"타겟 '{target['id']}': delivery:edition 에는 editionBuilder(판 빌더 경로)가 필요하다"
+        )
+    return builder
 
 
 def build_marketplace(ssot: dict, target: dict, plugin_root_rel: str) -> dict | None:
@@ -471,13 +600,19 @@ class Artifact:
 def artifacts_for(
     repo_root: Path, policy: dict, ssot: dict, target: dict
 ) -> list[Artifact]:
+    manifest_path = target.get("manifestPath")
+    if not isinstance(manifest_path, str) or not manifest_path:
+        raise PolicyError(
+            f"타겟 '{target.get('id')}': manifestPath 가 없다 — main 에 생성하는 타겟"
+            f'(delivery 생략)에는 필수다. 판으로 배포한다면 delivery:"edition" 을 쓴다'
+        )
     plugin_root = _source_path(repo_root, policy, "pluginRoot")
     present = _detect_components(plugin_root, policy)
     out = [
         Artifact(
             target["id"],
             "manifest",
-            target["manifestPath"],
+            manifest_path,
             build_manifest(ssot, target, present),
             repo_root,
         )
@@ -538,19 +673,139 @@ def _selected_targets(policy: dict, only: str | None) -> tuple[list[dict], list[
     빈 목록+경고(조용한 성공이 아니라 "왜 아무것도 안 됐는지"를 보여준다).
     """
     all_targets = policy.get("targets", [])
+    editions = [t for t in all_targets if is_edition(t)]
+    for t in editions:
+        _edition_builder(t)
     if only is None:
-        return [t for t in all_targets if t.get("enabled")], []
+        return [t for t in all_targets if t.get("enabled") and not is_edition(t)], []
     t = _find_target(policy, only)
     if t is None:
         known = ", ".join(sorted(x["id"] for x in all_targets)) or "(없음)"
         raise PolicyError(
             f"--only '{only}' 는 정책에 없는 타겟 id다. 알려진 id: {known}"
         )
+    if is_edition(t):
+        raise PolicyError(
+            f"--only '{only}' 는 delivery:edition 타겟이다 — main 에 생성물이 없고, 판 트리 생성·검사는 "
+            f"판 빌더({_edition_builder(t)})가 담당한다. 매니페스트 계산 판정만 보려면 "
+            f"--only 없이 --check 를 돌려라."
+        )
     if not t.get("enabled"):
         return [], [
             f"'{only}' 는 enabled:false — 건너뜀 ({t.get('_disabledReason', '사유 미기재')})"
         ]
     return [t], []
+
+
+def _main_artifacts(
+    repo_root: Path, policy: dict, ssot: dict
+) -> dict[str, list[Artifact]]:
+    """main 에 생성하는 활성 타겟 전부의 생성물. 충돌 검사는 `--only` 와 무관하게 이 전체로 한다."""
+    return {
+        t["id"]: artifacts_for(repo_root, policy, ssot, t)
+        for t in policy.get("targets", [])
+        if t.get("enabled") and not is_edition(t)
+    }
+
+
+def _path_collisions(repo_root: Path, arts: list[Artifact]) -> list[str]:
+    """정규화 경로(`Artifact.resolved_path`, `_resolve_in_repo` 결과)가 겹치는 쌍.
+
+    같은 파일이거나 한쪽이 다른 쪽의 상위 디렉토리면 충돌이다. 탈출 경로(None)는 여기서
+    보지 않는다 — 각 모드가 "경로 탈출 차단" 으로 따로 보고한다.
+    """
+    root = repo_root.resolve()
+    placed = [a for a in arts if a.resolved_path is not None]
+    out: list[str] = []
+    for i, a in enumerate(placed):
+        for b in placed[i + 1 :]:
+            pa, pb = a.resolved_path, b.resolved_path
+            if pa == pb or pa in pb.parents or pb in pa.parents:
+                shown = min(pa, pb, key=lambda p: len(p.parts)).relative_to(root)
+                out.append(
+                    f"{a.target_id}:{a.rel_path} ↔ {b.target_id}:{b.rel_path} "
+                    f"(정규화 경로 {shown.as_posix()})"
+                )
+    return out
+
+
+def _report_collisions(repo_root: Path, all_arts: dict[str, list[Artifact]]) -> bool:
+    flat = [a for arts in all_arts.values() for a in arts]
+    collisions = _path_collisions(repo_root, flat)
+    for c in collisions:
+        print(f"[build-targets] ✗ 출력 경로 충돌 — {c}")
+    if collisions:
+        print(
+            "  → 생성 전에 중단했다. packaging/targets.json 의 출력 경로를 서로 겹치지 않게 고쳐라."
+        )
+    return bool(collisions)
+
+
+def _check_editions(repo_root: Path, policy: dict, ssot: dict) -> tuple[int, bool]:
+    """edition 타겟 전부(enabled 무관)의 매니페스트를 계산해 AP v1 판정. (판정 수, 실패 여부)."""
+    plugin_root = _source_path(repo_root, policy, "pluginRoot")
+    present = _detect_components(plugin_root, policy)
+    fail = False
+    count = 0
+    for target in policy.get("targets", []):
+        if not is_edition(target):
+            continue
+        count += 1
+        problems = ap_v1_violations(build_manifest(ssot, target, present))
+        for problem in problems:
+            print(
+                f"[build-targets] ✗ edition '{target['id']}' AP v1 판정 실패 — {problem}"
+            )
+        if problems:
+            fail = True
+        else:
+            print(
+                f"[build-targets] ✓ edition '{target['id']}' — AP v1 매니페스트 계산 판정 통과 "
+                f"(main 생성물 없음, 판은 {_edition_builder(target)})"
+            )
+    return count, fail
+
+
+def _check_fail_closed_invariant(repo_root: Path, policy: dict) -> bool:
+    """main 의 플러그인 루트가 Hermes 에 설치 가능한 패키지로 보이지 않는가. 위반이면 True.
+
+    판정할 수 없는 상태(읽기·파싱 실패)는 통과로 치지 않는다.
+    """
+    plugin_root = _source_path(repo_root, policy, "pluginRoot")
+    rel_root = plugin_root.relative_to(repo_root.resolve()).as_posix()
+    fail = False
+    for name in HERMES_NATIVE_MANIFESTS:
+        # lexists: 끊어진 심링크도 "있다"로 본다 — 판정을 관대하게 하지 않는다.
+        if os.path.lexists(plugin_root / name):
+            print(
+                f"[build-targets] ✗ fail-closed 불변식 위반 — {rel_root}/{name} 이 있다 "
+                f"(Hermes 가 main 트리를 네이티브 플러그인으로 읽는다)"
+            )
+            fail = True
+    manifest = plugin_root / AP_V1_MANIFEST_NAME
+    if os.path.lexists(manifest):
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as err:
+            print(
+                f"[build-targets] ✗ fail-closed 불변식 판정 불가 — {rel_root}/{AP_V1_MANIFEST_NAME} "
+                f"를 읽지 못했다 ({err})"
+            )
+            return True
+        schema = data.get("$schema") if isinstance(data, dict) else None
+        if not isinstance(data, dict):
+            print(
+                f"[build-targets] ✗ fail-closed 불변식 판정 불가 — {rel_root}/{AP_V1_MANIFEST_NAME} "
+                f"가 JSON 객체가 아니다"
+            )
+            fail = True
+        elif schema == AP_V1_SCHEMA_URL:
+            print(
+                f"[build-targets] ✗ fail-closed 불변식 위반 — {rel_root}/{AP_V1_MANIFEST_NAME} 의 "
+                f"$schema 가 AP v1 URL 이다 (ref 없는 Hermes 설치가 main 트리를 받아들이게 된다)"
+            )
+            fail = True
+    return fail
 
 
 def cmd_check(repo_root: Path, policy: dict, only: str | None) -> int:
@@ -562,10 +817,20 @@ def cmd_check(repo_root: Path, policy: dict, only: str | None) -> int:
     targets, warnings = _selected_targets(policy, only)
     for w in warnings:
         print(f"[build-targets] i {w}")
-    fail = False
+    all_arts = _main_artifacts(repo_root, policy, ssot)
+    fail = _report_collisions(repo_root, all_arts)
+    editions = 0
+    if only is None:
+        editions, edition_fail = _check_editions(repo_root, policy, ssot)
+        fail = _check_fail_closed_invariant(repo_root, policy) or edition_fail or fail
     checked = 0
     for target in targets:
-        for art in artifacts_for(repo_root, policy, ssot, target):
+        # all_arts 는 활성 main 타겟만 담는다. --only 로 고른 비활성 타겟은 _selected_targets 가
+        # 이미 빈 목록으로 걸렀으므로 여기 오는 것은 활성 타겟뿐이지만, 방어적으로 다시 계산한다.
+        arts = all_arts.get(target["id"])
+        if arts is None:
+            arts = artifacts_for(repo_root, policy, ssot, target)
+        for art in arts:
             if art.resolved_path is None:
                 print(
                     f"[build-targets] ✗ 경로 탈출 차단 — {art.rel_path}: {art.escape_error}"
@@ -597,10 +862,15 @@ def cmd_check(repo_root: Path, policy: dict, only: str | None) -> int:
                 fail = True
     if fail:
         return 1
+    tail = (
+        f" · edition {editions}개 AP v1 계산 판정 통과 · fail-closed 불변식 통과"
+        if only is None
+        else ""
+    )
     if checked == 0:
-        print("[build-targets] ✓ 검사 대상 없음 (enabled 타겟 없음)")
+        print(f"[build-targets] ✓ 검사 대상 없음 (enabled 타겟 없음){tail}")
     else:
-        print(f"[build-targets] ✓ 생성물 {checked}개 모두 SSOT와 일치")
+        print(f"[build-targets] ✓ 생성물 {checked}개 모두 SSOT와 일치{tail}")
     return 0
 
 
@@ -618,10 +888,16 @@ def cmd_write(repo_root: Path, policy: dict, only: str | None) -> int:
     targets, warnings = _selected_targets(policy, only)
     for w in warnings:
         print(f"[build-targets] i {w}")
+    all_arts = _main_artifacts(repo_root, policy, ssot)
+    if _report_collisions(repo_root, all_arts):
+        return 1
     written = 0
     failed = 0
     for target in targets:
-        for art in artifacts_for(repo_root, policy, ssot, target):
+        arts = all_arts.get(target["id"])
+        if arts is None:
+            arts = artifacts_for(repo_root, policy, ssot, target)
+        for art in arts:
             if art.resolved_path is None:
                 print(
                     f"[build-targets] ✗ 경로 탈출 차단 — {art.rel_path}: {art.escape_error}"
