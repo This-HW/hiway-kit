@@ -229,12 +229,19 @@ reconsidered once it can be measured.
 
 ## Hermes Agent
 
-**Researched, not supported yet.** No Hermes package is published. The design (a generated `hermes`
-branch carrying an Agent Plugins v1 edition, installed by commit sha) and its measurement plan are in
-[`specs/2026-11-24-hermes-edition/`](specs/2026-11-24-hermes-edition/design-verdict.md). This section
-will gain install commands only after that edition has been installed and observed in a sandbox. Every
-statement below comes from reading Hermes source and docs at `NousResearch/hermes-agent@352b249`
-(stable v0.23.3), not from running it.
+**Measured in a sandbox, not published yet.** No Hermes package is published. The design is a generated
+`hermes` branch that carries an Agent Plugins v1 edition and is installed by commit sha. It is described in
+[`specs/2026-11-24-hermes-edition/`](specs/2026-11-24-hermes-edition/design-verdict.md). On 2026-11-24 the
+edition was installed, enabled, listed and removed with Hermes `352b249` in a write-denied sandbox. The
+results are in [the H1 record](specs/2026-11-24-hermes-edition/h1-measurement.md):
+
+- 15 skills appear once the edition is enabled.
+- `AGENTS.md` export works from the edition's own tools.
+- Hermes's install scanner rates the edition **caution** (no critical findings). A first non-interactive
+  install therefore needs `--force`.
+
+Install commands will appear here once the `hermes` branch is published. Statements below that are not
+from that record come from reading Hermes source and docs at that commit.
 
 **Rules reach Hermes today through `AGENTS.md`.** Run `/harness-export` in another harness, or the
 exporter directly:

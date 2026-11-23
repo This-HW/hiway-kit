@@ -1,7 +1,7 @@
 ---
 title: "Hermes 판 — H0 문서·비활성 타겟, 판 빌더, H1 격리 실측"
 status: current
-execution_status: in-progress
+execution_status: done
 as_of: 2026-11-24
 created: 2026-11-24
 size: large
@@ -48,6 +48,15 @@ size: large
   - 이 테스트는 **새로 추가한 opt-in 검사**다. 클론이 없는 환경에서는 원문 일치를 원리상 탐지할 수 없다
   - 상시 검사(발췌 fixture ↔ 상수 대조)는 skip 없이 돈다
   - 그래서 약화가 아니다
+- **"skip 추가 0" 의 두 번째 예외(승인, controller 2026-11-24)**: `test_build_hermes_branch.py::test_out_refuses_case_variant_of_the_repo` 는 대소문자 변형 경로가 같은 디렉토리가 아니면 skip 한다(W-C 리뷰 ATK-004).
+  - 대소문자를 구분하는 FS(Linux CI)에서는 변형 경로가 실제로 다른 디렉토리다. 막을 우회 자체가 존재하지 않는다
+  - 대소문자를 무시하는 FS(macOS 개발 환경)에서는 실제로 실행된다
+  - 기존 게이트를 약화하는 skip 이 아니다
+- **스펙 변경에 따른 테스트 수정(승인, controller 2026-11-24)**:
+  - `test_real_repo_hermes_policy_and_check` 가 기대하는 `verificationLevel` 을 `researched-only` 에서 `runtime-verified` 로 바꿨다
+  - H1 에서 실물 CLI 로 install→list→remove 왕복을 마쳐, 정책의 3단계 정의상 상태가 바뀌었기 때문이다
+  - 게이트 약화가 아니라 스펙 변경이다. `enabled:false` 단언은 그대로 둔다
+- **`rules/VERSION` 오분류(controller 지시서 결함)**: H1 P4 와 W-C 리뷰가 각각 잡았다. 판에 다시 넣었고, 판 도구를 실제로 실행하는 회귀 테스트를 더했다
 - **모호함 탐색** — 네 자리를 다 훑었다:
   - **상태 전이**: `enabled:false→true` 일 때 `--write` 만 enabled 를 요구한다(판정 쟁점 4-4). `hermes` 브랜치가 처음 생길 때는 부모 없이 커밋한다. 디렉토리 빌더 관례를 따른다
   - **두 규칙 동시 적용**: build-targets 원칙 "enabled = main 에 생성" 과 `delivery: edition` 이 겹친다. edition 은 main 에 파일을 만들지 않고 계산 검사만 한다(판정 쟁점 4-1·2)
@@ -124,3 +133,20 @@ size: large
   - `git diff --name-only --diff-filter=D "$BASE" -- scripts/tests tests` 빈 출력
   - `scripts/tests`·`tests` 에 skip·xfail 추가 0
   - 이 절의 변경 0
+
+## 검증 결과
+
+범위 H0 + 빌더 + H1 완료(2026-11-24). **H2(게시)는 범위 밖이며, 사용자 재승인을 기다린다.**
+
+- **배치 1**:
+  - W-B 디렉토리 빌더 배관 공통화 — 리뷰 ACCEPT 후 보강
+  - W-A `hermes` 타겟·`build-targets` edition 지원 — 리뷰 CONDITIONAL → 수정 → 재리뷰 ACCEPT → 보강
+  - W-D H0 문서
+  - W-E1 H1 1단계
+- **배치 2**: W-C 판 빌더 — 리뷰 CONDITIONAL → 수정 4회. 그중 하나는 디렉토리 빌더 몫의 `--write` 계보 검사
+- **배치 3**: W-E2 H1 2단계와 재측정 2회
+- **게시 후보**: 판 트리 `plugins/common=392f203d028b201c6f5044daf148964921749843`(원본 `20dd2c8`, 파일 83, 스킬 15). H1 최종 측정과 같은 트리다
+- **디렉토리판 무회귀**: plugin tree `364f51e6d4ef8ba952ae91301a935a3d5e70689c` 불변이다. main push 뒤에도 `directory` 는 `df4fa43` 그대로다
+- **미측정**: Hermes 내장 기능 공존(모델 실행 필요), 게시된 GitHub `hermes` 브랜치 sha 설치
+- 완료 조건 명령과 전체 게이트 결과는 병합 커밋 메시지와 heartbeat 기록에 남는다
+

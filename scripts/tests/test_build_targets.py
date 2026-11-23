@@ -2258,7 +2258,10 @@ def test_real_repo_hermes_policy_and_check():
     hermes = next(t for t in policy["targets"] if t["id"] == "hermes")
     assert hermes["enabled"] is False
     assert hermes["delivery"] == "edition"
-    assert hermes["verificationLevel"] == "researched-only"
+    # H1 sandbox round trip (install → list → remove with the real CLI) passed on 2026-11-24, so the
+    # target is runtime-verified; it stays disabled until the user approves publishing (H2).
+    assert hermes["verificationLevel"] == "runtime-verified"
+    assert "_observations20261124" in hermes
     assert hermes["schemaUrl"] == AP_URL
     assert hermes["requiredFields"] == ["name", "version", "description"]
     assert hermes["passthroughFields"] == [
