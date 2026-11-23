@@ -65,7 +65,7 @@ as_of: 2026-11-24
     - 이중 로드(`~/.agents/skills` 권고와의 충돌) `[C-C9]`
 - **H1 전 — 빌더**(코드 작업):
   - 공통 배관만 중립 모듈로 원문 그대로 옮긴다. golden 트리 sha 테스트를 먼저 넣고, 오라클 `derive_tree(ab468bf):plugins/common == 364f51e6d4ef8ba952ae91301a935a3d5e70689c` 를 재현한다 `[C-C2][X-S15]`
-  - `build-hermes-branch.py` 를 쓴다. 판 판정과 머리말은 따로 둔다. `--check` 는 `enabled` 와 무관하게 돌리고, `--write` 만 `enabled:true` 를 요구한다
+  - `build-hermes-branch.py` 를 쓴다. 판 판정과 머리말은 따로 둔다. `--check` 는 `enabled` 와 무관하게 돌리고, `--write` 만 `enabled:true` 를 요구한다 <!-- doc-ref-ok: H1 전에 만들 파일 -->
   - 실제 게시 후보의 `plugins/common` 하위 트리 sha 를 기대 트리와 대조한다 `[X-r2 쟁점4]`
   - 실레포 `--check` 를 pytest 에 넣는다(병합 전에 돈다) `[C-r2 쟁점4-3]`
   - `build-targets.py` 를 고친다:

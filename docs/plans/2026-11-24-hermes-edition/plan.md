@@ -1,6 +1,8 @@
 ---
 title: "Hermes 판 — H0 문서·비활성 타겟, 판 빌더, H1 격리 실측"
-status: in-progress
+status: current
+execution_status: in-progress
+as_of: 2026-11-24
 created: 2026-11-24
 size: large
 ---
@@ -55,12 +57,12 @@ size: large
 **배치 1 — 병렬(파일이 겹치지 않음)**
 
 1. **W-B 디렉토리 빌더 배관 공통화**(리팩터, Codex 워커)
-   - 바꿀 파일: `scripts/tests/test_build_directory_branch.py`, `scripts/edition_tree.py`(신규), `scripts/build-directory-branch.py`
+   - 바꿀 파일: `scripts/tests/test_build_directory_branch.py`, `scripts/edition_tree.py`(신규), `scripts/build-directory-branch.py` <!-- doc-ref-ok: 이 계획이 만들 파일 -->
    - 1a. 추출 **전** 커밋: golden 테스트를 넣는다
      - 픽스처 레포의 결과 트리 sha 를 고정한다
      - 실레포 오라클 `derive_tree(ab468bf):plugins/common == 364f51e6d4ef8ba952ae91301a935a3d5e70689c` 를 고정한다
      - 되돌려-FAIL 로 이 테스트가 실제로 잡는지 확인한다
-   - 1b. 정책과 무관한 배관만 원문 그대로 `scripts/edition_tree.py` 로 옮긴다
+   - 1b. 정책과 무관한 배관만 원문 그대로 `scripts/edition_tree.py` 로 옮긴다 <!-- doc-ref-ok: 이 계획이 만들 파일 -->
      - 대상: `_git`·`_git_bytes`·`_rev`·`_entries`·`_frontmatter_span`·`_strip_keys`·`_with_note`·커밋 체인
      - `derive_tree`·`_transform`·`_assert_*`·상수·머리말 문구는 디렉토리 빌더에 남긴다
    - 1c. `--check` 출력에 플러그인 하위 트리 sha 를 덧붙인다
@@ -72,7 +74,7 @@ size: large
    - `manifestPath`·출력 경로 충돌은 정규화한 경로로 exit 1 한다
    - edition 타겟에 `--only` 를 주면 판 빌더로 안내하는 오류를 낸다
    - `artifacts_for` 의 `manifestPath` 무조건 인덱싱(KeyError)을 막는다
-   - fail-closed 불변식의 정적 대리 검사를 둔다: `plugins/common/plugin.json` 의 `$schema` ≠ AP URL, 그리고 `plugins/common/plugin.yaml` 없음
+   - fail-closed 불변식의 정적 대리 검사를 둔다: `plugins/common/plugin.json` 의 `$schema` ≠ AP URL, 그리고 `plugins/common/plugin.yaml` 없음 <!-- doc-ref-ok: 없어야 한다는 불변식의 대상 경로 -->
 3. **W-D H0 문서**(controller 직접)
    - 바꿀 파일: `docs/harnesses.md`
    - Hermes 절을 쓴다: 지원 상태(researched-only), `AGENTS.md` 경로와 가림, 컨텍스트 기본 20,000자, `skills.external_dirs` 평가 경로(읽기 전용 클론·manual-only 노출), 이중 로드 경고, "지원 표기는 실측 뒤"
@@ -80,7 +82,7 @@ size: large
 **배치 2 — 1·2 병합 뒤**
 
 4. **W-C Hermes 판 빌더**(신규 기능, 워커 1)
-   - 바꿀 파일: `scripts/build-hermes-branch.py`(신규), `scripts/tests/test_build_hermes_branch.py`(신규)
+   - 바꿀 파일: `scripts/build-hermes-branch.py`(신규), `scripts/tests/test_build_hermes_branch.py`(신규) <!-- doc-ref-ok: 이 계획이 만들 파일 -->
    - `edition_tree` 배관과 `build-targets.build_manifest` 를 쓴다(매핑을 두 벌 두지 않는다)
    - 판 변환과 fail-closed 판정:
      - 결과 트리에 `hooks/`·`setup/`·빼기로 한 스킬 2종이 없어야 한다
@@ -98,7 +100,7 @@ size: large
 **배치 3 — 4 병합 뒤**
 
 5. **W-E H1 격리 실측**(워커 1, 결과는 controller 가 대조)
-   - 바꿀 파일: `docs/specs/2026-11-24-hermes-edition/h1-measurement.md`(신규), `scripts/hermes-sandbox.sb`(신규 — `sandbox-exec` 프로필, 레포 밖 쓰기 금지 경로 목록)
+   - 바꿀 파일: `docs/specs/2026-11-24-hermes-edition/h1-measurement.md`(신규), `scripts/hermes-sandbox.sb`(신규 — `sandbox-exec` 프로필, 레포 밖 쓰기 금지 경로 목록) <!-- doc-ref-ok: 이 계획이 만들 파일 -->
    - 할 일: 고정 sha Hermes 를 임시 venv 에 설치한다. `build-hermes-branch.py --out` 의 트리로 P0~P6·공존을 측정하고, 원 출력과 트리 sha 를 기록한다
    - 사용자 홈·레포·`~/.claude` 에 쓰지 않는다. 측정 전후에 홈 디렉토리 변경 목록을 대조한다
 

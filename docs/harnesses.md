@@ -1,6 +1,6 @@
 ---
 status: current
-as_of: 2026-11-21
+as_of: 2026-11-24
 ---
 
 # hiway-kit on other harnesses — install details
@@ -226,6 +226,46 @@ The kit provides **only `GEMINI.md`** for Gemini CLI (written by `/harness-expor
 or agents are shipped for it. Its runtime has **not been measured** with this kit (the test machine
 had no working API key). Gemini CLI is not a supported target beyond that file; this will be
 reconsidered once it can be measured.
+
+## Hermes Agent
+
+**Researched, not supported yet.** No Hermes package is published. The design (a generated `hermes`
+branch carrying an Agent Plugins v1 edition, installed by commit sha) and its measurement plan are in
+[`specs/2026-11-24-hermes-edition/`](specs/2026-11-24-hermes-edition/design-verdict.md). This section
+will gain install commands only after that edition has been installed and observed in a sandbox. Every
+statement below comes from reading Hermes source and docs at `NousResearch/hermes-agent@352b249`
+(stable v0.23.3), not from running it.
+
+**Rules reach Hermes today through `AGENTS.md`.** Run `/harness-export` in another harness, or the
+exporter directly:
+
+```bash
+python3 <kit root>/tools/export_harness.py --plugin-root <kit root> --target <project> --entrypoints AGENTS.md
+```
+
+Hermes loads **one** project context file, the first that exists: `.hermes.md`/`HERMES.md` →
+`AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md` → Cursor rules. If your project has one of the first two,
+`AGENTS.md` is not read — export into that file instead (it is your file; the exporter only writes
+between its own markers). Hermes scans context files for prompt-injection patterns and replaces the
+**whole file** when one line matches, so a line elsewhere in that file can hide the kit block too. The
+per-file size budget defaults to 20,000 characters and is configurable.
+
+**Skills, for evaluation only:** list a **read-only** clone's `plugins/common/skills` under
+`skills.external_dirs` in `~/.hermes/config.yaml`. Three caveats:
+
+- Hermes does not read `disable-model-invocation`, so `harness-export`, `skill-forge` and `using-hiway-kit`
+  become ordinary skills the model may call on its own on this path — `harness-export` writes files.
+- Hermes can edit files in external skill folders (`skill_manage`); keep the clone read-only.
+- If the `~/.agents/skills` symlinks below are also listed there, every skill loads twice.
+
+**Not available on Hermes:** kit agents (Hermes has no agent-definition loader — `delegate_task` takes a
+goal and context, and the child inherits the parent's tools), kit hooks (Hermes shell hooks live in the
+user's `config.yaml` and receive a different payload), and MCP servers (the kit bundles none).
+
+`hermes plugins install This-HW/hiway-kit/plugins/common` is **refused** (`manifest_invalid`):
+`plugins/common/plugin.json` is the Antigravity manifest, and Hermes accepts a `plugin.json` only with
+the Agent Plugins v1 `$schema`. Keep it that way — that tree carries the hooks and the manual-only
+skills, and `build-targets.py --check` guards the refusal.
 
 ## Sharing skills across harnesses (`~/.agents/skills`)
 
