@@ -67,7 +67,7 @@ Codex·Cursor 매니페스트는 디렉토리가 읽지 않는다), (2) 디렉�
 커밋이 게시될 수도 있다. 둘 다 다음 main push 에서 바로잡힌다 — 그 사이 디렉토리판이 한 push 뒤처진다.
 
 사용:
-  scripts/build-directory-branch.py --check              # 결과 트리 sha 만 출력(ref 를 건드리지 않음)
+  scripts/build-directory-branch.py --check              # 결과 트리와 플러그인 하위 트리 sha 출력
   scripts/build-directory-branch.py --write              # refs/heads/directory 갱신
   scripts/build-directory-branch.py --write --source origin/main
 """
@@ -382,9 +382,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.exit(f"[directory-branch] ✗ 원본 커밋을 찾지 못했다: {args.source}")
     tree = derive_tree(args.repo, source)
     if args.check:
+        plugin_tree = _git(args.repo, "rev-parse", f"{tree}:{PLUGIN_ROOT}", label=_LOG_LABEL)
         print(
             f"[directory-branch] ✓ 디렉토리판 트리 {tree[:12]} (원본 {source[:7]}, 제외 {len(EXCLUDED)}개)"
         )
+        print(f"plugin tree: {plugin_tree}")
         return 0
     write_branch(args.repo, source, tree, args.branch)
     return 0
