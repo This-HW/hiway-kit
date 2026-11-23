@@ -43,6 +43,11 @@ size: large
   - 레포 밖 임시 bare 저장소를 `file://` URL 로 쓴다(Hermes 가 받으면)
   - 받지 않으면 P5′ 를 H2 게시 직전 단계로 미루고, 그 사실을 기록한다
   - 공개 `hermes` 브랜치 push 는 H2(사용자 재승인) 몫이다
+- **완료 조건 "skip 추가 0" 의 예외(승인, controller 2026-11-24)**: `scripts/tests/test_build_targets.py` 의 Hermes 원문 재대조 선택 테스트 2건은 `HERMES_AGENT_CLONE` 이 없으면 사유를 명시하고 skip 한다(W-A 재리뷰 ATK-R04).
+  - 이 조건은 기존 테스트를 skip 해서 게이트를 통과시키는 약화를 막으려는 것이다
+  - 이 테스트는 **새로 추가한 opt-in 검사**다. 클론이 없는 환경에서는 원문 일치를 원리상 탐지할 수 없다
+  - 상시 검사(발췌 fixture ↔ 상수 대조)는 skip 없이 돈다
+  - 그래서 약화가 아니다
 - **모호함 탐색** — 네 자리를 다 훑었다:
   - **상태 전이**: `enabled:false→true` 일 때 `--write` 만 enabled 를 요구한다(판정 쟁점 4-4). `hermes` 브랜치가 처음 생길 때는 부모 없이 커밋한다. 디렉토리 빌더 관례를 따른다
   - **두 규칙 동시 적용**: build-targets 원칙 "enabled = main 에 생성" 과 `delivery: edition` 이 겹친다. edition 은 main 에 파일을 만들지 않고 계산 검사만 한다(판정 쟁점 4-1·2)
