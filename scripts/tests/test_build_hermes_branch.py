@@ -111,6 +111,7 @@ def _fixture_allowlists(
         return
     monkeypatch.setattr(mod, "MISSING_PATHS_DOCS", FIX_MISSING_DOCS)
     monkeypatch.setattr(mod, "ISOLATION_NOTE_DOCS", FIX_ISOLATION_DOCS)
+    monkeypatch.setattr(mod, "MISSING_PATHS_EXEMPT", {})
 
 
 @pytest.fixture()
@@ -143,6 +144,11 @@ def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         f"{P}/skills/harness-export/SKILL.md": _skill("harness-export"),
         f"{P}/skills/skill-forge/SKILL.md": _skill("skill-forge"),
         f"{P}/agents/review-code.md": "---\nname: review-code\nmodel: opus\n---\n\nReview.\n",
+        f"{P}/.codex-plugin/plugin.json": json.dumps({"hooks": "./hooks/hooks-codex.json"}),
+        f"{P}/.cursor-plugin/plugin.json": json.dumps({"name": "hiway-kit"}),
+        f"{P}/skills/review/agents/openai.yaml": "interface:\n  short_description: x\n",
+        f"{P}/skills/using-hiway-kit/agents/openai.yaml": "interface:\n  short_description: hook-injected\n",
+        f"{P}/assets/icon.png": "png",
     }
     for name in KEPT_SKILLS:
         files[f"{P}/skills/{name}/SKILL.md"] = _skill(name)
@@ -221,6 +227,10 @@ def test_check_builds_the_hermes_edition(
         "rules/CHECKSUMS.sha256",
         "skills/harness-export/SKILL.md",
         "skills/skill-forge/SKILL.md",
+        ".codex-plugin/plugin.json",
+        ".cursor-plugin/plugin.json",
+        "skills/review/agents/openai.yaml",
+        "skills/using-hiway-kit/agents/openai.yaml",
     ):
         assert f"{P}/{gone}" not in files, gone
     for kept in (
@@ -344,10 +354,14 @@ def test_readme_is_the_hermes_edition_readme(repo: Path) -> None:
         "skills/harness-export",
         "skills/skill-forge",
         "rules/CHECKSUMS.sha256",
+        ".codex-plugin",
+        ".cursor-plugin",
+        "skills/review/agents/openai.yaml skills/using-hiway-kit/agents/openai.yaml",
     ],
 )
 def test_missing_excluded_path_stops(repo: Path, gone: str) -> None:
-    subprocess.run(["rm", "-rf", str(repo / P / gone)], check=True)
+    for one in gone.split():
+        subprocess.run(["rm", "-rf", str(repo / P / one)], check=True)
     _commit_all(repo, "rename")
     _check_fails(repo, "뺄 경로가 없다")
 
@@ -770,3 +784,178 @@ def test_real_repo_edition_checklist_runs(real_repo_out: Path, tmp_path: Path) -
         )
         assert proc.returncode == 0, (args[0], proc.stdout + proc.stderr)
     assert (plan / "checklist.json").is_file()
+
+
+# --- 리뷰 수정 2 (ATK-002..010) -----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "Look in `hooks/` first.\n",  # 슬래시 뒤 백틱
+        "The hooks/ folder is gone.\n",  # 슬래시 뒤 공백
+        "The session-start 훅 reads plans.\n",  # 훅 stem 만
+        "자식 스킬이 쓰고, 훅 예시가 읽는다.\n",  # "훅 예시"
+        "훅(auto-format·stop-validator)과 같은 조건이다.\n",
+        "Run pre-commit.\n",
+        "Verify CHECKSUMS before injecting.\n",
+    ],
+)
+def test_wide_scan_catches_common_spellings(repo: Path, body: str) -> None:
+    """변환 정규식이 놓치는 흔한 표기를 판정의 넓은 스캔이 잡는다(ATK-002)."""
+    _write(repo, f"{P}/skills/review/SKILL.md", _skill("review", body=body))
+    _commit_all(repo, "spelling")
+    _check_fails(repo, "MISSING_PATHS_DOCS")
+
+
+def test_exempt_doc_passes_with_a_reason(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _write(repo, f"{P}/skills/review/SKILL.md", _skill("review", body="Run pre-commit.\n"))
+    _commit_all(repo, "exempt")
+    monkeypatch.setattr(mod, "MISSING_PATHS_EXEMPT", {"skills/review/SKILL.md": "소비자 자기 설정"})
+    assert mod.main(["--check", "--repo", str(repo)]) == 0
+    tree = _tree(repo)
+    assert "Hermes 판" not in _show(repo, tree, "skills/review/SKILL.md")
+
+
+def test_stale_exemption_stops(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mod, "MISSING_PATHS_EXEMPT", {"skills/review/SKILL.md": "x"})
+    _check_fails(repo, "MISSING_PATHS_EXEMPT 가 낡은")
+
+
+def test_path_reference_cannot_be_exempted(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _write(repo, f"{P}/skills/review/SKILL.md", _skill("review", body="Run `setup/pre-commit`.\n"))
+    _commit_all(repo, "exempt path")
+    monkeypatch.setattr(mod, "MISSING_PATHS_EXEMPT", {"skills/review/SKILL.md": "x"})
+    _check_fails(repo, "제외할 수 없다")
+
+
+def test_wide_scan_allowlisted_doc_gets_the_note(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _write(repo, f"{P}/skills/review/SKILL.md", _skill("review", body="The session-start 훅 reads plans.\n"))
+    _commit_all(repo, "listed")
+    monkeypatch.setattr(mod, "MISSING_PATHS_DOCS", FIX_MISSING_DOCS | {"skills/review/SKILL.md"})
+    tree = _tree(repo)
+    assert mod._note_marker(mod.HERMES_MISSING_PATHS_NOTE) in _show(repo, tree, "skills/review/SKILL.md")
+
+
+@pytest.mark.parametrize("name", ["Plugin.yaml", "PLUGIN.YML", "plugin.YAML"])
+def test_native_manifest_case_variants_stop(repo: Path, name: str) -> None:
+    _git(repo, "update-index", "--add", "--cacheinfo",
+         f"100644,{_git(repo, 'hash-object', '-w', str(repo / P / 'rules/r.md'))},{P}/{name}")
+    _git(repo, "commit", "-q", "--no-verify", "-m", "native variant")
+    _check_fails(repo, "네이티브")
+
+
+def test_second_plugin_json_candidate_stops(repo: Path) -> None:
+    blob = _git(repo, "hash-object", "-w", str(repo / P / "plugin.json"))
+    _git(repo, "update-index", "--add", "--cacheinfo", f"100644,{blob},{P}/Plugin.json")
+    _git(repo, "commit", "-q", "--no-verify", "-m", "two manifests")
+    _check_fails(repo, "정확히 하나")
+
+
+def test_manifest_pointing_at_missing_path_stops(repo: Path) -> None:
+    (repo / P / "assets/icon.png").unlink()
+    _commit_all(repo, "icon gone")
+    _check_fails(repo, "판에 없는 경로")
+
+
+def test_out_refuses_case_variant_of_the_repo(repo: Path) -> None:
+    variant = repo.parent / repo.name.upper()
+    if not variant.exists():
+        pytest.skip("대소문자를 구분하는 파일시스템 — 변형 경로가 같은 디렉토리가 아니다")
+    with pytest.raises(SystemExit, match="레포 안"):
+        mod.main(["--out", str(variant / "x"), "--repo", str(repo)])
+    assert not (repo / "x").exists()
+
+
+def test_out_refuses_other_worktrees(repo: Path, tmp_path: Path) -> None:
+    wt = tmp_path / "wt"
+    _git(repo, "worktree", "add", "-q", "--detach", str(wt))
+    with pytest.raises(SystemExit, match="레포 안"):
+        mod.main(["--out", str(wt / "x"), "--repo", str(repo)])
+    assert not (wt / "x").exists()
+
+
+def test_out_does_not_overwrite_a_dir_filled_after_the_check(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """검사 뒤·쓰기 전에 누가 디렉토리를 채우면 rename 이 실패하고 그 내용을 건드리지 않는다(ATK-010)."""
+    dest = tmp_path / "late"
+    dest.mkdir()
+    real = mod._export_files
+
+    def fill_then_export(repo_: Path, entries: list, out: Path) -> None:
+        (dest / "theirs.txt").write_text("keep")
+        real(repo_, entries, out)
+
+    monkeypatch.setattr(mod, "_export_files", fill_then_export)
+    with pytest.raises(SystemExit, match="비어 있지 않다"):
+        mod.main(["--out", str(dest), "--repo", str(repo)])
+    assert [p.name for p in dest.iterdir()] == ["theirs.txt"]
+    assert [p.name for p in tmp_path.iterdir() if p.name.startswith(".late.")] == []
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        ("license:\tMIT\n", "읽을 수 없는"),  # 키 뒤 탭
+        ("license: a:\tb\n", "읽을 수 없는"),  # 값 안 `:\t`
+        ("metadata:\n\towner: kit\n", "탭 들여쓰기"),
+        ("metadata:\n  \towner: kit\n", "탭 들여쓰기"),
+    ],
+)
+def test_tabs_in_frontmatter_stop(repo: Path, extra: str, match: str) -> None:
+    _write(repo, f"{P}/skills/review/SKILL.md", _skill("review", extra))
+    _commit_all(repo, "tabs")
+    _check_fails(repo, match)
+
+
+@pytest.mark.parametrize(("length", "ok"), [(64, True), (65, False)])
+def test_skill_name_length_cap(repo: Path, length: int, ok: bool) -> None:
+    name = "r" * length
+    subprocess.run(["mv", str(repo / P / "skills/review"), str(repo / P / f"skills/{name}")], check=True)
+    _write(repo, f"{P}/skills/{name}/SKILL.md", _skill(name))
+    _commit_all(repo, "long name")
+    if ok:
+        assert mod.main(["--check", "--repo", str(repo)]) == 0
+    else:
+        _check_fails(repo, "64자")
+
+
+def test_disable_model_invocation_compared_explicitly() -> None:
+    assert mod._same_scalar(mod._NonStr("true"), mod._NonStr("true"))
+    assert not mod._same_scalar(mod._NonStr("true"), mod._NonStr("True"))
+    assert not mod._same_scalar(mod._NonStr("true"), "true")
+    assert not mod._same_scalar("1", mod._NonStr("1"))
+
+
+def test_disable_model_invocation_value_change_stops(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = mod._transform
+
+    def flip(rel: str, text: str) -> str:
+        out = real(rel, text)
+        return out.replace("disable-model-invocation: true", "disable-model-invocation: false")
+
+    monkeypatch.setattr(mod, "_transform", flip)
+    _check_fails(repo, "disable-model-invocation")
+
+
+def test_write_refuses_other_branches(repo: Path) -> None:
+    with pytest.raises(SystemExit) as exc:
+        mod.main(["--write", "--branch", "main", "--repo", str(repo)])
+    assert exc.value.code == 2
+
+
+def test_write_refuses_source_outside_main(repo: Path) -> None:
+    _write(repo, "packaging/targets.json", json.dumps(_policy(enabled=True)))
+    _commit_all(repo, "enable")
+    _git(repo, "checkout", "-q", "-b", "side")
+    _write(repo, f"{P}/rules/r.md", "---\ntier: core\n---\nside\n")
+    side = _commit_all(repo, "side")
+    _git(repo, "checkout", "-q", "main")
+    with pytest.raises(SystemExit, match="조상"):
+        mod.main(["--write", "--source", side, "--repo", str(repo)])
+    assert _git(repo, "branch", "--list", "hermes") == ""
+
+
+def test_isolation_note_states_precedence() -> None:
+    assert "이 머리말이 아래 본문의 worktree·커밋 지시보다 우선한다" in mod.HERMES_ISOLATION_NOTE

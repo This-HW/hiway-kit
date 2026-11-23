@@ -12,9 +12,10 @@ Hermes 는 `plugin.json` 을 **Agent Plugins(AP) v1 `$schema`** 일 때만 받�
 ## 판 변환 (전부 fail-closed — 기대와 다르면 exit 1)
 
 1. **빼기** — `EXCLUDED`: `hooks/`·`setup/`, 사용자 파일을 쓰는 `harness-export`, Hermes 내장 스킬 생성과
-   경합하는 `skill-forge`, 훅만 읽는 `rules/CHECKSUMS.sha256`. 원본에 없으면 멈춘다
-   (이름이 바뀐 것이다 — 아무것도 빼지 않은 트리를 판이라 부르지 않는다). `tools/` 는 **싣는다**
-   (스킬 도구·규칙 내보내기 CLI).
+   경합하는 `skill-forge`, 훅만 읽는 `rules/CHECKSUMS.sha256`, Hermes 가 읽지 않는 다른 하네스 파일
+   (`.codex-plugin/`·`.cursor-plugin/`·`skills/*/agents/openai.yaml`). 항목마다 원본에서 하나 이상 걸려야 한다
+   (아니면 이름이 바뀐 것이다 — 아무것도 빼지 않은 트리를 판이라 부르지 않는다). `tools/` 와 `rules/VERSION`
+   (export_harness.py 가 필수로 읽는다)은 **싣는다**.
 2. **루트 매니페스트** — `plugins/common/plugin.json` 을 `build-targets.py` 의 `load_policy`·`load_ssot`·
    `build_manifest`(hermes 타겟)로 만든 AP v1 매니페스트로 **교체**한다. 매핑은 정책 한 벌뿐이고, 직렬화도
    build-targets 의 `_dumps` 다. 정책과 SSOT 는 작업 트리가 아니라 **원본 커밋**의 것을 읽는다.
@@ -23,34 +24,39 @@ Hermes 는 `plugin.json` 을 **Agent Plugins(AP) v1 `$schema`** 일 때만 받�
 4. **Hermes 머리말** — 공용 배관 `_with_note` 로 frontmatter 바로 뒤에 넣는다. 문구는 디렉토리판과 따로다.
    `HERMES_AGENT_NOTE` 는 모든 `agents/*.md`, `HERMES_ISOLATION_NOTE` 는 수정 에이전트 4종과 그들을
    부르는 문서(`ISOLATION_NOTE_DOCS`), `HERMES_MISSING_PATHS_NOTE` 는 뺀 경로를 가리키는 문서
-   (`MISSING_PATHS_DOCS`)에 단다.
+   (`MISSING_PATHS_DOCS`)에 단다. 대상은 **허용 목록**이 정하고, 스캔은 판정만 쓴다.
 5. **판 README** — `plugins/common/README.md` 를 `HERMES_README` 로 교체한다.
 
 ## 검사 조건 (한 문장)
 
 **실행할 때마다(`--check`·`--out`·`--write` 모두) 원본 커밋에 `EXCLUDED` 가 전부 있는지, 원본 정책의
 hermes 타겟으로 계산한 매니페스트가 AP v1 판정을 통과하는지, `using-hiway-kit` description 이 기대 문자열과
-같은지를 보고, 결과 트리의 `plugins/common` 에 대해 (1) 뺀 경로가 없는지, (2) `plugin.yaml`(`.yml`)이 없는지,
-(3) 루트 `plugin.json` 이 AP v1 판정을 통과하고 계산값과 바이트가 같은지, (4) `.claude-plugin/plugin.json` 이
-있는지, (5) 스킬이 정확히 `EXPECTED_SKILL_COUNT` 개이고 각 `SKILL.md` frontmatter 가 AP 제약을 지키는지,
-(6) 심링크·서브모듈이 0개인지, (7) 원본을 **따로 스캔한** 머리말 대상 집합이 허용 목록과 같고 머리말이 정확히
-그 문서들에만 있는지, (8) description 교체와 README 교체가 적용됐는지를 확인해 하나라도 어긋나면 exit 1.**
-(7)은 양방향이다 — 허용 목록 밖에서 뺀 경로·수정 에이전트를 가리키는 새 문서도, 더는 가리키지 않는데
-목록에 남은 문서도 red 다(디렉토리 빌더의 `DEGRADES_WITHOUT_REMOVED` 관례, 낡은 목록 방지).
+같은지를 보고, 결과 트리의 `plugins/common` 에 대해 (1) 뺀 경로가 없는지, (2) 루트에 `plugin.yaml`(`.yml`)의
+대소문자 변형이 없고 `plugin.json` 후보가 정확히 하나인지, (3) 루트 `plugin.json` 이 AP v1 판정을 통과하고 계산값과
+바이트가 같은지, (4) `.claude-plugin/plugin.json` 이 있고 두 매니페스트의 상대 경로(`./…`)가 판 안에 있는지,
+(5) 스킬이 정확히 `EXPECTED_SKILL_COUNT` 개이고 각 `SKILL.md` frontmatter 가 AP 제약을 지키는지, (6) 심링크·
+서브모듈이 0개인지, (7) 원본을 **따로·더 넓게 스캔한** 머리말 대상 집합이 허용 목록(+사유 붙은 제외 목록)과
+같고 머리말이 정확히 그 문서들에만 있는지, (8) description 교체와 README 교체가 적용되고
+`disable-model-invocation` 이 원본 값 그대로인지를 확인해 하나라도 어긋나면 exit 1.**
+(7)은 양방향이다 — 목록 밖에서 뺀 경로·훅 이름·수정 에이전트를 가리키는 새 문서도, 더는 가리키지 않는데
+목록에 남은 문서도 red 다(디렉토리 빌더의 `DEGRADES_WITHOUT_REMOVED` 관례, 낡은 목록 방지). 경로로 쓴 참조
+(`hooks/x` 등)는 제외 목록으로 넘길 수 없다.
 
 스킬 frontmatter 제약의 근거: Hermes `hermes_cli/agent_plugins.py` `_valid_skill_frontmatter` @352b249
 (조사 보고서 §2.3). YAML 을 풀지 않으므로 한 줄 스칼라와 한 단계 맵·목록만 읽고, 그 밖의 형태(블록 스칼라·
-흐름 컬렉션·앵커·주석이 붙은 값·중복 키)는 **판정할 수 없으므로** exit 1 이다.
+흐름 컬렉션·앵커·주석이 붙은 값·중복 키·탭 들여쓰기·`key:\t값`)는 **판정할 수 없으므로** exit 1 이다.
 
 ## 출력
 
 - `--check` — `enabled` 와 무관하게 판 트리를 계산·판정하고
   `[hermes-edition] ✓ 판 트리 <sha> (원본 <short>)`·`[hermes-edition] plugin tree: <sha>`(디렉토리 빌더와
   같은 형식 계약)·`[hermes-edition] skills: <n>` 을 출력한다. 바꾼 문서의 blob 은 객체 DB 에 쓴다(ref 무변경).
-- `--out <dir>` — 판의 `plugins/common` 을 파일로 내보낸다(H1 실측 설치 입력). 레포 안 경로·비어 있지 않은
-  디렉토리는 거부하고, 내보낸 파일 집합·내용(blob sha)·실행 비트를 트리와 스스로 대조한다.
-- `--write [--branch hermes]` — 원본 정책의 hermes 타겟이 `enabled:true` 일 때만 `refs/heads/<branch>` 를
-  공용 배관 `edition_tree.write_branch` 로 갱신한다. 아니면 이유를 출력하고 exit 1. push 는 하지 않는다.
+- `--out <dir>` — 판의 `plugins/common` 을 파일로 내보낸다(H1 실측 설치 입력). 레포 안 경로(모든 워크트리·
+  공용 git 디렉토리 포함, 대소문자 변형·별칭은 inode 로 본다)·비어 있지 않은 디렉토리는 거부한다. 옆 임시
+  디렉토리에 내보내 파일 집합·내용(blob sha)·실행 비트를 트리와 대조한 뒤 `rename` 으로 들인다.
+- `--write [--branch hermes]` — 원본 정책의 hermes 타겟이 `enabled:true` 이고 원본이 `main`(또는
+  `origin/main`)의 조상일 때만 `refs/heads/hermes` 를 공용 배관 `edition_tree.write_branch` 로 갱신한다. 아니면
+  이유를 출력하고 exit 1. 다른 브랜치 이름은 받지 않는다. push 는 하지 않는다.
 
 사용:
   scripts/build-hermes-branch.py --check [--source <rev>]
@@ -64,7 +70,9 @@ import argparse
 import importlib.util
 import json
 import os
+import posixpath
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -75,6 +83,7 @@ from edition_tree import (
     _frontmatter_span,
     _git,
     _git_bytes,
+    _is_ancestor,
     _note_marker,
     _rev,
     _with_note,
@@ -106,6 +115,10 @@ README = f"{PLUGIN_ROOT}/README.md"
 USING_SKILL = "skills/using-hiway-kit/SKILL.md"
 EXPECTED_SKILL_COUNT = 15
 DEFAULT_BRANCH = "hermes"
+#: `--write` 가 받는 브랜치 — 이 빌더의 판 브랜치뿐이다(리뷰 ATK-006: 임의 ref 를 덮어쓰지 않는다).
+ALLOWED_BRANCHES = (DEFAULT_BRANCH,)
+#: `--write` 의 원본은 이 ref 중 하나(있는 것)의 조상이어야 한다 — 게시되지 않은 곁가지를 판으로 내지 않는다.
+WRITE_LINEAGE_REFS = ("refs/heads/main", "refs/remotes/origin/main")
 
 #: 판에서 빼는 레포 루트 기준 경로(파일 또는 디렉토리)와 사유 — 판정 D2.
 EXCLUDED = {
@@ -117,6 +130,15 @@ EXCLUDED = {
     # rules/VERSION 은 **빼지 않는다**: tools/export_harness.py(`_rules_version`)가 마커 sha 입력으로
     # 필수로 읽는다. "훅만 읽는다"로 오분류해 뺐다가 H1 P4 실측에서 판의 규칙 내보내기가 rc 1 로 죽었다.
     # 회귀는 실레포 판을 --out 으로 내보내 도구를 실제로 돌리는 테스트가 막는다.
+    # 다른 하네스 매니페스트 — Hermes 는 읽지 않고, 판에 없는 경로(`./hooks/hooks-codex.json`)와 판과 다른
+    # 문구("17 skills"·skill-forge·harness-export)를 담는다(리뷰 ATK-007).
+    f"{PLUGIN_ROOT}/.codex-plugin": "Codex 매니페스트 — 판에 없는 hooks-codex.json 을 가리킨다, Hermes 는 읽지 않는다",
+    f"{PLUGIN_ROOT}/.cursor-plugin": "Cursor 매니페스트 — Hermes 는 읽지 않는다",
+    f"{PLUGIN_ROOT}/skills/*/agents/openai.yaml": (
+        "Codex 스킬 메타데이터 — Hermes 는 읽지 않고, using-hiway-kit 것은 아직 'hook-injected' 문구다"
+    ),
+    # assets/icon.png 는 **남긴다**: 판에 남는 `.claude-plugin/plugin.json`(export_harness.py 의 루트 확인용)의
+    # `icon` 필드가 가리킨다 — 빼면 판 안 매니페스트가 판에 없는 경로를 가리킨다(사후 판정이 막는다).
 }
 
 #: `using-hiway-kit` description — 원본 원문(정확 일치)과 Hermes 판 문구. Hermes 에는 세션 시작 주입 훅이
@@ -142,7 +164,8 @@ HERMES_ISOLATION_NOTE = (
     " `delegation.worktree_isolation` 은 worktree 를 만들지 못하면 **공유 CWD 로 진행**할 수 있다. 그래서 파일을"
     " 고치는 에이전트(implement-code·fix-bugs·write-tests·sync-docs)는 호출자가 별도 worktree 와 기준 커밋을"
     " 확인해 주지 않았으면 **커밋하지 말고** 편집 결과(diff·요약)를 부모에게 돌려준다. 수정 위임은 격리가"
-    " 확인되는 운송으로만 하고, 확인되지 않으면 부모가 그 작업을 **순차로** 직접 실행한다.\n"
+    " 확인되는 운송으로만 하고, 확인되지 않으면 부모가 그 작업을 **순차로** 직접 실행한다. **이 머리말이 아래"
+    " 본문의 worktree·커밋 지시보다 우선한다.**\n"
 )
 HERMES_MISSING_PATHS_NOTE = (
     "> **Hermes 판 — 훅·설치 스크립트·일부 스킬 없음.** 이 판에는 킷의 `hooks/`·`setup/` 과 `harness-export`·"
@@ -157,12 +180,25 @@ HERMES_MISSING_PATHS_NOTE = (
 MISSING_PATHS_DOCS = frozenset(
     {
         "rules/agent-delegation-chain.md",
+        "rules/child-marker.md",  # "훅 예시가 읽는다" — hooks/examples/ 는 판에 없다
         "skills/auto-dev/SKILL.md",
         "skills/child-session/SKILL.md",
         "skills/control-loop/SKILL.md",
+        "skills/plan-task/references/plan-format.md",  # "session-start 훅이 이 규약을 읽는다"
         "skills/plan-task/references/task-tools-fallback.md",
+        "skills/review/SKILL.md",  # "훅(auto-format·stop-validator)과 같은 조건"
     }
 )
+#: 넓은 스캔(`_REMOVED_WIDE_RE`)에 걸리지만 머리말이 필요 없는 문서와 **사유**. 좁은 스캔(`_MISSING_PATH_RE` —
+#: 경로로 쓴 참조)에 걸리는 문서는 여기 둘 수 없다. 걸리지 않게 된 항목도 red 다(낡은 목록 방지).
+MISSING_PATHS_EXEMPT = {
+    "rules/delegation-contract.md": (
+        "pre-commit 은 과거 사고 서술(다른 레포의 가드를 손으로 복사한 사례) — 킷 setup/ 을 실행하라는 단계가 없다"
+    ),
+    "skills/plan-task/references/boundary-check.md": (
+        "pre-commit 은 소비자 프로젝트의 자기 설정, auto-format 은 과거 결함 서술 — 킷 훅을 켜라는 단계가 없다"
+    ),
+}
 ISOLATED_AGENTS = ("implement-code", "fix-bugs", "write-tests", "sync-docs")
 ISOLATION_NOTE_DOCS = frozenset(
     {
@@ -180,6 +216,16 @@ ISOLATION_NOTE_DOCS = frozenset(
 _MISSING_PATH_RE = re.compile(
     r"(?<![\w.-])(?:hooks|setup)/[\w.*-]|(?<![\w-])(?:harness-export|skill-forge)(?![\w-])"
 )
+#: 판정용 **넓은** 스캔(리뷰 ATK-002) — 변환과 같은 정규식을 재사용하면 독립 판정이 아니다. 느슨하게 찾고
+#: (`hooks/`·`setup/` 뒤 글자 조건 없음, 뺀 훅·설치 스크립트의 이름만 쓴 참조, `CHECKSUMS`, "훅 예시")
+#: 엄격하게 판정한다(`MISSING_PATHS_DOCS` 또는 사유 붙은 `MISSING_PATHS_EXEMPT`). `EXCLUDED` 가 바뀌면
+#: 그 이름도 여기 넣는다.
+_REMOVED_WIDE_RE = re.compile(
+    r"(?<![\w.-])(?:hooks|setup)/"
+    r"|(?<![\w-])(?:session-start|session-check|stop-validator|protect-sensitive|auto-format|pre-commit"
+    r"|harness-export|skill-forge|child-git-guard|verify-mutate-split|reference-transaction|pre-push)(?![\w-])"
+    r"|CHECKSUMS|훅 ?예시|hooks? examples?"
+)
 #: 수정 에이전트를 부르는 본문(디렉토리 빌더 `_ISOLATED_AGENT_RE` 관례).
 _ISOLATED_AGENT_RE = re.compile(
     r"(?<![\w-])(?:implement-code|fix-bugs|write-tests|sync-docs)(?![\w-])"
@@ -188,6 +234,7 @@ _AGENT_DOC_RE = re.compile(r"agents/[^/]+\.md")
 
 #: AP 스킬 frontmatter 제약 — Hermes `_valid_skill_frontmatter` @352b249(조사 보고서 §2.3).
 SKILL_NAME_RE = re.compile(r"^(?!.*--)[a-z0-9]+(?:-[a-z0-9]+)*$")
+SKILL_NAME_MAX = 64
 SKILL_DESCRIPTION_MAX = 1024
 SKILL_COMPATIBILITY_MAX = 500
 SKILL_STRING_FIELDS = ("license", "compatibility", "allowed-tools")
@@ -310,18 +357,19 @@ _YAML_BOOL = frozenset(
     for b in ("yes", "no", "true", "false", "on", "off")
     for w in (b, b.capitalize(), b.upper())
 )
-#: PyYAML(YAML 1.1) 암묵 타입 — 이 모양의 평문 스칼라는 문자열이 아니다.
+#: PyYAML(YAML 1.1) 암묵 타입 — 이 모양의 평문 스칼라는 문자열이 아니다. PyYAML 보다 **넓게** 잡는다(예: "."
+#: 단독, 밑줄 섞인 수). 넓은 쪽은 문자열을 비문자열로 오판할 뿐이라 판정이 빨개지는 안전한 방향이다(리뷰 ATK-010).
 _YAML_NON_STR_RE = re.compile(
     r"[-+]?(?:0b[01_]+|0x[0-9a-fA-F_]+|0[0-7_]+|(?:0|[1-9][0-9_]*)|[1-9][0-9_]*(?::[0-5]?[0-9])+)"
     r"|[-+]?(?:[0-9][0-9_]*)?\.[0-9_]*(?:[eE][-+][0-9]+)?|[-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]*"
     r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN)"
     r"|[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:(?:[Tt]|[ \t]+)[0-9].*)?"
 )
-_FM_KEY_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.-]*):(?:[ \t]+(.*?))?[ \t]*$")
-_FM_CHILD_RE = re.compile(
-    r"^([ \t]+)([A-Za-z0-9_][A-Za-z0-9_.-]*):(?:[ \t]+(.*?))?[ \t]*$"
-)
-_FM_ITEM_RE = re.compile(r"^([ \t]+)-[ \t]+(.*?)[ \t]*$")
+#: 키 뒤 구분자는 **공백만** — `key:\t값` 은 YAML 구현마다 해석이 갈려 판정 불가로 둔다(리뷰 ATK-005).
+#: 들여쓰기도 공백만 — 탭 들여쓰기는 YAML 이 거부한다.
+_FM_KEY_RE = re.compile(r"^([A-Za-z0-9_][A-Za-z0-9_.-]*):(?: +(.*?))?[ \t]*$")
+_FM_CHILD_RE = re.compile(r"^( +)([A-Za-z0-9_][A-Za-z0-9_.-]*):(?: +(.*?))?[ \t]*$")
+_FM_ITEM_RE = re.compile(r"^( +)- +(.*?)[ \t]*$")
 
 
 class _NonStr:
@@ -359,6 +407,7 @@ def _scalar(raw: str, where: str) -> object:
             and not (raw[:1] in "-?:" and len(raw) > 1 and not raw[1].isspace())
         )
         or ": " in raw
+        or ":\t" in raw
         or " #" in raw
         or "\t#" in raw
         or raw.endswith(":")
@@ -400,6 +449,10 @@ def _frontmatter(text: str, rel: str) -> dict[str, object] | None:
         where = f"{rel}: `{key}`"
         children = []
         while i < len(lines) and lines[i][:1] in (" ", "\t"):
+            if "\t" in lines[i][: len(lines[i]) - len(lines[i].lstrip())]:
+                sys.exit(
+                    f"[{_LOG_LABEL}] ✗ {where}: 탭 들여쓰기는 판정할 수 없다(YAML 이 거부한다) — 공백으로 고쳐라"
+                )
             children.append(lines[i])
             i += 1
         if raw:
@@ -412,7 +465,7 @@ def _frontmatter(text: str, rel: str) -> dict[str, object] | None:
         if not children:
             out[key] = _NonStr("")  # 빈 값은 null
             continue
-        indent = re.match(r"[ \t]+", children[0]).group(0)
+        indent = re.match(r" +", children[0]).group(0)
         if all(
             _FM_ITEM_RE.match(c)
             and c.startswith(indent)
@@ -445,9 +498,15 @@ def _skill_problems(rel: str, text: str) -> list[str]:
     folder = rel.split("/")[1]
     out = []
     name = fm.get("name")
-    if not isinstance(name, str) or name != folder or not SKILL_NAME_RE.fullmatch(name):
+    if (
+        not isinstance(name, str)
+        or name != folder
+        or not SKILL_NAME_RE.fullmatch(name)
+        or len(name) > SKILL_NAME_MAX
+    ):
         out.append(
-            f"{rel}: name {name!r} 은 디렉토리명 {folder!r} 와 같고 {SKILL_NAME_RE.pattern} 를 만족해야 한다"
+            f"{rel}: name {name!r} 은 디렉토리명 {folder!r} 와 같고 {SKILL_NAME_RE.pattern} 를 만족하며"
+            f" {SKILL_NAME_MAX}자 이하여야 한다"
         )
     desc = fm.get("description")
     if not isinstance(desc, str) or not 1 <= len(desc) <= SKILL_DESCRIPTION_MAX:
@@ -497,13 +556,15 @@ def _replace_using_description(text: str, rel: str) -> str:
 
 
 def _transform(rel: str, text: str) -> str:
-    """Hermes 판 문서 변환. `rel` 은 플러그인 폴더 기준 경로. 머리말은 아래서부터 넣는다(위: 에이전트)."""
+    """Hermes 판 문서 변환. `rel` 은 플러그인 폴더 기준 경로. 머리말은 아래서부터 넣는다(위: 에이전트).
+
+    머리말 대상은 **허용 목록**이 정한다 — 스캔(넓은·좁은 정규식)은 판정(`_assert_hermes_edition`)만 쓴다.
+    변환과 판정이 같은 정규식을 쓰면 판정이 변환의 동어반복이 된다(리뷰 ATK-002).
+    """
     new = _replace_using_description(text, rel) if rel == USING_SKILL else text
-    if _MISSING_PATH_RE.search(text):
+    if rel in MISSING_PATHS_DOCS:
         new = _with_note(new, HERMES_MISSING_PATHS_NOTE, rel, label=_LOG_LABEL)
-    if rel in {f"agents/{a}.md" for a in ISOLATED_AGENTS} or _ISOLATED_AGENT_RE.search(
-        text
-    ):
+    if rel in ISOLATION_NOTE_DOCS:
         new = _with_note(new, HERMES_ISOLATION_NOTE, rel, label=_LOG_LABEL)
     if _AGENT_DOC_RE.fullmatch(rel):
         new = _with_note(new, HERMES_AGENT_NOTE, rel, label=_LOG_LABEL)
@@ -529,31 +590,43 @@ def _hash(repo: Path, data: bytes) -> str:
     )
 
 
-def derive_tree(repo: Path, source: str) -> str:
-    """원본 커밋에서 Hermes 판 트리를 만든다(임시 인덱스만 — 작업 트리·인덱스·ref 무변경)."""
-    missing = [
+def _excluded_match(path: str, pattern: str) -> bool:
+    """`EXCLUDED` 항목 판정 — 경로면 그 파일·디렉토리 아래, `*` 가 있으면 한 경로 조각만 대신하는 글롭."""
+    if "*" in pattern:
+        return re.fullmatch(re.escape(pattern).replace(r"\*", "[^/]+"), path) is not None
+    return path == pattern or path.startswith(pattern + "/")
+
+
+def _excluded_paths(repo: Path, source: str) -> list[str]:
+    """원본 커밋에서 뺄 파일 목록. 항목마다 하나 이상 걸려야 한다 — 아니면 이름이 바뀐 것이다(exit 1)."""
+    files = [
         path
-        for path in EXCLUDED
-        if subprocess.run(
-            ["git", "-C", str(repo), "cat-file", "-e", f"{source}:{path}"],
-            capture_output=True,
-            check=False,
-        ).returncode
-        != 0
+        for _m, _s, path in _entries(
+            _git_bytes(
+                repo, "ls-tree", "-r", "-z", source, "--", PLUGIN_ROOT, label=_LOG_LABEL
+            )
+        )
     ]
+    missing = [e for e in EXCLUDED if not any(_excluded_match(f, e) for f in files)]
     if missing:
         sys.exit(
             f"[{_LOG_LABEL}] ✗ 원본에 뺄 경로가 없다 — 이름이 바뀌었으면 EXCLUDED 를 고쳐라: "
             + ", ".join(missing)
         )
+    return [f for f in files if any(_excluded_match(f, e) for e in EXCLUDED)]
+
+
+def derive_tree(repo: Path, source: str) -> str:
+    """원본 커밋에서 Hermes 판 트리를 만든다(임시 인덱스만 — 작업 트리·인덱스·ref 무변경)."""
+    excluded = _excluded_paths(repo, source)
     for required in (ROOT_MANIFEST, README):
         _blob_text(repo, source, required)  # 교체 대상이 없으면 멈춘다
     policy, target, ssot = _source_policy(repo, source)
     with tempfile.TemporaryDirectory() as tmp:
         env = {**os.environ, "GIT_INDEX_FILE": str(Path(tmp) / "index")}
         _git(repo, "read-tree", source, env=env, label=_LOG_LABEL)
-        paths = _git_bytes(
-            repo, "ls-files", "-z", "--", *EXCLUDED, env=env, label=_LOG_LABEL
+        paths = "".join(f"{p}\0" for p in excluded).encode(
+            "utf-8", errors="surrogateescape"
         )
         _git_bytes(
             repo,
@@ -628,6 +701,52 @@ def derive_tree(repo: Path, source: str) -> str:
 # --- 결과 판정 ----------------------------------------------------------------------------------------
 
 
+def _local_root_manifest_names(names: list[str]) -> tuple[list[str], list[str]]:
+    """`build-targets.root_manifest_names`(main d7ab5c4, ATK-R01)와 같은 판정 — 이 브랜치 기준에는 아직
+    없어서 둔 동치 구현이다. 병합되면 아래 `getattr` 가 build-targets 것을 집는다."""
+    natives = {n.casefold() for n in bt.HERMES_NATIVE_MANIFESTS}
+    manifest = bt.AP_V1_MANIFEST_NAME.casefold()
+    return (
+        sorted(n for n in names if n.casefold() in natives),
+        sorted(n for n in names if n.casefold() == manifest),
+    )
+
+
+_root_manifest_names = getattr(bt, "root_manifest_names", _local_root_manifest_names)
+
+
+def _json_or_exit(text: str, rel: str) -> object:
+    try:
+        return json.loads(text)
+    except ValueError as err:
+        sys.exit(f"[{_LOG_LABEL}] ✗ {PLUGIN_ROOT}/{rel} 를 JSON 으로 읽지 못했다: {err}")
+
+
+def _relative_refs(value: object) -> list[str]:
+    """매니페스트 안의 상대 경로 문자열(`./`·`../` 로 시작) 전부 — 플러그인 루트 기준으로 해석된다."""
+    if isinstance(value, str):
+        return [value] if value.startswith(("./", "../")) else []
+    if isinstance(value, dict):
+        return [r for v in value.values() for r in _relative_refs(v)]
+    if isinstance(value, list):
+        return [r for v in value for r in _relative_refs(v)]
+    return []
+
+
+def _ref_present(ref: str, files: dict[str, str]) -> bool:
+    norm = posixpath.normpath(ref)
+    if norm == ".." or norm.startswith("../"):
+        return False
+    return norm in files or any(f.startswith(norm + "/") for f in files)
+
+
+def _same_scalar(a: object, b: object) -> bool:
+    """frontmatter 값 비교 — 비문자열 스칼라는 원문으로, 나머지는 타입과 값으로(repr 에 기대지 않는다)."""
+    if isinstance(a, _NonStr) or isinstance(b, _NonStr):
+        return isinstance(a, _NonStr) and isinstance(b, _NonStr) and a.raw == b.raw
+    return type(a) is type(b) and a == b
+
+
 def _assert_hermes_edition(
     repo: Path, source: str, tree: str, manifest_text: str
 ) -> None:
@@ -646,26 +765,39 @@ def _assert_hermes_edition(
         ).decode("utf-8")
 
     removed = [
-        r
-        for r in files
-        if any(
-            f"{PLUGIN_ROOT}/{r}".startswith(e + "/") or f"{PLUGIN_ROOT}/{r}" == e
-            for e in EXCLUDED
-        )
+        r for r in files if any(_excluded_match(f"{PLUGIN_ROOT}/{r}", e) for e in EXCLUDED)
     ]
     if removed:
         sys.exit(
             f"[{_LOG_LABEL}] ✗ 뺀 경로가 결과 트리에 남았다: "
             + ", ".join(sorted(removed))
         )
-    native = [n for n in bt.HERMES_NATIVE_MANIFESTS if n in files]
-    if native:
+    # 루트 매니페스트 후보는 casefold 로 고른다 — 대소문자를 무시하는 소비자 FS 에서 `Plugin.yaml` 도
+    # `plugin.yaml` 로 열린다(리뷰 ATK-003).
+    natives, manifests = _root_manifest_names([r for r in files if "/" not in r])
+    if natives:
         sys.exit(
-            f"[{_LOG_LABEL}] ✗ {', '.join(native)} 가 있다 — Hermes 가 네이티브로 읽고 plugin.json 을 보지 않는다"
+            f"[{_LOG_LABEL}] ✗ {', '.join(natives)} 가 있다 — Hermes 가 네이티브 매니페스트(plugin.yaml)로 읽고"
+            " plugin.json 을 보지 않는다"
+        )
+    if manifests != [bt.AP_V1_MANIFEST_NAME]:
+        sys.exit(
+            f"[{_LOG_LABEL}] ✗ 루트 plugin.json 후보가 정확히 하나가 아니다 — {manifests}"
+            " (대소문자만 다른 이름이 함께 있으면 어느 쪽이 열릴지 FS 가 정한다)"
         )
     if ".claude-plugin/plugin.json" not in files:
         sys.exit(
             f"[{_LOG_LABEL}] ✗ {CLAUDE_MANIFEST} 가 없다 — export_harness.py 의 플러그인 루트 확인에 쓰인다"
+        )
+    dangling = [
+        f"{rel}: {ref}"
+        for rel in (bt.AP_V1_MANIFEST_NAME, ".claude-plugin/plugin.json")
+        for ref in _relative_refs(_json_or_exit(text_of(rel), rel))
+        if not _ref_present(ref, files)
+    ]
+    if dangling:
+        sys.exit(
+            f"[{_LOG_LABEL}] ✗ 판 안 매니페스트가 판에 없는 경로를 가리킨다: " + "; ".join(dangling)
         )
     root_text = text_of(bt.AP_V1_MANIFEST_NAME)
     try:
@@ -723,26 +855,53 @@ def _assert_hermes_edition(
         sys.exit(
             f"[{_LOG_LABEL}] ✗ {USING_SKILL}: description 이 Hermes 문구로 교체되지 않았다"
         )
-    if using_fm.get("disable-model-invocation") is None or str(
-        using_fm.get("disable-model-invocation")
-    ) != str(source_using.get("disable-model-invocation")):
+    dmi = "disable-model-invocation"
+    if (
+        dmi not in using_fm
+        or dmi not in source_using
+        or not _same_scalar(using_fm[dmi], source_using[dmi])
+    ):
         sys.exit(
             f"[{_LOG_LABEL}] ✗ {USING_SKILL}: disable-model-invocation 은 원본 그대로 남아야 한다"
         )
 
     # 머리말 — 원본 blob 을 따로 스캔해 필요한 집합을 세고, 허용 목록·결과의 표지와 양방향으로 대조한다.
     docs = sorted(r for r in files if r.endswith(".md") and r != "README.md")
-    need_missing: set[str] = set()
+    need_narrow: set[str] = set()
+    need_wide: set[str] = set()
     need_iso = {f"agents/{a}.md" for a in ISOLATED_AGENTS}
     for rel in docs:
         original = _blob_text(repo, source, f"{PLUGIN_ROOT}/{rel}")
         if _MISSING_PATH_RE.search(original):
-            need_missing.add(rel)
+            need_narrow.add(rel)
+        if _REMOVED_WIDE_RE.search(original):
+            need_wide.add(rel)
         if _ISOLATED_AGENT_RE.search(original):
             need_iso.add(rel)
     errors = []
+    exempt = set(MISSING_PATHS_EXEMPT)
+    if exempt & MISSING_PATHS_DOCS:
+        errors.append(
+            "MISSING_PATHS_DOCS 와 MISSING_PATHS_EXEMPT 에 함께 있다: "
+            + ", ".join(sorted(exempt & MISSING_PATHS_DOCS))
+        )
+    if need_narrow & exempt:
+        errors.append(
+            "MISSING_PATHS_EXEMPT 의 문서가 뺀 경로를 경로로 가리킨다 — 제외할 수 없다, MISSING_PATHS_DOCS 로"
+            " 옮겨라: " + ", ".join(sorted(need_narrow & exempt))
+        )
+    if need_wide - MISSING_PATHS_DOCS - exempt:
+        errors.append(
+            "MISSING_PATHS_DOCS·MISSING_PATHS_EXEMPT 밖의 문서가 뺀 훅·경로·스킬을 가리킨다 — 머리말을 달지(목록)"
+            " 사유를 붙여 제외할지 정하라: " + ", ".join(sorted(need_wide - MISSING_PATHS_DOCS - exempt))
+        )
+    if exempt - need_wide:
+        errors.append(
+            "MISSING_PATHS_EXEMPT 가 낡은 목록이다 — 더는 걸리지 않는 문서: "
+            + ", ".join(sorted(exempt - need_wide))
+        )
     for name, need, allow in (
-        ("MISSING_PATHS_DOCS", need_missing, MISSING_PATHS_DOCS),
+        ("MISSING_PATHS_DOCS", need_wide - exempt, MISSING_PATHS_DOCS),
         ("ISOLATION_NOTE_DOCS", need_iso, ISOLATION_NOTE_DOCS),
     ):
         if need - allow:
@@ -774,10 +933,15 @@ def _assert_hermes_edition(
 
 
 def _forbidden_roots(repo: Path) -> list[Path]:
+    """`--out` 이 들어가면 안 되는 루트 — 이 워크트리, 공용 git 디렉토리, 주 체크아웃, 그리고 **모든
+    워크트리**(`git worktree list`, 리뷰 ATK-004)."""
     roots = {
         repo.resolve(),
         Path(_git(repo, "rev-parse", "--show-toplevel", label=_LOG_LABEL)).resolve(),
     }
+    for line in _git(repo, "worktree", "list", "--porcelain", label=_LOG_LABEL).splitlines():
+        if line.startswith("worktree "):
+            roots.add(Path(line[len("worktree ") :]).resolve())
     common = (
         repo / _git(repo, "rev-parse", "--git-common-dir", label=_LOG_LABEL)
     ).resolve()
@@ -787,13 +951,32 @@ def _forbidden_roots(repo: Path) -> list[Path]:
     return sorted(roots)
 
 
+def _path_key(p: Path) -> tuple[str, ...]:
+    """경로 비교 키 — darwin 기본 FS 는 대소문자를 무시하므로 casefold(build-targets `_path_key` 와 같은 규칙)."""
+    return tuple(part.casefold() for part in p.parts) if sys.platform == "darwin" else p.parts
+
+
 def _out_dir(repo: Path, raw: str) -> Path:
     """`--out` 경로를 **한 번만** resolve 해 레포 밖·비어 있음을 확인한 결과를 돌려준다(그 값을 끝까지 쓴다)."""
     dest = Path(raw).expanduser().resolve()
-    for root in _forbidden_roots(repo):
-        if dest == root or root in dest.parents:
+    roots = _forbidden_roots(repo)
+    # 문자열(darwin 은 casefold)과 **inode** 로 함께 본다 — 대소문자만 다른 경로(APFS)·하드링크 별칭은
+    # 문자열 비교를 빠져나간다(리뷰 ATK-004). 있는 조상만 stat 한다.
+    root_ids = {}
+    for root in roots:
+        try:
+            st = root.stat()
+        except OSError:
+            continue
+        root_ids[(st.st_dev, st.st_ino)] = root
+    for cand in (dest, *dest.parents):
+        hit = next((r for r in roots if _path_key(cand) == _path_key(r)), None)
+        if hit is None and cand.exists():
+            st = cand.stat()
+            hit = root_ids.get((st.st_dev, st.st_ino))
+        if hit is not None:
             sys.exit(
-                f"[{_LOG_LABEL}] ✗ --out 이 레포 안 경로다({root}) — 실측 입력은 레포 밖에 둔다: {dest}"
+                f"[{_LOG_LABEL}] ✗ --out 이 레포 안 경로다({hit}) — 실측 입력은 레포 밖에 둔다: {dest}"
             )
     if dest.exists():
         if not dest.is_dir():
@@ -867,6 +1050,25 @@ def _verify_export(repo: Path, entries: list[tuple[str, str, str]], dest: Path) 
         )
 
 
+def _export_atomically(repo: Path, entries: list[tuple[str, str, str]], dest: Path) -> None:
+    """옆 임시 디렉토리에 내보내 대조한 뒤 `rename` 으로 들인다 — 검사와 쓰기 사이에 누가 `dest` 를 채우면
+    rename 이 실패한다(비어 있지 않은 디렉토리·파일 위로는 옮겨지지 않는다, 리뷰 ATK-010)."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix=f".{dest.name}.", dir=dest.parent))
+    try:
+        _export_files(repo, entries, tmp)
+        _verify_export(repo, entries, tmp)
+        try:
+            os.rename(tmp, dest)
+        except OSError as err:
+            sys.exit(f"[{_LOG_LABEL}] ✗ --out 디렉토리가 비어 있지 않다(쓰는 사이에 바뀌었다) — {dest}: {err}")
+    finally:
+        if tmp.exists():
+            shutil.rmtree(tmp)
+    dest.chmod(0o755)  # mkdtemp 는 0700 — 일반 디렉토리처럼 둔다
+    _verify_export(repo, entries, dest)
+
+
 # --- 출력: --write ------------------------------------------------------------------------------------
 
 
@@ -901,7 +1103,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--source", default="HEAD", help="원본 커밋 (기본 HEAD)")
     parser.add_argument(
-        "--branch", default=DEFAULT_BRANCH, help=f"대상 브랜치 (기본 {DEFAULT_BRANCH})"
+        "--branch",
+        default=DEFAULT_BRANCH,
+        choices=ALLOWED_BRANCHES,
+        help=f"대상 브랜치 (기본·유일 {DEFAULT_BRANCH})",
     )
     parser.add_argument("--repo", type=Path, default=REPO_ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -918,6 +1123,12 @@ def main(argv: list[str] | None = None) -> int:
                 f" (enabled={target.get('enabled')!r}). 사유: {reason}"
             )
             return 1
+        lineage = [sha for ref in WRITE_LINEAGE_REFS if (sha := _rev(args.repo, ref))]
+        if not any(_is_ancestor(args.repo, source, sha) for sha in lineage):
+            sys.exit(
+                f"[{_LOG_LABEL}] ✗ --write 거부 — 원본 {source[:7]} 이 {', '.join(WRITE_LINEAGE_REFS)} 어느 것의"
+                " 조상도 아니다(없는 ref 는 건너뜀) — main 에 들어간 커밋만 판으로 낸다"
+            )
     dest = _out_dir(args.repo, args.out) if args.out else None
     tree = derive_tree(args.repo, source)
     plugin_tree = _git(
@@ -954,9 +1165,7 @@ def main(argv: list[str] | None = None) -> int:
                 label=_LOG_LABEL,
             )
         )
-        dest.mkdir(parents=True, exist_ok=True)
-        _export_files(args.repo, entries, dest)
-        _verify_export(args.repo, entries, dest)
+        _export_atomically(args.repo, entries, dest)
         print(
             f"[{_LOG_LABEL}] ✓ --out {dest} — 파일 {len(entries)}개, plugin tree {plugin_tree} 와 일치"
             f" (원본 {source[:7]})"
