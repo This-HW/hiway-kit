@@ -205,3 +205,165 @@ rc 1이었다. 실제 `~/.hermes` 디렉터리의 mtime이 04:07:08에서 04:09:
 - P5′: `--force --ref`로 고정 SHA 변경, 활성 상태 유지.
 - P6: 생성판 스킬의 도구 경로와 Claude Code 캐시 교차 사용 여부.
 - 내장 verify-on-stop, 스킬 생성 및 메모리와의 공존. 생성판 트리 SHA는 2단계에서 기록한다.
+
+## 2단계 — 판 트리
+
+`tree_sha: 3c38af92e071a73378b878550d71b3258f6f76b8`
+
+원본 커밋 `636fbfa9f650ea31d75666d21187b4e967b898c7` · 파일 106개 · 스킬 15종.
+
+`cp -Rp /private/tmp/hermes-edition-out-779 "$R/src/edition"`와 `diff -qr` (각 rc 0)로 내보낸 판을
+복사하고 대조했다. 임시 저장소의 `plugins/common`에 그 복사본을 커밋한 뒤
+`git -C "$R/git/edition.git" rev-parse HEAD HEAD:plugins/common` (rc 0)으로 하위 트리 SHA를 확인했다.
+원본 내보내기 디렉터리는 읽기 전용 입력으로 사용했다.
+
+1단계의 샌드박스와 격리 venv, 관리형 PM 런타임을 재사용했다. `sb off "$H" --version` (rc 0)에서
+`Hermes Agent vgit.352b249 (2026.9.24)`, Python 3.14.10을 다시 확인했다.
+측정 전 `sb off /opt/homebrew/bin/python3.11 "$R/probe.py" phase2-off "$outside" "$secret_paths"…`
+대조는 rc 0이었다. 실제 홈 쓰기, 실제 `~/.hermes`와 `~/.claude`를 포함한 비밀 경로 열기 10건,
+루프백 연결이 모두 `EPERM`이었다. 판 실측의 외부 코드 실행은 모두 같은 `off` 프로필에서 했다.
+원 로그와 함수 프로브 원문은 `~/.cache/hiway-research/hermes/h1/phase2/`에 있다.
+
+### P1 보안 판정
+
+`sb off "$H" plugins validate "$R/src/edition" --json` (rc 0)은 AP v1, `portable` 및
+`host_ready: true`를 반환했다. 설치 스캐너는 **caution**이었다.
+`sb off "$R/venv-main-314/bin/python" "$R/phase2/scan.py" "$R/src/edition"` (rc 0)는
+Hermes의 `scan_plugin` 결과를 그대로 JSON으로 출력했다. `plugin-guard-v15`가 보고한 85건은
+high 5, medium 18, low 62, critical 0이다. 아래는 high와 medium의 원래 위치 및 규칙 ID이고,
+85건 전체의 매칭 문자열과 설명은 원 로그에 보존했다.
+
+```text
+high    agents/review-code.md:392                              destructive_root_rm
+medium  agents/review-code.md:391                              path_traversal
+high    agents/review-code.md:391                              system_passwd_access
+high    evals/debug-obvious-no-skill/case.yaml:17               python_os_environ
+high    evals/debug-obvious-no-skill/case.yaml:33               python_os_environ
+medium  rules/child-marker.md:16                               backtick_subshell
+high    skills/auto-dev/SKILL.md:255                           python_os_environ
+medium  skills/child-session/SKILL.md:40                       backtick_subshell
+medium  skills/plan-task/references/task-tools-fallback.md:53  backtick_subshell
+medium  skills/plan-task/references/task-tools-fallback.md:20  path_traversal
+medium  skills/plan-task/references/task-tools-fallback.md:35  path_traversal
+medium  skills/review/SKILL.md:61                              backtick_subshell
+medium  tools/bounded_process.py:52                           python_subprocess
+medium  tools/checklist.py:64                                 python_subprocess
+medium  tools/checklist.py:290                                python_subprocess
+medium  tools/checklist.py:167                                path_traversal
+medium  tools/export_harness.py:937                           ssh_dir_access
+medium  tools/export_harness.py:1008                          python_subprocess
+medium  tools/feedback_ledger.py:118                          python_subprocess
+medium  tools/feedback_ledger.py:693                          python_subprocess
+medium  tools/hidden_chars.py:25                              hex_encoded_string
+medium  tools/lsp_query.py:60                                 python_subprocess
+medium  tools/lsp_transport.py:55                             python_subprocess
+```
+
+### P2 스킬 노출
+
+`sb off "$H" profile create h1-phase2 --no-alias --no-credentials --no-skills` (rc 0)로 격리 홈에
+새 프로필을 만들었다. 아래 `h2`는 `sb off "$H" --profile h1-phase2`를 뜻한다.
+`url="file://$R/git/edition.git#plugins/common"`이고 최초 고정 커밋
+`rev=179f82c6b6b2082630f546f43f5590c9e9b0efce`는 이 측정을 위한 임시 Git 커밋이다.
+
+| 명령 | rc | 관측 |
+| --- | --- | --- |
+| `h2 plugins install "$url" --ref "$rev" --no-enable` | 1 | `Decision: BLOCKED — Blocked (community source + caution verdict, 85 findings). Use --force to override.` |
+| `h2 plugins install "$url" --ref "$rev" --force --no-enable` | 0 | 컨트롤러가 동일 판 트리에만 승인한 재시도. `hiway-kit`은 비활성으로 설치됐다. |
+| `h2 plugins list --plain --no-bundled` | 0 | 설치 직후 `not enabled`, 활성화 후 `enabled`, 비활성화 후 `disabled`, 제거 후 빈 출력. |
+| `sb off "$R/venv-main-314/bin/python" "$R/phase2/skills_probe.py" "$R/hermes-home/profiles/h1-phase2"` | 각 0 | `skills_list()`와 `build_skills_system_prompt()`의 `<available_skills>`에 같은 판 스킬 이름이 노출됐다. 설치 전 0, 비활성 설치 직후 0, 활성화 후 15, 비활성화 후 0. <!-- doc-ref-ok: 고정 SHA의 외부 Hermes 함수 --> |
+
+두 스킬 목록에서 확인한 이름은 아래 15개다. `harness-export`와 `skill-forge`는 두 목록에서 모두
+0개였다. `using-hiway-kit`은 목록 노출과 실제 `skill_view` 읽기를 각각 확인했다.
+
+```text
+hiway-kit:agent-creator
+hiway-kit:auto-dev
+hiway-kit:brainstorming
+hiway-kit:child-session
+hiway-kit:code-intel
+hiway-kit:control-loop
+hiway-kit:cross-engine-review
+hiway-kit:debug
+hiway-kit:multi-perspective-review
+hiway-kit:plan-task
+hiway-kit:review
+hiway-kit:session-history
+hiway-kit:test
+hiway-kit:using-hiway-kit
+hiway-kit:web-research
+```
+
+### P3 생명주기와 잔여물
+
+`h2 plugins enable hiway-kit`, `h2 plugins disable hiway-kit`,
+`h2 plugins remove hiway-kit`는 각각 rc 0이었다. 프로필의 `plugins/` 경로 목록과
+`config.yaml`은 `sb off /opt/homebrew/bin/python3.11 -B "$R/phase2/profile_state.py" capture "$profile" "$snapshot"`
+으로 보존했다(각 rc 0). 같은 스크립트의 `compare "$before" "$after"` 결과는 다음과 같다.
+
+| 구간 | 비교 rc | 관측 |
+| --- | --- | --- |
+| 설치 전 → 설치 후 | 1 | 패키지·디렉터리·메타데이터 경로 0 → 158. 두 시점 모두 config.yaml 부재. |
+| 설치 후 → 활성화 후 | 1 | config.yaml 생성. `plugins.enabled`에 `hiway-kit`, `plugins.disabled`에 빈 목록. |
+| 활성화 후 → 고정 SHA 변경 후 | 0 | 설정 내용과 경로 목록 동일. 저장된 고정 SHA는 변경됐다. |
+| 고정 SHA 변경 후 → 비활성화 후 | 1 | `hiway-kit`이 `plugins.disabled`로 이동. |
+| 비활성화 후 → 제거 후 | 1 | 설치 트리 제거, 플러그인 경로 158 → 2. 설정의 두 목록이 비었고 `_config_version: 54` 추가. |
+
+격리 프로필에는 config.yaml과 설치 메타데이터·잠금 파일이 남았다.
+`plugins list --plain --no-bundled`에서 패키지는 사라졌다.
+
+### P4 프로젝트 규칙
+
+`sb off "$R/venv-main-314/bin/python" "$R/src/edition/tools/export_harness.py" --plugin-root "$R/src/edition" --target "$R/proj" --entrypoints AGENTS.md`
+는 rc 1이었다. 원 판의 도구가 `rules/VERSION`을 읽지 못해 파일을 생성하지 않았다.
+원 로그는 `[export-harness] ✗ rules/VERSION 을 읽지 못했다`와 `진입점을 기록하지 않는다`를 출력했다.
+빌더가 이 파일을 훅 전용으로 분류해 제외했으나, 내보내기 도구도 규범 마커 해시 계산에 읽는다.
+원 판의 프로젝트 규칙 생성은 실패다.
+
+별도 대조본은 판 복사본에 원본 커밋의 추적 `plugins/common/rules/VERSION` 한 파일만 추가했다.
+`git show 636fbfa9f650ea31d75666d21187b4e967b898c7:plugins/common/rules/VERSION`과
+`git hash-object` (각 rc 0)로 가져온 버전 파일의 blob SHA
+`88c5fb891dcf1d1647d2b84bac0630cf9570d213`를 확인했다. `diff -qr` (rc 1)은 추가 파일 한 개만 보고했다.
+
+| 대조본 명령 | rc | 관측 |
+| --- | --- | --- |
+| `sb off "$R/venv-main-314/bin/python" "$R/src/edition-p4-control/tools/export_harness.py" --plugin-root "$R/src/edition-p4-control" --target "$R/proj" --entrypoints AGENTS.md` | 0 | 임시 Git 프로젝트에 AGENTS.md 생성. |
+| `sb off "$R/venv-main-314/bin/python" "$R/phase2/context_probe.py" "$R/proj"` | 0 | `build_context_files_prompt(skip_soul=True)`에 AGENTS.md의 마커가 포함됐다. `list_context_file_sources`는 `loaded`, `scan_for_threats(scope="context")`는 발견 0건. |
+| 같은 함수 호출, `$R/proj/.hermes.md` 추가 후 | 0 | `.hermes.md`는 `loaded`, AGENTS.md는 `shadowed`. 프롬프트에서 AGENTS.md 마커가 사라졌다. |
+
+### P5′ 판 SHA 고정 설치
+
+처음 설치의 `rev`는 `179f82c6b6b2082630f546f43f5590c9e9b0efce`다. 같은 판 트리에 빈 커밋을
+추가하고 `git -C "$R/git/edition.git" fetch "$R/src/edition-git" refs/heads/main:refs/heads/main`
+(rc 0)으로 bare 저장소를 이동했다. 새 `rev`는 `bc225d1e19a7ba30a7196e7eab98a6a970052614`이고
+`git rev-parse HEAD HEAD:plugins/common` (rc 0)에서 두 커밋의 판 하위 트리 SHA가 일치했다.
+
+- 설치 디렉터리의 `git rev-parse HEAD`는 두 설치에서 rc 128이었다. 하위 경로 설치본은 Git 저장소가
+  아니었다. `pin_probe.py "$profile" "$url" "$rev"` (각 rc 0)로 설치 메타데이터의 `pinned: true`,
+  `revision`, `source`를 대조했다. 두 설치에서 `diff -qr "$R/src/edition" "$installed"`는 rc 0이었다.
+- 활성 상태에서 `h2 plugins install "$url" --force --ref "$rev" --no-enable` (rc 0)을 실행했다.
+  Hermes는 `Replacement installed; plugin selection was not changed.`를 출력했다.
+  목록은 `enabled` 및 `pinned@bc225d1e`였고 설정 내용은 같았다. 에이전트와 프롬프트의 판 스킬도
+  각각 15개로 유지됐다.
+
+### P6 설치본에서 도구 발견
+
+`sb off "$R/venv-main-314/bin/python" "$R/phase2/skill_view_probe.py" "$R/hermes-home/profiles/h1-phase2"`
+(rc 0)로 `skill_view("hiway-kit:plan-task", preprocess=False)`와
+`skill_view("hiway-kit:using-hiway-kit", preprocess=False)`를 호출했다.
+`plan-task`의 `skill_dir`는 `$R/hermes-home/profiles/h1-phase2/plugins/hiway-kit/skills/plan-task`였다.
+두 스킬에서 각각 `skill_dir/../..`를 해석한 플러그인 루트에 `tools/checklist.py`와
+`tools/export_harness.py`가 실제 파일로 있었으며, 두 해석 경로 모두 격리된 Hermes 프로필 안에 있었다.
+
+### 실제 홈 대조와 미측정
+
+호스트 셸에서 `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`으로
+실제 홈 메타데이터를 수집했다(각 rc 0). 같은 스크립트의 `compare "$before" "$after"`로
+Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조했다.
+중간 비교는 rc 1로 기존 허용 목록 외 `state.db` 변경 1건을 보고했다.
+`/usr/sbin/lsof /Users/hw/.hermes/state.db` (rc 0)에서 실 게이트웨이 pid 59776이
+`15u`로 열고 있었다. 컨트롤러가 데몬 관리 파일에 추가했다.
+원 판 측정 종료 시 비교는 rc 0으로 데몬 관리 항목 15건, 그 밖의 변경 및 Claude 플러그인 변경 0건이었다.
+
+- verify-on-stop, 스킬 자동 생성, 메모리와의 공존은 미측정 — 모델 실행 필요. API 키 없이 측정했다.
+- 브라우저형 `tree/hermes/…` URL은 이번 2단계 실측 범위 밖이다.
