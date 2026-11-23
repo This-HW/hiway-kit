@@ -82,12 +82,15 @@ main 에 생성하는 활성 타겟들의 출력 경로가 겹치면(같은 파�
 이다. 생성물이 생성기의 **읽기 입력**(SSOT `source.manifest`, 정책 파일, 훅 스크립트, 스킬
 `SKILL.md`)과 겹쳐도 같다. 비교는 `_resolve_in_repo` 가 정규화한 경로로 한다 — `./`·`..`·심링크
 별칭이 서로 다른 문자열로 같은 파일을 가리킬 수 있다. 이미 있는 파일은 `os.path.samefile`
-(하드링크)로도 보고, darwin 에서는 대소문자를 접어 비교한다(기본 파일시스템이 대소문자 무시).
+(하드링크)로도 보고, 대소문자는 **플랫폼과 무관하게** 접어 비교한다 — 기준은 빌드 호스트가
+아니라 대소문자를 무시하는 소비자 FS(macOS·Windows)다.
 `--only` 로 좁혀도 비교는 활성 타겟 전체로 한다(좁힌 타겟의 쓰기가 다른 타겟의 생성물을 덮을
 수 있다). 그 계산이 다른 타겟 때문에 실패하면 실패 타겟 이름을 함께 알린다.
 
-fail-closed 불변식·edition 판정도 `--only` 와 무관하게 돈다. 불변식은 디스크(`--check`)와
-**계산된 생성물**(`--check`·`--write`) 양쪽으로 본다 — `--write` 가 위반을 직접 만들지 않도록.
+fail-closed 불변식·edition 판정도 `--only` 와 무관하게 돈다. 불변식은 디스크와 **계산된
+생성물** 양쪽을 `--check`·`--write` 모두에서 본다 — `--write` 가 위반을 직접 만들거나, 이미 있는
+위반(끊어진 심링크 포함) 위에 기록하지 않도록. 디스크는 루트를 나열해 casefold 로 고른다.
+`enabled:true` edition 타겟은 `editionBuilder` 가 레포에 실제 파일로 있어야 한다.
 
 정책 구조 검증: 모든 `targets[].id` 는 비어 있지 않은 유일한 문자열이어야 한다(대상 선택 전).
 
@@ -171,9 +174,19 @@ def load_policy(path: Path) -> dict:
     except OSError as err:
         raise PolicyError(f"정책 파일을 읽지 못했다: {path} ({err})") from err
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
     except json.JSONDecodeError as err:
         raise PolicyError(f"정책 파일 JSON 파싱 실패: {path} ({err})") from err
+    if not isinstance(data, dict):
+        raise PolicyError(
+            f"정책 파일 최상위는 JSON 객체여야 한다: {path} ({type(data).__name__})"
+        )
+    gate = data.get("gate", {})
+    if not isinstance(gate, dict):
+        raise PolicyError(
+            f"정책 파일 gate 는 객체여야 한다: {path} ({type(gate).__name__})"
+        )
+    return data
 
 
 def load_ssot(repo_root: Path, policy: dict) -> dict:
@@ -191,9 +204,12 @@ def load_ssot(repo_root: Path, policy: dict) -> dict:
             f"  (packaging/targets.json의 source.manifest가 가리키는 파일이다) — {err}"
         ) from err
     try:
-        return json.loads(raw)
+        data = json.loads(raw)
     except json.JSONDecodeError as err:
         raise PolicyError(f"SSOT 매니페스트 JSON 파싱 실패: {p} ({err})") from err
+    if not isinstance(data, dict):
+        raise PolicyError(f"SSOT 매니페스트 최상위는 JSON 객체여야 한다: {p}")
+    return data
 
 
 def _detect_components(plugin_root: Path, policy: dict) -> set[str]:
@@ -407,11 +423,14 @@ def build_marketplace(ssot: dict, target: dict, plugin_root_rel: str) -> dict | 
     mk = target.get("marketplace")
     if not mk:
         return None
+    name = _require(
+        ssot, "name", f"타겟 '{target['id']}' marketplace 의 SSOT 매니페스트"
+    )
     entry: dict = {
-        "name": f"{ssot['name']}-marketplace",
+        "name": f"{name}-marketplace",
         "plugins": [
             {
-                "name": ssot["name"],
+                "name": name,
                 "source": {"source": "local", "path": f"./{plugin_root_rel}"},
                 "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
             }
@@ -451,6 +470,11 @@ def build_hooks(plugin_root: Path, target: dict) -> dict | None:
     if not isinstance(events_spec, dict):
         raise PolicyError(f"타겟 '{target['id']}' hooks.events: 객체가 필요하다")
     for event, entries in events_spec.items():
+        if not isinstance(entries, list):
+            raise PolicyError(
+                f"타겟 '{target['id']}' hooks.events.{event}: 엔트리 목록이 필요하다 — "
+                f"{type(entries).__name__}"
+            )
         built = []
         for entry in entries:
             rel = _require(
@@ -822,14 +846,17 @@ def _arts_of(
 
 
 def _path_key(p: Path) -> tuple[str, ...]:
-    """비교 키. darwin 은 기본 파일시스템이 대소문자를 무시하므로 casefold 로 접는다."""
-    if sys.platform == "darwin":
-        return tuple(part.casefold() for part in p.parts)
-    return p.parts
+    """비교 키 — **플랫폼과 무관하게** casefold 로 접는다.
+
+    기준은 빌드 호스트가 아니라 소비자 파일시스템이다. Linux CI 에서 `Plugin.yaml` 과
+    `plugin.yaml` 은 다른 파일이지만, 대소문자를 무시하는 macOS·Windows 소비자의 체크아웃에서는
+    같은 파일로 열린다(ATK-R01). 보수적으로 접는다 — 철자만 다른 두 경로는 늘 겹친다.
+    """
+    return tuple(part.casefold() for part in p.parts)
 
 
 def _same_path(a: Path, b: Path) -> bool:
-    """같은 파일인가 — 정규화 경로·대소문자(darwin)·이미 있는 파일의 inode(하드링크) 순으로 본다."""
+    """같은 파일인가 — 정규화 경로·대소문자·이미 있는 파일의 inode(하드링크) 순으로 본다."""
     if _path_key(a) == _path_key(b):
         return True
     try:
@@ -948,6 +975,16 @@ def _check_editions(repo_root: Path, policy: dict, ssot: dict) -> tuple[int, boo
             continue
         count += 1
         problems = ap_v1_violations(build_manifest(ssot, target, present))
+        builder = _edition_builder(target)
+        # enabled 는 "판 빌더가 판을 쓸 수 있다" 는 뜻이다 — 빌더가 없으면 그 약속이 거짓이다.
+        # enabled:false 는 경로만 안내한다(빌더는 아직 만드는 중일 수 있다).
+        if (
+            target.get("enabled")
+            and not _policy_path(
+                repo_root, builder, f"타겟 '{target['id']}' editionBuilder"
+            ).is_file()
+        ):
+            problems.append(f"enabled:true 인데 판 빌더 {builder} 가 레포에 없다")
         for problem in problems:
             print(
                 f"[build-targets] ✗ edition '{target['id']}' AP v1 판정 실패 — {problem}"
@@ -972,22 +1009,24 @@ def _invariant_computed(
     """
     plugin_root = _source_path(repo_root, policy, "pluginRoot")
     rel_root = plugin_root.relative_to(repo_root.resolve()).as_posix()
-    manifest = plugin_root / AP_V1_MANIFEST_NAME
-    natives = [plugin_root / n for n in HERMES_NATIVE_MANIFESTS]
+    # 자리 자체와, 그 자리에 심링크가 있으면(끊어졌어도) 그것이 가리키는 곳 둘 다 본다 —
+    # `plugin.json -> x.json` 을 심어 두고 x.json 을 생성하는 우회를 막는다(ATK-R06).
+    manifest = _invariant_places(plugin_root, (AP_V1_MANIFEST_NAME,))
+    natives = _invariant_places(plugin_root, HERMES_NATIVE_MANIFESTS)
     fail = False
     for _, arts in all_arts:
         for art in arts:
             p = art.resolved_path
             if p is None:
                 continue
-            if any(_same_path(p, n) for n in natives):
+            if any(_same_path(p, n) for n in natives):  # casefold 포함
                 print(
                     f"[build-targets] ✗ fail-closed 불변식 위반 — 생성물 {art.target_id}:{art.rel_path} "
                     f"가 {rel_root} 의 Hermes 네이티브 매니페스트 자리다"
                 )
                 fail = True
             elif (
-                _same_path(p, manifest)
+                any(_same_path(p, m) for m in manifest)
                 and isinstance(art.content, dict)
                 and art.content.get("$schema") == AP_V1_SCHEMA_URL
             ):
@@ -999,42 +1038,82 @@ def _invariant_computed(
     return fail
 
 
+def _invariant_places(plugin_root: Path, names: tuple[str, ...]) -> list[Path]:
+    """불변식이 지키는 자리들: `<pluginRoot>/<name>` 과, 거기 심링크가 있으면 그 resolve 결과.
+
+    resolve 는 `_policy_path` 로 한다 — 레포 밖을 가리키는 심링크는 PolicyError(exit 1)다.
+    """
+    out: list[Path] = []
+    for name in names:
+        place = plugin_root / name
+        out.append(place)
+        out.append(_policy_path(plugin_root, name, "fail-closed 불변식"))
+    return out
+
+
+def root_manifest_names(names: list[str]) -> tuple[list[str], list[str]]:
+    """플러그인 루트 항목 이름 중 (네이티브 매니페스트, AP v1 매니페스트) 후보 — casefold 비교.
+
+    대소문자를 무시하는 소비자 FS 에서 Hermes 가 `plugin.yaml`·`plugin.json` 으로 열 수 있는
+    이름을 전부 고른다. 빌드 호스트의 FS 가 대소문자를 구분해도 판정은 같다(ATK-R01).
+    """
+    natives = {n.casefold() for n in HERMES_NATIVE_MANIFESTS}
+    manifest = AP_V1_MANIFEST_NAME.casefold()
+    return (
+        sorted(n for n in names if n.casefold() in natives),
+        sorted(n for n in names if n.casefold() == manifest),
+    )
+
+
 def _check_fail_closed_invariant(repo_root: Path, policy: dict) -> bool:
     """main 의 플러그인 루트(디스크)가 Hermes 에 설치 가능한 패키지로 보이지 않는가. 위반이면 True.
 
-    판정할 수 없는 상태(읽기·파싱 실패)는 통과로 치지 않는다. 읽기 경로는 `_policy_path` 로
-    봉쇄한다 — 심링크로 레포 밖을 가리키면 PolicyError(exit 1)다.
+    루트를 **나열해** casefold 로 고른다 — `lexists("plugin.yaml")` 은 대소문자를 구분하는
+    호스트에서 `Plugin.yaml` 을 놓친다. 나열은 끊어진 심링크도 포함한다(읽지 않는다).
+    판정할 수 없는 상태(읽기·파싱 실패, `plugin.json` 후보가 둘 이상)는 통과로 치지 않는다.
+    읽기 경로는 `_policy_path` 로 봉쇄한다 — 심링크로 레포 밖을 가리키면 PolicyError(exit 1)다.
     """
     plugin_root = _source_path(repo_root, policy, "pluginRoot")
     rel_root = plugin_root.relative_to(repo_root.resolve()).as_posix()
+    try:
+        entries = [c.name for c in plugin_root.iterdir()]
+    except OSError as err:
+        raise PolicyError(
+            f"fail-closed 불변식: {rel_root} 를 나열하지 못했다 ({err})"
+        ) from err
+    natives, manifests = root_manifest_names(entries)
     fail = False
-    for name in HERMES_NATIVE_MANIFESTS:
-        # lexists: 끊어진 심링크도 "있다"로 본다 — 판정을 관대하게 하지 않는다(lstat 만, 읽지 않는다).
-        if os.path.lexists(plugin_root / name):
-            print(
-                f"[build-targets] ✗ fail-closed 불변식 위반 — {rel_root}/{name} 이 있다 "
-                f"(Hermes 가 main 트리를 네이티브 플러그인으로 읽는다)"
-            )
-            fail = True
-    if os.path.lexists(plugin_root / AP_V1_MANIFEST_NAME):
-        manifest = _policy_path(plugin_root, AP_V1_MANIFEST_NAME, "fail-closed 불변식")
+    for name in natives:
+        print(
+            f"[build-targets] ✗ fail-closed 불변식 위반 — {rel_root}/{name} 이 있다 "
+            f"(Hermes 가 main 트리를 네이티브 플러그인으로 읽는다)"
+        )
+        fail = True
+    if len(manifests) > 1:
+        print(
+            f"[build-targets] ✗ fail-closed 불변식 판정 불가 — {rel_root} 에 {manifests} 가 함께 있다 "
+            f"(대소문자를 무시하는 소비자 FS 에서 어느 것이 {AP_V1_MANIFEST_NAME} 인지 정할 수 없다)"
+        )
+        return True
+    for name in manifests:
+        manifest = _policy_path(plugin_root, name, "fail-closed 불변식")
         try:
             data = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, ValueError) as err:
             print(
-                f"[build-targets] ✗ fail-closed 불변식 판정 불가 — {rel_root}/{AP_V1_MANIFEST_NAME} "
+                f"[build-targets] ✗ fail-closed 불변식 판정 불가 — {rel_root}/{name} "
                 f"를 읽지 못했다 ({err})"
             )
             return True
         if not isinstance(data, dict):
             print(
-                f"[build-targets] ✗ fail-closed 불변식 판정 불가 — {rel_root}/{AP_V1_MANIFEST_NAME} "
+                f"[build-targets] ✗ fail-closed 불변식 판정 불가 — {rel_root}/{name} "
                 f"가 JSON 객체가 아니다"
             )
             fail = True
         elif data.get("$schema") == AP_V1_SCHEMA_URL:
             print(
-                f"[build-targets] ✗ fail-closed 불변식 위반 — {rel_root}/{AP_V1_MANIFEST_NAME} 의 "
+                f"[build-targets] ✗ fail-closed 불변식 위반 — {rel_root}/{name} 의 "
                 f"$schema 가 AP v1 URL 이다 (ref 없는 Hermes 설치가 main 트리를 받아들이게 된다)"
             )
             fail = True
@@ -1116,8 +1195,8 @@ def cmd_write(
     일치)를 드리프트로 잡아내므로, 이 명령이 자체적으로 원자성을 보장할 필요가
     없다(적대적 리뷰 2026-08-27, Medium 판정 반영).
 
-    단 **정책 자체의 결함**(출력 경로 충돌, 계산된 생성물의 fail-closed 불변식 위반, edition
-    AP v1 판정 실패)은 `--only` 와 무관하게 **아무것도 쓰기 전에** 막는다 — 부분 기록이 아니라
+    단 **정책 자체의 결함**(출력 경로 충돌, fail-closed 불변식 위반 — 계산된 생성물과 디스크
+    양쪽, edition AP v1 판정 실패)은 `--only` 와 무관하게 **아무것도 쓰기 전에** 막는다 — 부분 기록이 아니라
     잘못된 생성물을 만드는 것이기 때문이다.
     """
     validate_targets(policy)
@@ -1128,6 +1207,7 @@ def cmd_write(
     all_arts = _main_artifacts(repo_root, policy, ssot, only)
     blocked = _report_collisions(repo_root, policy, all_arts, policy_path)
     blocked = _invariant_computed(repo_root, policy, all_arts) or blocked
+    blocked = _check_fail_closed_invariant(repo_root, policy) or blocked
     blocked = _check_editions(repo_root, policy, ssot)[1] or blocked
     if blocked:
         print("[build-targets] ✗ 정책 결함 — 아무것도 기록하지 않았다.")

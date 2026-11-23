@@ -1266,8 +1266,8 @@ def _excerpt(name: str) -> tuple[dict[str, str], list[list[tuple[int, str]]]]:
     for line in (FIXTURES / name).read_text(encoding="utf-8").splitlines():
         if line.startswith("#") and not chunks[0]:
             key, sep, value = line[1:].partition(":")
-            if sep:
-                header[key.strip()] = value.strip()
+            if sep and key.strip() and " " not in key.strip():
+                header.setdefault(key.strip(), value.strip())
         elif line == "...":
             chunks.append([])
         else:
@@ -1355,10 +1355,48 @@ def test_native_manifest_names_match_upstream_excerpt():
     ]
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["hermes_agent_plugins_352b249.txt", "hermes_plugins_discovery_352b249.txt"],
+)
+def test_upstream_excerpt_matches_clone_when_available(name):
+    """ATK-R04 (선택): 오프라인에서는 발췌가 원문과 같은지 **탐지할 수 없다**. hermes-agent 클론이
+    있으면(`HERMES_AGENT_CLONE`) blob sha 와 줄 내용을 원문과 대조한다. 이 테스트만 skip 할 수 있다."""
+    clone = os.environ.get("HERMES_AGENT_CLONE")
+    if not clone or not (Path(clone) / ".git").exists():
+        pytest.skip(
+            "HERMES_AGENT_CLONE 미설정 또는 git 클론 아님 — 원문 대조는 클론이 있어야만 가능하다 "
+            "(fixture 헤더의 recheck 절차)"
+        )
+    header, chunks = _excerpt(name)
+    spec = f"{header['commit']}:{header['file']}"
+
+    def git(*args: str) -> str:
+        proc = subprocess.run(
+            ["git", "-C", clone, *args], capture_output=True, text=True, check=False
+        )
+        assert proc.returncode == 0, proc.stderr
+        return proc.stdout
+
+    assert git("rev-parse", spec).strip() == header["blob"]
+    upstream = git("show", spec).split("\n")
+    for chunk in chunks:
+        for number, text in chunk:
+            assert upstream[number - 1] == text, (name, number)
+
+
 # ── 타겟 id 구조 검증 (ATK-001) ─────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("mode", ["--check", "--write"])
+@pytest.mark.parametrize(
+    "mode",
+    [
+        ("--check",),
+        ("--write",),
+        ("--check", "--only", "gamma"),
+        ("--write", "--only", "alpha"),
+    ],
+)
 def test_duplicate_target_id_is_exit_1(tmp_path, capsys, mode):
     """codex 블록을 복사하며 id 를 그대로 둔 경우 — 앞 타겟 생성물이 사라지는 false green."""
     root = _fake_repo(tmp_path)
@@ -1374,8 +1412,26 @@ def test_duplicate_target_id_is_exit_1(tmp_path, capsys, mode):
     (root / "plugins/common/gamma-plugin.json").unlink()
     before = _snapshot(root)
     capsys.readouterr()
-    assert _run(root, mode) == 1
+    assert _run(root, *mode) == 1
     assert "id 'gamma' 중복 — targets[2] 와 같다" in capsys.readouterr().err
+    assert _snapshot(root) == before
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        ("--check",),
+        ("--write",),
+        ("--check", "--only", "gamma"),
+        ("--check", "--only", "alpha"),
+    ],
+)
+def test_edition_and_main_target_sharing_an_id_is_exit_1(tmp_path, capsys, mode):
+    root = _edition_repo(tmp_path, id="gamma")
+    before = _snapshot(root)
+    capsys.readouterr()
+    assert _run(root, *mode) == 1
+    assert "targets[3]: id 'gamma' 중복 — targets[2] 와 같다" in capsys.readouterr().err
     assert _snapshot(root) == before
 
 
@@ -1671,15 +1727,25 @@ def test_copied_file_is_not_a_collision(tmp_path):
     assert _run(root, "--check") == 0
 
 
-def test_case_only_difference_collides_on_darwin(tmp_path, capsys):
-    """ATK-006: darwin 기본 파일시스템은 대소문자를 무시한다 — 철자만 다른 경로는 같은 파일이다."""
+HOST_PLATFORMS = ["linux", "darwin", "win32"]
+
+
+@pytest.mark.parametrize("platform", HOST_PLATFORMS)
+def test_case_only_difference_collides_on_every_platform(
+    tmp_path, capsys, monkeypatch, platform
+):
+    """ATK-R01: 판정은 빌드 호스트가 아니라 소비자 FS 기준이다 — 철자만 다른 경로는 어느
+    호스트에서 판정해도 같은 파일이다(대소문자를 무시하는 macOS·Windows 소비자)."""
     root = _collide(tmp_path, "plugins/common/.ALPHA-plugin/plugin.json")
-    rc = _run(root, "--write")
+    monkeypatch.setattr(sys, "platform", platform)
+    before = _snapshot(root)
+    assert _run(root, "--write") == 1
     out = capsys.readouterr().out
-    if sys.platform == "darwin":
-        assert rc == 1 and "✗ 출력 경로 충돌" in out, out
-    else:
-        assert rc == 0, out
+    assert (
+        "✗ 출력 경로 충돌 — alpha:plugins/common/.alpha-plugin/plugin.json ↔ gamma:"
+        in out
+    )
+    assert _snapshot(root) == before
 
 
 def test_write_only_names_other_failing_target(tmp_path, capsys):
@@ -1712,10 +1778,43 @@ def test_only_edition_target_is_exit_1_pointing_to_builder(
 
 def test_enabled_edition_target_is_not_generated_on_main(tmp_path):
     root = _edition_repo(tmp_path, enabled=True)
+    (root / "scripts").mkdir()
+    (root / "scripts/build-epsilon-branch.py").write_text("# builder\n")
     before = _files(root)
     assert _run(root, "--write") == 0
     assert _files(root) == before
     assert _run(root, "--check") == 0
+
+
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+def test_enabled_edition_requires_builder_file(tmp_path, capsys, mode):
+    """ATK-R02: enabled:true 는 판 빌더가 판을 쓸 수 있다는 뜻 — 빌더가 없으면 exit 1."""
+    root = _edition_repo(tmp_path, enabled=True)
+    before = _snapshot(root)
+    capsys.readouterr()
+    assert _run(root, mode) == 1
+    assert (
+        "enabled:true 인데 판 빌더 scripts/build-epsilon-branch.py 가 레포에 없다"
+        in (capsys.readouterr().out)
+    )
+    assert _snapshot(root) == before
+    (root / "scripts").mkdir()
+    (root / "scripts/build-epsilon-branch.py").mkdir()  # 디렉토리는 파일이 아니다
+    assert _run(root, mode) == 1
+
+
+def test_disabled_edition_does_not_require_builder_file(tmp_path):
+    root = _edition_repo(tmp_path, enabled=False)
+    assert not (root / "scripts/build-epsilon-branch.py").exists()
+    assert _run(root, "--check") == 0
+
+
+def test_enabled_edition_builder_path_cannot_escape(tmp_path, capsys):
+    outside = tmp_path / "builder.py"
+    outside.write_text("")
+    root = _edition_repo(tmp_path, enabled=True, editionBuilder=str(outside))
+    assert _run(root, "--check") == 1
+    assert "editionBuilder: 경로 탈출 차단" in capsys.readouterr().err
 
 
 # ── fail-closed 불변식: 디스크 + 계산된 생성물 (ATK-003·007) ─────────────────
@@ -1762,17 +1861,123 @@ def test_policy_turning_root_manifest_into_ap_v1_is_blocked(tmp_path, capsys, ar
     assert AP_URL not in (root / "plugins/common/plugin.json").read_text()
 
 
-@pytest.mark.parametrize("name", ["plugin.yaml", "plugin.yml"])
-def test_generated_artifact_at_native_manifest_path_is_blocked(tmp_path, capsys, name):
-    root = _fake_repo(tmp_path)
-    _edit_policy(
-        root,
-        lambda p: p["targets"][2].__setitem__("manifestPath", f"plugins/common/{name}"),
-    )
+def _set_alpha(key: str, value: object):
+    return lambda p: p["targets"][0].__setitem__(key, value)
+
+
+_NATIVE_SPELLINGS = [
+    # (라벨, 픽스처, 정책 편집, 발화해야 하는 문구, 그 문구가 나오는 스트림)
+    (
+        "yaml",
+        "plain",
+        lambda p: p["targets"][2].__setitem__(
+            "manifestPath", "plugins/common/plugin.yaml"
+        ),
+        "gamma:plugins/common/plugin.yaml 가 "
+        "plugins/common 의 Hermes 네이티브 매니페스트 자리다",
+        "out",
+    ),
+    (
+        "yml",
+        "plain",
+        lambda p: p["targets"][2].__setitem__(
+            "manifestPath", "plugins/common/plugin.yml"
+        ),
+        "Hermes 네이티브 매니페스트 자리",
+        "out",
+    ),
+    (
+        "dot-slash",
+        "plain",
+        lambda p: p["targets"][2].__setitem__(
+            "manifestPath", "./plugins/common/plugin.yaml"
+        ),
+        "Hermes 네이티브 매니페스트 자리",
+        "out",
+    ),
+    (
+        "parent-segment-yml",
+        "plain",
+        lambda p: p["targets"][2].__setitem__(
+            "manifestPath", "plugins/common/skills/../plugin.yml"
+        ),
+        "Hermes 네이티브 매니페스트 자리",
+        "out",
+    ),
+    (
+        "upper-case-yaml",
+        "plain",
+        lambda p: p["targets"][2].__setitem__(
+            "manifestPath", "plugins/common/Plugin.YAML"
+        ),
+        "Hermes 네이티브 매니페스트 자리",
+        "out",
+    ),
+    (
+        "parent-segment-json-ap",
+        "plain",
+        lambda p: p["targets"][2].update(
+            manifestPath="plugins/common/skills/../plugin.json", schemaUrl=AP_URL
+        ),
+        "$schema 를 AP v1 URL 로 쓴다",
+        "out",
+    ),
+    (
+        "upper-case-json-ap",
+        "plain",
+        lambda p: p["targets"][2].update(
+            manifestPath="plugins/common/PLUGIN.json", schemaUrl=AP_URL
+        ),
+        "$schema 를 AP v1 URL 로 쓴다",
+        "out",
+    ),
+    (
+        "hooks-path",
+        "hooks",
+        lambda p: p["targets"][0]["hooks"].__setitem__(
+            "path", "plugins/common/plugin.yaml"
+        ),
+        "alpha:plugins/common/plugin.yaml 가 "
+        "plugins/common 의 Hermes 네이티브 매니페스트 자리다",
+        "out",
+    ),
+    # skillInterface.path 는 스킬 디렉토리 안으로 봉쇄된다 — 같은 자리를 가리키면 탈출 차단이다
+    (
+        "skill-interface-path",
+        "skills",
+        lambda p: p["targets"][0]["skillInterface"].__setitem__(
+            "path", "../../plugin.yaml"
+        ),
+        "skillInterface.path: 경로 탈출 차단",
+        "err",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("label", "repo", "edit", "expect", "stream"), _NATIVE_SPELLINGS
+)
+@pytest.mark.parametrize("platform", HOST_PLATFORMS)
+def test_generated_artifact_at_native_manifest_path_is_blocked(
+    tmp_path, capsys, monkeypatch, label, repo, edit, expect, stream, platform
+):
+    if repo == "hooks":
+        root = _hooks_repo(tmp_path)
+    elif repo == "skills":
+        root = _skill_repo(tmp_path, {"plain": _TWO_SKILLS["plain"]})
+    else:
+        root = _fake_repo(tmp_path)
+    _edit_policy(root, edit)
+    monkeypatch.setattr(sys, "platform", platform)
     before = _snapshot(root)
-    for argv in (("--write", "--only", "gamma"), ("--check", "--only", "alpha")):
-        assert _run(root, *argv) == 1, argv
-        assert "Hermes 네이티브 매니페스트 자리" in capsys.readouterr().out, argv
+    for argv in (
+        ("--write", "--only", "gamma"),
+        ("--write",),
+        ("--check", "--only", "alpha"),
+    ):
+        assert _run(root, *argv) == 1, (label, argv)
+        captured = capsys.readouterr()
+        assert expect in getattr(captured, stream), (label, argv, captured)
     assert _snapshot(root) == before
 
 
@@ -1857,6 +2062,181 @@ def test_invariant_native_manifest_must_be_absent(
     assert _run(root, "--check", *extra) == 1
     out = capsys.readouterr().out
     assert f"fail-closed 불변식 위반 — plugins/common/{name} 이 있다" in out
+
+
+@pytest.mark.parametrize(
+    ("names", "natives", "manifests"),
+    [
+        (["plugin.json", "skills"], [], ["plugin.json"]),
+        (["PLUGIN.json"], [], ["PLUGIN.json"]),
+        (["Plugin.yaml", "README.md"], ["Plugin.yaml"], []),
+        (["PLUGIN.YML"], ["PLUGIN.YML"], []),
+        (["plugin.json", "Plugin.JSON"], [], ["Plugin.JSON", "plugin.json"]),
+        (["plugin.json5", "my-plugin.yaml"], [], []),
+    ],
+)
+def test_root_manifest_names_casefold(names, natives, manifests):
+    """ATK-R01: 디스크 판정의 이름 선택은 호스트 FS 와 무관한 casefold 비교다."""
+    assert _mod.root_manifest_names(names) == (natives, manifests)
+
+
+@pytest.mark.parametrize("platform", HOST_PLATFORMS)
+@pytest.mark.parametrize(
+    ("name", "content", "expect"),
+    [
+        ("Plugin.yaml", "name: x\n", "plugins/common/Plugin.yaml 이 있다"),
+        ("PLUGIN.yml", "name: x\n", "plugins/common/PLUGIN.yml 이 있다"),
+        (
+            "PLUGIN.json",
+            json.dumps({"$schema": AP_URL}),
+            "plugins/common/PLUGIN.json 의 $schema 가 AP v1 URL 이다",
+        ),
+    ],
+)
+def test_disk_invariant_catches_case_variants(
+    tmp_path, capsys, monkeypatch, platform, name, content, expect
+):
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    (root / "plugins/common" / name).write_text(content)
+    monkeypatch.setattr(sys, "platform", platform)
+    capsys.readouterr()
+    for argv in (("--check",), ("--check", "--only", "alpha"), ("--write",)):
+        assert _run(root, *argv) == 1, argv
+        assert expect in capsys.readouterr().out, argv
+
+
+def test_disk_invariant_multiple_manifest_candidates_is_undecidable(
+    tmp_path, capsys, monkeypatch
+):
+    """대소문자를 구분하는 FS 에서만 둘이 공존할 수 있다 — 나열 결과를 바꿔 끼워 재현한다."""
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    real = _mod.root_manifest_names
+    monkeypatch.setattr(
+        _mod,
+        "root_manifest_names",
+        lambda names: real([*names, "plugin.json", "PLUGIN.json"]),
+    )
+    capsys.readouterr()
+    assert _run(root, "--check") == 1
+    assert (
+        "fail-closed 불변식 판정 불가 — plugins/common 에 ['PLUGIN.json', 'plugin.json'] 가 함께 있다"
+        in (capsys.readouterr().out)
+    )
+
+
+# ── --write 도 디스크 불변식을 본다 (ATK-R06) ───────────────────────────────
+
+
+@pytest.mark.parametrize("name", ["plugin.yaml", "Plugin.yml"])
+def test_write_refuses_on_existing_dangling_native_manifest(tmp_path, capsys, name):
+    root = _fake_repo(tmp_path)
+    (root / "plugins/common" / name).symlink_to("nowhere.yaml")
+    before = _snapshot(root)
+    assert _run(root, "--write") == 1
+    out = capsys.readouterr().out
+    assert f"fail-closed 불변식 위반 — plugins/common/{name} 이 있다" in out
+    assert "아무것도 기록하지 않았다" in out
+    assert _snapshot(root) == before
+    assert not (root / ALPHA_MANIFEST).exists()
+
+
+def test_write_cannot_fill_dangling_plugin_json_symlink_with_ap_manifest(
+    tmp_path, capsys
+):
+    """`plugin.json -> x.json`(끊어진 링크)을 심고 x.json 을 AP $schema 로 생성하는 우회."""
+    root = _fake_repo(tmp_path)
+    _edit_policy(
+        root,
+        lambda p: p["targets"][2].update(
+            manifestPath="plugins/common/x.json", schemaUrl=AP_URL
+        ),
+    )
+    (root / "plugins/common/plugin.json").symlink_to("x.json")
+    before = _snapshot(root)
+    assert _run(root, "--write", "--only", "gamma") == 1
+    out = capsys.readouterr().out
+    assert "생성물 gamma:plugins/common/x.json 가 $schema 를 AP v1 URL 로 쓴다" in out
+    assert _snapshot(root) == before
+    assert not (root / "plugins/common/x.json").exists()
+
+
+def test_write_with_clean_disk_still_writes(tmp_path):
+    """양성 대조: 디스크 불변식이 깨끗하면 --write 는 그대로 기록한다."""
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    assert (root / ALPHA_MANIFEST).exists()
+
+
+# ── 남은 traceback 경로 (ATK-R03) ───────────────────────────────────────────
+
+
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+@pytest.mark.parametrize(
+    ("label", "mutate", "expect"),
+    [
+        (
+            "policy-top-level-list",
+            lambda root: (root / "packaging/targets.json").write_text("[]"),
+            "정책 파일 최상위는 JSON 객체여야 한다",
+        ),
+        (
+            "gate-not-object",
+            lambda root: _edit_policy(root, lambda p: p.__setitem__("gate", "yes")),
+            "정책 파일 gate 는 객체여야 한다",
+        ),
+        (
+            "ssot-not-object",
+            lambda root: (
+                root / "plugins/common/.claude-plugin/plugin.json"
+            ).write_text("[]"),
+            "SSOT 매니페스트 최상위는 JSON 객체여야 한다",
+        ),
+    ],
+)
+def test_policy_shape_errors_are_clean_exit_1(
+    tmp_path, capsys, mode, label, mutate, expect
+):
+    root = _fake_repo(tmp_path)
+    mutate(root)
+    assert _run(root, mode) == 1, label
+    assert expect in capsys.readouterr().err, label
+
+
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+@pytest.mark.parametrize(
+    "entries", [{"script": "hooks/inject.py"}, "hooks/inject.py", None]
+)
+def test_hook_event_entries_must_be_a_list(tmp_path, capsys, mode, entries):
+    root = _hooks_repo(tmp_path)
+    _edit_policy(
+        root,
+        lambda p: p["targets"][0]["hooks"]["events"].__setitem__(
+            "SessionStart", entries
+        ),
+    )
+    assert _run(root, mode) == 1
+    assert (
+        "hooks.events.SessionStart: 엔트리 목록이 필요하다" in capsys.readouterr().err
+    )
+
+
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+def test_marketplace_requires_ssot_name(tmp_path, capsys, mode):
+    root = _fake_repo(tmp_path)
+    ssot = {k: v for k, v in SSOT.items() if k != "name"}
+    (root / "plugins/common/.claude-plugin/plugin.json").write_text(json.dumps(ssot))
+
+    def no_name(p):
+        for t in p["targets"]:
+            t["requiredFields"] = ["version"]
+
+    _edit_policy(root, no_name)
+    assert _run(root, mode) == 1
+    assert "타겟 'alpha' marketplace 의 SSOT 매니페스트: 필수 키 'name'" in (
+        capsys.readouterr().err
+    )
 
 
 # ── 실제 레포(읽기 전용) ────────────────────────────────────────────────────

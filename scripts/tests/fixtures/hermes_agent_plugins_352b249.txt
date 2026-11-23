@@ -4,6 +4,10 @@
 # file:   hermes_cli/agent_plugins.py
 # blob:   6cece2b262168d1ddb6d146057b9224fd72d3d9b
 # lines:  46-57, 212-217, 230-261
+# recheck: git -C <hermes-agent clone> show 352b249f67fb6a4a7d7904acaca9dd410db229e0:hermes_cli/agent_plugins.py | sed -n '46,57p;212,217p;230,261p'
+#          and git -C <clone> rev-parse 352b249f67fb6a4a7d7904acaca9dd410db229e0:hermes_cli/agent_plugins.py == blob above
+# limit:  offline, this repo cannot detect whether the excerpt still matches upstream. The blob sha is
+#         the anchor; set HERMES_AGENT_CLONE=<clone> to run the optional comparison test.
 # read:   2026-11-24, as data only (git show; never imported or executed)
 # format: each source line is '<line number>|<original text>'; '...' separates ranges.
 # used by: scripts/tests/test_build_targets.py (AP v1 constants in scripts/build-targets.py must match)

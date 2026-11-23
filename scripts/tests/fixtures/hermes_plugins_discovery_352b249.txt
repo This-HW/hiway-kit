@@ -4,6 +4,10 @@
 # file:   hermes_cli/plugins_discovery.py
 # blob:   24685d94a5ef160a16bced15a252b522e19aeae3
 # lines:  165-177
+# recheck: git -C <hermes-agent clone> show 352b249f67fb6a4a7d7904acaca9dd410db229e0:hermes_cli/plugins_discovery.py | sed -n '165,177p'
+#          and git -C <clone> rev-parse 352b249f67fb6a4a7d7904acaca9dd410db229e0:hermes_cli/plugins_discovery.py == blob above
+# limit:  offline, this repo cannot detect whether the excerpt still matches upstream. The blob sha is
+#         the anchor; set HERMES_AGENT_CLONE=<clone> to run the optional comparison test.
 # read:   2026-11-24, as data only (git show; never imported or executed)
 # format: each source line is '<line number>|<original text>'.
 # used by: scripts/tests/test_build_targets.py (HERMES_NATIVE_MANIFESTS in scripts/build-targets.py)
