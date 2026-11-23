@@ -12,7 +12,7 @@ Hermes 는 `plugin.json` 을 **Agent Plugins(AP) v1 `$schema`** 일 때만 받�
 ## 판 변환 (전부 fail-closed — 기대와 다르면 exit 1)
 
 1. **빼기** — `EXCLUDED`: `hooks/`·`setup/`, 사용자 파일을 쓰는 `harness-export`, Hermes 내장 스킬 생성과
-   경합하는 `skill-forge`, 훅만 읽는 `rules/CHECKSUMS.sha256`·`rules/VERSION`. 원본에 없으면 멈춘다
+   경합하는 `skill-forge`, 훅만 읽는 `rules/CHECKSUMS.sha256`. 원본에 없으면 멈춘다
    (이름이 바뀐 것이다 — 아무것도 빼지 않은 트리를 판이라 부르지 않는다). `tools/` 는 **싣는다**
    (스킬 도구·규칙 내보내기 CLI).
 2. **루트 매니페스트** — `plugins/common/plugin.json` 을 `build-targets.py` 의 `load_policy`·`load_ssot`·
@@ -113,8 +113,10 @@ EXCLUDED = {
     f"{PLUGIN_ROOT}/setup": "session-check·git 훅 — Claude Code·git 설치 경로 전용",
     f"{PLUGIN_ROOT}/skills/harness-export": "사용자 파일을 쓰는 스킬 — consumer-footprint 규칙 1·4, CLI 로 대신 안내",
     f"{PLUGIN_ROOT}/skills/skill-forge": "Hermes 내장 스킬 생성과 경합(판정 기준 5)",
-    f"{PLUGIN_ROOT}/rules/CHECKSUMS.sha256": "훅(session-start)만 읽는다",
-    f"{PLUGIN_ROOT}/rules/VERSION": "훅만 읽는다",
+    f"{PLUGIN_ROOT}/rules/CHECKSUMS.sha256": "훅(session-start)만 읽는다 — tools/ 참조 0건(grep)",
+    # rules/VERSION 은 **빼지 않는다**: tools/export_harness.py(`_rules_version`)가 마커 sha 입력으로
+    # 필수로 읽는다. "훅만 읽는다"로 오분류해 뺐다가 H1 P4 실측에서 판의 규칙 내보내기가 rc 1 로 죽었다.
+    # 회귀는 실레포 판을 --out 으로 내보내 도구를 실제로 돌리는 테스트가 막는다.
 }
 
 #: `using-hiway-kit` description — 원본 원문(정확 일치)과 Hermes 판 문구. Hermes 에는 세션 시작 주입 훅이

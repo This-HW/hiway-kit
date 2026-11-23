@@ -219,7 +219,6 @@ def test_check_builds_the_hermes_edition(
         "hooks/session-start.py",
         "setup/pre-commit",
         "rules/CHECKSUMS.sha256",
-        "rules/VERSION",
         "skills/harness-export/SKILL.md",
         "skills/skill-forge/SKILL.md",
     ):
@@ -228,6 +227,7 @@ def test_check_builds_the_hermes_edition(
         ".claude-plugin/plugin.json",
         "tools/export_harness.py",
         "rules/r.md",
+        "rules/VERSION",  # tools/export_harness.py 가 필수로 읽는다(H1 P4 실측 결함)
         "plugin.json",
     ):
         assert f"{P}/{kept}" in files, kept
@@ -344,7 +344,6 @@ def test_readme_is_the_hermes_edition_readme(repo: Path) -> None:
         "skills/harness-export",
         "skills/skill-forge",
         "rules/CHECKSUMS.sha256",
-        "rules/VERSION",
     ],
 )
 def test_missing_excluded_path_stops(repo: Path, gone: str) -> None:
@@ -697,3 +696,77 @@ def test_real_repo_head_check_passes() -> None:
 def test_real_repo_using_description_matches_constant() -> None:
     text = (REPO_ROOT / P / "skills/using-hiway-kit/SKILL.md").read_text()
     assert f"\ndescription: {mod.EXPECTED_USING_DESCRIPTION}\n" in text
+
+
+# --- 판의 도구가 판 안에서 실제로 돈다 (H1 P4 실측 결함의 클래스 회귀) ----------------------------------
+#
+# 판에서 파일을 뺄 때 "훅만 읽는다"는 분류가 틀리면(rules/VERSION — export_harness.py 가 필수로 읽는다)
+# 판의 유일한 규칙 내보내기 경로가 죽는다. 정적 판정은 도구가 여는 경로를 문자열로 다 찾아내지 못하므로
+# (경로가 `plugin_root / "rules" / "VERSION"` 처럼 조립된다) **실레포 판을 --out 으로 내보내 실제로 돌린다**.
+
+
+def _tool_env() -> dict[str, str]:
+    # 셸에 남은 다른 설치의 플러그인 루트를 집지 않게 — --plugin-root 만으로 돌아야 한다
+    return {k: v for k, v in os.environ.items() if k != "CLAUDE_PLUGIN_ROOT"}
+
+
+@pytest.fixture(scope="module")
+def real_repo_out(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    out = tmp_path_factory.mktemp("hermes-out") / "edition"
+    proc = subprocess.run(
+        [sys.executable, str(SCRIPT), "--out", str(out), "--source", "HEAD"],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return out
+
+
+def test_real_repo_edition_export_harness_runs(real_repo_out: Path, tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    proc = subprocess.run(
+        [
+            sys.executable,
+            str(real_repo_out / "tools" / "export_harness.py"),
+            "--plugin-root",
+            str(real_repo_out),
+            "--target",
+            str(project),
+            "--entrypoints",
+            "AGENTS.md",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=project,
+        env=_tool_env(),
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    agents = (project / "AGENTS.md").read_text()
+    version = (real_repo_out / "rules" / "VERSION").read_text().strip()
+    assert re.search(
+        rf"(?m)^<!-- kit:begin rules-v{re.escape(version)} sha256:[0-9a-f]{{64}} -->$", agents
+    ), agents[:400]
+    assert re.search(r"(?m)^<!-- kit:end -->$", agents)
+
+
+def test_real_repo_edition_checklist_runs(real_repo_out: Path, tmp_path: Path) -> None:
+    tool = str(real_repo_out / "tools" / "checklist.py")
+    plan = tmp_path / "plan"
+    plan.mkdir()
+    item = '[{"id": "a", "description": "d", "acceptance": "x", "verify": "true"}]'
+    for args in (["init", str(plan), item], ["show", str(plan)]):
+        proc = subprocess.run(
+            [sys.executable, tool, *args],
+            capture_output=True,
+            text=True,
+            cwd=tmp_path,
+            env=_tool_env(),
+            check=False,
+        )
+        assert proc.returncode == 0, (args[0], proc.stdout + proc.stderr)
+    assert (plan / "checklist.json").is_file()
