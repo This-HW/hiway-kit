@@ -1,0 +1,22 @@
+# Hermes plugin discovery: native plugin.yaml/.yml wins over portable plugin.json - verbatim excerpt.
+# repo:   https://github.com/NousResearch/hermes-agent
+# commit: 352b249f67fb6a4a7d7904acaca9dd410db229e0
+# file:   hermes_cli/plugins_discovery.py
+# blob:   24685d94a5ef160a16bced15a252b522e19aeae3
+# lines:  165-177
+# read:   2026-11-24, as data only (git show; never imported or executed)
+# format: each source line is '<line number>|<original text>'.
+# used by: scripts/tests/test_build_targets.py (HERMES_NATIVE_MANIFESTS in scripts/build-targets.py)
+165|            manifest_file = next((f for f in (child / "plugin.yaml", child / "plugin.yml") if f.exists()), None)
+166|            portable_file = child / "plugin.json"
+167|            has_portable = portable_file.exists() or portable_file.is_symlink()
+168|        except OSError as exc:
+169|            # stat() raises (not "False") on an unsearchable directory — Windows ACLs (WinError 5) or a
+170|            # mode-000 dir; one such plugin must not abort discovery for every other plugin (#111804).
+171|            logger.warning("Skipping unreadable plugin directory %s: %s", child, exc)
+172|            continue
+173|        if manifest_file is not None:
+174|            manifest = parse_manifest_file(manifest_file, child, source, prefix)
+175|            if manifest is not None:
+176|                manifests.append(manifest)
+177|        elif has_portable:

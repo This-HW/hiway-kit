@@ -1,0 +1,61 @@
+# Agent Plugins v1 manifest constraints as implemented by Hermes - verbatim excerpt.
+# repo:   https://github.com/NousResearch/hermes-agent
+# commit: 352b249f67fb6a4a7d7904acaca9dd410db229e0
+# file:   hermes_cli/agent_plugins.py
+# blob:   6cece2b262168d1ddb6d146057b9224fd72d3d9b
+# lines:  46-57, 212-217, 230-261
+# read:   2026-11-24, as data only (git show; never imported or executed)
+# format: each source line is '<line number>|<original text>'; '...' separates ranges.
+# used by: scripts/tests/test_build_targets.py (AP v1 constants in scripts/build-targets.py must match)
+46|PLUGIN_SCHEMA_V1 = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+47|MCP_SCHEMA_V1 = "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json"
+48|
+49|_PLUGIN_FIELDS = {"$schema", "name", "version", "description", "author", "homepage", "repository",
+50|                  "license", "keywords", "extensions"}
+51|_AUTHOR_FIELDS = {"name", "email", "url"}
+52|_STDIO_FIELDS = {"type", "command", "args", "env", "cwd"}
+53|_REMOTE_FIELDS = {"type", "url", "headers"}
+54|_PLUGIN_NAME_RE = re.compile(r"^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
+55|_SKILL_NAME_RE = re.compile(r"^(?!.*--)[a-z0-9]+(?:-[a-z0-9]+)*$")
+56|_PLACEHOLDER_RE = re.compile(r"\$\{(PLUGIN_ROOT|PLUGIN_DATA)\}")
+57|_HEADER_NAME_RE = re.compile(r"^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$")
+...
+212|def _all_str(values) -> bool:
+213|    return all(isinstance(v, str) for v in values)
+214|
+215|
+216|def _str_map(value: object) -> bool:
+217|    return isinstance(value, dict) and _all_str(value) and _all_str(value.values())
+...
+230|def _validate_manifest(root: Path) -> tuple[dict, list[AgentPluginDiagnostic]]:
+231|    manifest_path = root / "plugin.json"
+232|    if not _inside(manifest_path, root) or not manifest_path.is_file():
+233|        raise AgentPluginError("plugin.json must be a regular file within the plugin root")
+234|    manifest = _read_json_object(manifest_path, label="plugin.json")
+235|    diagnostics: list[AgentPluginDiagnostic] = []
+236|    for field in sorted(set(manifest) - _PLUGIN_FIELDS):
+237|        diagnostics.append(AgentPluginDiagnostic("manifest", f"ignored unknown top-level field: {field}"))
+238|        manifest.pop(field)
+239|    if manifest.get("$schema") != PLUGIN_SCHEMA_V1:
+240|        raise AgentPluginError("plugin.json declares an unsupported or missing Agent Plugins schema")
+241|    name = manifest.get("name")
+242|    if not isinstance(name, str) or not 1 <= len(name) <= 64 or _PLUGIN_NAME_RE.fullmatch(name) is None:
+243|        raise AgentPluginError("plugin.json name does not satisfy v1 constraints")
+244|    for field in ("version", "description", "homepage", "repository", "license"):
+245|        if field in manifest and not isinstance(manifest[field], str):
+246|            raise AgentPluginError(f"plugin.json {field} must be a string")
+247|    keywords = manifest.get("keywords", [])
+248|    if not isinstance(keywords, list) or not _all_str(keywords):
+249|        raise AgentPluginError("plugin.json keywords must be an array of strings")
+250|    author = manifest.get("author", {})
+251|    if not isinstance(author, dict):
+252|        raise AgentPluginError("plugin.json author must be an object")
+253|    if set(author) - _AUTHOR_FIELDS or not _all_str(author.values()):
+254|        raise AgentPluginError("plugin.json author may contain only string name, email, and url fields")
+255|    extensions = manifest.get("extensions", {})
+256|    if not isinstance(extensions, dict):
+257|        diagnostics.append(AgentPluginDiagnostic("manifest", "ignored non-object extensions field"))
+258|        manifest.pop("extensions")
+259|    elif any(not isinstance(value, dict) for value in extensions.values()):
+260|        raise AgentPluginError("plugin.json extension namespace values must be objects")
+261|    return manifest, diagnostics

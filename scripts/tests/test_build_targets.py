@@ -1016,9 +1016,11 @@ def test_real_repo_skill_interfaces_match_frontmatter():
 # `delivery: "edition"` 타겟은 main 에 파일을 만들지 않는다. build-targets 는 매니페스트를
 # 계산만 해 Agent Plugins v1 정적 제약을 판정한다(enabled 와 무관). 판 트리는 판 빌더가 만든다.
 # 판정 상수는 테스트에도 따로 적는다 — 정책·코드와 독립된 오라클이어야 정책 파손을 잡는다.
-# 출처: hermes_cli/agent_plugins.py:46-262 @352b249 (docs/specs/2026-11-24-hermes-edition/).
+# 원문: scripts/tests/fixtures/hermes_agent_plugins_352b249.txt (아래 발췌 대조 테스트).
 
 AP_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+FIXTURES = SCRIPTS_DIR / "tests" / "fixtures"
+_DROP = object()
 
 EDITION = {
     "id": "epsilon",
@@ -1031,53 +1033,65 @@ EDITION = {
 }
 
 
+def _edit_policy(root: Path, fn) -> None:
+    path = root / "packaging" / "targets.json"
+    policy = json.loads(path.read_text())
+    fn(policy)
+    path.write_text(json.dumps(policy))
+
+
+def _apply(base: dict, overrides: dict) -> dict:
+    out = dict(base)
+    for key, value in overrides.items():
+        if value is _DROP:
+            out.pop(key, None)
+        else:
+            out[key] = value
+    return out
+
+
 def _edition_repo(
     tmp_path: Path, *, ssot: dict | None = None, **overrides: object
 ) -> Path:
-    """기본 픽스처 + edition 타겟 하나. alpha·gamma 는 미리 생성해 둔다(드리프트 0 상태)."""
+    """기본 픽스처 + edition 타겟 하나. main 생성물(alpha·gamma)은 edition 을 넣기 **전에**
+    만들어 둔다 — edition 판정이 실패하면 --write 도 막히므로(정책 결함), 실패 원인을 좁힌다."""
     root = _fake_repo(tmp_path)
     if ssot is not None:
         (root / "plugins/common/.claude-plugin/plugin.json").write_text(
             json.dumps(ssot), encoding="utf-8"
         )
-    path = root / "packaging" / "targets.json"
-    policy = json.loads(path.read_text())
-    edition = dict(EDITION)
-    for key, value in overrides.items():
-        if value is _DROP:
-            edition.pop(key, None)
-        else:
-            edition[key] = value
-    policy["targets"].append(edition)
-    path.write_text(json.dumps(policy))
     assert _run(root, "--write") == 0
+    _edit_policy(root, lambda p: p["targets"].append(_apply(EDITION, overrides)))
     return root
-
-
-_DROP = object()
 
 
 def _files(root: Path) -> set[str]:
     return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()}
 
 
+def _snapshot(root: Path) -> dict[str, bytes]:
+    return {f: (root / f).read_bytes() for f in _files(root)}
+
+
+def _bad_ssot(**changes: object) -> dict:
+    return {**SSOT, **changes}
+
+
 def test_edition_target_creates_nothing_and_check_passes(tmp_path, capsys):
-    root = tmp_path / "plain"
-    root.mkdir()
-    plain = _fake_repo(root)
+    plain = _fake_repo(tmp_path / "plain")
     assert _run(plain, "--write") == 0
     expected = _files(plain)
 
     root = _edition_repo(tmp_path)
-    capsys.readouterr()
+    assert _run(root, "--write") == 0
     # 같은 정책 + edition 타겟 하나 — --write 결과 파일 집합이 늘지 않는다
     assert _files(root) == expected
     generated = _files(root) - {"packaging/targets.json"}
     assert not any(AP_URL in (root / f).read_text() for f in generated)
+    capsys.readouterr()
     assert _run(root, "--check") == 0
     out = capsys.readouterr().out
-    assert "epsilon" in out
-    assert "AP v1" in out
+    assert "✓ edition 'epsilon' — AP v1 매니페스트 계산 판정 통과" in out
 
 
 @pytest.mark.parametrize("enabled", [False, True])
@@ -1085,66 +1099,123 @@ def test_edition_verdict_runs_regardless_of_enabled(tmp_path, capsys, enabled):
     root = _edition_repo(tmp_path, enabled=enabled, schemaUrl=AP_URL + "x")
     capsys.readouterr()
     assert _run(root, "--check") == 1
-    assert "epsilon" in capsys.readouterr().out
+    assert "✗ edition 'epsilon' AP v1 판정 실패 — $schema 가 AP v1 URL 과 다르다" in (
+        capsys.readouterr().out
+    )
 
 
-def _bad_ssot(**changes: object) -> dict:
-    out = dict(SSOT)
-    out.update(changes)
-    return out
+_VERDICT_CASES = [
+    # (라벨, SSOT, edition 덮어쓰기, 발화해야 하는 판정 문구)
+    (
+        "schema-other-version",
+        None,
+        {"schemaUrl": AP_URL.replace("1.0.0", "1.0.1")},
+        "$schema 가 AP v1 URL 과 다르다",
+    ),
+    (
+        "schema-missing",
+        None,
+        {"schemaUrl": _DROP},
+        "$schema 가 AP v1 URL 과 다르다 — None",
+    ),
+    (
+        "disallowed-top-level",
+        _bad_ssot(icon="./icon.png"),
+        {"passthroughFields": [*EDITION["passthroughFields"], "icon"]},
+        "허용하지 않는 최상위 필드 — ['icon']",
+    ),
+    (
+        "component-field",
+        None,
+        {"componentFields": {"skills": "./skills/"}},
+        "허용하지 않는 최상위 필드 — ['skills']",
+    ),
+    ("name-uppercase", _bad_ssot(name="Fixture-Kit"), {}, "name 이 AP v1 규칙"),
+    ("name-double-dash", _bad_ssot(name="fixture--kit"), {}, "name 이 AP v1 규칙"),
+    ("name-double-dot", _bad_ssot(name="fixture..kit"), {}, "name 이 AP v1 규칙"),
+    ("name-leading-dash", _bad_ssot(name="-kit"), {}, "name 이 AP v1 규칙"),
+    ("name-trailing-dot", _bad_ssot(name="kit."), {}, "name 이 AP v1 규칙"),
+    ("name-trailing-newline", _bad_ssot(name="kit\n"), {}, "name 이 AP v1 규칙"),
+    ("name-65-chars", _bad_ssot(name="a" * 65), {}, "name 이 AP v1 규칙"),
+    ("name-empty", _bad_ssot(name=""), {}, "name 이 AP v1 규칙"),
+    ("name-not-string", _bad_ssot(name=7), {}, "name 이 AP v1 규칙"),
+    (
+        "version-not-string",
+        _bad_ssot(version=1),
+        {},
+        "version 는 문자열이어야 한다 — int",
+    ),
+    (
+        "description-not-string",
+        _bad_ssot(description=["d"]),
+        {},
+        "description 는 문자열이어야 한다 — list",
+    ),
+    (
+        "homepage-not-string",
+        _bad_ssot(homepage={"u": "x"}),
+        {},
+        "homepage 는 문자열이어야 한다 — dict",
+    ),
+    (
+        "repository-not-string",
+        _bad_ssot(repository={"url": "x"}),
+        {},
+        "repository 는 문자열이어야 한다 — dict",
+    ),
+    (
+        "license-not-string",
+        _bad_ssot(license=None),
+        {},
+        "license 는 문자열이어야 한다 — NoneType",
+    ),
+    (
+        "keywords-string",
+        _bad_ssot(keywords="a,b"),
+        {},
+        "keywords 는 문자열 배열이어야 한다",
+    ),
+    (
+        "keywords-non-str-item",
+        _bad_ssot(keywords=["a", 1]),
+        {},
+        "keywords 는 문자열 배열이어야 한다",
+    ),
+    (
+        "author-extra-key",
+        _bad_ssot(author={"name": "x", "twitter": "y"}),
+        {},
+        "위반 키 ['twitter']",
+    ),
+    ("author-non-string", _bad_ssot(author={"name": 1}), {}, "위반 키 ['name']"),
+    (
+        "author-string",
+        _bad_ssot(author="Fixture Org"),
+        {},
+        "author 는 객체여야 한다 — str",
+    ),
+]
 
 
-@pytest.mark.parametrize(
-    ("label", "ssot", "overrides"),
-    [
-        ("schema-other-version", None, {"schemaUrl": AP_URL.replace("1.0.0", "1.0.1")}),
-        ("schema-missing", None, {"schemaUrl": _DROP}),
-        (
-            "disallowed-top-level",
-            _bad_ssot(icon="./icon.png"),
-            {"passthroughFields": [*EDITION["passthroughFields"], "icon"]},
-        ),
-        ("component-field", None, {"componentFields": {"skills": "./skills/"}}),
-        ("name-uppercase", _bad_ssot(name="Fixture-Kit"), {}),
-        ("name-double-dash", _bad_ssot(name="fixture--kit"), {}),
-        ("name-double-dot", _bad_ssot(name="fixture..kit"), {}),
-        ("name-leading-dash", _bad_ssot(name="-kit"), {}),
-        ("name-trailing-dot", _bad_ssot(name="kit."), {}),
-        ("name-trailing-newline", _bad_ssot(name="kit\n"), {}),
-        ("name-65-chars", _bad_ssot(name="a" * 65), {}),
-        ("name-empty", _bad_ssot(name=""), {}),
-        ("name-not-string", _bad_ssot(name=7), {}),
-        ("author-extra-key", _bad_ssot(author={"name": "x", "twitter": "y"}), {}),
-        ("author-non-string", _bad_ssot(author={"name": 1}), {}),
-        ("author-string", _bad_ssot(author="Fixture Org"), {}),
-    ],
-)
-def test_edition_ap_v1_verdict_failures(tmp_path, capsys, label, ssot, overrides):
-    root = tmp_path / "r"
-    root.mkdir()
-    built = _fake_repo(root)
-    if ssot is not None:
-        (built / "plugins/common/.claude-plugin/plugin.json").write_text(
-            json.dumps(ssot), encoding="utf-8"
-        )
-    path = built / "packaging" / "targets.json"
-    policy = json.loads(path.read_text())
-    edition = dict(EDITION)
-    for key, value in overrides.items():
-        if value is _DROP:
-            edition.pop(key, None)
-        else:
-            edition[key] = value
-    policy["targets"].append(edition)
-    path.write_text(json.dumps(policy))
-    # alpha·gamma 는 edition 과 무관하게 일치시켜 둔다 — 실패 원인을 edition 하나로 좁힌다
-    assert _run(built, "--write", "--only", "alpha") == 0
-    assert _run(built, "--write", "--only", "gamma") == 0
+@pytest.mark.parametrize(("label", "ssot", "overrides", "expect"), _VERDICT_CASES)
+def test_edition_ap_v1_verdict_failures(
+    tmp_path, capsys, label, ssot, overrides, expect
+):
+    root = _edition_repo(tmp_path, ssot=ssot, **overrides)
+    before = _snapshot(root)
     capsys.readouterr()
-    assert _run(built, "--check") == 1, label
+    assert _run(root, "--check") == 1, label
     captured = capsys.readouterr()
-    assert "epsilon" in captured.out + captured.err, label
+    assert "✗ edition 'epsilon' AP v1 판정 실패" in captured.out, label
+    assert expect in captured.out, (label, captured.out)
     assert "Traceback" not in captured.err
+    # --check --only <main 타겟> 도 edition 판정을 돈다 (ATK-003)
+    assert _run(root, "--check", "--only", "alpha") == 1, label
+    assert expect in capsys.readouterr().out, label
+    # --write 는 정책 결함이면 아무것도 쓰지 않는다
+    assert _run(root, "--write") == 1, label
+    assert "아무것도 기록하지 않았다" in capsys.readouterr().out, label
+    assert _snapshot(root) == before, label
 
 
 @pytest.mark.parametrize("name", ["a", "a" * 64, "fixture-kit", "kit.v2", "0x"])
@@ -1155,19 +1226,188 @@ def test_edition_ap_v1_name_boundaries_pass(tmp_path, name):
 
 def test_edition_author_with_all_string_fields_passes(tmp_path):
     author = {"name": "x", "email": "x@example.com", "url": "https://example.com"}
-    root = _edition_repo(tmp_path, ssot=_bad_ssot(author=author))
+    full = _bad_ssot(
+        author=author,
+        homepage="https://example.com",
+        repository="https://example.com/r",
+        license="MIT",
+        keywords=["a", "b"],
+    )
+    root = _edition_repo(tmp_path, ssot=full)
     assert _run(root, "--check") == 0
 
 
 def test_ap_v1_violations_function_direct():
     good = {"$schema": AP_URL, "name": "kit", "version": "1", "description": "d"}
-    assert _mod.ap_v1_violations(good) == []
-    assert _mod.ap_v1_violations({**good, "extensions": {}}) == []
-    assert _mod.ap_v1_violations({**good, "hooks": "./h.json"})
-    assert _mod.ap_v1_violations({k: v for k, v in good.items() if k != "$schema"})
+    v = _mod.ap_v1_violations
+    assert v(good) == []
+    assert v({**good, "extensions": {"com.example": {}}}) == []
+    assert v({**good, "keywords": []}) == []
+    assert any("최상위 필드 — ['hooks']" in x for x in v({**good, "hooks": "./h.json"}))
+    assert any(
+        "$schema" in x for x in v({k: x for k, x in good.items() if k != "$schema"})
+    )
+    assert any("extensions 는 객체여야" in x for x in v({**good, "extensions": []}))
+    assert any(
+        "네임스페이스 값은 객체" in x
+        for x in v({**good, "extensions": {"com.example": 1}})
+    )
 
 
-# ── manifestPath 무조건 인덱싱(KeyError) 회귀 ───────────────────────────────
+# ── AP v1 상수 ↔ Hermes 원문 발췌 대조 (ATK-002) ─────────────────────────────
+
+UPSTREAM_SHA = "352b249f67fb6a4a7d7904acaca9dd410db229e0"
+
+
+def _excerpt(name: str) -> tuple[dict[str, str], list[list[tuple[int, str]]]]:
+    """fixture 를 (헤더, 연속 줄 묶음들) 로 읽는다. 줄 번호 연속성은 여기서 단언한다."""
+    header: dict[str, str] = {}
+    chunks: list[list[tuple[int, str]]] = [[]]
+    for line in (FIXTURES / name).read_text(encoding="utf-8").splitlines():
+        if line.startswith("#") and not chunks[0]:
+            key, sep, value = line[1:].partition(":")
+            if sep:
+                header[key.strip()] = value.strip()
+        elif line == "...":
+            chunks.append([])
+        else:
+            number, sep, text = line.partition("|")
+            assert sep, line
+            chunks[-1].append((int(number), text))
+    for chunk in chunks:
+        numbers = [n for n, _ in chunk]
+        assert numbers == list(range(numbers[0], numbers[0] + len(numbers))), name
+    ranges = ", ".join(f"{c[0][0]}-{c[-1][0]}" for c in chunks)
+    assert header["lines"] == ranges, (header["lines"], ranges)
+    assert header["commit"] == UPSTREAM_SHA
+    return header, chunks
+
+
+def _upstream_ast(chunks: list[list[tuple[int, str]]]):
+    import ast
+
+    return [ast.parse("\n".join(text for _, text in chunk)) for chunk in chunks]
+
+
+def test_ap_v1_constants_match_upstream_excerpt():
+    import ast
+
+    header, chunks = _excerpt("hermes_agent_plugins_352b249.txt")
+    assert header["file"] == "hermes_cli/agent_plugins.py"
+    assigned: dict[str, ast.expr] = {}
+    validate = None
+    for tree in _upstream_ast(chunks):
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+                assigned[node.targets[0].id] = node.value
+            if isinstance(node, ast.FunctionDef) and node.name == "_validate_manifest":
+                validate = node
+    assert ast.literal_eval(assigned["PLUGIN_SCHEMA_V1"]) == _mod.AP_V1_SCHEMA_URL
+    assert ast.literal_eval(assigned["_PLUGIN_FIELDS"]) == set(_mod.AP_V1_TOP_LEVEL)
+    assert ast.literal_eval(assigned["_AUTHOR_FIELDS"]) == set(_mod.AP_V1_AUTHOR_FIELDS)
+    regex_call = assigned["_PLUGIN_NAME_RE"]
+    assert isinstance(regex_call, ast.Call)
+    assert ast.literal_eval(regex_call.args[0]) == _mod.AP_V1_NAME_RE.pattern
+    assert validate is not None
+
+    # name 길이: `1 <= len(name) <= 64`
+    bounds = [
+        (ast.literal_eval(n.left), ast.literal_eval(n.comparators[-1]))
+        for n in ast.walk(validate)
+        if isinstance(n, ast.Compare)
+        and isinstance(n.comparators[0], ast.Call)
+        and ast.unparse(n.comparators[0]) == "len(name)"
+    ]
+    assert bounds == [(_mod.AP_V1_NAME_MIN, _mod.AP_V1_NAME_MAX)]
+    # 문자열 필드: `for field in (...): ... isinstance(manifest[field], str)`
+    loops = [
+        ast.literal_eval(n.iter)
+        for n in ast.walk(validate)
+        if isinstance(n, ast.For)
+        and ast.unparse(n.target) == "field"
+        and isinstance(n.iter, ast.Tuple)
+    ]
+    assert loops == [tuple(_mod.AP_V1_STRING_FIELDS)]
+    source = ast.unparse(validate)
+    # keywords·author·extensions 타입 검사가 원문에 있다 — 판정이 이것을 흡수했다
+    assert "isinstance(keywords, list)" in source
+    assert "_all_str(keywords)" in source
+    assert "isinstance(author, dict)" in source
+    assert "set(author) - _AUTHOR_FIELDS or not _all_str(author.values())" in source
+    assert (
+        "any((not isinstance(value, dict) for value in extensions.values()))" in source
+    )
+
+
+def test_native_manifest_names_match_upstream_excerpt():
+    import re as _re
+
+    header, chunks = _excerpt("hermes_plugins_discovery_352b249.txt")
+    assert header["file"] == "hermes_cli/plugins_discovery.py"
+    text = {n: t for chunk in chunks for n, t in chunk}
+    native_line = next(t for t in text.values() if "manifest_file = next(" in t)
+    assert tuple(_re.findall(r'child / "([^"]+)"', native_line)) == (
+        _mod.HERMES_NATIVE_MANIFESTS
+    )
+    portable_line = next(t for t in text.values() if "portable_file = " in t)
+    assert _re.findall(r'child / "([^"]+)"', portable_line) == [
+        _mod.AP_V1_MANIFEST_NAME
+    ]
+
+
+# ── 타겟 id 구조 검증 (ATK-001) ─────────────────────────────────────────────
+
+
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+def test_duplicate_target_id_is_exit_1(tmp_path, capsys, mode):
+    """codex 블록을 복사하며 id 를 그대로 둔 경우 — 앞 타겟 생성물이 사라지는 false green."""
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    dup = {
+        "id": "gamma",
+        "enabled": True,
+        "manifestPath": "plugins/common/gamma-copy.json",
+        "requiredFields": ["name"],
+    }
+    _edit_policy(root, lambda p: p["targets"].append(dup))
+    # 원래 gamma 생성물을 지워도 통과하면 false green 이다
+    (root / "plugins/common/gamma-plugin.json").unlink()
+    before = _snapshot(root)
+    capsys.readouterr()
+    assert _run(root, mode) == 1
+    assert "id 'gamma' 중복 — targets[2] 와 같다" in capsys.readouterr().err
+    assert _snapshot(root) == before
+
+
+@pytest.mark.parametrize("bad", [_DROP, "", "   ", 7, None, ["alpha"]])
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+def test_target_id_must_be_nonempty_string(tmp_path, capsys, bad, mode):
+    root = _fake_repo(tmp_path)
+    _edit_policy(
+        root,
+        lambda p: p["targets"].__setitem__(1, _apply(p["targets"][1], {"id": bad})),
+    )
+    assert _run(root, mode) == 1
+    err = capsys.readouterr().err
+    assert "targets[1]: id 는 비어 있지 않은 문자열이어야 한다" in err
+    assert not (root / "plugins/common/.alpha-plugin").exists()
+
+
+@pytest.mark.parametrize(
+    ("targets", "expect"),
+    [
+        ({"id": "x"}, "targets: 타겟 객체의 목록이 필요하다"),
+        (["x"], "targets[0]: 타겟 객체가 필요하다"),
+    ],
+)
+def test_targets_structure_must_be_list_of_objects(tmp_path, capsys, targets, expect):
+    root = _fake_repo(tmp_path)
+    _edit_policy(root, lambda p: p.__setitem__("targets", targets))
+    assert _run(root, "--check") == 1
+    assert expect in capsys.readouterr().err
+
+
+# ── manifestPath·중첩 키 무조건 인덱싱(KeyError) 회귀 (ATK-008) ─────────────
 
 
 @pytest.mark.parametrize("mode", ["--check", "--write"])
@@ -1175,13 +1415,91 @@ def test_enabled_main_target_without_manifest_path_is_clean_exit_1(
     tmp_path, capsys, mode
 ):
     root = _fake_repo(tmp_path)
-    path = root / "packaging" / "targets.json"
-    policy = json.loads(path.read_text())
-    del policy["targets"][2]["manifestPath"]  # gamma
-    path.write_text(json.dumps(policy))
+    _edit_policy(root, lambda p: p["targets"][2].pop("manifestPath"))
     assert _run(root, mode) == 1
     err = capsys.readouterr().err
-    assert "gamma" in err and "manifestPath" in err
+    assert "타겟 'gamma': manifestPath 가 없다" in err
+
+
+def _drop_hooks_key(key):
+    def fn(p):
+        p["targets"][0]["hooks"] = {
+            k: v for k, v in p["targets"][0]["hooks"].items() if k != key
+        }
+
+    return fn
+
+
+@pytest.mark.parametrize(
+    ("label", "repo", "edit", "expect"),
+    [
+        (
+            "marketplace.path",
+            "plain",
+            lambda p: p["targets"][0].__setitem__("marketplace", {"_meta": "no path"}),
+            "타겟 'alpha' marketplace: 필수 키 'path'",
+        ),
+        (
+            "hooks.path",
+            "hooks",
+            _drop_hooks_key("path"),
+            "타겟 'alpha' hooks: 필수 키 'path'",
+        ),
+        (
+            "hooks.manifestField",
+            "hooks",
+            _drop_hooks_key("manifestField"),
+            "타겟 'alpha' hooks: 필수 키 'manifestField'",
+        ),
+        (
+            "hooks.events",
+            "hooks",
+            _drop_hooks_key("events"),
+            "타겟 'alpha' hooks: 필수 키 'events'",
+        ),
+        (
+            "hooks.events[].script",
+            "hooks",
+            lambda p: p["targets"][0]["hooks"].__setitem__(
+                "events", {"SessionStart": [{"timeout": 10}]}
+            ),
+            "hooks.events.SessionStart[]: 필수 키 'script'",
+        ),
+        (
+            "skillInterface.path",
+            "skills",
+            lambda p: p["targets"][0]["skillInterface"].pop("path"),
+            "타겟 'alpha' skillInterface: 필수 키 'path'",
+        ),
+        (
+            "skillInterface.interfaceFrom",
+            "skills",
+            lambda p: p["targets"][0]["skillInterface"].pop("interfaceFrom"),
+            "skillInterface: 필수 키 'interfaceFrom'",
+        ),
+        (
+            "source._meta.componentDirs",
+            "plain",
+            lambda p: p["source"]["_meta"].pop("componentDirs"),
+            "source._meta: 필수 키 'componentDirs'",
+        ),
+    ],
+)
+@pytest.mark.parametrize("mode", ["--check", "--write"])
+def test_missing_nested_policy_key_is_clean_exit_1(
+    tmp_path, capsys, label, repo, edit, expect, mode
+):
+    if repo == "hooks":
+        root = _hooks_repo(tmp_path)
+    elif repo == "skills":
+        root = _skill_repo(tmp_path, {"plain": _TWO_SKILLS["plain"]})
+    else:
+        root = _fake_repo(tmp_path)
+    _edit_policy(root, edit)
+    before = _snapshot(root)
+    assert _run(root, mode) == 1, label
+    assert expect in capsys.readouterr().err, label
+    assert _snapshot(root) == before, label
 
 
 @pytest.mark.parametrize(
@@ -1189,31 +1507,22 @@ def test_enabled_main_target_without_manifest_path_is_clean_exit_1(
     [
         ("manifestPath", "plugins/common/epsilon.json"),
         ("marketplace", {"path": ".agents/plugins/e.json"}),
+        ("marketplace", None),
         ("skillInterface", {"path": "agents/openai.yaml", "interfaceFrom": {}}),
+        ("hooks", {}),
         ("editionBuilder", _DROP),
         ("delivery", "carrier-pigeon"),
     ],
 )
 def test_edition_policy_contradictions_are_exit_1(tmp_path, capsys, key, value):
-    root = _fake_repo(tmp_path)
-    assert _run(root, "--write") == 0  # 실패 원인을 edition 정책 하나로 좁힌다
-    assert _run(root, "--check") == 0
+    root = _edition_repo(tmp_path, **{key: value})
+    before = _snapshot(root)
     capsys.readouterr()
-    path = root / "packaging" / "targets.json"
-    policy = json.loads(path.read_text())
-    edition = dict(EDITION)
-    if value is _DROP:
-        edition.pop(key)
-    else:
-        edition[key] = value
-    policy["targets"].append(edition)
-    path.write_text(json.dumps(policy))
     for mode in ("--check", "--write"):
         assert _run(root, mode) == 1, mode
         err = capsys.readouterr().err
         assert key in err and "epsilon" in err, (mode, err)
-    assert not (root / "plugins/common/epsilon.json").exists()
-    assert not (root / ".agents/plugins/e.json").exists()
+    assert _snapshot(root) == before
 
 
 # ── 출력 경로 충돌(정규화 경로) ──────────────────────────────────────────────
@@ -1228,11 +1537,21 @@ def _collide(tmp_path: Path, gamma_path: str, *, symlink: bool = False) -> Path:
         (root / "plugins/common/alias").symlink_to(
             ".alpha-plugin", target_is_directory=True
         )
-    path = root / "packaging" / "targets.json"
-    policy = json.loads(path.read_text())
-    policy["targets"][2]["manifestPath"] = gamma_path
-    path.write_text(json.dumps(policy))
+    _edit_policy(
+        root, lambda p: p["targets"][2].__setitem__("manifestPath", gamma_path)
+    )
     return root
+
+
+def _assert_collision_blocks(root: Path, capsys, expect: str, *extra: str) -> None:
+    before = _snapshot(root)
+    assert _run(root, "--write", *extra) == 1
+    out = capsys.readouterr().out
+    assert "✗ 출력 경로 충돌" in out and expect in out, out
+    assert _snapshot(root) == before  # 생성 전에 멈췄다
+    assert _run(root, "--check", *extra) == 1
+    out = capsys.readouterr().out
+    assert "✗ 출력 경로 충돌" in out and expect in out, out
 
 
 @pytest.mark.parametrize(
@@ -1252,14 +1571,8 @@ def test_output_path_collision_is_exit_1_before_writing(
     tmp_path, capsys, label, gamma_path, symlink, only
 ):
     root = _collide(tmp_path, gamma_path, symlink=symlink)
-    before = _files(root)
     extra = ("--only", only) if only else ()
-    assert _run(root, "--write", *extra) == 1, label
-    out = capsys.readouterr().out
-    assert "충돌" in out, label
-    assert _files(root) == before, label  # 생성 전에 멈췄다
-    assert _run(root, "--check", *extra) == 1, label
-    assert "충돌" in capsys.readouterr().out, label
+    _assert_collision_blocks(root, capsys, f"gamma:{gamma_path}", *extra)
 
 
 @pytest.mark.parametrize(
@@ -1271,6 +1584,115 @@ def test_normalized_distinct_paths_do_not_collide(tmp_path, gamma_path):
     assert _run(root, "--check") == 0
 
 
+def test_collision_within_one_target_marketplace(tmp_path, capsys):
+    root = _fake_repo(tmp_path)
+    _edit_policy(
+        root,
+        lambda p: p["targets"][0]["marketplace"].__setitem__("path", ALPHA_MANIFEST),
+    )
+    _assert_collision_blocks(
+        root, capsys, f"alpha:{ALPHA_MANIFEST} ↔ alpha:{ALPHA_MANIFEST}"
+    )
+
+
+def test_collision_within_one_target_hooks(tmp_path, capsys):
+    root = _hooks_repo(tmp_path)
+    _edit_policy(
+        root, lambda p: p["targets"][0]["hooks"].__setitem__("path", ALPHA_MANIFEST)
+    )
+    _assert_collision_blocks(
+        root, capsys, f"alpha:{ALPHA_MANIFEST} ↔ alpha:{ALPHA_MANIFEST}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("label", "repo", "gamma_path", "expect"),
+    [
+        (
+            "ssot",
+            "plain",
+            "plugins/common/.claude-plugin/plugin.json",
+            "입력 source.manifest(SSOT)",
+        ),
+        (
+            "ssot-dir",
+            "plain",
+            "plugins/common/.claude-plugin",
+            "입력 source.manifest(SSOT)",
+        ),
+        ("policy", "plain", "packaging/targets.json", "입력 정책 파일"),
+        ("skill", "skills", "plugins/common/skills/plain/SKILL.md", "입력 스킬 원본"),
+        ("skill-dir", "skills", "plugins/common/skills/plain", "입력 스킬 원본"),
+        ("hook-script", "hooks", "plugins/common/hooks/inject.py", "입력 훅 스크립트"),
+    ],
+)
+@pytest.mark.parametrize("only", [None, "gamma"])
+def test_output_must_not_overlap_read_only_inputs(
+    tmp_path, capsys, label, repo, gamma_path, expect, only
+):
+    if repo == "hooks":
+        root = _hooks_repo(tmp_path)
+    elif repo == "skills":
+        root = _skill_repo(tmp_path, {"plain": _TWO_SKILLS["plain"]})
+    else:
+        root = _fake_repo(tmp_path)
+    _edit_policy(
+        root, lambda p: p["targets"][2].__setitem__("manifestPath", gamma_path)
+    )
+    extra = ("--only", only) if only else ()
+    _assert_collision_blocks(root, capsys, expect, *extra)
+
+
+def test_hardlinked_outputs_collide_via_samefile(tmp_path, capsys):
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    os.link(root / ALPHA_MANIFEST, root / "plugins/common/hl.json")
+    _edit_policy(
+        root,
+        lambda p: p["targets"][2].__setitem__("manifestPath", "plugins/common/hl.json"),
+    )
+    _assert_collision_blocks(root, capsys, "gamma:plugins/common/hl.json")
+
+
+def test_copied_file_is_not_a_collision(tmp_path):
+    """양성 대조: 내용만 같은 다른 파일(하드링크 아님)은 충돌이 아니다."""
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    (root / "plugins/common/copy.json").write_bytes(
+        (root / ALPHA_MANIFEST).read_bytes()
+    )
+    _edit_policy(
+        root,
+        lambda p: p["targets"][2].__setitem__(
+            "manifestPath", "plugins/common/copy.json"
+        ),
+    )
+    assert _run(root, "--write") == 0
+    assert _run(root, "--check") == 0
+
+
+def test_case_only_difference_collides_on_darwin(tmp_path, capsys):
+    """ATK-006: darwin 기본 파일시스템은 대소문자를 무시한다 — 철자만 다른 경로는 같은 파일이다."""
+    root = _collide(tmp_path, "plugins/common/.ALPHA-plugin/plugin.json")
+    rc = _run(root, "--write")
+    out = capsys.readouterr().out
+    if sys.platform == "darwin":
+        assert rc == 1 and "✗ 출력 경로 충돌" in out, out
+    else:
+        assert rc == 0, out
+
+
+def test_write_only_names_other_failing_target(tmp_path, capsys):
+    """ATK-009: --only alpha 가 다른 타겟(gamma) 계산 실패로 막히면 그 사실을 말한다."""
+    root = _fake_repo(tmp_path)
+    _edit_policy(root, lambda p: p["targets"][2].pop("manifestPath"))
+    assert _run(root, "--write", "--only", "alpha") == 1
+    err = capsys.readouterr().err
+    assert "충돌 검사를 위해 활성 타겟 전체를 계산했다 — 실패 타겟: gamma" in err
+    assert _run(root, "--write", "--only", "gamma") == 1
+    assert "실패 타겟" not in capsys.readouterr().err
+
+
 # ── --only <edition> 은 판 빌더로 안내하는 오류 ─────────────────────────────
 
 
@@ -1280,16 +1702,15 @@ def test_only_edition_target_is_exit_1_pointing_to_builder(
     tmp_path, capsys, mode, enabled
 ):
     root = _edition_repo(tmp_path, enabled=enabled)
-    before = _files(root)
+    before = _snapshot(root)
     capsys.readouterr()
     assert _run(root, mode, "--only", "epsilon") == 1
     err = capsys.readouterr().err
-    assert "scripts/build-epsilon-branch.py" in err
-    assert "판 빌더" in err
-    assert _files(root) == before
+    assert "판 빌더(scripts/build-epsilon-branch.py)가 담당한다" in err
+    assert _snapshot(root) == before
 
 
-def test_enabled_edition_target_is_not_generated_on_main(tmp_path, capsys):
+def test_enabled_edition_target_is_not_generated_on_main(tmp_path):
     root = _edition_repo(tmp_path, enabled=True)
     before = _files(root)
     assert _run(root, "--write") == 0
@@ -1297,19 +1718,75 @@ def test_enabled_edition_target_is_not_generated_on_main(tmp_path, capsys):
     assert _run(root, "--check") == 0
 
 
-# ── fail-closed 불변식의 정적 대리 검사 ─────────────────────────────────────
+# ── fail-closed 불변식: 디스크 + 계산된 생성물 (ATK-003·007) ─────────────────
+
+ANTIGRAVITY_URL = "https://antigravity.google/schemas/v1/plugin.json"
+
+
+def _root_manifest_repo(tmp_path: Path) -> Path:
+    """gamma 를 Antigravity 모양(`<pluginRoot>/plugin.json`)으로 둔 픽스처, 생성 완료 상태."""
+    root = _fake_repo(tmp_path)
+    _edit_policy(
+        root,
+        lambda p: p["targets"][2].update(
+            manifestPath="plugins/common/plugin.json", schemaUrl=ANTIGRAVITY_URL
+        ),
+    )
+    assert _run(root, "--write") == 0
+    assert _run(root, "--check") == 0
+    return root
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ("--write", "--only", "gamma"),
+        ("--write",),
+        ("--check", "--only", "gamma"),
+        ("--check", "--only", "alpha"),
+        ("--check",),
+    ],
+)
+def test_policy_turning_root_manifest_into_ap_v1_is_blocked(tmp_path, capsys, argv):
+    root = _root_manifest_repo(tmp_path)
+    _edit_policy(root, lambda p: p["targets"][2].__setitem__("schemaUrl", AP_URL))
+    before = _snapshot(root)
+    capsys.readouterr()
+    assert _run(root, *argv) == 1
+    out = capsys.readouterr().out
+    assert (
+        "fail-closed 불변식 위반 — 생성물 gamma:plugins/common/plugin.json 가 $schema 를 AP v1 URL 로 쓴다"
+        in out
+    ), out
+    assert _snapshot(root) == before  # 디스크 무변경 — AP $schema 가 쓰이지 않았다
+    assert AP_URL not in (root / "plugins/common/plugin.json").read_text()
+
+
+@pytest.mark.parametrize("name", ["plugin.yaml", "plugin.yml"])
+def test_generated_artifact_at_native_manifest_path_is_blocked(tmp_path, capsys, name):
+    root = _fake_repo(tmp_path)
+    _edit_policy(
+        root,
+        lambda p: p["targets"][2].__setitem__("manifestPath", f"plugins/common/{name}"),
+    )
+    before = _snapshot(root)
+    for argv in (("--write", "--only", "gamma"), ("--check", "--only", "alpha")):
+        assert _run(root, *argv) == 1, argv
+        assert "Hermes 네이티브 매니페스트 자리" in capsys.readouterr().out, argv
+    assert _snapshot(root) == before
 
 
 @pytest.mark.parametrize(
     ("label", "schema", "expect"),
     [
         ("ap-schema", AP_URL, 1),
-        ("other-schema", "https://antigravity.google/schemas/v1/plugin.json", 0),
+        ("other-schema", ANTIGRAVITY_URL, 0),
         ("no-schema", None, 0),
     ],
 )
+@pytest.mark.parametrize("only", [None, "alpha"])
 def test_invariant_root_plugin_json_must_not_declare_ap_schema(
-    tmp_path, capsys, label, schema, expect
+    tmp_path, capsys, label, schema, expect, only
 ):
     root = _fake_repo(tmp_path)
     assert _run(root, "--write") == 0
@@ -1317,10 +1794,13 @@ def test_invariant_root_plugin_json_must_not_declare_ap_schema(
     if schema is not None:
         data["$schema"] = schema
     (root / "plugins/common/plugin.json").write_text(json.dumps(data))
+    extra = ("--only", only) if only else ()
     capsys.readouterr()
-    assert _run(root, "--check") == expect, label
+    assert _run(root, "--check", *extra) == expect, label
     if expect:
-        assert "불변식" in capsys.readouterr().out
+        assert "plugins/common/plugin.json 의 $schema 가 AP v1 URL 이다" in (
+            capsys.readouterr().out
+        )
 
 
 def test_invariant_unreadable_root_plugin_json_is_not_passed(tmp_path, capsys):
@@ -1329,13 +1809,40 @@ def test_invariant_unreadable_root_plugin_json_is_not_passed(tmp_path, capsys):
     (root / "plugins/common/plugin.json").write_text("{not json")
     capsys.readouterr()
     assert _run(root, "--check") == 1
-    assert "불변식" in capsys.readouterr().out
+    assert (
+        "fail-closed 불변식 판정 불가 — plugins/common/plugin.json 를 읽지 못했다"
+        in (capsys.readouterr().out)
+    )
+
+
+def test_invariant_read_cannot_follow_symlink_outside_repo(tmp_path, capsys):
+    """ATK-007: 불변식이 읽는 plugin.json 이 레포 밖을 가리키는 심링크면 읽지 않고 exit 1."""
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    outside = tmp_path / "outside.json"
+    outside.write_text(json.dumps({"$schema": ANTIGRAVITY_URL}))
+    (root / "plugins/common/plugin.json").symlink_to(outside)
+    capsys.readouterr()
+    assert _run(root, "--check") == 1
+    assert "fail-closed 불변식: 경로 탈출 차단" in capsys.readouterr().err
+
+
+def test_invariant_read_follows_internal_symlink(tmp_path):
+    """양성 대조: 레포 안을 가리키는 심링크는 따라가 판정한다."""
+    root = _fake_repo(tmp_path)
+    assert _run(root, "--write") == 0
+    (root / "plugins/common/real.json").write_text(
+        json.dumps({"$schema": ANTIGRAVITY_URL})
+    )
+    (root / "plugins/common/plugin.json").symlink_to("real.json")
+    assert _run(root, "--check") == 0
 
 
 @pytest.mark.parametrize("name", ["plugin.yaml", "plugin.yml"])
 @pytest.mark.parametrize("dangling_symlink", [False, True])
+@pytest.mark.parametrize("only", [None, "alpha"])
 def test_invariant_native_manifest_must_be_absent(
-    tmp_path, capsys, name, dangling_symlink
+    tmp_path, capsys, name, dangling_symlink, only
 ):
     root = _fake_repo(tmp_path)
     assert _run(root, "--write") == 0
@@ -1345,10 +1852,11 @@ def test_invariant_native_manifest_must_be_absent(
         target.symlink_to("does-not-exist.yaml")
     else:
         target.write_text("name: fixture-kit\n")
+    extra = ("--only", only) if only else ()
     capsys.readouterr()
-    assert _run(root, "--check") == 1
+    assert _run(root, "--check", *extra) == 1
     out = capsys.readouterr().out
-    assert "불변식" in out and name in out
+    assert f"fail-closed 불변식 위반 — plugins/common/{name} 이 있다" in out
 
 
 # ── 실제 레포(읽기 전용) ────────────────────────────────────────────────────
@@ -1382,6 +1890,7 @@ def test_real_repo_hermes_policy_and_check():
     ]
     assert "manifestPath" not in hermes
     assert hermes.get("_disabledReason")
+    assert "hermes_agent_plugins_352b249.txt" in hermes["_apV1Source"]
 
     proc = _real("--check")
     assert proc.returncode == 0, proc.stdout + proc.stderr
