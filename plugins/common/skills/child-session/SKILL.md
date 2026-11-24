@@ -3,6 +3,8 @@ name: child-session
 description: Discipline a worker session loads at dispatch time — verify the brief's premises before implementing, work only on its own branch, and report in the fixed completion format. Use when a session has been dispatched as a worker (child) with a brief from a parent control session.
 ---
 
+> **Hermes 판 — 훅·설치 스크립트·일부 스킬 없음.** 이 판에는 킷의 `hooks/`·`setup/`·`evals/` 와 `harness-export`·`skill-forge` 스킬이 없다. 아래에서 그것을 실행하거나 켜라는 단계는 건너뛴다(없음으로 처리). 규칙 내보내기는 CLI 로 한다: `python3 <설치 루트>/tools/export_harness.py --plugin-root <설치 루트> --target <프로젝트> --entrypoints AGENTS.md`. 다른 설치(예: `~/.claude/plugins/cache`)에서 같은 이름의 파일·도구를 찾아 쓰지 않는다 — 버전이 다른 도구다.
+
 # Child Session 스킬
 
 `control-loop`을 쓰는 부모 세션이 워커를 디스패치할 때 함께 로드하는 스킬이다. 부모와

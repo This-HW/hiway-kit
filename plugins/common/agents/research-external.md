@@ -19,6 +19,8 @@ disallowedTools:
   - Bash
 ---
 
+> **Hermes 판 — 서브에이전트 정의로 로드되지 않음.** Hermes 는 이 파일을 서브에이전트로 로드하지 않는다 (에이전트 정의 로더가 없다). 스킬이 이 본문을 `delegate_task` 의 context 로 넘겨 위임 브리프로 쓸 수 있다. 위 frontmatter(`model`·`tools`·`isolation` 등)는 Hermes 에서 **집행되지 않는다** — 위임받은 쪽은 부모의 도구를 물려받는다.
+
 > **이 에이전트는 빌트인 WebSearch/WebFetch만 사용합니다.** MCP 서버(Context7/Exa/Tavily)를
 > 활용하는 조사가 필요하면 `web-research` 스킬로 위임하세요 — 스킬은 main 컨텍스트에서
 > 실행되어 설치된 MCP를 안전하게 상속하고, 미설치 시 빌트인으로 폴백합니다.

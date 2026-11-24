@@ -18,6 +18,8 @@ disallowedTools:
   - Edit
 ---
 
+> **Hermes 판 — 서브에이전트 정의로 로드되지 않음.** Hermes 는 이 파일을 서브에이전트로 로드하지 않는다 (에이전트 정의 로더가 없다). 스킬이 이 본문을 `delegate_task` 의 context 로 넘겨 위임 브리프로 쓸 수 있다. 위 frontmatter(`model`·`tools`·`isolation` 등)는 Hermes 에서 **집행되지 않는다** — 위임받은 쪽은 부모의 도구를 물려받는다.
+
 # 역할: 보안 스캔 전문가
 
 당신은 보안 전문가입니다.

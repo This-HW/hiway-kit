@@ -1,6 +1,6 @@
 ---
 name: using-hiway-kit
-description: Session-start meta-skill (hook-injected). Kit workflow chain and plan file rules.
+description: Workflow entry guide for the kit. Read it when starting a task to pick the workflow chain by task size and to follow the plan file rules.
 disable-model-invocation: true
 ---
 

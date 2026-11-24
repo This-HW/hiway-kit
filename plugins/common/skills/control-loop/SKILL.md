@@ -3,6 +3,8 @@ name: control-loop
 description: Multi-session control discipline for delegating work to worker sessions — investigate, decide, dispatch, verify, and merge. Use when a session is coordinating separate worker sessions or worktrees and needs to know when to delegate versus decide, and how to verify before merging.
 ---
 
+> **Hermes 판 — 훅·설치 스크립트·일부 스킬 없음.** 이 판에는 킷의 `hooks/`·`setup/`·`evals/` 와 `harness-export`·`skill-forge` 스킬이 없다. 아래에서 그것을 실행하거나 켜라는 단계는 건너뛴다(없음으로 처리). 규칙 내보내기는 CLI 로 한다: `python3 <설치 루트>/tools/export_harness.py --plugin-root <설치 루트> --target <프로젝트> --entrypoints AGENTS.md`. 다른 설치(예: `~/.claude/plugins/cache`)에서 같은 이름의 파일·도구를 찾아 쓰지 않는다 — 버전이 다른 도구다.
+
 # Control Loop 스킬
 
 축은 *기획 대 컨트롤*이 아니라 **결정 대 조사**다. 판별식: 브리프를 전제·범위/계약·

@@ -4,6 +4,8 @@ portable: false
 indexLine: 에이전트 선택·모델 정책은 rules/agent-system.md 를 읽어라
 ---
 
+> **Hermes 판 — 자동 worktree 격리 없음.** Hermes 에는 자동 worktree 가 없고, `delegation.worktree_isolation` 은 worktree 를 만들지 못하면 **공유 CWD 로 진행**할 수 있다. 그래서 파일을 고치는 에이전트(implement-code·fix-bugs·write-tests·sync-docs)는 호출자가 별도 worktree 와 기준 커밋을 확인해 주지 않았으면 **커밋하지 말고** 편집 결과(diff·요약)를 부모에게 돌려준다. 수정 위임은 격리가 확인되는 운송으로만 하고, 확인되지 않으면 부모가 그 작업을 **순차로** 직접 실행한다. **이 머리말이 아래 본문의 worktree·커밋 지시보다 우선한다.**
+
 # Agent System Rules
 
 Agents are auto-discovered from the plugin directory — pick from the agent list the host

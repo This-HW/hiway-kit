@@ -3,6 +3,10 @@ name: auto-dev
 description: Automated development pipeline. Runs a completed plan file through Development and Validation phases end-to-end.
 ---
 
+> **Hermes 판 — 자동 worktree 격리 없음.** Hermes 에는 자동 worktree 가 없고, `delegation.worktree_isolation` 은 worktree 를 만들지 못하면 **공유 CWD 로 진행**할 수 있다. 그래서 파일을 고치는 에이전트(implement-code·fix-bugs·write-tests·sync-docs)는 호출자가 별도 worktree 와 기준 커밋을 확인해 주지 않았으면 **커밋하지 말고** 편집 결과(diff·요약)를 부모에게 돌려준다. 수정 위임은 격리가 확인되는 운송으로만 하고, 확인되지 않으면 부모가 그 작업을 **순차로** 직접 실행한다. **이 머리말이 아래 본문의 worktree·커밋 지시보다 우선한다.**
+
+> **Hermes 판 — 훅·설치 스크립트·일부 스킬 없음.** 이 판에는 킷의 `hooks/`·`setup/`·`evals/` 와 `harness-export`·`skill-forge` 스킬이 없다. 아래에서 그것을 실행하거나 켜라는 단계는 건너뛴다(없음으로 처리). 규칙 내보내기는 CLI 로 한다: `python3 <설치 루트>/tools/export_harness.py --plugin-root <설치 루트> --target <프로젝트> --entrypoints AGENTS.md`. 다른 설치(예: `~/.claude/plugins/cache`)에서 같은 이름의 파일·도구를 찾아 쓰지 않는다 — 버전이 다른 도구다.
+
 # Auto-Dev 스킬
 
 계획 파일(`docs/plans/<YYYY-MM-DD>-<slug>/plan.md` — 규약 SSOT: `skills/plan-task/references/plan-format.md`)을

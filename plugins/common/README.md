@@ -1,73 +1,83 @@
-# hiway-kit
+# hiway-kit — Hermes edition
 
-> Turn any task into production-ready code. Specialized agents handle planning, implementation, code review, and security scanning for any stack.
+The **Hermes Agent edition** of hiway-kit: an Agent Plugins v1 package generated from `main` by
+`scripts/build-hermes-branch.py` onto the `hermes` branch. `main` keeps a manifest Hermes refuses, so an
+install that is not pinned to this branch stops instead of loading the wrong tree.
 
-## Install
+What this page states was **observed** in a sandboxed, offline Hermes (`NousResearch/hermes-agent@352b249`,
+the H1 measurement). Anything not measured is marked as such.
 
-Pick **one** (installing both loads every skill twice and mixes versions):
+## Install (pinned to a commit)
+
+`--ref` takes only a full 40-character commit sha of the `hermes` branch.
 
 ```bash
-# Anthropic's directory — built into Claude Code
-/plugin install hiway-kit@anthropic-plugin-directory
-# or: this repository as a marketplace (marketplace name: hiway-kit)
-/plugin marketplace add This-HW/hiway-kit
-/plugin install hiway-kit@hiway-kit
+SHA="$(git ls-remote https://github.com/This-HW/hiway-kit refs/heads/hermes | cut -f1)"
+test -n "$SHA" || { echo "hermes branch not found"; exit 1; }
+hermes plugins install This-HW/hiway-kit/plugins/common --ref "$SHA" --force --no-enable
+hermes plugins enable hiway-kit
 ```
 
-From 5.9.1 the directory gets a **reduced edition**: Anthropic's directory accepts command hooks,
-script files and some agent frontmatter keys only from Verified organizations, so that edition has
-no hooks, no Python tools, no `code-intel`, `session-history` or `harness-export` skills (they need
-those tools), and agents run without worktree isolation. Until a newer version passes the
-directory's review it serves 5.5.1. Install from the repository marketplace for the full kit.
+H1 ran these steps against a local Git mirror of the same tree; the GitHub address is confirmed once the
+branch is published.
 
-Other harnesses (Codex, Antigravity, Gemini CLI) and what each one supports:
-[repository README](https://github.com/This-HW/hiway-kit#where-it-runs).
+**Why `--force` is needed.** Hermes' install scanner rates this edition **caution**
+(critical 0). For a community source, a caution verdict blocks a non-interactive first install
+with `Use --force to override.` The findings that drive it are **defensive example text** in documents, not
+code that runs:
 
-> The published plugin is **`hiway-kit`** — the full kit is 15 agents + 17 skills + 12 rules + hooks.
-> Project-specific extensions live in a user's own `project-local/` tier, not as separate
-> published plugins.
+- `agents/review-code.md` — the security reviewer's examples of what to flag (access to a system password
+  file, a recursive delete of the root directory)
+- `skills/auto-dev/SKILL.md` — a mention of reading environment variables
 
-## Key Skills
+## Update
 
-A selection below — 17 skills total, auto-discovered from `skills/` (not hand-listed here).
+There is **no automatic update**, and `hermes plugins update` refuses pinned installs. Install the new
+sha over the old one:
 
-| Command                     | Description                                              |
-| --------------------------- | -------------------------------------------------------- |
-| `/plan-task`                | Structured task planning into a plan file                |
-| `/auto-dev`                 | Run a completed plan through development and validation  |
-| `/review`                   | Lint + adversarial review + security scan                |
-| `/debug`                    | Diagnose an error, fix it, confirm the fix               |
-| `/test`                     | Run tests and fix failures                               |
-| `/multi-perspective-review` | Multi-perspective deliberation, consensus-driven         |
-| `/web-research`             | Research with the search/docs/browser tools you have     |
-| `/agent-creator`            | Create a project agent (`.claude/agents/`) with valid frontmatter |
+```bash
+hermes plugins install This-HW/hiway-kit/plugins/common --ref <new 40-char sha> --force --no-enable
+```
 
-## Agents
+Hermes replaces the files and keeps the plugin enabled (`Replacement installed; plugin selection was not changed.`).
 
-15 agents in one flat `agents/` folder, grouped here by role:
+## What is in it
 
-| Role       | Examples                                                               |
-| ---------- | ---------------------------------------------------------------------- |
-| Planning   | `clarify-requirements`, `define-business-logic`, `design-user-journey` |
-| Development and review | `implement-code`, `fix-bugs`, `review-code`, `security-scan` |
-| Meta       | `devils-advocate`                                                      |
+- **15 skills** under the `hiway-kit:` namespace (for example `hiway-kit:plan-task`). They
+  appear in the agent's skill list once the plugin is enabled, and disappear when it is disabled.
+- `rules/` and `tools/`.
+- `agents/` as **brief documents**: a skill may pass an agent body to `delegate_task` as context. Each
+  agent starts with a note on what Hermes does not enforce (frontmatter, worktree isolation).
 
-## Hooks (auto-registered in Claude Code)
+## What is not
 
-The blocking and Stop hooks below are Claude Code behavior; on Codex only session-start and auto-format ship.
+- **No hooks.**
+- **No agent loader** — agents are used only as `delegate_task` context.
+- No `harness-export` and no `skill-forge` skill.
+- No MCP servers.
+- No behavioral evals (`evals/` is not shipped).
 
+## Project rules (`AGENTS.md`)
 
-- **SessionStart** — Injects governance rules, recurring review lessons, and open plan files
-- **PreToolUse** — Blocks reads and edits of sensitive files such as `.env`, SSH/cloud credential directories, key files and credential/secret data files and modules like `credentials.json` or `secrets.py` (`protect-sensitive.py`); source, SQL and docs that only use such a word in a compound name (`credential_collector.py`) are allowed and are outside this guard. It only matches the *path* the agent is about to open and refuses it — it never opens, reads or transmits those files, and it makes no network calls. Credential paths appear in its source because they are the blocklist. <!-- doc-ref-ok: 외부 사용자 레포의 예시 파일명 -->
-- **PostToolUse** — Auto-formats the edited file (`auto-format.py`): ruff only when the project configures it (`ruff.toml`, `.ruff.toml` or `[tool.ruff]` in `pyproject.toml`), prettier/eslint only when the project has their config and has them installed, gofmt only inside a Go module (`go.mod`), rustfmt only with `rustfmt.toml`. A project without them is left as is
-- **Stop** — Lints edited Python files (same ruff condition) and runs the tests you edited; on failure, the turn continues so the agent fixes it
+Export the kit's rules into a project with the shipped CLI:
 
-To turn hooks off, set `HIWAY_KIT_DISABLE_HOOKS` to a comma-separated list (`session-start`, `session-check`, `protect-sensitive`, `auto-format`, `stop-validator`) or `all` in the `env` of your project's `.claude/settings.json` or `.claude/settings.local.json`. Do not edit the cached `hooks.json` — an update restores it. Codex does not read these settings files; there the variable has to be in the environment Codex starts with (not verified).
+```bash
+python3 <install root>/tools/export_harness.py --plugin-root <install root> --target <project> --entrypoints AGENTS.md
+```
 
-The hooks do not upload data to the publisher. Programs invoked by hooks and helpers can
-write files or access the network; read-only code queries do not sandbox language servers
-or project build scripts. Use code intelligence only in trusted workspaces.
+The install root is `hiway-kit` under the Hermes profile's `plugins/` directory — measured as
+`<HERMES_HOME>/profiles/<profile>/plugins/hiway-kit`. Use that copy, not a same-named tool from another install. Hermes loaded the
+generated `AGENTS.md`; a `.hermes.md` in the project **shadowed** it (measured). By Hermes' source,
+`HERMES.md` and `AGENTS.override.md` take precedence the same way.
 
-## License
+## `using-hiway-kit`
 
-MIT — [github.com/This-HW/hiway-kit](https://github.com/This-HW/hiway-kit)
+Hermes does not read the manual-only flag (`disable-model-invocation`), so the model can list and read
+this skill on its own.
+
+## Not measured
+
+- Coexistence with Hermes' built-ins (verify-on-stop, automatic skill creation, memory) — needs a model run.
+- No behavioral evals for this edition.
+
+Details and caveats: `docs/harnesses.md#hermes-agent` in the repository.

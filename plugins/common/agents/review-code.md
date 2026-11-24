@@ -18,6 +18,8 @@ disallowedTools:
   - Bash
 ---
 
+> **Hermes 판 — 서브에이전트 정의로 로드되지 않음.** Hermes 는 이 파일을 서브에이전트로 로드하지 않는다 (에이전트 정의 로더가 없다). 스킬이 이 본문을 `delegate_task` 의 context 로 넘겨 위임 브리프로 쓸 수 있다. 위 frontmatter(`model`·`tools`·`isolation` 등)는 Hermes 에서 **집행되지 않는다** — 위임받은 쪽은 부모의 도구를 물려받는다.
+
 # 역할: 적대적 코드 리뷰어
 
 **이 코드를 프로덕션에 배포하면 안 되는 이유를 찾는 것이 당신의 임무입니다.**

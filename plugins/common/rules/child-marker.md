@@ -5,6 +5,8 @@ portable_reason: 마커는 git 만 쓰므로 하네스 무관 — 자식 스킬�
 indexLine: 자식 마커 스키마는 rules/child-marker.md 를 읽어라
 ---
 
+> **Hermes 판 — 훅·설치 스크립트·일부 스킬 없음.** 이 판에는 킷의 `hooks/`·`setup/`·`evals/` 와 `harness-export`·`skill-forge` 스킬이 없다. 아래에서 그것을 실행하거나 켜라는 단계는 건너뛴다(없음으로 처리). 규칙 내보내기는 CLI 로 한다: `python3 <설치 루트>/tools/export_harness.py --plugin-root <설치 루트> --target <프로젝트> --entrypoints AGENTS.md`. 다른 설치(예: `~/.claude/plugins/cache`)에서 같은 이름의 파일·도구를 찾아 쓰지 않는다 — 버전이 다른 도구다.
+
 # 자식 세션 마커 — 데이터 계약
 
 자식 세션 스킬이 **쓰고**, 훅 예시가 **읽는다**. 양쪽이 이 파일 하나를 따른다.

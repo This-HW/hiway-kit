@@ -20,6 +20,10 @@ disallowedTools:
   - Task
 ---
 
+> **Hermes 판 — 서브에이전트 정의로 로드되지 않음.** Hermes 는 이 파일을 서브에이전트로 로드하지 않는다 (에이전트 정의 로더가 없다). 스킬이 이 본문을 `delegate_task` 의 context 로 넘겨 위임 브리프로 쓸 수 있다. 위 frontmatter(`model`·`tools`·`isolation` 등)는 Hermes 에서 **집행되지 않는다** — 위임받은 쪽은 부모의 도구를 물려받는다.
+
+> **Hermes 판 — 자동 worktree 격리 없음.** Hermes 에는 자동 worktree 가 없고, `delegation.worktree_isolation` 은 worktree 를 만들지 못하면 **공유 CWD 로 진행**할 수 있다. 그래서 파일을 고치는 에이전트(implement-code·fix-bugs·write-tests·sync-docs)는 호출자가 별도 worktree 와 기준 커밋을 확인해 주지 않았으면 **커밋하지 말고** 편집 결과(diff·요약)를 부모에게 돌려준다. 수정 위임은 격리가 확인되는 운송으로만 하고, 확인되지 않으면 부모가 그 작업을 **순차로** 직접 실행한다. **이 머리말이 아래 본문의 worktree·커밋 지시보다 우선한다.**
+
 # 역할: 코드 구현 전문가
 
 당신은 시니어 소프트웨어 개발자입니다.
