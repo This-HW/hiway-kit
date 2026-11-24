@@ -1,7 +1,7 @@
 ---
 title: "Archify 로 레포 아키텍처·흐름 도식 업그레이드 (프로젝트 전용 설치)"
-status: current
-execution_status: in-progress
+status: historical
+execution_status: done
 as_of: 2026-11-25
 created: 2026-11-25
 size: medium
@@ -79,4 +79,4 @@ size: medium
 - 되돌려-FAIL 확인 둘: 정본 라벨에 없는 `/스킬` 이름을 넣으면 rc 1, SVG 를 정본과 다르게 바꾸면 rc 1
 - `git diff --quiet origin/main -- plugins/common` → exit 0 (플러그인 무변경)
 - `git check-ignore -q .claude/rules/archify.md && git status --porcelain .claude/skills | grep -c archify` → 0 (설치 흔적 미추적)
-- 검수 결과를 `docs/specs/2026-11-25-archify-diagrams/review.md` 에 남긴다 <!-- doc-ref-ok: 검수 단계가 만들 보고서 -->
+- 검수 결과를 `docs/specs/2026-11-25-archify-diagrams/review.md` 에 남긴다
