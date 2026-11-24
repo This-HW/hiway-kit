@@ -254,7 +254,11 @@ def test_real_repo_listing_fields_stay_in_claude_manifest_only():
     enabled = [t for t in policy["targets"] if t.get("enabled")]
     assert enabled
     for target in enabled:
-        data = json.loads((repo / target["manifestPath"]).read_text(encoding="utf-8"))
+        if _mod.is_edition(target):
+            # Edition targets write nothing to the main tree; judge the manifest they would build.
+            data = _mod.build_manifest(_mod.load_ssot(repo, policy), target, set())
+        else:
+            data = json.loads((repo / target["manifestPath"]).read_text(encoding="utf-8"))
         leaked = [field for field in LISTING_FIELDS if field in data]
         assert not leaked, (target["id"], leaked)
 
@@ -2256,10 +2260,11 @@ def test_real_repo_hermes_policy_and_check():
         (SCRIPTS_DIR.parent / "packaging/targets.json").read_text(encoding="utf-8")
     )
     hermes = next(t for t in policy["targets"] if t["id"] == "hermes")
-    assert hermes["enabled"] is False
+    # H2 (publishing) approved on 2026-11-24: the edition builder may --write the `hermes` branch.
+    assert hermes["enabled"] is True
     assert hermes["delivery"] == "edition"
     # H1 sandbox round trip (install → list → remove with the real CLI) passed on 2026-11-24, so the
-    # target is runtime-verified; it stays disabled until the user approves publishing (H2).
+    # target is runtime-verified.
     assert hermes["verificationLevel"] == "runtime-verified"
     assert "_observations20261124" in hermes
     assert hermes["schemaUrl"] == AP_URL
@@ -2272,7 +2277,8 @@ def test_real_repo_hermes_policy_and_check():
         "keywords",
     ]
     assert "manifestPath" not in hermes
-    assert hermes.get("_disabledReason")
+    assert hermes.get("_publishNote")
+    assert "_disabledReason" not in hermes
     assert "hermes_agent_plugins_352b249.txt" in hermes["_apV1Source"]
 
     proc = _real("--check")

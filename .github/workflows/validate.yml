@@ -305,3 +305,37 @@ jobs:
           python3 scripts/build-directory-branch.py --write --source "$GITHUB_SHA"
           # fast-forward 만 — 강제 push 는 하지 않는다(어긋나면 red 로 드러난다)
           git push origin refs/heads/directory:refs/heads/directory
+
+  hermes-branch:
+    # Hermes Agent 판 — 생성 브랜치 `hermes` 의 Agent Plugins v1 축소판(packaging/targets.json hermes,
+    # delivery: edition). 검증을 통과한 main push 마다 그 커밋에서 판 트리를 만들어 fast-forward 한다
+    # (scripts/build-hermes-branch.py 가 단일 소스: 뺄 경로·매니페스트·머리말·판정). 디렉토리 게시와는
+    # job·concurrency 를 나눈다 — 한쪽 실패가 다른 쪽 게시를 막지 않는다(설계 판정 D3).
+    # 사용자는 이 브랜치의 40자 커밋 sha 로 고정 설치한다(Hermes `--ref` 는 브랜치 이름을 받지 않는다).
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [validate, python39-compat]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: hermes-branch
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Update hermes branch
+        env:
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin hermes >/dev/null; then
+            git fetch --no-tags origin hermes:refs/heads/hermes
+          fi
+          python3 scripts/build-hermes-branch.py --write --source "$GITHUB_SHA"
+          # fast-forward 만 — 강제 push 는 하지 않는다(어긋나면 red 로 드러난다)
+          git push origin refs/heads/hermes:refs/heads/hermes
