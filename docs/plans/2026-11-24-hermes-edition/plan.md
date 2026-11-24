@@ -150,3 +150,15 @@ size: large
 - **미측정**: Hermes 내장 기능 공존(모델 실행 필요), 게시된 GitHub `hermes` 브랜치 sha 설치
 - 완료 조건 명령과 전체 게이트 결과는 병합 커밋 메시지와 heartbeat 기록에 남는다
 
+### H2 게시 (사용자 승인 2026-11-24 "지금 게시 (추천)")
+
+- `88b9f8b`: `hermes` 타겟 `enabled:true` + CI `hermes-branch` job(디렉토리와 별도 job·concurrency)
+  - CI 45357326404 green 4/4
+  - `hermes`=`5dda1c9` 게시, plugins/common=`392f203d`(H1 최종 측정 트리와 동일)
+  - `directory`=`df4fa43` 불변
+- W-E3 GitHub 실측(같은 격리 환경): sha 고정 설치(`--force` 전 rc 1 caution, 후 rc 0, pinned=true), enable 후 15, 설치본 export_harness → AGENTS.md rc 0, disable·remove 정리, ref 없는 설치 거부, 실제 홈 보호 파일 변경 0
+- 이후 판 README 의 "게시 후 확인" 두 줄만 실측 문구로 바꿨다(새 판 트리 `05d48056`, 나머지 82 파일 동일). 문서 반영:
+  - `docs/harnesses.md` 설치·갱신·제거 명령
+  - README "Where it runs" 의 Hermes 열
+  - `targets.json` `_observations20261124GitHub`
+

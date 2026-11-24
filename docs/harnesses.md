@@ -229,26 +229,47 @@ reconsidered once it can be measured.
 
 ## Hermes Agent
 
-**Measured in a sandbox, not published yet.** No Hermes package is published. The design is a generated
-`hermes` branch that carries an Agent Plugins v1 edition and is installed by commit sha. It is described in
-[`specs/2026-11-24-hermes-edition/`](specs/2026-11-24-hermes-edition/design-verdict.md). On 2026-11-24 the
-edition was installed, enabled, listed and removed with Hermes `352b249` in a write-denied sandbox. The
-results are in [the H1 record](specs/2026-11-24-hermes-edition/h1-measurement.md):
-
-- 15 skills appear once the edition is enabled.
-- `AGENTS.md` export works from the edition's own tools.
-- Hermes's install scanner rates the edition **caution** (no critical findings). A first non-interactive
-  install therefore needs `--force`.
-
-Install commands will appear here once the `hermes` branch is published. Statements below that are not
-from that record come from reading Hermes source and docs at that commit.
-
-**Rules reach Hermes today through `AGENTS.md`.** Run `/harness-export` in another harness, or the
-exporter directly:
+**Published as an edition on the `hermes` branch** (2026-11-24). The branch carries an Agent Plugins v1
+edition of the kit, generated from `main` by `scripts/build-hermes-branch.py` on every validated push.
+It contains 15 skills, `rules/`, `tools/` and the agent files as briefs, and no hooks. The design and every
+measurement are in [`specs/2026-11-24-hermes-edition/`](specs/2026-11-24-hermes-edition/design-verdict.md)
+([measurement record](specs/2026-11-24-hermes-edition/h1-measurement.md)). Hermes `352b249`, measured in a
+write-denied sandbox, against the published branch:
 
 ```bash
-python3 <kit root>/tools/export_harness.py --plugin-root <kit root> --target <project> --entrypoints AGENTS.md
+SHA="$(git ls-remote https://github.com/This-HW/hiway-kit refs/heads/hermes | cut -f1)"
+test -n "$SHA" || { echo "hermes branch not found"; exit 1; }
+hermes plugins install This-HW/hiway-kit/plugins/common --ref "$SHA" --force --no-enable
+hermes plugins enable hiway-kit
 ```
+
+- **Pin to a commit.** `--ref` takes only a full 40-character commit sha; a branch name is refused. A pinned
+  install is not moved by `hermes plugins update`. To update, run the install line again with the new sha.
+  `--force` replaces the old copy and keeps the plugin enabled.
+- **Why `--force`.** Hermes's install scanner rates the edition **caution** (no critical findings).
+  - For a community source, caution blocks a non-interactive first install with `Use --force to override.`
+  - The findings come from defensive example text in `agents/review-code.md` (patterns a security review
+    looks for) and an environment-variable mention in `skills/auto-dev/SKILL.md`.
+  - Neither is code that runs.
+- **What appears.** Once enabled, the 15 skills show up as `hiway-kit:<skill>` in the skill list and the
+  prompt's `<available_skills>`. `harness-export` and `skill-forge` are not in the edition.
+- **Remove.** Run `hermes plugins disable hiway-kit`, then `hermes plugins remove hiway-kit`. This leaves
+  only an empty install-metadata file and empty `plugins.enabled`/`disabled` lists.
+- **Not measured.** Whether the kit coexists with Hermes's built-in verify-on-stop, skill generation and
+  memory has not been checked, because that needs a model run.
+
+Statements below that are not in the measurement record come from reading Hermes source and docs at that
+commit.
+
+**Rules reach Hermes today through `AGENTS.md`.** Use the edition's own exporter (measured: it writes the
+kit block into `AGENTS.md`), or `/harness-export` in another harness:
+
+```bash
+python3 <install root>/tools/export_harness.py --plugin-root <install root> --target <project> --entrypoints AGENTS.md
+```
+
+`<install root>` is the `hiway-kit` folder in your Hermes profile's `plugins/` directory (measured as
+`<HERMES_HOME>/profiles/<profile>/plugins/hiway-kit` for a named profile).
 
 Hermes loads **one** project context file, the first that exists: `.hermes.md`/`HERMES.md` →
 `AGENTS.override.md` → `AGENTS.md` → `CLAUDE.md` → Cursor rules. If your project has one of the first two,
@@ -257,7 +278,7 @@ between its own markers). Hermes scans context files for prompt-injection patter
 **whole file** when one line matches, so a line elsewhere in that file can hide the kit block too. The
 per-file size budget defaults to 20,000 characters and is configurable.
 
-**Skills, for evaluation only:** list a **read-only** clone's `plugins/common/skills` under
+**Skills without the plugin (evaluation only):** list a **read-only** clone's `plugins/common/skills` under
 `skills.external_dirs` in `~/.hermes/config.yaml`. Three caveats:
 
 - Hermes does not read `disable-model-invocation`, so `harness-export`, `skill-forge` and `using-hiway-kit`

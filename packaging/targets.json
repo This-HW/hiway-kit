@@ -258,9 +258,9 @@
       "_publishNote": "H2 게시(사용자 승인 2026-11-24): `enabled:true` 는 판 빌더 `--write` 를 허용한다 — CI `hermes-branch` job 이 검증을 통과한 main push 마다 그 커밋에서 판 트리를 만들어 `hermes` 브랜치를 fast-forward 한다(디렉토리 게시와 별도 job·concurrency). main 생성물은 여전히 없다. 사용자는 그 브랜치의 40자 커밋 sha 로 고정 설치한다.",
       "_unverified": {
         "_meta": "H1(2026-11-24) 뒤에도 남은 미측정. 근거: docs/specs/2026-11-24-hermes-edition/h1-measurement.md.",
-        "coexistence": "Hermes 내장 기능(verify-on-stop·스킬 자동 생성·메모리)과의 공존 — 모델 실행이 필요해 미측정(API 키 없이 측정).",
-        "publishedSource": "GitHub `hermes` 브랜치 sha 설치는 게시 전이라 미측정 — H1 P5′ 는 같은 트리를 담은 로컬 file:// 저장소로 고정 sha 설치·`--force --ref` 이동을 확인했다."
+        "coexistence": "Hermes 내장 기능(verify-on-stop·스킬 자동 생성·메모리)과의 공존 — 모델 실행이 필요해 미측정(API 키 없이 측정)."
       },
+      "_observations20261124GitHub": "H2 확인(게시된 GitHub 브랜치, 같은 격리 환경): `hermes`=5dda1c91f8848ad5bb5fe8c5ba8b16cae648558c, plugins/common=392f203d(H1 최종 측정 트리와 동일). `install This-HW/hiway-kit/plugins/common --ref <sha> --no-enable` rc 1(caution 87 — `Use --force to override.`) → `--force --no-enable` rc 0, 메타데이터 revision=sha·pinned=true, 설치본 = 게시 커밋 하위 트리. enable 후 목록·`<available_skills>` 15, 설치본 `tools/export_harness.py` → AGENTS.md rc 0, disable·remove rc 0(빈 메타데이터만 잔류). ref 없는 GitHub 설치는 AP 스키마로 거부. 실제 홈 보호 파일·Claude 플러그인 변경 0. 이후 판 README 의 '게시 후 확인' 두 줄만 실측 문구로 바뀌었다(트리 05d48056, 나머지 82 파일 동일).",
       "_observations20261124": "H1 격리 실측(쓰기 거부 sandbox-exec, Hermes 352b249 + uv.lock frozen, Python 3.14, 네트워크 차단 측정): 게시 후보 판 트리 plugins/common=392f203d028b201c6f5044daf148964921749843(원본 20dd2c8, 파일 83, 스킬 15). P0 — main 트리는 로컬·GitHub ref 없음 모두 AP 스키마로 거부. P1 — validate rc 0, caution 87(critical 0, high 3: agents/review-code.md 의 방어 예시 2·skills/auto-dev/SKILL.md 환경변수 언급 1). 비대화형 첫 설치는 community+caution 으로 `Use --force to override.` → `--force --no-enable` rc 0. P2 — 스킬 목록·프롬프트 0→15→0. P3 — 제거 뒤 메타데이터·잠금·빈 설정만 잔류. P4 — 판 그대로 export_harness.py → AGENTS.md 로드·인젝션 0·`.hermes.md` 로 가림. P5′ — file:// 고정 sha 설치·`--force --ref` 이동 후 활성 유지. P6 — 설치본 skill_dir 기준 tools/ 발견. 실제 ~/.hermes·~/.claude 보호 파일 변경 0."
     },
     {
