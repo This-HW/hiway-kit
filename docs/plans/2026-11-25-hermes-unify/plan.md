@@ -19,10 +19,10 @@ size: medium
 - **업계 근거**:
   - Hermes 공식 카탈로그 2,632건 중 96.3% 가 기본 브랜치에서 배포한다. 배포용 브랜치를 쓰는 곳은 약 1%(eachlabs `dist/hermes`, Kinprove 등)다. 별 수 상위 40개는 전부 기본 브랜치다 `[researched: hermes-agent plugin-catalog @4c84e786 전수, 2026-11-25]`
   - 유명 멀티 하네스 저장소 13곳(superpowers·ECC·addyosmani·figma·context7 등) 중 하네스별 배포 브랜치는 0곳이다. obsidian-skills·NVIDIA/skills 는 한 폴더에 AP v1 `plugin.json` + `.claude-plugin/` 등 + `skills/` 를 함께 둔다 `[researched: gh api, 2026-11-25]`
-  - 루트 `plugin.json` 충돌은 Antigravity 공식 규칙으로 푼다: `.antigravity-plugin/plugin.json` 이 루트보다 우선한다 `[researched: antigravity.google/docs/build-plugins, 미실측 → U-0]`
+  - 루트 `plugin.json` 충돌은 Antigravity 공식 규칙으로 푼다: `.antigravity-plugin/plugin.json` 이 루트보다 우선한다 `[researched: antigravity.google/docs/build-plugins, 미실측 → U-0]` <!-- doc-ref-ok: 이 계획이 만들 경로(적용 전에는 없다) -->
 - **목표 구조**:
   - `plugins/common/plugin.json` = Agent Plugins v1(Hermes 가 읽는다)
-  - `plugins/common/.antigravity-plugin/plugin.json` = Antigravity 매니페스트
+  - `plugins/common/.antigravity-plugin/plugin.json` = Antigravity 매니페스트 <!-- doc-ref-ok: 이 계획이 만들 경로(적용 전에는 없다) -->
   - Hermes 사용자는 `hermes plugins install This-HW/hiway-kit/plugins/common` 으로 main 을 설치하고 `update` 로 갱신을 받는다
   - `hermes` 브랜치·`build-hermes-branch.py`·CI `hermes-branch` 는 폐지한다
 - **감수하는 것**:
@@ -45,9 +45,9 @@ size: medium
 유형: 동작 변경(배포 구조). 정책·생성기 테스트를 새 스펙으로 먼저 고친다.
 
 1. **U-0 Antigravity 우선순위 실측**(Codex 워커, 지금 병렬)
-   - 바꿀 파일: 레포 밖 산출물만 쓴다. 결과는 `docs/specs/2026-11-25-hermes-unify/u0-antigravity.md`
+   - 바꿀 파일: 레포 밖 산출물만 쓴다. 결과는 `docs/specs/2026-11-25-hermes-unify/u0-antigravity.md` <!-- doc-ref-ok: U-0 가 만들 보고서 -->
    - 최소 플러그인으로 `agy` 1.5.15 를 쓰기 거부 샌드박스에서 비교한다:
-     - (a) 루트 AP v1 + `.antigravity-plugin/plugin.json`
+     - (a) 루트 AP v1 + `.antigravity-plugin/plugin.json` <!-- doc-ref-ok: 이 계획이 만들 경로(적용 전에는 없다) -->
      - (b) 루트 AP v1 만
      - (c) 루트 Antigravity 형식만(현재 구조, 대조군)
    - 비교 항목: validate/install/list/uninstall 결과, 인식된 name·version·스킬
@@ -56,7 +56,7 @@ size: medium
      - `packaging/targets.json`(antigravity `manifestPath` 이동, hermes 를 main 배포 타겟으로)
      - `scripts/build-targets.py` 와 테스트(불변식 교체)
      - `scripts/build-codex-zip.py`(`.antigravity-plugin/` 제외)
-     - `plugins/common/plugin.json`·`plugins/common/.antigravity-plugin/plugin.json`(생성물)
+     - `plugins/common/plugin.json`·`plugins/common/.antigravity-plugin/plugin.json`(생성물) <!-- doc-ref-ok: 이 계획이 만들 경로(적용 전에는 없다) -->
      - `plugins/common/skills/harness-export/SKILL.md`(쓰기 안전장치)
      - `docs/conventions/consumer-footprint.md`
      - `scripts/build-hermes-branch.py`·`scripts/tests/test_build_hermes_branch.py` 삭제
