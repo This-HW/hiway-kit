@@ -177,35 +177,36 @@ other plugins.
 
 **Claude Code is the full-feature baseline.** The kit's plugin root (`plugins/common/`) also ships
 **native plugin manifests** for Codex, Antigravity and Cursor, generated from the same source of truth as
-the Claude Code manifest (`packaging/targets.json` + `scripts/build-targets.py` — see
+the Claude Code manifest, and a generated **Hermes Agent edition** on the `hermes` branch (`packaging/targets.json` + `scripts/build-targets.py` — see
 [`packaging/README.md`](packaging/README.md)). What reaches each harness differs by platform
 capability. The cells below cite the measurement they rest on; the dated records live in
 `packaging/targets.json` and `docs/specs/2026-10-05-audit-remediation/audit/A-harness.md`
-(codex 0.159.3, agy 1.2.17, measured 2026-10-05). Install commands for each harness:
+(codex 0.159.3, agy 1.2.17, measured 2026-10-05; Hermes `352b249`, measured 2026-11-24 in
+`docs/specs/2026-11-24-hermes-edition/h1-measurement.md`). Install commands for each harness:
 [docs/harnesses.md](docs/harnesses.md).
 
-| Component | Codex | Antigravity |
-| --- | --- | --- |
-| Skills | ✅ `"skills": "./skills/"` — all recognized (measured 2026-10-05) | ✅ recognized by the model (measured 2026-10-05); running a skill end-to-end is unmeasured |
-| Rules | ⚠ no dedicated field → hook injection (marketplace install) or `AGENTS.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **plugin `rules/` does not arrive** (a token planted in `rules/` never reached the model, measured 2026-10-05 — although Google's plugin docs list `rules/`). Norms reach Antigravity **only** through the entrypoint file |
-| Agents | ⚠ no plugin field — files ship but are not exposed as subagents | ❌ **not recognized** — even after the 5.3.0 flat layout, `agy agents` lists none of them. The cause is the `model: haiku\|sonnet\|opus` frontmatter (an agent with `model: inherit` or no `model` is recognized — bisected 2026-10-05), not the folder layout. `agy plugin validate` counts files only (an empty `junk.txt` counts as an agent), so its green "agents processed" line is not evidence of recognition |
-| Hooks | ⚠ `session-start` and `auto-format` ship and require native trust and an enabled state — see [Trusting and enabling Codex hooks](docs/harnesses.md#trusting-and-enabling-codex-hooks). `protect-sensitive` is not shipped (see *Automatic blocking*) | ❌ not shipped — format unverified |
-| MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled |
+| Component | Codex | Antigravity | Hermes Agent |
+| --- | --- | --- | --- |
+| Skills | ✅ `"skills": "./skills/"` — all recognized (measured 2026-10-05) | ✅ recognized by the model (measured 2026-10-05); running a skill end-to-end is unmeasured | ✅ 15 of 17 as `hiway-kit:<skill>` from the `hermes` branch edition — listed and in `<available_skills>` once enabled (measured 2026-11-24); `harness-export`·`skill-forge` are not shipped |
+| Rules | ⚠ no dedicated field → hook injection (marketplace install) or `AGENTS.md` (see [`/harness-export`](plugins/common/skills/harness-export/SKILL.md)) | ❌ **plugin `rules/` does not arrive** (a token planted in `rules/` never reached the model, measured 2026-10-05 — although Google's plugin docs list `rules/`). Norms reach Antigravity **only** through the entrypoint file | ⚠ no plugin rules path → `AGENTS.md` from the edition's `tools/export_harness.py` (measured); `.hermes.md`/`AGENTS.override.md` shadow it |
+| Agents | ⚠ no plugin field — files ship but are not exposed as subagents | ❌ **not recognized** — even after the 5.3.0 flat layout, `agy agents` lists none of them. The cause is the `model: haiku\|sonnet\|opus` frontmatter (an agent with `model: inherit` or no `model` is recognized — bisected 2026-10-05), not the folder layout. `agy plugin validate` counts files only (an empty `junk.txt` counts as an agent), so its green "agents processed" line is not evidence of recognition | ❌ no agent-definition loader — the files ship as briefs a skill can pass to `delegate_task` |
+| Hooks | ⚠ `session-start` and `auto-format` ship and require native trust and an enabled state — see [Trusting and enabling Codex hooks](docs/harnesses.md#trusting-and-enabling-codex-hooks). `protect-sensitive` is not shipped (see *Automatic blocking*) | ❌ not shipped — format unverified | ❌ not shipped (Hermes shell hooks live in the user's `config.yaml` with a different payload) |
+| MCP servers | ❌ not bundled (kit doesn't ship MCP servers) | ❌ not bundled | ❌ not bundled |
 
 **Parity contract**: rules and skills (norms and procedures) work on every harness — but how the
 norms arrive differs, and on some paths they arrive only if you export them:
 
-| | Claude Code | Codex | Antigravity |
-| --- | --- | --- | --- |
-| Rules | hook injection (install path B — path A's edition has no hooks, see Quick Install) | hook injection (marketplace install, after hook trust) — `AGENTS.md` is the fallback | `AGENTS.md` / `GEMINI.md` only — Antigravity reads **both**, so identical copies load twice |
-| Ledger digest (memory) | hook injection (path B only) | hook injection; rules also tell the agent to fetch it itself | self-fetch per the rule (unmeasured) |
-| Skills | native | recognized | recognized |
-| Subagents | ✅ | **not exposed** — skills degrade to in-session execution | not recognized (`model:` frontmatter, see above) |
-| Agent `model` / `effort` frontmatter | ✅ applied per agent | ❌ not applied — everything runs on the model/effort in your Codex config | ❌ not applied |
-| Automatic blocking | `PreToolUse` veto | **none shipped.** On codex 0.153.4 a `PreToolUse` block did not stop the command; **on codex 0.159.3 it does** (measured in the 2026-10-05 audit, recorded in `packaging/targets.json`). Porting `protect-sensitive` is a separate decision — its payload differs (`Bash`/`apply_patch`) | none |
+| | Claude Code | Codex | Antigravity | Hermes Agent |
+| --- | --- | --- | --- | --- |
+| Rules | hook injection (install path B — path A's edition has no hooks, see Quick Install) | hook injection (marketplace install, after hook trust) — `AGENTS.md` is the fallback | `AGENTS.md` / `GEMINI.md` only — Antigravity reads **both**, so identical copies load twice | `AGENTS.md` only (export it) |
+| Ledger digest (memory) | hook injection (path B only) | hook injection; rules also tell the agent to fetch it itself | self-fetch per the rule (unmeasured) | self-fetch per the rule (unmeasured) |
+| Skills | native | recognized | recognized | recognized (plugin, namespaced) |
+| Subagents | ✅ | **not exposed** — skills degrade to in-session execution | not recognized (`model:` frontmatter, see above) | **not exposed** — `delegate_task` takes a goal and context only |
+| Agent `model` / `effort` frontmatter | ✅ applied per agent | ❌ not applied — everything runs on the model/effort in your Codex config | ❌ not applied | ❌ not applied (Hermes delegation config) |
+| Automatic blocking | `PreToolUse` veto | **none shipped.** On codex 0.153.4 a `PreToolUse` block did not stop the command; **on codex 0.159.3 it does** (measured in the 2026-10-05 audit, recorded in `packaging/targets.json`). Porting `protect-sensitive` is a separate decision — its payload differs (`Bash`/`apply_patch`) | none | none shipped |
 
 Put plainly: **what a non-Claude-Code harness loses is dedicated executors (subagents), automatic
-blocking, and — on Antigravity, Gemini CLI, and the Codex directory ZIP — automatic injection**
+blocking, and — on Antigravity, Gemini CLI, Hermes Agent, and the Codex directory ZIP — automatic injection**
 (there you run `/harness-export`). Everything else keeps working, because it depends only on git and
 external processes: discipline (rules), procedure (skills), state (child session markers under
 `gitdir/kit/child.json`), and the registry `describe` seam. One caveat: behavioral evals (`evals/`)

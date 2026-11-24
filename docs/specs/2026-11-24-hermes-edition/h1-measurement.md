@@ -515,3 +515,103 @@ AGENTS.md 7,206자가 `loaded`이며 프롬프트에 마커가 실렸음을 확�
 기록하고 비교했다(각 rc 0). 승인된 Hermes 데몬 관리 파일 6건이 바뀌었고
 그 밖의 변경과 Claude 플러그인 파일 변경은 각각 0건이었다. 원 로그와 프로브는
 `~/.cache/hiway-research/hermes/h1/phase2/`에 보존했다.
+
+## H2 확인 — 게시된 GitHub hermes 브랜치
+
+- `SHA=5dda1c91f8848ad5bb5fe8c5ba8b16cae648558c` (`refs/heads/hermes`).
+- `tree_sha: 392f203d028b201c6f5044daf148964921749843` (`plugins/common`). 컨트롤러가 승인한 후보와 일치했다.
+
+기존 격리 환경과 PM 런타임을 사용했다. `sb off "$H" --version`과
+`sb off "$R/venv-main-314/bin/python" --version` (각 rc 0)은
+Hermes Agent `vgit.352b249`와 Python 3.14.10을 출력했다.
+`sb off /usr/bin/git -C "$R/src/hermes-main" diff --exit-code HEAD -- uv.lock pm/lock.json` (rc 0)에서
+두 잠금 파일의 변경은 0건이었다. 원 로그는 샌드박스 밖에서
+`~/.cache/hiway-research/hermes/h2/`에 복사했다. 아래 명령의 `sb`, `R`, `H`는
+앞과 같다. uv의 경로도 모두 `$R` 아래로 지정했다.
+
+```sh
+SHA=5dda1c91f8848ad5bb5fe8c5ba8b16cae648558c
+url=https://github.com/This-HW/hiway-kit
+slug=This-HW/hiway-kit/plugins/common
+work="$R/h2-github.mOXJkj"
+profile=h2-github-moxjkj
+profile_home="$R/hermes-home/profiles/$profile"
+installed="$profile_home/plugins/hiway-kit"
+py="$R/venv-main-314/bin/python"
+removed="$work/33-profile-removed.json"
+after_p0="$work/39-profile-after-p0.json"
+h2gh() {
+  mode=$1
+  shift
+  sb "$mode" "$H" --profile "$profile" "$@"
+}
+```
+
+### 게시 브랜치와 고정 SHA 설치
+
+| 명령 | rc | 관측 |
+| --- | --- | --- |
+| `sb install /usr/bin/git ls-remote "$url" refs/heads/hermes` | 0 | stdout에 `5dda1c91f8848ad5bb5fe8c5ba8b16cae648558c`와 탭으로 구분된 `refs/heads/hermes` 한 줄을 출력했다. |
+| `sb off /usr/bin/git -C "$work/published" init` 및 `sb install /usr/bin/git -C "$work/published" fetch --depth=1 --no-tags "$url" "$SHA"` | 각 0 | 워크트리 밖 임시 Git 저장소에 게시 커밋을 가져왔다. |
+| `sb off /usr/bin/git -C "$work/published" rev-parse FETCH_HEAD "$SHA:plugins/common"` | 0 | 가져온 커밋은 `$SHA`였고 하위 트리는 위 `tree_sha`와 같았다. |
+| `sb off "$H" profile create "$profile" --no-alias --no-credentials --no-skills` | 0 | 격리 홈에 새 프로필을 만들었다. |
+| `h2gh install plugins install "$slug" --ref "$SHA" --no-enable` | 1 | GitHub에서 복제한 뒤 커뮤니티 소스의 `CAUTION` 판정(87건)으로 막혔다. `Use --force to override.`를 출력했고 설치 디렉터리는 생기지 않았다. |
+| `h2gh install plugins install "$slug" --ref "$SHA" --force --no-enable` | 0 | 같은 판정이 표시됐고 `hiway-kit` 5.9.1이 비활성 상태로 설치됐다. |
+| `sb off /usr/bin/git -C "$installed" rev-parse HEAD` | 128 | 하위 경로 설치본에는 `.git`이 없어 설치 디렉터리에서 HEAD를 읽을 수 없었다. |
+| `sb off "$py" -B "$R/phase2/pin_probe.py" "$profile_home" "https://github.com/This-HW/hiway-kit.git#plugins/common" "$SHA"` | 0 | 메타데이터의 `revision`은 `$SHA`, `pinned`는 `true`였다. |
+| `sb off /usr/bin/git -C "$work/published" archive --format=tar -o "$work/published.tar" "$SHA:plugins/common"`, `sb off /usr/bin/tar -xf "$work/published.tar" -C "$work/edition"`, `sb off /usr/bin/diff -qr "$work/edition" "$installed"` | 각 0 | 게시 커밋의 하위 트리와 설치본의 파일 경로·내용이 일치했다. |
+
+Apple Git은 격리 루트 밖 `xcrun` 캐시 쓰기가 거부됐다는 메시지를 stderr에 남겼다.
+`ls-remote`의 SHA는 stdout으로 확인했다. 고정 SHA 확인에서는 CLI에 전달한 shorthand를
+메타데이터에 저장되는 정규 URL로 바꿔 대조했다. 두 초기 대조의 출력도 원 로그에 남겼다.
+
+### 활성화, 규칙 생성, 제거
+
+| 명령 | rc | 관측 |
+| --- | --- | --- |
+| `h2gh off plugins enable hiway-kit` | 0 | `Plugin hiway-kit enabled.` |
+| `h2gh off plugins list` | 각 0 | 설치 직후 `not enabled`, 활성화 후 `enabled`, 비활성화 후 `disabled`. 제거 후에는 `hiway-kit` 항목이 사라졌다. 생략 옵션을 주지 않은 원 출력을 보존했다. |
+| `sb off "$py" -B "$R/phase2/skills_probe.py" "$profile_home"` | 각 0 | 에이전트 목록과 프롬프트의 `<available_skills>`에 설치 전 0, 비활성 설치 직후 0, 활성화 후 15, 비활성화 후 0, 제거 후 0개가 노출됐다. |
+| `sb off /usr/bin/git -C "$work/project" init -b main` | 0 | 규칙을 내보낼 임시 Git 프로젝트를 만들었다. |
+| 설치 루트에서 `sb off "$py" "$installed/tools/export_harness.py" --plugin-root "$installed" --target "$work/project" --entrypoints AGENTS.md` | 0 | `✓ 기록`을 출력하고 `AGENTS.md`를 생성했다. 시작 마커는 `kit:begin rules-v1.4.0 sha256:858066ab699a8c249eb5b40af082e234bf0731f1c304907690c64f5a5d47392e`, 끝 마커는 `kit:end`였다(두 줄 검사 rc 0). |
+| `h2gh off plugins disable hiway-kit` 및 `h2gh off plugins remove hiway-kit` | 각 0 | 설정에서 비활성화한 뒤 설치 트리를 제거했다. |
+
+활성화 후 목록과 프롬프트에 나온 이름 집합은 다음과 같다.
+
+```text
+hiway-kit:agent-creator
+hiway-kit:auto-dev
+hiway-kit:brainstorming
+hiway-kit:child-session
+hiway-kit:code-intel
+hiway-kit:control-loop
+hiway-kit:cross-engine-review
+hiway-kit:debug
+hiway-kit:multi-perspective-review
+hiway-kit:plan-task
+hiway-kit:review
+hiway-kit:session-history
+hiway-kit:test
+hiway-kit:using-hiway-kit
+hiway-kit:web-research
+```
+
+`sb off /opt/homebrew/bin/python3.11 -B "$R/phase2/profile_state.py" capture "$profile_home" "$snapshot"`
+(각 rc 0)에서 설치 전 플러그인 경로는 0개였다. 제거 후에는 프로필의 `plugins/`에
+`.install-metadata.json`(내용은 `{}`)과 `.install-metadata.json.lock`이 남았다. `config.yaml`에는
+`plugins.enabled: []`, `plugins.disabled: []`, `_config_version: 54`가 남았다.
+
+### P0 GitHub 무ref 대조와 실제 홈 대조
+
+`sb install /usr/bin/git ls-remote --symref "$url" HEAD` (rc 0)에서 기본 브랜치는
+`refs/heads/main`, HEAD는 `88b9f8bb748c5b06302fd3ef37daf783327aa5d1`이었다.
+`h2gh install plugins install "$slug" --no-enable` (rc 1)은 GitHub에서 `plugins/common`을
+복제한 뒤 `Portable plugin manifest validation failed: plugin.json declares an unsupported or missing Agent Plugins schema`로 거부했다.
+목록에 `hiway-kit`은 없고 스킬 목록과 프롬프트는 각각 0개였다(각 확인 rc 0).
+제거 직후와 P0 이후 프로필 스냅샷을 비교한 `sb off /usr/bin/diff -u "$removed" "$after_p0"` (rc 0)에서
+설정 내용과 플러그인 경로가 일치했다. 설치 메타데이터도 빈 객체 그대로였다.
+
+호스트에서 `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`
+(전후 각 rc 0)으로 파일 메타데이터를 기록했다. 같은 스크립트의 `compare "$before" "$after"` (rc 0)에서
+기존 허용 목록의 Hermes 데몬 파일 12건이 바뀌었고, 보호 파일과 허용 목록 밖 변경 0건,
+실제 Claude 플러그인 파일 변경 0건이었다.

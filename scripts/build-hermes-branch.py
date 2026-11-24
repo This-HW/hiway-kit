@@ -276,8 +276,8 @@ hermes plugins install This-HW/hiway-kit/plugins/common --ref "$SHA" {H1_FORCE_F
 hermes plugins enable hiway-kit
 ```
 
-H1 ran these steps against a local Git mirror of the same tree; the GitHub address is confirmed once the
-branch is published.
+These exact steps were measured on 2026-11-24 against the published `hermes` branch on GitHub (Hermes
+`352b249`): the pinned install, 15 skills after `enable`, and a clean `disable`/`remove`.
 
 **Why `{H1_FORCE_FLAG}` is needed.** Hermes' install scanner rates this edition **{H1_SCAN_VERDICT}**
 (critical 0). For a community source, a {H1_SCAN_VERDICT} verdict blocks a non-interactive first install
