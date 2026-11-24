@@ -13,25 +13,12 @@ to check its work against except its own judgment. **hiway-kit gives it somethin
 against:** a plan whose completion conditions are written as commands, and a gate that reads exit
 codes instead of sentences.
 
-```mermaid
-flowchart LR
-  subgraph G1["Planning gate — you decide"]
-    PT["/plan-task writes plan.md<br/>completion conditions are commands"]
-  end
-  subgraph L["Build loop — runs on its own"]
-    AD["/auto-dev works the plan"] --> RV["review-code + security-scan"]
-  end
-  subgraph G2["Verification gate"]
-    VD{"completion commands<br/>exit 0?"}
-  end
-  PT -->|"you approve the plan"| AD
-  RV --> VD
-  VD -->|"yes"| DONE(["done"])
-  VD -->|"no: fix and re-run"| AD
-  AD -.->|"P0 question or a guard stops it"| YOU(["reported to you"])
-  RV -.->|"findings"| LED[("feedback ledger<br/>.git/kit/")]
-  LED -.->|"LESSONS at the next session start (path B hooks)"| AD
-```
+![Approved plans move into implementation, review, security checks, and a completion gate](docs/architecture/diagrams/plan-build-verify/plan-build-verify.svg)
+
+`/plan-task` records the completion commands for approval. `/auto-dev` implements the approved plan and
+runs the spec check, code review, and security scan. It reports unresolved checks or guards to the
+user. Completion requires fresh passing commands and passing review and security results. The
+feedback ledger can supply lessons from review and security findings at a later path B session start.
 
 Claude Code is the full-feature baseline; Codex, Antigravity and Gemini CLI get the partial support
 measured in [Where it runs](#where-it-runs). Docs & blog: **[hiway.thishw.com](https://hiway.thishw.com/)**
@@ -118,19 +105,11 @@ Other harnesses (Codex, Antigravity, Cursor, Gemini CLI, the `skills` CLI): see
 Pick the path by the size of the task. The skills own the details; agents are invoked by those
 skills, not chained by hand.
 
-```mermaid
-flowchart LR
-  S{"How big is the task?"}
-  S -->|"Large new feature"| BR["/brainstorming"]
-  S -->|"Medium"| PT["/plan-task"]
-  S -->|"Small fix or bug"| IM["implement directly"]
-  BR -->|"design approved"| PT
-  PT -->|"plan approved"| AD["/auto-dev"]
-  AD --> V{"completion commands<br/>exit 0?"}
-  IM --> V
-  V -->|"yes"| D(["done"])
-  V -->|"no"| R(["not done: report what is left"])
-```
+![Task size selects design, planning, or direct implementation before verification](docs/architecture/diagrams/task-size/task-size.svg)
+
+Start design-heavy large features with `/brainstorming` and medium work with `/plan-task`. An approved
+design goes to planning. An approved plan goes to `/auto-dev`. Implement small fixes directly.
+Run the completion commands for each path and report anything still open.
 
 What to type first:
 
@@ -300,11 +279,11 @@ Tier 2: project-local/   — Project-specific agents (user-defined)
 
 Larger work follows a 3-phase gate; small fixes don't need the ceremony:
 
-```
-Phase 1 (Planning)     → Remove ambiguity (brainstorming only for Large new features)
-Phase 2 (Development)  → Implement based on Phase 1 artifacts
-Phase 3 (Validation)   → Review + security scan
-```
+![Planning approval unlocks development, then passing development checks unlock validation](docs/architecture/diagrams/phase-gates/phase-gates.svg)
+
+Resolve P0 ambiguity and approve the plan before development. Development uses the plan as its input.
+Passing the development checks opens validation, which checks spec compliance before code review and
+the security scan.
 
 ### Model Selection
 
@@ -363,23 +342,12 @@ Report vulnerabilities privately — see [SECURITY.md](SECURITY.md).
 
 What the hooks do in a Claude Code session (install path B):
 
-```mermaid
-sequenceDiagram
-  participant U as You
-  participant CC as Claude Code
-  participant K as hiway-kit hooks (path B)
-  U->>CC: start a session
-  CC->>K: SessionStart
-  K-->>CC: environment check, then rules + active plans + LESSONS
-  CC->>K: PreToolUse (Read, Edit, Write of .env)
-  K-->>CC: blocked by protect-sensitive
-  CC->>K: PostToolUse after Edit or Write
-  K-->>CC: auto-format, only with the project's own formatter setup
-  CC->>K: Stop
-  K-->>CC: decision block if lint or the edited tests fail
-  CC->>CC: keeps fixing, then stops again
-  Note over U,K: These are the path B hooks. Path A (Anthropic directory) is a reduced edition, see Quick Install. Turn any hook off with HIWAY_KIT_DISABLE_HOOKS.
-```
+![Claude Code calls hiway-kit at session start, before sensitive tool use, after edits, and at Stop](docs/architecture/diagrams/path-b-hooks/path-b-hooks.svg)
+
+`SessionStart` checks the environment and injects rules, active plans, and available lessons.
+`PreToolUse` checks protected paths and `PostToolUse` uses the project's formatter configuration.
+`Stop` can ask Claude Code to fix lint or edited-test failures within its retry guards.
+Use `HIWAY_KIT_DISABLE_HOOKS` to disable a hook. The directory edition on path A has a reduced footprint.
 
 - **Hooks:** `protect-sensitive.py` runs on Edit/Write/MultiEdit/NotebookEdit/Read/Grep and blocks
   sensitive file **paths**: `.env`, key and certificate files, SSH/cloud credential directories,

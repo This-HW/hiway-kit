@@ -33,18 +33,18 @@ size: medium
   - 제외 1: `plugins/common/**` — 디렉토리 심사 중에는 고정이고, 배포물이다
   - 제외 2: `CLAUDE.md`·`AGENTS.md` — 에이전트가 텍스트로 읽는다
   - 제외 3: 지위가 historical·superseded 인 문서와 `CHANGELOG.md` — 기록이다
-- **산출 형식**: `docs/architecture/diagrams/<slug>/` 아래에 세 파일을 둔다
+- **산출 형식**: `docs/architecture/diagrams/<slug>/`에는 정본과 정적판, 두 파일의 매니페스트를 추적한다
   - `candidate.json`: 정본
-  - `<slug>.html`: 인터랙티브판
   - `<slug>.svg`: 정적판. 테마는 `auto` 다. Archify 의 README 규칙도 정적 SVG 다
-  - 문서는 SVG 를 Markdown 이미지로 싣고 HTML 링크를 단다
+  - `ARTIFACTS.sha256`: 정본과 SVG의 SHA-256
+  - `<slug>.html`은 로컬 인터랙티브판이자 SVG 내보내기의 중간 산출물이다. 직접 마켓플레이스 설치는 이 레포 전체를 받는다. 뷰어 런타임이 도식마다 들어가 설치·업데이트 용량이 커지고, GitHub 파일 화면에서는 HTML을 실행할 수 없으므로 추적에서 제외한다
+  - 문서는 SVG를 Markdown 이미지로 싣는다. 재생성과 로컬 열람 절차는 [도식 관리 문서](../../architecture/diagrams/README.md)에 둔다
+  - README의 "What to type first"는 검색·복사가 필요한 명령 참조이므로 원래 `skills` 펜스를 유지한다
   - 도식을 대체할 때는 같은 내용을 텍스트로 요약한 문단을 남긴다. 이미지를 못 보는 독자와 에이전트를 위해서다
 - **게이트를 약화하지 않는다**
-  - `check_doc_refs.py` 의 도식 블록 검사는 README 의 `mermaid`·`skills` 펜스에 걸려 있다. 펜스 안의 `/스킬` 이름은 실재해야 하고, 개수는 넣지 않는다
-  - 그 펜스를 SVG 로 바꾸면 이 검사가 사라진다
-  - 그러므로 같은 두 규칙을 `docs/architecture/diagrams/*/candidate.json` 의 라벨에도 적용한다
-  - SVG·HTML 이 정본 `candidate.json` 과 조용히 어긋나지 않도록 Node 없이 도는 결정적 검사를 둔다(예: Archify 가 산출물에 박는 출처 해시와 정본의 대조)
-  - 위 둘 모두 되돌려-FAIL 로 증명한다
+  - `check_doc_refs.py`는 남은 `mermaid`·`skills` 펜스의 스킬 실재와 개수 금지를 검사한다
+  - 같은 규칙을 후보 JSON과 렌더된 SVG에 적용한다. Python 게이트는 후보와 SVG의 해시, SVG 노드·엣지 메타데이터, 출처 파일과 줄 범위, 추적 파일과 Markdown SVG 위치를 검사한다
+  - 해시만 갱신한 정본 변경과 잘못된 SVG 표시 텍스트도 되돌려-FAIL로 증명한다
 - **Code Analysis(의존 그래프)는 조사만 한다**
   - 대상은 `scripts/`·`plugins/common/hooks`·`plugins/common/tools`
   - 결과 HTML 은 레포 밖에 둔다. 발견 요지만 보고서에 쓴다
@@ -64,7 +64,7 @@ size: medium
    - 인벤토리의 대체 대상마다 Archify 절차를 따른다: Type router → schema·example → candidate → `finalize --quality showcase`
    - 그다음 `export-svg.mjs` 로 SVG 를 내보낸다
    - 모든 노드·관계는 레포 근거(경로:줄)에 묶는다. 근거가 없으면 그리지 않는다
-4. **A-4 문서 교체**: README·docs 에 SVG 를 넣고 HTML 링크를 달고 텍스트 요약을 남긴다
+4. **A-4 문서 교체**: README·docs에 SVG를 넣고 텍스트 요약을 남긴다
 5. **A-5 Code Analysis 조사**: 레포 밖에서 실행한다
 6. **검수(controller)**
    - 도식을 직접 열어 확인한다

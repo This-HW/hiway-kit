@@ -47,9 +47,9 @@ fail.** 분기가 없다 — 항상 돈다(`docs/conventions/warning-signal.md` 
 
 ## 도식 블록 — `mermaid`·`skills` 펜스 (5.9.0)
 
-펜스는 위에서 "실재를 주장하지 않는다"고 했지만 **도식은 주장한다** — README 의 워크플로 그림과
-"상황 → 명령" 카드는 독자가 그대로 입력할 명령을 그린다. 그래서 info string 이 `mermaid` 또는
-`skills` 인 펜스에는 두 가지를 더 건다.
+README의 "What to type first" 명령 카드처럼 `mermaid` 또는 `skills` 펜스에 사용법을
+그릴 수 있다. 이 펜스에는 아래 두 규칙을 추가로 적용한다. SVG로 교체한 도식의 정본과
+표시 텍스트는 `scripts/check_archify_diagrams.py`(§32)가 같은 규칙으로 검사한다.
 
 | 검사 | 조건 | 이유 |
 | --- | --- | --- |
@@ -60,8 +60,7 @@ fail.** 분기가 없다 — 항상 돈다(`docs/conventions/warning-signal.md` 
 대상은 info string 으로 고른다 — 파일·절 목록이 아니다. 줄 opt-out(`doc-ref-ok`)은 **듣지 않는다**:
 도식에 개수를 넣지 않는 데에 줄 단위 예외가 필요한 경우가 없고, 예외는 이유가 붙는
 `ALLOWED_REFS` 쌍으로만 둔다. `skills` 는 GitHub 가 모르는 언어라 평범한 코드블록으로 렌더된다 —
-"상황 → 명령" 카드를 이 검사에 태우려고 고른 형식이다. 성공 줄에 검사한 도식 블록 수를 찍는다
-(0 이면 대상에 닿지 않은 것이다 — `warning-signal.md` §측정 3).
+"상황 → 명령" 카드를 이 검사에 태우려고 고른 형식이다. 성공 줄의 개수는 검사한 펜스의 수다.
 
 ## 못 읽은 파일은 집계한다
 
@@ -372,12 +371,12 @@ def count_diagram_blocks(text: str) -> int:
 Ref = tuple[str, str, str]  # (종류, 참조, 고치는 법)
 
 
-def _check_diagram_line(line: str, index: Index) -> list[Ref]:
+def diagram_line_problems(line: str, files: set[str]) -> list[Ref]:
     """도식 블록 한 줄 — 없는 스킬을 가리키는 `/이름`, 그리고 개수(독스트링 "도식 블록")."""
     out: list[Ref] = []
     for m in SLASH_CMD_RE.finditer(line):
         name = m.group(1)
-        if f"{SKILLS_PREFIX}{name}/SKILL.md" not in index.files:
+        if f"{SKILLS_PREFIX}{name}/SKILL.md" not in files:
             out.append(("도식 스킬", f"/{name}", FIX_DIAGRAM_SKILL))
     for m in DIAGRAM_COUNT_RE.finditer(line):
         out.append(("도식 수치", m.group(0), FIX_DIAGRAM_COUNT))
@@ -487,7 +486,9 @@ def find_refs(
         if (
             lang in DIAGRAM_LANGS
         ):  # 줄 opt-out 보다 먼저 — 도식 검사는 그것을 듣지 않는다
-            bad.extend((lineno, *r) for r in keep(_check_diagram_line(line, index)))
+            bad.extend(
+                (lineno, *r) for r in keep(diagram_line_problems(line, index.files))
+            )
         if LINE_OPT_OUT in line:
             continue
         if in_fence:

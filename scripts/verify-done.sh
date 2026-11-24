@@ -900,6 +900,14 @@ else
   red "보이지 않는 Unicode 가 실렸다 — 지우거나 정당하면 사유와 함께 예외 등재 (상세는 위 출력의 file:line:col)"
 fi
 
+hdr "32. Archify 도식 — 표시 텍스트와 산출물 드리프트"
+# 이 검사가 도는 조건: 항상 — Git 추적 도식과 Markdown의 SVG 이미지 전량을 확인한다.
+if python3 scripts/check_archify_diagrams.py; then
+  green "Archify 정본·산출물 일치 (check_archify_diagrams.py — CI와 단일 소스)"
+else
+  red "Archify 도식 검사 실패 — 표시 텍스트를 고치거나 정본에서 다시 생성 (상세는 위 출력)"
+fi
+
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'

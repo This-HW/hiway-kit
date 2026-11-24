@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Claude Code hooks on install path B",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/path-b-hooks/path-b-hooks.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    }
+  },
+  "participants": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "You",
+      "sources": [
+        {
+          "path": "README.md",
+          "line": 364,
+          "end_line": 381
+        }
+      ]
+    },
+    {
+      "id": "host",
+      "type": "frontend",
+      "label": "Claude Code",
+      "sources": [
+        {
+          "path": "plugins/common/hooks/hooks.json",
+          "line": 2,
+          "end_line": 25
+        },
+        {
+          "path": "plugins/common/hooks/hooks.json",
+          "line": 27,
+          "end_line": 55
+        },
+        {
+          "path": "plugins/common/hooks/hooks.json",
+          "line": 57,
+          "end_line": 70
+        }
+      ]
+    },
+    {
+      "id": "kit",
+      "type": "backend",
+      "label": "hiway-kit hooks",
+      "sources": [
+        {
+          "path": "plugins/common/hooks/session-start.py",
+          "line": 601,
+          "end_line": 625
+        },
+        {
+          "path": "plugins/common/hooks/auto-format.py",
+          "line": 510,
+          "end_line": 527
+        },
+        {
+          "path": "plugins/common/hooks/stop-validator.py",
+          "line": 783,
+          "end_line": 815
+        }
+      ],
+      "explanation": "This is path B. Active plans and LESSONS are injected when present. The directory edition has a reduced footprint."
+    }
+  ],
+  "messages": [
+    {
+      "id": "launch",
+      "from": "user",
+      "to": "host",
+      "y": 160,
+      "label": "Start session",
+      "variant": "default"
+    },
+    {
+      "id": "startup",
+      "from": "host",
+      "to": "kit",
+      "y": 197,
+      "label": "SessionStart",
+      "variant": "default"
+    },
+    {
+      "id": "context",
+      "from": "kit",
+      "to": "host",
+      "y": 234,
+      "label": "Check environment, then inject context",
+      "variant": "return"
+    },
+    {
+      "id": "before",
+      "from": "host",
+      "to": "kit",
+      "y": 274,
+      "label": "PreToolUse for protected path",
+      "variant": "security"
+    },
+    {
+      "id": "deny",
+      "from": "kit",
+      "to": "host",
+      "y": 311,
+      "label": "Block access to .env",
+      "variant": "return"
+    },
+    {
+      "id": "after",
+      "from": "host",
+      "to": "kit",
+      "y": 351,
+      "label": "PostToolUse after an edit",
+      "variant": "default"
+    },
+    {
+      "id": "format",
+      "from": "kit",
+      "to": "host",
+      "y": 388,
+      "label": "Format if project configuration allows",
+      "variant": "return"
+    },
+    {
+      "id": "stop",
+      "from": "host",
+      "to": "kit",
+      "y": 428,
+      "label": "Stop",
+      "variant": "default"
+    },
+    {
+      "id": "decision",
+      "from": "kit",
+      "to": "host",
+      "y": 465,
+      "label": "Block on lint or edited-test failure",
+      "variant": "return",
+      "note": "Claude Code can try to fix the failure. Re-entry and retry guards bound the cycle."
+    }
+  ],
+  "cards": [
+    {
+      "dot": "slate",
+      "title": "Hook configuration",
+      "items": [
+        "SessionStart contributes rules, active plans and LESSONS when available.",
+        "Use HIWAY_KIT_DISABLE_HOOKS to turn off the matching hook."
+      ]
+    }
+  ]
+}

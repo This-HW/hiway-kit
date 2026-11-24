@@ -1,0 +1,118 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "구현 중 발견한 기획 공백",
+    "locale": "ko",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/planning-gap/planning-gap.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "p0",
+      "label": "결정이 필요할 때"
+    },
+    {
+      "id": "spec",
+      "label": "명세가 없을 때"
+    },
+    {
+      "id": "blocked",
+      "label": "구현이 어려울 때"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "gap",
+      "lane": "spec",
+      "col": 0,
+      "label": "기획 공백 발견",
+      "type": "frontend",
+      "sources": [
+        {
+          "path": "plugins/common/rules/planning-protocol.md",
+          "line": 18,
+          "end_line": 26
+        },
+        {
+          "path": "plugins/common/agents/implement-code.md",
+          "line": 66,
+          "end_line": 76
+        }
+      ],
+      "sublabel": "구현 중 유형 분류"
+    },
+    {
+      "id": "p0",
+      "lane": "p0",
+      "col": 1,
+      "label": "P0_AMBIGUITY",
+      "type": "security",
+      "sources": [
+        {
+          "path": "plugins/common/rules/planning-protocol.md",
+          "line": 11,
+          "end_line": 23
+        }
+      ],
+      "sublabel": "중단 후 사용자에게 질문",
+      "explanation": "데이터 무결성, 보안, 금융, 핵심 비즈니스가 모호하면 맥락과 선택지를 제시하고 답을 받는다."
+    },
+    {
+      "id": "missing",
+      "lane": "spec",
+      "col": 1,
+      "label": "MISSING_SPEC",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/rules/planning-protocol.md",
+          "line": 18,
+          "end_line": 26
+        }
+      ],
+      "sublabel": "명세에 추가"
+    },
+    {
+      "id": "infeasible",
+      "lane": "blocked",
+      "col": 1,
+      "label": "INFEASIBLE",
+      "type": "external",
+      "sources": [
+        {
+          "path": "plugins/common/rules/planning-protocol.md",
+          "line": 18,
+          "end_line": 26
+        }
+      ],
+      "sublabel": "대안 검토 후 보고"
+    }
+  ],
+  "edges": [
+    {
+      "id": "gap-to-p0",
+      "from": "gap",
+      "to": "p0"
+    },
+    {
+      "id": "gap-to-missing",
+      "from": "gap",
+      "to": "missing"
+    },
+    {
+      "id": "gap-to-infeasible",
+      "from": "gap",
+      "to": "infeasible"
+    }
+  ]
+}

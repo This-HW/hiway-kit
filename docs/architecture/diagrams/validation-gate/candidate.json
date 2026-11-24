@@ -1,0 +1,124 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "검증에서 완료까지",
+    "locale": "ko",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/validation-gate/validation-gate.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "validation",
+      "label": "검증"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "spec",
+      "lane": "validation",
+      "col": 0,
+      "label": "스펙 준수",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 136,
+          "end_line": 161
+        }
+      ],
+      "sublabel": "T-spec"
+    },
+    {
+      "id": "review",
+      "lane": "validation",
+      "col": 1,
+      "label": "리뷰와 보안 검사",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 177,
+          "end_line": 197
+        }
+      ],
+      "sublabel": "T-review · T-security",
+      "explanation": "스펙 확인을 먼저 통과하면 review-code와 security-scan을 병렬 실행한다."
+    },
+    {
+      "id": "gate",
+      "lane": "validation",
+      "col": 2,
+      "label": "완료 조건 재실행",
+      "type": "security",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 214,
+          "end_line": 243
+        },
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 71,
+          "end_line": 75
+        }
+      ],
+      "sublabel": "T-merge 판정",
+      "explanation": "명령을 지금 다시 실행해 전부 rc 0이어야 한다. 리뷰 ACCEPT와 보안 CRITICAL·HIGH 0을 확인한다. 미충족 시 이슈를 보고하고 중단한다."
+    },
+    {
+      "id": "done",
+      "lane": "validation",
+      "col": 3,
+      "label": "완료",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 229,
+          "end_line": 243
+        },
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 71,
+          "end_line": 75
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "spec-to-review",
+      "from": "spec",
+      "to": "review",
+      "label": "통과"
+    },
+    {
+      "id": "review-to-gate",
+      "from": "review",
+      "to": "gate",
+      "label": "결과 취합"
+    },
+    {
+      "id": "gate-to-done",
+      "from": "gate",
+      "to": "done",
+      "label": "조건 충족"
+    }
+  ],
+  "mainPath": [
+    "spec",
+    "review",
+    "gate",
+    "done"
+  ]
+}

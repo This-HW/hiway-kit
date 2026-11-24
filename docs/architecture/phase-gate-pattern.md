@@ -18,19 +18,8 @@ as_of: 2026-10-05
 
 ## 이 패턴이 필요한 이유
 
-**문제:**
-
-```
-Planning 불완전 → Dev 구현 시작 → Planning Gap 발견 → 재구현 필요
-→ 시간/비용 2-3배 낭비
-```
-
-**해결:**
-
-```
-Planning → Gap 발견 → Planning 내에서 해결 → 충분히 완료 → Dev 시작
-→ 재작업 최소화
-```
+기획에서 핵심 모호함을 해결하고 구현 전에 계획을 검토하면, 구현 중에 기획을 다시 열어야
+하는 상황을 줄일 수 있다.
 
 ---
 
@@ -40,15 +29,10 @@ Planning → Gap 발견 → Planning 내에서 해결 → 충분히 완료 → D
 
 **Exit Gate = 메인 Claude의 판단 기준**
 
-```
-실제 작동 방식:
+![요구사항 확인에서 P0 질문과 계획 승인을 거쳐 구현을 시작하는 흐름](diagrams/planning-gate/planning-gate.svg)
 
-1. Planning subagent 실행 완료
-2. 메인 Claude가 결과물 검토
-3. 메인 Claude 판단: "이 정도면 Dev 시작해도 되나?"
-   ├─ 충분함 → Dev agent 호출
-   └─ 부족함 → 추가 Planning agent 호출 (피드백 루프)
-```
+메인 세션은 요구사항에서 P0 모호함을 찾는다. P0가 있으면 멈추고 사용자에게 질문해 답과
+근거를 기록한다. 구현 계획에 완료 명령을 담고 승인을 받은 뒤 구현으로 넘어간다.
 
 ### Exit Gate 판단 기준
 
@@ -77,72 +61,24 @@ Planning → Gap 발견 → Planning 내에서 해결 → 충분히 완료 → D
 
 ### Phase 1: Planning (목표: 최대한 완전하게)
 
-```
-┌─────────────────────────────────────────┐
-│ Planning Phase                          │
-├─────────────────────────────────────────┤
-│ Round 1: 초기 Planning                  │
-│   ├─ clarify-requirements               │
-│   ├─ design-user-journey (필요시)       │
-│   └─ define-business-logic (필요시)     │
-│                                          │
-│ 메인 Claude 판단:                       │
-│   "충분한가?" → 부족 → Round 2          │
-│                                          │
-│ Round 2: 피드백 루프                    │
-│   ├─ AskUserQuestion (P0 모호함)        │
-│   ├─ 내장 Explore (기존 패턴 확인)     │
-│   └─ clarify-requirements (재질문)      │
-│                                          │
-│ 메인 Claude 판단:                       │
-│   "충분한가?" → 충분 → Dev Phase        │
-│                                          │
-│ 목표: 재작업 최소화                     │
-└─────────────────────────────────────────┘
-```
+요구사항 정리는 `clarify-requirements`에 위임하거나 직접 수행한다. Medium 이상은 사용자
+여정을, Large는 비즈니스 로직을 계획에 포함한다. [위 기획 도식](#exit-gate란)에서 P0를
+확인하고 사용자 승인을 받는 위치를 볼 수 있다.
 
 ### Phase 2: Development (목표: 구현 완료)
 
-```
-┌─────────────────────────────────────────┐
-│ Development Phase                       │
-├─────────────────────────────────────────┤
-│ Step 1: Planning artifacts 활용         │
-│   └─ requirements.md, journey.md 등     │
-│                                          │
-│ Step 2: 구현                            │
-│   ├─ implement-code                     │
-│   ├─ write-tests                        │
-│   └─ sync-docs                          │
-│                                          │
-│ Step 3: Planning Gap 발견 (현실)        │
-│   메인 Claude 선택:                     │
-│   ├─ A) 사용자에게 질문                 │
-│   ├─ B) Planning agent 재호출 (역위임)  │
-│   └─ C) 합리적 추측 후 진행 (리스크)   │
-│                                          │
-│ Step 4: 완료 판단                       │
-│   메인 Claude: "구현 완료되었는가?"     │
-│   → Validation Phase                    │
-└─────────────────────────────────────────┘
-```
+![계획의 미완 항목을 구현하고 개발 검사를 통과하면 Validation으로 넘어가는 흐름](diagrams/development-gate/development-gate.svg)
+
+계획 원문에서 미완 항목을 찾아 구현한다. 구현 중 기획 공백을 만나면 유형에 맞게 기획으로
+돌아간다. 빌드, 변경 동작의 테스트, 린트와 타입 검사를 통과하면 Validation으로 넘어간다.
 
 ### Phase 3: Validation
 
-```
-┌─────────────────────────────────────────┐
-│ Validation Phase                        │
-├─────────────────────────────────────────┤
-│ 병렬 검증:                              │
-│   ├─ verify-code                        │
-│   ├─ review-code                        │
-│   └─ security-scan                      │
-│                                          │
-│ 메인 Claude 판단:                       │
-│   "프로덕션 배포 가능한가?"             │
-│   → 가능 → 완료                         │
-└─────────────────────────────────────────┘
-```
+![스펙 준수를 먼저 확인하고 리뷰와 보안 검사 후 완료 명령을 다시 실행하는 흐름](diagrams/validation-gate/validation-gate.svg)
+
+스펙 준수를 먼저 확인한 뒤 코드 리뷰와 보안 검사를 병렬로 실행한다. 완료 조건 명령을
+다시 실행해 모두 rc 0인지 확인한다. 리뷰가 ACCEPT이고 보안 검사에서 CRITICAL·HIGH가
+없어야 완료로 판정한다. 기준에 못 미치면 남은 항목을 사용자에게 보고한다.
 
 ---
 
@@ -239,13 +175,9 @@ P1/P2는 Dev 중 해결 가능
 
 ### 3. 역위임 발생 시 즉시 처리
 
-```
-Dev 중 Planning Gap 발견:
-├─ 즉시 멈춤
-├─ 사용자 질문 또는 Planning agent 호출
-├─ 답변 받은 후 진행
-└─ 결정 사항 문서화
-```
+`P0_AMBIGUITY`는 즉시 멈추고 사용자 답을 받아 결정 사항을 기록한다. `MISSING_SPEC`는
+명세에 추가하고, `INFEASIBLE`은 대안을 검토한 뒤 보고한다. [기획 공백 분기 도식](rules/planning-protocol.md#3-dev--planning-역위임-프로토콜)을
+참고한다.
 
 ---
 

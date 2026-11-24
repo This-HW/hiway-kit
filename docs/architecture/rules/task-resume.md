@@ -17,14 +17,10 @@ as_of: 2026-10-05
 사라진다. Codex 처럼 영속 태스크가 아예 없는 하네스도 있다. 반대로
 `docs/plans/<slug>/plan.md`와 `checklist.json`은 git 파일이라 세션 경계를 넘어 남는다.
 
-```
-세션 종료 전:
-  checklist.json: [C-1 passes✅] [C-2 passes✅] [C-3 passes:false]
+![세션이 바뀌면 계획과 체크리스트를 읽고 미완 항목부터 재개하는 흐름](../diagrams/task-resume/task-resume.svg)
 
-세션 재시작 후:
-  호스트 태스크는 전부 사라짐
-  → checklist.json 을 다시 읽고 C-3 부터 재개
-```
+재개 요청을 받으면 이전 세션에서 남긴 계획 원문과 체크리스트를 읽는다. `passes: false`인
+항목부터 재개하고 필요하면 호스트 태스크를 다시 만든다.
 
 그래서 "무엇이 끝났는가"의 **단일 authority**는 `checklist.json`(없으면 `plan.md`의
 `## 완료 조건`)이고, 호스트 태스크는 재개할 때마다 거기서 다시 파생시키는 **캐시**일

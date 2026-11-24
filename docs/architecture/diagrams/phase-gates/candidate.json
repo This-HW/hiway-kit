@@ -1,0 +1,111 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "The gates between phases",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/phase-gates/phase-gates.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "flow",
+      "label": "Larger work"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "planning",
+      "lane": "flow",
+      "col": 0,
+      "label": "Planning",
+      "type": "frontend",
+      "sources": [
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 58,
+          "end_line": 69
+        },
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 16,
+          "end_line": 22
+        },
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 119,
+          "end_line": 143
+        }
+      ],
+      "sublabel": "resolve P0 ambiguity"
+    },
+    {
+      "id": "development",
+      "lane": "flow",
+      "col": 1,
+      "label": "Development",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 62,
+          "end_line": 69
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 48,
+          "end_line": 62
+        }
+      ],
+      "sublabel": "build from the plan"
+    },
+    {
+      "id": "validation",
+      "lane": "flow",
+      "col": 2,
+      "label": "Validation",
+      "type": "security",
+      "sources": [
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 67,
+          "end_line": 75
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 136,
+          "end_line": 147
+        }
+      ],
+      "sublabel": "spec, review and security"
+    }
+  ],
+  "edges": [
+    {
+      "id": "planning-to-development",
+      "from": "planning",
+      "to": "development",
+      "label": "plan approved"
+    },
+    {
+      "id": "development-to-validation",
+      "from": "development",
+      "to": "validation",
+      "label": "local checks pass"
+    }
+  ],
+  "mainPath": [
+    "planning",
+    "development",
+    "validation"
+  ]
+}

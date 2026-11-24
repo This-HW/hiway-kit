@@ -29,32 +29,12 @@ as_of: 2026-10-05
 
 ## 2. MCP vs 기본 도구 선택 플로우차트
 
-```
-작업 유형은 무엇인가?
-         │
-         ├─ 라이브러리/API 문서 확인
-         │        │
-         │        └─ (스킬/main에서) Context7 우선, 없으면 WebFetch 폴백
-         │
-         ├─ 코드/기술 검색
-         │        │
-         │        ├─ 정밀한 기술 쿼리? → Exa 사용
-         │        └─ 일반 검색? → WebSearch 사용
-         │
-         ├─ 웹 페이지 접근
-         │        │
-         │        ├─ JS 렌더링 필요? → Playwright 사용
-         │        └─ 정적 HTML? → WebFetch 사용
-         │
-         ├─ 리서치/팩트 체킹
-         │        │
-         │        └─ Tavily 사용
-         │
-         └─ DB 조회
-                  │
-                  └─ PostgreSQL MCP 사용
-                     (터널이 필요하면 환경별 수단으로 먼저 기동 — §6)
-```
+![작업 유형에 따라 MCP와 내장 도구를 선택하는 지도](../diagrams/mcp-routing/mcp-routing.svg)
+
+메인 세션과 스킬에서 사용 가능한 MCP를 우선한다. 라이브러리 문서는 Context7, 정밀 기술
+검색은 Exa, JS 렌더링은 Playwright, 종합 리서치는 Tavily, DB 조회는 PostgreSQL을 쓴다.
+일반 검색은 WebSearch, 정적 페이지는 WebFetch가 담당한다. MCP가 없거나 실패하면 해당
+내장 도구로 돌아가며, DB에 터널이나 프록시가 필요하면 먼저 기동한다.
 
 ---
 

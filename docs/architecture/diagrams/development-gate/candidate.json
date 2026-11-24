@@ -1,0 +1,161 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "구현을 검증으로 넘기는 조건",
+    "locale": "ko",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/development-gate/development-gate.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "dev",
+      "label": "구현"
+    },
+    {
+      "id": "gap",
+      "label": "기획 공백"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "plan",
+      "lane": "dev",
+      "col": 0,
+      "label": "계획 원문",
+      "type": "frontend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 48,
+          "end_line": 78
+        }
+      ],
+      "sublabel": "구현 항목과 완료 조건"
+    },
+    {
+      "id": "build",
+      "lane": "dev",
+      "col": 1,
+      "label": "미완 항목 구현",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 48,
+          "end_line": 78
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 82,
+          "end_line": 89
+        },
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 67,
+          "end_line": 69
+        }
+      ],
+      "sublabel": "변경 동작에 맞춰 테스트"
+    },
+    {
+      "id": "local",
+      "lane": "dev",
+      "col": 2,
+      "label": "개발 검사",
+      "type": "security",
+      "sources": [
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 67,
+          "end_line": 69
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 113,
+          "end_line": 132
+        }
+      ],
+      "sublabel": "빌드·테스트·린트·타입"
+    },
+    {
+      "id": "validation",
+      "lane": "dev",
+      "col": 3,
+      "label": "Validation",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 132,
+          "end_line": 150
+        },
+        {
+          "path": "plugins/common/rules/agent-system.md",
+          "line": 67,
+          "end_line": 75
+        }
+      ],
+      "sublabel": "스펙 준수부터 확인"
+    },
+    {
+      "id": "back",
+      "lane": "gap",
+      "col": 1,
+      "label": "Planning으로 돌아감",
+      "type": "external",
+      "sources": [
+        {
+          "path": "plugins/common/rules/planning-protocol.md",
+          "line": 18,
+          "end_line": 26
+        },
+        {
+          "path": "plugins/common/agents/implement-code.md",
+          "line": 66,
+          "end_line": 76
+        }
+      ],
+      "sublabel": "P0 · 명세 누락 · 실행 불가"
+    }
+  ],
+  "edges": [
+    {
+      "id": "plan-to-build",
+      "from": "plan",
+      "to": "build"
+    },
+    {
+      "id": "build-to-local",
+      "from": "build",
+      "to": "local"
+    },
+    {
+      "id": "build-to-back",
+      "from": "build",
+      "to": "back",
+      "label": "모호함 발견"
+    },
+    {
+      "id": "local-to-validation",
+      "from": "local",
+      "to": "validation",
+      "label": "통과"
+    }
+  ],
+  "mainPath": [
+    "plan",
+    "build",
+    "local",
+    "validation"
+  ]
+}

@@ -1,0 +1,219 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "From approved plan to verified work",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/plan-build-verify/plan-build-verify.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "Planned work"
+    },
+    {
+      "id": "feedback",
+      "label": "Stop and learn"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "plan",
+      "lane": "main",
+      "col": 0,
+      "label": "/plan-task",
+      "type": "frontend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 119,
+          "end_line": 143
+        },
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 149,
+          "end_line": 164
+        }
+      ],
+      "sublabel": "plan.md and commands"
+    },
+    {
+      "id": "build",
+      "lane": "main",
+      "col": 1,
+      "label": "/auto-dev",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 48,
+          "end_line": 78
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 305,
+          "end_line": 329
+        }
+      ],
+      "sublabel": "implement the plan",
+      "explanation": "Batch mode is opt-in, with guards for P0 ambiguity, persistent failure and no progress."
+    },
+    {
+      "id": "review",
+      "lane": "main",
+      "col": 2,
+      "label": "Review + security",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 136,
+          "end_line": 147
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 171,
+          "end_line": 212
+        }
+      ],
+      "sublabel": "after the spec check"
+    },
+    {
+      "id": "verify",
+      "lane": "main",
+      "col": 3,
+      "label": "Completion gate",
+      "type": "security",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 214,
+          "end_line": 239
+        }
+      ],
+      "sublabel": "commands and verdicts",
+      "explanation": "Every completion command must exit 0. The review must be complete and ACCEPT. The security scan must have no critical or high findings."
+    },
+    {
+      "id": "done",
+      "lane": "main",
+      "col": 4,
+      "label": "Done",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 229,
+          "end_line": 243
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "lane": "feedback",
+      "col": 1,
+      "label": "Report to user",
+      "type": "external",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 323,
+          "end_line": 329
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 229,
+          "end_line": 243
+        }
+      ],
+      "sublabel": "P0, guard or failed gate"
+    },
+    {
+      "id": "ledger",
+      "lane": "feedback",
+      "col": 2,
+      "label": "Feedback ledger",
+      "type": "database",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 199,
+          "end_line": 212
+        },
+        {
+          "path": "plugins/common/tools/feedback_ledger.py",
+          "line": 138,
+          "end_line": 158
+        },
+        {
+          "path": "plugins/common/hooks/session-start.py",
+          "line": 582,
+          "end_line": 619
+        }
+      ],
+      "sublabel": "later session LESSONS",
+      "explanation": "The path B startup hook can inject recorded findings at a later session."
+    }
+  ],
+  "edges": [
+    {
+      "id": "plan-to-build",
+      "from": "plan",
+      "to": "build",
+      "label": "approval",
+      "variant": "emphasis"
+    },
+    {
+      "id": "build-to-review",
+      "from": "build",
+      "to": "review"
+    },
+    {
+      "id": "review-to-verify",
+      "from": "review",
+      "to": "verify"
+    },
+    {
+      "id": "verify-to-done",
+      "from": "verify",
+      "to": "done",
+      "label": "passes"
+    },
+    {
+      "id": "build-to-report",
+      "from": "build",
+      "to": "report",
+      "variant": "dashed"
+    },
+    {
+      "id": "verify-to-report",
+      "from": "verify",
+      "to": "report",
+      "variant": "dashed"
+    },
+    {
+      "id": "review-to-ledger",
+      "from": "review",
+      "to": "ledger",
+      "label": "findings",
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "plan",
+    "build",
+    "review",
+    "verify",
+    "done"
+  ]
+}

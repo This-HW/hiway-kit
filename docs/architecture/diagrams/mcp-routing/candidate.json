@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "diagram_type": "tree",
+  "meta": {
+    "title": "작업에 맞는 MCP와 내장 도구",
+    "locale": "ko",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/mcp-routing/mcp-routing.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    }
+  },
+  "layout": {
+    "direction": "right"
+  },
+  "nodes": [
+    {
+      "id": "work",
+      "label": "작업 유형",
+      "sublabel": "메인 세션·스킬",
+      "sources": [
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 21,
+          "end_line": 38
+        }
+      ]
+    },
+    {
+      "id": "docs",
+      "parent": "work",
+      "label": "라이브러리 문서",
+      "sublabel": "Context7 / WebFetch",
+      "sources": [
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 14,
+          "end_line": 14
+        },
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 23,
+          "end_line": 26
+        },
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 45,
+          "end_line": 48
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "parent": "work",
+      "label": "기술 검색",
+      "sublabel": "Exa / WebSearch",
+      "sources": [
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 15,
+          "end_line": 15
+        },
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 26,
+          "end_line": 38
+        }
+      ]
+    },
+    {
+      "id": "page",
+      "parent": "work",
+      "label": "웹 페이지 읽기",
+      "sublabel": "Playwright / WebFetch",
+      "sources": [
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 17,
+          "end_line": 17
+        },
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 23,
+          "end_line": 38
+        }
+      ]
+    },
+    {
+      "id": "research",
+      "parent": "work",
+      "label": "리서치·팩트 확인",
+      "sublabel": "Tavily / 내장 검색",
+      "sources": [
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 11,
+          "end_line": 18
+        },
+        {
+          "path": "plugins/common/skills/web-research/SKILL.md",
+          "line": 8,
+          "end_line": 16
+        }
+      ]
+    },
+    {
+      "id": "db",
+      "parent": "work",
+      "label": "DB 조회",
+      "sublabel": "PostgreSQL / Bash psql",
+      "sources": [
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 18,
+          "end_line": 18
+        },
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 23,
+          "end_line": 33
+        },
+        {
+          "path": "plugins/common/rules/mcp-usage.md",
+          "line": 40,
+          "end_line": 43
+        }
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "title": "선택 조건",
+      "dot": "slate",
+      "items": [
+        "정밀 검색에는 Exa, 일반 검색에는 WebSearch를 쓴다.",
+        "JS 렌더링에는 Playwright, 정적 페이지에는 WebFetch를 선택한다.",
+        "MCP가 없거나 실패하면 내장 도구로 전환한다. 필요한 DB 터널은 먼저 기동한다."
+      ]
+    }
+  ]
+}

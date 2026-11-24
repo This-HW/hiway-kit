@@ -42,26 +42,16 @@ hiway-kit이 무엇을 어떻게 융합하는지 — 한눈에 보는 설계 원
 
 ### 결합 방식
 
-```
- [설계 게이트 — 사람 승인]              [실행 루프 — 자율 완주]
- brainstorming → plan-task    ──승인──▶  auto-dev 배치 드라이버
- (무엇을 만들지 HARD-GATE)               (checklist 진행 + 종료 가드)
-                                              │
-        ┌─────────────────────────────────────┤ 스케일별 오케스트레이션
-        ▼                                     ▼
-   병렬 청크 수 개: 스킬 주도 플랫 dispatch   10~100+: 네이티브 workflow (사용자 opt-in)
-        │                                     │
-        ▼  validation (review + security)     ▼
-   Stop 훅 block 자동수정 마이크로루프
-        │
-        ▼  결함 → feedback ledger → 다음 세션 LESSONS 주입  ◀─┐
-        └──────────────────── 학습 루프 ──────────────────────┘
-```
+![계획 승인 뒤 배치 실행이 진행되고, 검증에서 확인한 결함이 다음 세션에 주입되는 흐름](architecture/diagrams/harness-loop/harness-loop.svg)
 
-> **고친 곳 1** (2026-11-21): 옛 README 는 오케스트레이션 분기를 *Small/Medium ↔ Large* 로 그렸다.
-> 정본(`CLAUDE.md` "Orchestration Model")은 작업 크기가 아니라 **병렬 청크 수**로 가르고, 네이티브
-> workflow 는 스킬이 켜지 않고 **사용자가 opt-in** 한다(`auto-dev` 는 안내만 한다). 그림과 아래 표를
-> 그 기준으로 고쳤다. 같은 흐름의 영문 도식은 README 의 mermaid 그림이다.
+승인된 배치는 P0 모호함, 완료 또는 종료 가드에 닿을 때까지 진행한다. 독립 청크는 스킬이
+플랫 위임하고, 많은 병렬 청크를 가진 Large 계획은 사용자가 네이티브 workflow를 선택할 수
+있도록 `auto-dev`가 안내한다. 검증에서 발견한 결함은 feedback ledger에 기록하며, 다음
+세션 시작에 LESSONS로 들어갈 수 있다. Claude Code의 Stop 훅은 변경 파일의 린트와 수정된
+테스트를 확인하는 별도의 안전망이다.
+
+2026-11-21에 옛 README의 작업 크기별 오케스트레이션 분기를 병렬 청크 기준으로 고쳤다.
+Large 계획에서 네이티브 workflow를 안내하는 구체적인 조건은 `auto-dev`의 Large 라우팅을 따른다.
 
 세부는 SSOT 문서 참조: [CLAUDE.md](../CLAUDE.md) (오케스트레이션·규율),
 [docs/specs/](specs/) (설계 스펙), `plugins/common/rules/` (규칙).

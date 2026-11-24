@@ -1,0 +1,242 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Choose a workflow by task size",
+    "locale": "en",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/task-size/task-size.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "planned",
+      "label": "Planned work"
+    },
+    {
+      "id": "direct",
+      "label": "Direct work and reporting"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "size",
+      "lane": "planned",
+      "col": 0,
+      "label": "Task size",
+      "type": "frontend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/using-hiway-kit/SKILL.md",
+          "line": 13,
+          "end_line": 22
+        },
+        {
+          "path": "plugins/common/skills/plan-task/references/elicitation.md",
+          "line": 194,
+          "end_line": 204
+        }
+      ]
+    },
+    {
+      "id": "design",
+      "lane": "planned",
+      "col": 1,
+      "label": "/brainstorming",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/brainstorming/SKILL.md",
+          "line": 100,
+          "end_line": 120
+        }
+      ],
+      "sublabel": "large design work"
+    },
+    {
+      "id": "plan",
+      "lane": "planned",
+      "col": 2,
+      "label": "/plan-task",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 117,
+          "end_line": 143
+        },
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 149,
+          "end_line": 164
+        }
+      ],
+      "sublabel": "medium or approved design"
+    },
+    {
+      "id": "build",
+      "lane": "planned",
+      "col": 3,
+      "label": "/auto-dev",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 155,
+          "end_line": 164
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 136,
+          "end_line": 147
+        }
+      ]
+    },
+    {
+      "id": "direct",
+      "lane": "direct",
+      "col": 1,
+      "label": "Implement directly",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/using-hiway-kit/SKILL.md",
+          "line": 13,
+          "end_line": 22
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 292,
+          "end_line": 301
+        }
+      ],
+      "sublabel": "small fix or bug"
+    },
+    {
+      "id": "check",
+      "lane": "planned",
+      "col": 4,
+      "label": "Verify completion",
+      "type": "security",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 214,
+          "end_line": 239
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 292,
+          "end_line": 301
+        }
+      ],
+      "sublabel": "fresh commands"
+    },
+    {
+      "id": "done",
+      "lane": "planned",
+      "col": 5,
+      "label": "Done",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 218,
+          "end_line": 239
+        }
+      ]
+    },
+    {
+      "id": "open",
+      "lane": "direct",
+      "col": 5,
+      "label": "Report what is open",
+      "type": "external",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 218,
+          "end_line": 239
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 297,
+          "end_line": 301
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "size-to-design",
+      "from": "size",
+      "to": "design",
+      "label": "large"
+    },
+    {
+      "id": "size-to-plan",
+      "from": "size",
+      "to": "plan",
+      "label": "medium",
+      "fromSide": "top",
+      "toSide": "top",
+      "route": "up-channel"
+    },
+    {
+      "id": "size-to-direct",
+      "from": "size",
+      "to": "direct",
+      "label": "small"
+    },
+    {
+      "id": "design-to-plan",
+      "from": "design",
+      "to": "plan",
+      "label": "design approved"
+    },
+    {
+      "id": "plan-to-build",
+      "from": "plan",
+      "to": "build",
+      "label": "plan approved"
+    },
+    {
+      "id": "build-to-check",
+      "from": "build",
+      "to": "check"
+    },
+    {
+      "id": "direct-to-check",
+      "from": "direct",
+      "to": "check"
+    },
+    {
+      "id": "check-to-done",
+      "from": "check",
+      "to": "done",
+      "label": "passes"
+    },
+    {
+      "id": "check-to-open",
+      "from": "check",
+      "to": "open",
+      "label": "fails"
+    }
+  ],
+  "mainPath": [
+    "size",
+    "design",
+    "plan",
+    "build",
+    "check",
+    "done"
+  ]
+}

@@ -1,0 +1,230 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "설계 승인과 실행·학습 루프",
+    "locale": "ko",
+    "quality_profile": "showcase",
+    "feedback_links": false,
+    "output": "docs/architecture/diagrams/harness-loop/harness-loop.html",
+    "repository": {
+      "url": "git@github.com:This-HW/hiway-kit.git",
+      "revision": "99bfd76978b91799550d95983f2d5986194ea37e",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "승인과 실행"
+    },
+    {
+      "id": "native",
+      "label": "선택 경로"
+    },
+    {
+      "id": "feedback",
+      "label": "다음 세션에 반영"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "plan",
+      "lane": "main",
+      "col": 0,
+      "label": "설계·계획 승인",
+      "type": "frontend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/brainstorming/SKILL.md",
+          "line": 100,
+          "end_line": 120
+        },
+        {
+          "path": "plugins/common/skills/plan-task/SKILL.md",
+          "line": 149,
+          "end_line": 164
+        }
+      ],
+      "sublabel": "/brainstorming · /plan-task",
+      "explanation": "brainstorming은 설계가 필요한 Large 새 기능에 선행한다."
+    },
+    {
+      "id": "batch",
+      "lane": "main",
+      "col": 1,
+      "label": "/auto-dev",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 305,
+          "end_line": 329
+        },
+        {
+          "path": "plugins/common/rules/loop-engineering.md",
+          "line": 7,
+          "end_line": 25
+        }
+      ],
+      "sublabel": "승인된 배치 실행"
+    },
+    {
+      "id": "flat",
+      "lane": "main",
+      "col": 2,
+      "label": "플랫 위임",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "CLAUDE.md",
+          "line": 220,
+          "end_line": 234
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 82,
+          "end_line": 106
+        }
+      ],
+      "sublabel": "병렬 청크 수 개",
+      "explanation": "서로 독립적이고 파일이 겹치지 않는 청크를 병렬 위임한다."
+    },
+    {
+      "id": "native",
+      "lane": "native",
+      "col": 2,
+      "label": "네이티브 workflow",
+      "type": "external",
+      "sources": [
+        {
+          "path": "CLAUDE.md",
+          "line": 226,
+          "end_line": 234
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 101,
+          "end_line": 111
+        }
+      ],
+      "sublabel": "사용자 opt-in",
+      "explanation": "Large 계획에서 실행 가능한 병렬 청크가 10개 이상이면 auto-dev가 ultracode 사용을 안내한다."
+    },
+    {
+      "id": "review",
+      "lane": "main",
+      "col": 3,
+      "label": "검증",
+      "type": "security",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 136,
+          "end_line": 147
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 177,
+          "end_line": 197
+        }
+      ],
+      "sublabel": "review-code · security-scan"
+    },
+    {
+      "id": "ledger",
+      "lane": "feedback",
+      "col": 3,
+      "label": "feedback ledger",
+      "type": "database",
+      "sources": [
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 199,
+          "end_line": 212
+        },
+        {
+          "path": "plugins/common/tools/feedback_ledger.py",
+          "line": 138,
+          "end_line": 158
+        }
+      ],
+      "sublabel": "발견한 결함 기록"
+    },
+    {
+      "id": "lessons",
+      "lane": "feedback",
+      "col": 4,
+      "label": "다음 세션",
+      "type": "backend",
+      "sources": [
+        {
+          "path": "plugins/common/hooks/session-start.py",
+          "line": 582,
+          "end_line": 619
+        },
+        {
+          "path": "plugins/common/skills/auto-dev/SKILL.md",
+          "line": 199,
+          "end_line": 212
+        }
+      ],
+      "sublabel": "LESSONS 주입"
+    }
+  ],
+  "edges": [
+    {
+      "id": "plan-to-batch",
+      "from": "plan",
+      "to": "batch",
+      "label": "승인"
+    },
+    {
+      "id": "batch-to-flat",
+      "from": "batch",
+      "to": "flat"
+    },
+    {
+      "id": "batch-to-native",
+      "from": "batch",
+      "to": "native",
+      "label": "Large · 병렬 청크 다수"
+    },
+    {
+      "id": "flat-to-review",
+      "from": "flat",
+      "to": "review"
+    },
+    {
+      "id": "review-to-ledger",
+      "from": "review",
+      "to": "ledger",
+      "label": "결함",
+      "variant": "dashed"
+    },
+    {
+      "id": "ledger-to-lessons",
+      "from": "ledger",
+      "to": "lessons",
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "plan",
+    "batch",
+    "flat",
+    "review"
+  ],
+  "cards": [
+    {
+      "title": "Claude Code의 Stop 안전망",
+      "dot": "slate",
+      "items": [
+        "Stop 훅은 변경된 Python 파일의 린트와 수정된 테스트를 확인한다. 실패 시 자동 수정 또는 차단을 시도하며, 재진입 가드가 반복을 제한한다."
+      ]
+    }
+  ]
+}
