@@ -1,6 +1,6 @@
 ---
 status: current
-as_of: 2026-11-25
+as_of: 2026-11-27
 ---
 
 # Archify 도식 관리
@@ -9,21 +9,20 @@ as_of: 2026-11-25
 문서에는 `auto` 테마 SVG와 내용을 요약한 텍스트를 싣는다. 로컬 인터랙티브 HTML은 같은
 뷰어 런타임을 도식마다 포함하고 GitHub 파일 화면에서는 실행되지 않으므로 Git에서 제외한다.
 
-## 프로젝트 전용 설치
+## 설치
 
-고정 사본은 tt-a1i/archify 3.3.1, 커밋 `62f3a995eb26`이다. 캐시 사본이 준비된
-환경에서 레포 루트 기준으로 아래를 한 번 실행한다. 심볼릭 링크와 규칙 파일은 워크트리별로
-만들고, exclude는 같은 저장소의 워크트리가 공유한다.
+Archify는 이 레포의 의존성이 아니라 개발자 환경의 도구다. 레포에는 아무것도 설치하지 않는다
+(`.claude/skills/`에 링크나 사본을 두지 않는다). 검토한 고정판은 tt-a1i/archify 3.3.1,
+커밋 `62f3a995eb26`이다. 하네스 공용 스킬 위치에 한 번 설치하고, Claude Code는 링크로 연결한다.
 
 ```sh
-archify="$HOME/.cache/hiway-kit-tools/archify-3.3.1-62f3a99/archify"
-ln -s "$archify" .claude/skills/archify
-exclude="$(git rev-parse --git-path info/exclude)"
-grep -qxF '/.claude/skills/archify' "$exclude" || printf '%s\n' '/.claude/skills/archify' >> "$exclude"
-mkdir -p .claude/rules
-printf '%s\n' '[archify explainer: on-demand]' > .claude/rules/archify.md
-git check-ignore -v .claude/skills/archify .claude/rules/archify.md
+src=<검토한 archify 체크아웃>/archify
+cp -R "$src" "$HOME/.agents/skills/archify"
+ln -s ../../.agents/skills/archify "$HOME/.claude/skills/archify"
 ```
+
+Archify는 기본적으로 묻지 않아도 설명 페이지를 만든다. 요청할 때만 만들게 하려면 각 하네스의 전역
+규칙 파일(`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md` 등)에 `[archify explainer: on-demand]` 한 줄을 둔다.
 
 ## 재생성
 
@@ -36,7 +35,7 @@ Archify는 로컬 Chrome을 사용한다. 다른 실행 파일이나 오프라�
 slug=phase-gates
 kind=workflow
 d="docs/architecture/diagrams/$slug"
-archify=.claude/skills/archify
+archify="$HOME/.agents/skills/archify"
 receipts="$(mktemp -d "${TMPDIR:-/tmp}/hiway-archify.XXXXXX")"
 ARCHIFY_UPDATE_CHECK_DISABLED=1 node "$archify/bin/archify.mjs" \
   finalize "$kind" "$d/candidate.json" "$d/$slug.html" \

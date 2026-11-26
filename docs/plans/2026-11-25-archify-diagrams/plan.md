@@ -26,6 +26,10 @@ size: medium
   - 레포는 `.claude/skills/` 를 추적하므로 `.git/info/exclude` 에 `/.claude/skills/archify` 를 넣는다. 이 파일은 공통 git dir 에 있어 모든 워크트리에 적용되고, 커밋되지 않는다
   - 전역 설치(`~/.claude/skills`·`~/.agents/skills`)는 하지 않는다
   - `plugins/common` 에도 넣지 않는다. 배포물이 아니다
+- **2026-11-27 변경 — 전역 설치로 이동**: 사용자 요청으로 이 레포 전용 설치를 걷었다
+  - 이제 `~/.agents/skills/archify` 한 곳에 설치하고, Claude Code는 링크로 연결한다. 워크트리별 링크와 exclude 줄은 지웠다
+  - explainer 모드는 각 하네스의 전역 규칙 파일에 `[archify explainer: on-demand]` 로 둔다
+  - 절차: [도식 관리 문서](../../architecture/diagrams/README.md). 아래 두 항목은 당시 결정 기록이다
 - **설명 페이지 자동 생성 끄기**
   - Archify 의 explainer 기본값은 묻지 않아도 페이지를 만드는 `proactive` 다
   - 로컬 규칙 `.claude/rules/archify.md` 에 `[archify explainer: on-demand]` 를 둔다. `.gitignore` 의 `.claude/*` 규칙으로 이미 무시되는 경로다
