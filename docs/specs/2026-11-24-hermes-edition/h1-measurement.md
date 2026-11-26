@@ -15,11 +15,11 @@ as_of: 2026-11-24
 
 `R=/private/tmp/hermes-h1`. 표의 `sb off`와 `sb install`은 아래 런처로 실행한 명령을 뜻한다.
 각 원 로그에는 환경 인자, 실행 파일의 절대경로, 작업 디렉터리, stdout·stderr, rc가 있다.
-샌드박스 밖에서 원 로그를 `~/.cache/hiway-research/hermes/h1/`에 복사했다.
 
 ```sh
 R=/private/tmp/hermes-h1
 PROFILE="$PWD/scripts/hermes-sandbox.sb"
+tool_path="${TOOL_PATH:?set to directories containing python3.11, python3.14 and uv}"
 sb() {
   mode=$1
   shift
@@ -29,9 +29,9 @@ sb() {
     XDG_RUNTIME_DIR="$R/xdg/runtime" PIP_CACHE_DIR="$R/pip-cache" \
     PIP_CONFIG_FILE=/dev/null PIP_DISABLE_PIP_VERSION_CHECK=1 PIP_NO_INPUT=1 \
     PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 GIT_CONFIG_NOSYSTEM=1 \
-    GIT_TERMINAL_PROMPT=0 PATH=/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+    GIT_TERMINAL_PROMPT=0 PATH="$tool_path":/usr/bin:/bin:/usr/sbin:/sbin \
     LC_ALL=en_US.UTF-8 TERM=dumb \
-    /usr/bin/sandbox-exec -D "HERMES_NETWORK=$mode" -f "$PROFILE" "$@"
+    /usr/bin/sandbox-exec -D HOME="$HOME" -D "HERMES_NETWORK=$mode" -f "$PROFILE" "$@"
 }
 H="$R/venv-main-314/bin/hermes"
 ```
@@ -39,13 +39,13 @@ H="$R/venv-main-314/bin/hermes"
 - `/usr/bin/sw_vers`, `/usr/bin/uname -m` (각 rc 0)에서 macOS 27.2.1 (26B131), arm64를 확인했다.
 - `/usr/bin/codesign -dv /usr/bin/sandbox-exec` (rc 0)은 `com.apple.sandbox-exec`, Mach-O arm64e를 출력했다.
   `sb off /usr/bin/git --version` (rc 0)은 Apple Git 2.54.0을 출력했다.
-- `/opt/homebrew/bin/python3.11 --version` (rc 0)은 3.11.18,
-  `sb off /opt/homebrew/bin/python3.14 --version` (rc 0)은 3.14.10이었다.
+- `python3.11 --version` (rc 0)은 3.11.18,
+  `sb off python3.14 --version` (rc 0)은 3.14.10이었다.
 - `sb install /usr/bin/git clone --depth 1 --no-tags --revision="$sha" https://github.com/NousResearch/hermes-agent.git "$src"`와
   `sb off /usr/bin/git -C "$src" rev-parse HEAD`를 각 소스에 실행했다(각 rc 0).
   main은 `352b249f67fb6a4a7d7904acaca9dd410db229e0`, stable은
   `caafe5389ae585ef77387a962aee05b1bcf17029`와 일치했다.
-- `sb off /opt/homebrew/bin/python3.11 -m venv "$venv"`로 별도 venv를 만들어
+- `sb off python3.11 -m venv "$venv"`로 별도 venv를 만들어
   두 SHA를 각각 `sb install "$venv/bin/python" -m pip install -e "$src"`로 설치했다(각 명령 rc 0).
   `sb off "$venv/bin/hermes" --version`은 main에서 `Hermes Agent vgit.352b249 (2026.9.24)`,
   stable에서 `Hermes Agent vgit.caafe53 (2026.9.24)`를 출력했다(각 rc 0, 두 환경에서 OpenAI SDK 미설치).
@@ -55,10 +55,10 @@ H="$R/venv-main-314/bin/hermes"
 
 [프로필](../../../scripts/hermes-sandbox.sb)의 `-D HERMES_NETWORK=off`는 측정용,
 `-D HERMES_NETWORK=install`은 설치와 GitHub 무ref 대조용이다. 두 모드에서 쓰기 허용 범위와 홈 읽기 거부는 같다.
-프로필 SHA-256은 `2dd510170462828e9f82f21c7c883833ad9522aee48e1e97ed49bf08e4c544fc`다.
+당시 측정에 사용한 프로필의 SHA-256은 `2dd510170462828e9f82f21c7c883833ad9522aee48e1e97ed49bf08e4c544fc`다.
 
-`/opt/homebrew/bin/python3.11 -B "$R/recheck.py" uv-314` (rc 0)는 두 모드에서
-`sb "$mode" /opt/homebrew/bin/python3.11 "$R/probe.py" "uv-314-$mode" "$outside" "$secret_paths"…`를 실행했다.
+`python3.11 -B "$R/recheck.py" uv-314` (rc 0)는 두 모드에서
+`sb "$mode" python3.11 "$R/probe.py" "uv-314-$mode" "$outside" "$secret_paths"…`를 실행했다.
 두 대조의 rc는 각각 0이다. 격리 루트 안에 테스트 파일을 썼고 실제 홈의 새 파일 생성은 `EPERM`으로 거부됐다.
 존재하는 비밀 경로 열기 10건도 모두 `EPERM`이었다. 대조 경로에는 실제 `~/.hermes`와 그 안의
 `.env`, `auth.json`, `config.yaml`, 그 밖에 `.ssh`, `.config`, `.docker`, `.claude`, `.codex`,
@@ -71,8 +71,8 @@ H="$R/venv-main-314/bin/hermes"
 | --- | --- | --- |
 | 3.11 venv에서 `sb off "$R/venv-main/bin/hermes" plugins validate "$R/src/main-common" --json` 및 `plugins install "$R/src/main-common" --no-enable` | 각각 1 | 둘 다 CLI 시작 중 `ModuleNotFoundError: No module named 'ruamel'`. 매니페스트 판정 미도달. |
 | main 소스에서 3.11 venv의 `sb install "$R/venv-main-311-wheel/bin/python" -m pip install .` | 1 | `RuntimeError: Building wheels or sdists for hermes-agent is not supported.` upstream은 editable 설치를 안내한다. |
-| `sb off /opt/homebrew/bin/python3.14 -m venv "$R/venv-main-314"` 및 `sb install "$R/venv-main-314/bin/python" -m pip install -e "$R/src/hermes-main"` | 0, 1 | 3.14 venv는 생성됐다. pip 해석은 `Pillow==13.0.0`과 `browser-harness==0.1.13`이 요구하는 `pillow==12.3.0` 충돌로 `ResolutionImpossible`. |
-| main 소스에서 `sb install /opt/homebrew/bin/uv sync --frozen --python /opt/homebrew/bin/python3.14` | 0 | upstream `uv.lock`의 Pillow 13.0.0 override를 그대로 사용했다. `git diff --exit-code HEAD -- uv.lock`은 rc 0. |
+| `sb off python3.14 -m venv "$R/venv-main-314"` 및 `sb install "$R/venv-main-314/bin/python" -m pip install -e "$R/src/hermes-main"` | 0, 1 | 3.14 venv는 생성됐다. pip 해석은 `Pillow==13.0.0`과 `browser-harness==0.1.13`이 요구하는 `pillow==12.3.0` 충돌로 `ResolutionImpossible`. |
+| main 소스에서 `sb install uv sync --frozen --python python3.14` | 0 | upstream `uv.lock`의 Pillow 13.0.0 override를 그대로 사용했다. `git diff --exit-code HEAD -- uv.lock`은 rc 0. |
 | `sb off "$H" --version` | 0 | `Hermes Agent vgit.352b249 (2026.9.24) · stable · local 352b249f67fb`, `Install method: git`, Python 3.14.10, OpenAI SDK 2.54.0. 네트워크 차단으로 안정판 조회에는 실패했다. |
 
 3.11은 upstream의 구형 설치 갱신용이다. `pyproject.toml`은 `ruamel.yaml` 등 런타임 의존성을
@@ -99,7 +99,7 @@ uv에는 `UV_PROJECT_ENVIRONMENT=$R/venv-main-314`, `UV_CACHE_DIR=$R/uv-cache`,
 `sb install "$R/venv-main-314/bin/python" -c 'from pm.client import sync_venv; sync_venv(explicit=True)'`를 실행했다.
 동기화와 이후 `sb off /usr/bin/git -C "$R/src/hermes-main" diff --exit-code HEAD -- uv.lock pm/lock.json`는 각각 rc 0이었다.
 
-샌드박스 밖에서 `/opt/homebrew/bin/python3.11 -B "$R/local_inventory.py" capture "$snapshot"`을
+샌드박스 밖에서 `python3.11 -B "$R/local_inventory.py" capture "$snapshot"`을
 각 준비 단계 전후에 실행했다. 같은 스크립트의 `compare "$before" "$after"` (rc 0)로 확인한 변경은
 모두 `$R` 안에 있었다. 관리형 도구 설치의 추가 항목은 `hermes-home` 2,253개,
 `src` 4개, `tmp` 1개였다. 코어 동기화는 `hermes-home`에 21,972개를 추가하고 1개를 수정했으며
@@ -138,7 +138,7 @@ main SHA의 `hermes_cli/plugins_cmd.py`에 있는 `_resolve_git_url`은 `file://
 | `sb off "$H" plugins install "$R/src/min-ap" --no-enable` | 1 | P0의 직접 경로 설치와 같은 GitHub shorthand 해석. |
 | `sb off /usr/bin/git -C "$R/src/min-ap" init -b main`, `add plugin.json skills/h1-only/SKILL.md`, `commit --no-gpg-sign -m 'Minimal portable plugin'`, `git clone --bare "$R/src/min-ap" "$R/git/hermes-test.git"`, `git -C "$R/git/hermes-test.git" rev-parse HEAD` | 모두 0 | 픽스처 커밋 `4aca0cc473a7f7b6ea00a4b0c9bf5b46178b4796`. |
 | `sb off "$H" plugins install "file://$R/git/hermes-test.git" --ref 4aca0cc473a7f7b6ea00a4b0c9bf5b46178b4796 --no-enable` | 첫 시도 1 | 로컬 복제와 매니페스트 판정을 지나 게시 직전 실패. Hermes PM이 관리형 Python 3.14.9를 내려받으려 했고 네트워크가 차단됐다. |
-| `sb off /opt/homebrew/bin/python3.11 -B "$R/config_report.py" compare before-install after-failed-install` | 0 | 격리 홈의 config.yaml은 설치 시도 전후 모두 부재. |
+| `sb off python3.11 -B "$R/config_report.py" compare before-install after-failed-install` | 0 | 격리 홈의 config.yaml은 설치 시도 전후 모두 부재. |
 
 관리형 도구와 코어 환경 준비 뒤 다음 순서로 오프라인에서 대조했다.
 
@@ -152,7 +152,7 @@ main SHA의 `hermes_cli/plugins_cmd.py`에 있는 `_resolve_git_url`은 `file://
 | `sb off "$H" plugins disable h1-probe` | 0 | `Plugin h1-probe disabled.` 격리 홈에는 실행 중인 게이트웨이가 없었다. |
 | `sb off "$H" plugins remove h1-probe` 및 `sb off "$H" plugins list` | 각각 0 | 패키지 디렉터리가 제거됐고 목록에서도 사라졌다. |
 
-격리 홈의 `config.yaml`을 `sb off /opt/homebrew/bin/python3.11 -B "$R/config_report.py" snapshot "$stage"`
+격리 홈의 `config.yaml`을 `sb off python3.11 -B "$R/config_report.py" snapshot "$stage"`
 (각 rc 0)로 보존했다. 같은 스크립트의 `compare "$before" "$after"`로 확인한 변화다.
 
 | 단계 | 비교 rc | 설정 변화 |
@@ -168,7 +168,7 @@ main SHA의 `hermes_cli/plugins_cmd.py`에 있는 `_resolve_git_url`은 `file://
 rc 1이었다. 실제 `~/.hermes` 디렉터리의 mtime이 04:07:08에서 04:09:16(한국시각)으로 바뀌었다.
 컨트롤러가 실제 게이트웨이(pid 59776)의 상태 파일 갱신을 확인했다. 같은 시도에서 3.11 CLI의 의존성 누락도 확인했다.
 
-재개 후 호스트 셸의 `/opt/homebrew/bin/python3.11 -B "$R/home_inventory.py" capture "$snapshot"`로
+재개 후 호스트 셸의 `python3.11 -B "$R/home_inventory.py" capture "$snapshot"`로
 파일명과 mtime을 기록하고 같은 스크립트의 `compare "$before" "$after"`로 차이를 분류했다.
 `~/.agents`, `~/.config`, `~/.claude/plugins`, 셸 rc의 존재 여부와 mtime은 별도로 대조했다.
 실제 Hermes 홈의 `config.yaml`, `.env`, `auth.json`, `plugins/`, `skills/`, `hooks/`,
@@ -180,7 +180,7 @@ rc 1이었다. 실제 `~/.hermes` 디렉터리의 mtime이 04:07:08에서 04:09:
 - 3.11 재시도의 파일 대조는 rc 1로 `kanban.db-shm`, `state/gateway.heartbeat`를 추가로 발견했다.
   워커 대기 중에도 갱신돼 컨트롤러가 두 파일과 `kanban.db-wal`을 데몬 목록에 추가했다.
 - 3.14 pip 시도의 대조는 rc 1로 `state.db-wal`을 추가로 발견했다. 대기 중 mtime이 변했고
-  `/usr/sbin/lsof -a -p 59776 /Users/hw/.hermes/state.db /Users/hw/.hermes/state.db-shm /Users/hw/.hermes/state.db-wal`
+  `/usr/sbin/lsof -a -p 59776 "$HOME"/.hermes/state.db "$HOME"/.hermes/state.db-shm "$HOME"/.hermes/state.db-wal`
   (rc 0)에서 실제 게이트웨이의 쓰기 가능한 FD 3개를 확인했다. 컨트롤러가 WAL만 목록에 추가했다.
 - uv 설치 및 첫 측정 구간의 파일 대조는 rc 0이었다. 승인된 데몬 변경 8건, 보호 대상 및 그 밖의 변경 0건이었다.
 - 관리형 런타임 준비부터 최종 측정까지의 파일 대조는 rc 1이었다. 승인된 데몬 변경 9건 외에
@@ -219,10 +219,9 @@ rc 1이었다. 실제 `~/.hermes` 디렉터리의 mtime이 04:07:08에서 04:09:
 
 1단계의 샌드박스와 격리 venv, 관리형 PM 런타임을 재사용했다. `sb off "$H" --version` (rc 0)에서
 `Hermes Agent vgit.352b249 (2026.9.24)`, Python 3.14.10을 다시 확인했다.
-측정 전 `sb off /opt/homebrew/bin/python3.11 "$R/probe.py" phase2-off "$outside" "$secret_paths"…`
+측정 전 `sb off python3.11 "$R/probe.py" phase2-off "$outside" "$secret_paths"…`
 대조는 rc 0이었다. 실제 홈 쓰기, 실제 `~/.hermes`와 `~/.claude`를 포함한 비밀 경로 열기 10건,
 루프백 연결이 모두 `EPERM`이었다. 판 실측의 외부 코드 실행은 모두 같은 `off` 프로필에서 했다.
-원 로그와 함수 프로브 원문은 `~/.cache/hiway-research/hermes/h1/phase2/`에 있다.
 
 ### P1 보안 판정
 
@@ -298,7 +297,7 @@ hiway-kit:web-research
 
 `h2 plugins enable hiway-kit`, `h2 plugins disable hiway-kit`,
 `h2 plugins remove hiway-kit`는 각각 rc 0이었다. 프로필의 `plugins/` 경로 목록과
-`config.yaml`은 `sb off /opt/homebrew/bin/python3.11 -B "$R/phase2/profile_state.py" capture "$profile" "$snapshot"`
+`config.yaml`은 `sb off python3.11 -B "$R/phase2/profile_state.py" capture "$profile" "$snapshot"`
 으로 보존했다(각 rc 0). 같은 스크립트의 `compare "$before" "$after"` 결과는 다음과 같다.
 
 | 구간 | 비교 rc | 관측 |
@@ -357,11 +356,11 @@ hiway-kit:web-research
 
 ### 실제 홈 대조와 미측정
 
-호스트 셸에서 `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`으로
+호스트 셸에서 `python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`으로
 실제 홈 메타데이터를 수집했다(각 rc 0). 같은 스크립트의 `compare "$before" "$after"`로
 Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조했다.
 중간 비교는 rc 1로 기존 허용 목록 외 `state.db` 변경 1건을 보고했다.
-`/usr/sbin/lsof /Users/hw/.hermes/state.db` (rc 0)에서 실 게이트웨이 pid 59776이
+`/usr/sbin/lsof "$HOME"/.hermes/state.db` (rc 0)에서 실 게이트웨이 pid 59776이
 `15u`로 열고 있었다. 컨트롤러가 데몬 관리 파일에 추가했다.
 원 판 측정 종료 시 비교는 rc 0으로 데몬 관리 항목 15건, 그 밖의 변경 및 Claude 플러그인 변경 0건이었다.
 
@@ -395,12 +394,11 @@ Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조�
 | evals/debug-obvious-no-skill/case.yaml | 33 | `python_os_environ` |
 | skills/auto-dev/SKILL.md | 255 | `python_os_environ` |
 
-호스트에서 `/opt/homebrew/bin/python3.11 -B "$R/phase2/v2_findings_compare.py"` (rc 0)로
+호스트에서 `python3.11 -B "$R/phase2/v2_findings_compare.py"` (rc 0)로
 파일·규칙·심각도를 비교했다. 새 머리말에서 low `agent_config_ref`가 세 건 추가됐다.
 위치는 `rules/child-marker.md` 8행, `skills/plan-task/references/plan-format.md` 1행,
 `skills/review/SKILL.md` 6행이다. 제거된 Codex 매니페스트의 같은 규칙 1건이 빠져 전체는
-85건에서 87건으로 늘었다. 수정 판 87건의 원래 매칭 문자열과 규칙 목록은
-`~/.cache/hiway-research/hermes/h1/phase2/phase2-v2-p1-findings.log`에 보존했다.
+85건에서 87건으로 늘었다.
 
 ### 수정 판 P2 스킬 노출과 정리
 
@@ -422,7 +420,7 @@ Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조�
 앞 P2의 `hiway-kit:` 이름 15개와 정확히 같았다. `using-hiway-kit`이 노출됐고,
 `harness-export`와 `skill-forge`는 두 목록에 없었다.
 
-`sb off /opt/homebrew/bin/python3.11 -B "$R/phase2/profile_state.py" capture "$profile" "$snapshot"`
+`sb off python3.11 -B "$R/phase2/profile_state.py" capture "$profile" "$snapshot"`
 (설치 전·제거 후 각각 rc 0)에서 설치 전 플러그인 경로는 0개였다. 제거 후에는
 `.install-metadata.json`과 그 잠금 파일만 `plugins/`에 남았고 `config.yaml`에는
 `plugins.enabled: []`, `plugins.disabled: []`, `_config_version: 54`가 남았다.
@@ -438,9 +436,9 @@ Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조�
 
 ### 수정 판 홈 대조와 재측정 범위
 
-`sb off /opt/homebrew/bin/python3.11 "$R/probe.py" phase2-v2-off "$outside" "$secret_paths"…`
+`sb off python3.11 "$R/probe.py" phase2-v2-off "$outside" "$secret_paths"…`
 (rc 0)에서 실제 홈 쓰기, 비밀 경로 10곳 열기, 루프백 연결은 모두 `EPERM`으로 거부됐다.
-호스트가 `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`으로
+호스트가 `python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`으로
 전후 메타데이터를 기록했다(각 rc 0). 같은 스크립트의 `compare "$before" "$after"`는 rc 0이었다.
 승인된 Hermes 데몬 관리 파일 8건이 바뀌었고 보호 파일과 Claude 플러그인 파일 등 예상 밖 변경은 0건이었다.
 
@@ -475,11 +473,10 @@ Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조�
 | agents/review-code.md | 391 | `system_passwd_access` |
 | skills/auto-dev/SKILL.md | 255 | `python_os_environ` |
 
-호스트에서 `/opt/homebrew/bin/python3.11 -B "$R/phase2/final_findings_lines.py"` (rc 0)로
+호스트에서 `python3.11 -B "$R/phase2/final_findings_lines.py"` (rc 0)로
 수정 판과 후보의 발견을 대조했다. evals 삭제로 해당 평가 파일의 high `python_os_environ` 두 건이
 빠졌다. README의 low `agent_config_ref`는 재작성 전 19행 한 건에서 재작성 후 60·65·70행 세 건으로
-늘었다. 두 변화가 상쇄돼 총 발견 수는 87건으로 같았다. 전체 발견의 파일·규칙·매칭 원문은
-`~/.cache/hiway-research/hermes/h1/phase2/phase2-final-p1-findings.log`에 보존했다.
+늘었다. 두 변화가 상쇄돼 총 발견 수는 87건으로 같았다.
 
 ### 게시 후보 P2 스킬 노출
 
@@ -509,12 +506,11 @@ Hermes의 파일 변경과 Claude 플러그인 목록·mtime·크기를 대조�
 `sb off "$R/venv-main-314/bin/python" "$R/phase2/context_probe.py" "$R/proj-edition-final"` (rc 0)은
 AGENTS.md 7,206자가 `loaded`이며 프롬프트에 마커가 실렸음을 확인했다. 컨텍스트 인젝션 발견은 0건이었다.
 
-`sb off /opt/homebrew/bin/python3.11 "$R/probe.py" phase2-final-off "$outside" "$secret_paths"…`
+`sb off python3.11 "$R/probe.py" phase2-final-off "$outside" "$secret_paths"…`
 (rc 0)에서 실제 홈 쓰기, 비밀 경로 열기, 루프백 연결이 `EPERM`으로 거부됐다.
-호스트의 `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py"`로 실험 전후 파일 메타데이터를
+호스트의 `python3.11 -B "$R/phase2/home_phase2.py"`로 실험 전후 파일 메타데이터를
 기록하고 비교했다(각 rc 0). 승인된 Hermes 데몬 관리 파일 6건이 바뀌었고
-그 밖의 변경과 Claude 플러그인 파일 변경은 각각 0건이었다. 원 로그와 프로브는
-`~/.cache/hiway-research/hermes/h1/phase2/`에 보존했다.
+그 밖의 변경과 Claude 플러그인 파일 변경은 각각 0건이었다.
 
 ## H2 확인 — 게시된 GitHub hermes 브랜치
 
@@ -525,8 +521,7 @@ AGENTS.md 7,206자가 `loaded`이며 프롬프트에 마커가 실렸음을 확�
 `sb off "$R/venv-main-314/bin/python" --version` (각 rc 0)은
 Hermes Agent `vgit.352b249`와 Python 3.14.10을 출력했다.
 `sb off /usr/bin/git -C "$R/src/hermes-main" diff --exit-code HEAD -- uv.lock pm/lock.json` (rc 0)에서
-두 잠금 파일의 변경은 0건이었다. 원 로그는 샌드박스 밖에서
-`~/.cache/hiway-research/hermes/h2/`에 복사했다. 아래 명령의 `sb`, `R`, `H`는
+두 잠금 파일의 변경은 0건이었다. 아래 명령의 `sb`, `R`, `H`는
 앞과 같다. uv의 경로도 모두 `$R` 아래로 지정했다.
 
 ```sh
@@ -596,7 +591,7 @@ hiway-kit:using-hiway-kit
 hiway-kit:web-research
 ```
 
-`sb off /opt/homebrew/bin/python3.11 -B "$R/phase2/profile_state.py" capture "$profile_home" "$snapshot"`
+`sb off python3.11 -B "$R/phase2/profile_state.py" capture "$profile_home" "$snapshot"`
 (각 rc 0)에서 설치 전 플러그인 경로는 0개였다. 제거 후에는 프로필의 `plugins/`에
 `.install-metadata.json`(내용은 `{}`)과 `.install-metadata.json.lock`이 남았다. `config.yaml`에는
 `plugins.enabled: []`, `plugins.disabled: []`, `_config_version: 54`가 남았다.
@@ -611,7 +606,7 @@ hiway-kit:web-research
 제거 직후와 P0 이후 프로필 스냅샷을 비교한 `sb off /usr/bin/diff -u "$removed" "$after_p0"` (rc 0)에서
 설정 내용과 플러그인 경로가 일치했다. 설치 메타데이터도 빈 객체 그대로였다.
 
-호스트에서 `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`
+호스트에서 `python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"`
 (전후 각 rc 0)으로 파일 메타데이터를 기록했다. 같은 스크립트의 `compare "$before" "$after"` (rc 0)에서
 기존 허용 목록의 Hermes 데몬 파일 12건이 바뀌었고, 보호 파일과 허용 목록 밖 변경 0건,
 실제 Claude 플러그인 파일 변경 0건이었다.

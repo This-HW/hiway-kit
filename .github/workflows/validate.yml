@@ -205,6 +205,10 @@ jobs:
         # 이 검사가 도는 조건: 항상 — Git 추적 도식과 Markdown의 SVG 이미지 전량을 확인한다.
         run: python3 scripts/check_archify_diagrams.py
 
+      - name: Local environment traces in tracked text (§33)
+        # 이 검사가 도는 조건: 항상 — Git이 추적하는 텍스트와 심링크 대상을 검사한다.
+        run: python3 scripts/check_local_traces.py
+
       - name: Security scan (gitleaks — 범위 안의 모든 커밋)
         # gitleaks-action 은 push 에서 `--no-merges --first-parent` 로 스캔했다 — `--no-ff` 로
         # 병합한 옆가지 커밋은 **한 번도 스캔되지 않았다**(2026-09-27 실측: main 의 49커밋,

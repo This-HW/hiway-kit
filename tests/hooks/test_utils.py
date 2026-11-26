@@ -26,7 +26,7 @@ class TestSafePath:
         assert safe_path("") is False
 
     def test_normal_path_allowed(self):
-        assert safe_path("/home/user/project/main.py") is True
+        assert safe_path("/fixture/account/project/main.py") is True
 
     def test_relative_path_allowed(self):
         assert safe_path("src/main.py") is True
@@ -35,7 +35,7 @@ class TestSafePath:
         assert safe_path("../../etc/passwd") is False
 
     def test_path_traversal_in_middle_blocked(self):
-        assert safe_path("/home/user/../../../etc/passwd") is False
+        assert safe_path("/fixture/account/../../../etc/passwd") is False
 
     def test_dotdot_as_filename_component_allowed(self):
         # "my..file" — ".." is a substring but not a path component

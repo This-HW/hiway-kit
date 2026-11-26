@@ -42,15 +42,9 @@ as_of: 2026-09-07
 이벤트 모델(`hookSpecificOutput.additionalContext`, `tool_name` 매처, `decision:block`)에
 묶여 있어 실행돼도 제어 효과가 없다.
 
-### 1.2 지금 어디에도 설치돼 있지 않다
+### 1.2 다중 하네스 지원 범위
 
-```
-$ find ~/.codex/plugins -maxdepth 3 -type d   → openai-curated-remote 뿐. kit 없음
-$ ls ~/.antigravity/extensions/               → VS Code 확장뿐. kit 없음
-```
-
-다중 하네스 지원은 **생성 + 1회 실측 검증**까지고 상시 사용이 아니다. 즉 현재의 "3사 공통"은
-**매니페스트 수준의 주장**이다.
+Codex와 Antigravity에서 매니페스트 생성과 1회 실측까지 확인했다. 상시 운영은 검증 범위 밖이었다.
 
 ### 1.3 이름이 SSOT에서 파생되지 않는다
 
@@ -84,14 +78,9 @@ SSOT에서 생성하는 규율을 세워뒀는데, 문서·사이트·스킬 본
 
 ### 1.5 로컬 위생
 
-- **처리 완료** — `~/.claude/mcp-disabled-stash.json` 삭제. 평문 API 키 2건(gemini·magic)이
-  3개월간 방치돼 있었다. 사용자가 미사용 확인. **발급처 폐기는 사용자 몫으로 남아 있다.**
-- 잔재: 고아 임시 클론 4개 + `cck-probe-marketplace`(W-019 프로브) + 킷 구버전 캐시 2개 ≈ 5.2MB
-- 유령 플러그인 설치 기록 8건 (삭제된 워크트리 7 + `all-note` 1)
-- 설정 백업 4개 (`settings.json.bak`, `config.toml.bak`, `.backup-20260828-llama-local`, `.bak-D368`)
-- `settings.json` 33KB 중 79% 가 orca 훅 shim 12벌 반복 — **orca 소유, 손대지 않는다**
-- `permissions.allow` 42개가 `skipDangerousModePermissionPrompt: true` + bypass 상시 운영과 공존
-- 정상 확인: 전역 `CLAUDE.md` 226B(graphify 하나), `~/.claude/agents/`·`commands/` 비어 있음 — 이중 로드 없음
+미사용 설정에서 평문 키 2건을 제거했고, 발급처 폐기는 사용자에게 맡겼다.
+캐시 약 5.2MB, 유효하지 않은 설치 기록 8건, 설정 백업 4개를 확인했다.
+설정 33KB 중 79%를 차지한 외부 훅 12건은 보존하기로 했다. 에이전트와 명령의 이중 로드는 발견되지 않았다.
 
 ---
 
@@ -153,8 +142,7 @@ Codex 사용자는 규율과 절차를 얻고, 자동화만 잃는다.
   충돌해 탈락, `hiway-code-kit` 은 이득이 절반.
 - **이행 메커니즘은 지금 확정하지 않는다.** 마켓플레이스 항목 이름과 `plugin.json` 의 `name`
   이 불일치할 때 설치가 성립하는지 확인되지 않았다. 이 레포의 기준(`runtime-verified`)에
-  미달하므로, **스크래치 마켓플레이스 프로브로 실측한 뒤** 확정한다 — W-019 의
-  `cck-probe-marketplace` 와 동일 기법(그 잔재가 지금 캐시에 남아 있다).
+  미달하므로, **스크래치 마켓플레이스 프로브로 실측한 뒤** 확정한다. W-019에서 사용한 프로브 방식이다.
 - 프로브가 답해야 할 질문: ① 구 이름 항목을 폐기 표시로 남긴 채 신 이름으로 설치가 되는가
   ② 구 이름 설치본과 신 이름 설치본이 공존할 때 스킬·에이전트가 중복 등록되는가
   ③ `enabledPlugins` 키 이행이 자동인가 수동인가
@@ -228,14 +216,7 @@ W-021/022 가 폐기한 `---DELEGATION_SIGNAL---` 과 겉모습이 비슷하므�
 
 ### D-11 — permissions 는 "인정하고 최소화"로 간다
 
-현재는 `skipDangerousModePermissionPrompt: true` + bypass 상시 운영이라 42개 allowlist 가
-**실제로 게이트하는 것이 거의 없다.** 방어선이 있다고 *믿게 만드는* 상태가 가장 나쁘고,
-이는 킷이 반복해서 잡아온 "켜져 있다는 착각"과 같은 클래스다.
-
-**채택**: bypass 운영을 인정하고 allowlist 를 **정직한 최소**로 줄인다.
-프로젝트 전용(`Bash(<project>:*)`)과 광범위 쓰기(`curl`·`ssh`·`scp`·`source`·`chmod`)를 뺀다.
-bypass 를 끄는 날 allowlist 가 **검토된 진짜 방어선**이 되게 하는 것이 목적이다.
-되돌리기는 한 커밋이다.
+권한 프롬프트를 생략한 세션에서는 allowlist 42개 항목의 효과를 검증할 수 없었다. 사용 권한을 검토해 최소한으로 줄이는 일을 환경 정리 트랙에 맡겼다.
 
 ---
 
@@ -449,7 +430,7 @@ flowchart LR
 | --- | --- | --- |
 | 25-1 | 유령 프로젝트 항목 28건 정리 | 컨트롤 |
 | 25-2 | eval 회귀 가드 (`run.py` projects 델타 경고) | 워커 |
-| 25-3 | 플러그인 캐시 잔재 정리 (temp 클론 4 · cck-probe · 구버전 캐시) | 컨트롤 |
+| 25-3 | 플러그인 캐시 잔재 정리 | 컨트롤 |
 | 25-4 | 유령 플러그인 설치 기록 8건 정리 | 컨트롤 |
 | 25-5 | 설정 백업 4개 정리 | 컨트롤 |
 | 25-6 | `permissions.allow` 최소화 (D-11) | 컨트롤 |
@@ -493,7 +474,7 @@ flowchart LR
 - **`~/.claude/projects` 1.4GB 정리** — 트랜스크립트는 메모리·`self-improve` 의 원천 자산이다.
   보존 기준을 정하기 전에는 지우지 않는다.
 - **orca 오케스트레이션을 배포물에 넣는 것** — D-6.
-- **`settings.json` 의 orca 훅 shim** — 남의 생성물이다.
+- **다른 도구가 생성한 훅 설정** — 남의 생성물이다.
 
 ---
 
@@ -1458,7 +1439,7 @@ CHILD=[1] ENTRY=[sdk-cli]
 
 ```bash
 $ git rev-parse --git-dir
-/Users/…/claude-code-kit/.git/worktrees/torpedo      # 워크트리마다 분리
+<repo>/.git/worktrees/torpedo      # 워크트리마다 분리
 $ echo '{}' > "$(git rev-parse --git-dir)/cck/marker-probe.json"
 $ git status --porcelain | wc -l   → 0               # 워킹트리 안 더럽힘
 $ git ls-files | grep -c marker-probe → 0            # 추적 대상 밖
@@ -1640,7 +1621,7 @@ D-2 의 능력 층은 **L0 규범 · L1 절차 · L2 실행자 · L3 강제** �
 
 ```bash
 $ git rev-parse --git-common-dir            # 워크트리 4곳 전부
-/Users/…/claude-code-kit/.git               # ← 동일. 레포의 모든 워크트리가 공유
+<repo>/.git               # ← 동일. 레포의 모든 워크트리가 공유
 $ echo '{}' > "$(…--git-common-dir)/cck/probe.json"
 $ git status --porcelain | wc -l   → 0      # untracked 구조 보장
 $ 다른 워크트리에서 조회           → 보임    # 공유 확인
@@ -2174,7 +2155,7 @@ D-43 이 이미 그 경우의 답을 갖고 있다 — 컨트롤이 없으면 cc
 
 ```bash
 $ git rev-parse --git-path hooks
-/Users/…/claude-code-kit/.git/hooks     # 워크트리 → 공용 hooks 경로로 해석
+<repo>/.git/hooks     # 워크트리 → 공용 hooks 경로로 해석
 .git/hooks                              # 주 체크아웃 → 상대경로
 ```
 

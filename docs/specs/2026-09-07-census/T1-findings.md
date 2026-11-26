@@ -241,7 +241,7 @@ D-1~D-21 전부 확인함.
 ```
 # 워크트리/설계문서 위치 확인
 $ pwd && git log -1 --format='%H %s' && git status
-/Users/hw/orca/workspaces/claude-code-kit/census-T1
+<worktree>
 dd63b44 fix(ci): gitleaks private-project-names 오탐 해소 — 테스트 식별자 개명
 (clean)
 

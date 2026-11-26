@@ -46,7 +46,7 @@ size: medium
 
 - 사용자(2026-11-09, 자문 취합 후): 5.7.2 범위 확대 — *"당연히 함께 넣어야지"*. 행동 eval 은 *"필요하다면
   해야하는거고"*, 원격 probe 브랜치는 *"필요없다면 없애버려"*(삭제 완료). 자문 2건(Claude Opus xhigh·Codex
-  gpt-6.1-sol max)과 취합본: `~/.local/share/hiway-kit/consult/2026-11-09-consumer-footprint/`.
+  gpt-6.1-sol max)을 취합했다.
   확대분: plan-task 위치·승인 게이트, write-tests 기존 배치, sync-docs 기존 문서·지침 파일 지정 시만,
   verify-code 무설치, pre-commit 동의·부분 스테이징, 원장 자동 이관 제거·비-git 무기록, prettier 설정 조건,
   checklist 봉쇄, 정책 `docs/conventions/consumer-footprint.md`, 게이트 §30, eval `path_absent`·`glob_contains`.

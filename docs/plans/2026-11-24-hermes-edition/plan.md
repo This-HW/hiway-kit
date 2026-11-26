@@ -30,7 +30,7 @@ size: large
     - 판 README 를 다시 쓴다
 - **H1 실측 원칙** `[confirmed: 헌장 기준 7, 메모리 sandbox-agent-fs-isolation]`
   - 쓰기를 거부한 샌드박스에서만 한다. `install.sh | bash` 는 쓰지 않는다
-  - Hermes 고정 sha 소스(`352b249`, stable `caafe53`)를 임시 venv 에 설치한다. Python 3.11+ 가 필요하다 — `/opt/homebrew/bin/python3.11` 이 있다 `[researched: which, 1]`
+  - Hermes 고정 sha 소스(`352b249`, stable `caafe53`)를 임시 venv 에 설치한다. Python 3.11 이상이 필요하다.
 - **H1 결정 변수**: P0·P1·P2·P3·P4·P5′·P6 + 내장 기능 공존(판정 D3 H1 절). 측정 기록에는 측정한 **트리 sha** 를 남긴다.
 
 ## 결정
@@ -114,7 +114,7 @@ size: large
 **배치 3 — 4 병합 뒤**
 
 5. **W-E H1 격리 실측**(워커 1, 결과는 controller 가 대조)
-   - 바꿀 파일: `docs/specs/2026-11-24-hermes-edition/h1-measurement.md`(신규), `scripts/hermes-sandbox.sb`(신규 — `sandbox-exec` 프로필, 레포 밖 쓰기 금지 경로 목록) <!-- doc-ref-ok: 이 계획이 만들 파일 -->
+   - 바꿀 파일: `docs/specs/2026-11-24-hermes-edition/h1-measurement.md`(신규), `scripts/hermes-sandbox.sb`(신규 — `sandbox-exec` 프로필, 호스트 홈을 -D HOME="$HOME"으로 전달하고 픽스처 밖 쓰기를 거부) <!-- doc-ref-ok: 이 계획이 만들 파일 -->
    - 할 일: 고정 sha Hermes 를 임시 venv 에 설치한다. `build-hermes-branch.py --out` 의 트리로 P0~P6·공존을 측정하고, 원 출력과 트리 sha 를 기록한다
    - 사용자 홈·레포·`~/.claude` 에 쓰지 않는다. 측정 전후에 홈 디렉토리 변경 목록을 대조한다
 

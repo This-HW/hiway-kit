@@ -44,8 +44,7 @@ secrets/
 docs/personal/
 .worktrees/
 
-# graphify 지식그래프 산출물 (개발 시점 분석 보조물 — 순수 로컬)
-# 이 레포가 참조하지도, 배포 대상도 아니며 graphify update . 로 재생성 가능 → 추적 제외
+# 생성된 지식그래프
 graphify-out/
 
 # Agent evals 실행 리포트 (매 실행 산출물 — 로컬 전용, baseline/만 추적)

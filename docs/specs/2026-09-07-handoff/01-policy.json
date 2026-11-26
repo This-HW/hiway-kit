@@ -684,7 +684,7 @@
       { "item": "Cursor·Pi·OpenCode 타겟 활성화", "reason": "각각의 _disabledReason 이 유효" },
       { "item": "~/.claude/projects 1.4GB 정리", "reason": "트랜스크립트는 메모리·self-improve 의 원천 자산. 보존 기준을 정하기 전에는 지우지 않는다" },
       { "item": "orca 오케스트레이션을 배포물에 넣는 것", "reason": "D-6" },
-      { "item": "settings.json 의 orca 훅 shim", "reason": "남의 생성물이다" },
+      { "item": "다른 도구가 생성한 훅 설정", "reason": "남의 생성물이다" },
       { "item": "하이픈 파일명을 언더스코어로 개명", "reason": "D-14 — 약 40개 파일이 참조하고 다수가 불변 기록. verify-done.sh 섹션 번호 동결과 같은 판단" },
       { "item": "hooks/utils.py 공유 계층 확대", "reason": "D-16 — 훅은 독립 프로세스이고 3.9 하한에서 fail-open 해야 한다. 공유를 키우면 utils.py 버그 하나의 폭발 반경이 훅 전체가 된다(2.12.1 사고)" },
       { "item": "경로 봉쇄 헬퍼 4벌을 공용 라이브러리로 통합", "reason": "D-15 — 훅은 디렉토리를 넘는 import 가 불가능. 구현은 4벌 유지, 계약(이름 + 적대 케이스 표)만 하나로" },
@@ -731,9 +731,9 @@
     },
     "unconfirmed": {
       "value": [
-        { "capability": "마켓플레이스 스크래치 설치(27-1 프로브)", "note": "W-019 의 cck-probe-marketplace 와 동일 기법이 가능하다는 것은 §1.5 의 잔재로 확인되나, 이 세션이 재현하지 않았다" },
+        { "capability": "마켓플레이스 스크래치 설치(27-1 프로브)", "note": "W-019에 스크래치 설치 사례가 있으나 이 세션에서 재현하지 않았다" },
         { "capability": "agy CLI (Antigravity)", "note": "targets.json 은 agy 1.1.20 실측 기록을 갖는다. 현재 설치 여부 미확인" },
-        { "capability": "codex CLI", "note": "§1.2 — ~/.codex/plugins 에 kit 없음. CLI 자체의 존재는 미확인" },
+        { "capability": "codex CLI", "note": "§1.2 — CLI 상시 사용은 미확인" },
         { "capability": "커뮤니티 카탈로그 제출(27-6)", "note": "일회성 리스팅은 clau.de/plugin-directory-submission 경유. 개명 = 새 리스팅(D-4)" }
       ],
       "fact": "unresolved",

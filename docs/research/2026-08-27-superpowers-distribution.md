@@ -307,8 +307,8 @@ Antigravity `agents/` 사건에서 우리가 배운 것이 바로 이것이고, 
 SessionStart를 유발한 결과, 마커 파일:
 
 ```
-fired argv0=/Users/hw/.codex/plugins/cache/hookprobe-marketplace/hookprobe/0.0.1/hooks/mark.sh
-CLAUDE_PLUGIN_ROOT_env=/Users/hw/.codex/plugins/cache/hookprobe-marketplace/hookprobe/0.0.1
+fired argv0=<plugin-cache>/hookprobe-marketplace/hookprobe/0.0.1/hooks/mark.sh
+CLAUDE_PLUGIN_ROOT_env=<plugin-cache>/hookprobe-marketplace/hookprobe/0.0.1
 ```
 
 `${CLAUDE_PLUGIN_ROOT}`가 따옴표 문자열 안에서 **실제 설치 경로로 치환**되고, 같은 값이

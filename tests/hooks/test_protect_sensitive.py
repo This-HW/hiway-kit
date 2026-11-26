@@ -53,15 +53,15 @@ class TestCheckProtected:
         assert blocked
 
     def test_credential_file_blocked(self):
-        blocked, _ = check_protected("/home/user/credentials.json")
+        blocked, _ = check_protected("/fixture/account/credentials.json")
         assert blocked
 
     def test_ssh_dir_blocked(self):
-        blocked, _ = check_protected("/home/user/.ssh/id_rsa")
+        blocked, _ = check_protected("/fixture/account/.ssh/id_rsa")
         assert blocked
 
     def test_aws_config_blocked(self):
-        blocked, _ = check_protected("/home/user/.aws/credentials")
+        blocked, _ = check_protected("/fixture/account/.aws/credentials")
         assert blocked
 
     def test_pem_file_blocked(self):
@@ -69,7 +69,7 @@ class TestCheckProtected:
         assert blocked
 
     def test_npmrc_blocked(self):
-        blocked, _ = check_protected("/home/user/.npmrc")
+        blocked, _ = check_protected("/fixture/account/.npmrc")
         assert blocked
 
     def test_token_file_blocked(self):
@@ -85,7 +85,7 @@ class TestCheckProtected:
     def test_token_credential_shapes_still_blocked(self):
         for p in [
             "/config/token.json",
-            "/home/user/.token",
+            "/fixture/account/.token",
             "/config/.tokens",
             "/repo/github-token.txt",
             "/repo/my_tokens.yaml",
@@ -131,7 +131,7 @@ class TestCheckProtected:
         assert blocked
 
     def test_kube_config_blocked(self):
-        blocked, _ = check_protected("/home/user/.kube/config")
+        blocked, _ = check_protected("/fixture/account/.kube/config")
         assert blocked
 
 
@@ -530,7 +530,7 @@ FEEDBACK_SOURCE_PATHS = [
 
 STILL_BLOCKED_STORES = [
     "credentials.json",
-    "/home/u/.aws/credentials",
+    "/fixture/account/.aws/credentials",
     "config/gcp-credentials.json",
     "aws_credentials",
     "client_secret.json",
@@ -769,7 +769,7 @@ class TestGrep:
     @pytest.mark.parametrize("name", [".ssh", ".aws", ".gcp", ".azure", "secrets", "credentials"])
     def test_credential_store_directories_are_fully_protected_for_read(self, name):
         """디렉토리 판정은 그 안의 파일 전부를 Read 판정이 이미 막는 이름에만 건다(판정 범위를 넓히지 않는다)."""
-        assert _mod.check_protected(f"/home/u/{name}/anything.txt")[0]
+        assert _mod.check_protected(f"/fixture/account/{name}/anything.txt")[0]
 
     def test_grep_home_ssh_blocked(self, tmp_path, monkeypatch):
         (tmp_path / ".ssh").mkdir()

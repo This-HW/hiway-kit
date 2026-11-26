@@ -2743,7 +2743,7 @@ def test_isolated_env_strips_parent_session_and_keeps_auth():
     """부모 세션이 물려준 변수는 걷고(플러그인 디렉토리 포함), 인증·프로바이더는 남긴다."""
     env = {
         "PATH": "/usr/bin",
-        "HOME": "/home/x",
+        "HOME": "/fixture/account",
         "ANTHROPIC_API_KEY": "x",
         "ANTHROPIC_BASE_URL": "http://localhost",
         "CLAUDE_CONFIG_DIR": "/cfg",
@@ -2886,7 +2886,7 @@ def test_kept_behavior_env_records_names_not_credentials():
     """남긴 동작 변수는 이름만, 자격증명·무관 변수는 빼고 기록한다 (ATK-009)."""
     env = {
         "PATH": "/usr/bin",
-        "HOME": "/home/x",
+        "HOME": "/fixture/account",
         "ANTHROPIC_API_KEY": "secret-a",
         "ANTHROPIC_AUTH_TOKEN": "secret-b",
         "CLAUDE_CODE_OAUTH_TOKEN": "secret-c",

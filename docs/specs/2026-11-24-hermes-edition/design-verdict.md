@@ -3,9 +3,8 @@ status: current
 as_of: 2026-11-24
 ---
 
-> 이 문서는 3자 설계 토론(controller·reviewer-claude·reviewer-codex)의 판정문 원문이다. 토론 원문(헌장·라운드 답신)과
-> 두 독립 조사 보고서는 레포 밖 `~/.cache/hiway-research/hermes/` 에 있다(로컬 작업 기록, 추적하지 않음).
-> 근거 id `[C-…]`·`[X-…]` 는 그 답신들을 가리킨다. 사용자 결정(2026-11-24): **"H0+빌더+H1 실측"** 진행 — H2(게시)는 실측 보고 뒤 다시 묻는다.
+> 이 문서는 3자 설계 토론(controller·reviewer-claude·reviewer-codex)의 판정문이다.
+> 근거 id `[C-…]`·`[X-…]` 는 각 라운드의 답신을 가리킨다. 사용자 결정(2026-11-24): **"H0+빌더+H1 실측"** 진행 — H2(게시)는 실측 보고 뒤 다시 묻는다.
 
 # 99-verdict — Hermes 타겟 설계 3자 토론 판정
 

@@ -45,24 +45,7 @@ red 를 못 보면 그 게이트는 **없는 것과 같다** — 이 레포가 �
 
 ### G1 — 경로 없는 projects 항목 0건 【결정적 / A 트랙】
 
-```bash
-python3 - <<'EOF'
-import json, os, sys
-p = os.path.expanduser("~/.claude.json")
-d = json.load(open(p))
-ghosts = [k for k in d.get("projects", {}) if not os.path.isdir(k)]
-print(f"projects={len(d.get('projects', {}))} ghosts={len(ghosts)}")
-for g in ghosts[:20]: print("  GHOST", g)
-sys.exit(1 if ghosts else 0)
-EOF
-```
-
-- **통과**: exit 0 (ghosts == 0).
-- **되돌려-FAIL**: `projects` 에 `/nonexistent/path-xyz` 키를 하나 넣으면 exit 1,
-  지우면 exit 0. **사용자 전역 설정을 만지므로 스냅샷 후 수행**하고 즉시 원복한다.
-- **주의**: 이 검사는 `verify-done.sh` 에 **넣지 않는다** — 소비자의 홈 디렉토리를 읽는
-  게이트는 consumer-first 위반이고, A 트랙은 레포와 무관하다. **1회성 확인 명령**이다.
-- **건수 불일치**: §1.4(26건) vs D-10/25-1(28건). 착수 시 위 명령의 실측값을 기록한다.
+등록된 프로젝트 중 경로가 존재하지 않는 항목을 세어 0건을 통과 기준으로 삼았다. 조사 시점에 따라 26건과 28건으로 달랐다. 사용자 설정을 대상으로 한 일회성 관측이어서 레포 완료 게이트에서는 제외했다.
 
 ### G2 — eval 회귀 가드가 실제로 경고를 낸다 【결정적, 되돌려-FAIL 필수】
 
@@ -103,12 +86,6 @@ python3 -m pytest tests/ -k "projects_delta" -q
 **결과적으로 이 항목은 W-025 의 완료를 무기한 막는다** — `rules/definition-of-done.md` 가
 요구하는 "게이트 통과 후 완료 선언" 형태와 맞지 않는다.
 
-**대체 검증** (수용 테스트에서 **강등**, A 트랙 산출물로):
-```bash
-# 1) 제거 전후 allowlist 목록을 보고서에 기록
-python3 -c "import json,os;d=json.load(open(os.path.expanduser('~/.claude/settings.json')));print('\n'.join(d.get('permissions',{}).get('allow',[])))"
-# 2) bypass 를 끈 1세션의 실행 로그(권한 프롬프트 발생 지점 포함)를 보고서에 첨부
-```
 - **산출물 기준**: before/after 목록 + 1세션 로그. **"성립함" 이라는 판정 문장을 쓰지 않는다** —
   관측을 남기고 사용자가 판단한다.
 

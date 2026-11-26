@@ -908,6 +908,14 @@ else
   red "Archify 도식 검사 실패 — 표시 텍스트를 고치거나 정본에서 다시 생성 (상세는 위 출력)"
 fi
 
+hdr "33. 추적 파일의 개인 환경 경로"
+# 이 검사가 도는 조건: 항상 — Git이 추적하는 텍스트와 심링크 대상을 검사한다.
+if python3 scripts/check_local_traces.py; then
+  green "개인 환경 경로 검사 통과"
+else
+  red "개인 환경 경로 또는 예외 정책을 확인한다 (상세는 위 출력)"
+fi
+
 hdr "═══ 기계 검사 결과: ${PASS} pass / ${FAIL} fail ═══"
 hdr "수동 DoD attest (증거와 함께 명시 — 자동 검사 불가)"
 cat <<'EOF'

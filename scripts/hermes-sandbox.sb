@@ -1,7 +1,11 @@
 (version 1)
 (allow default)
 
-; H1 local fixture. Keep these paths literal and run with an empty environment.
+; Pass the host home with -D HOME="$HOME" before entering the isolated environment.
+(define host-home (param "HOME"))
+(define data-home (string-append "/System/Volumes/Data" host-home))
+
+; H1 fixture. Run with an empty environment and an isolated HOME.
 (deny file-write*)
 (allow file-write*
     (subpath "/private/tmp/hermes-h1")
@@ -11,13 +15,13 @@
 
 ; The live Hermes home contains credentials and user configuration.
 (deny file-read*
-    (subpath "/Users/hw/.hermes")
-    (subpath "/System/Volumes/Data/Users/hw/.hermes"))
+    (subpath (string-append host-home "/.hermes"))
+    (subpath (string-append data-home "/.hermes")))
 
 ; Cover the rest of the real home, including other credentials and the checkout.
 (deny file-read*
-    (subpath "/Users/hw")
-    (subpath "/System/Volumes/Data/Users/hw"))
+    (subpath host-home)
+    (subpath data-home))
 
 ; Use -D HERMES_NETWORK=install only for installation and the GitHub control.
 ; Measurement uses -D HERMES_NETWORK=off. Other values also deny networking.

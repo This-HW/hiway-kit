@@ -179,7 +179,7 @@ as_of: 2026-09-07
 ```bash
 # 워크트리/브랜치 상태
 $ pwd && git log -1 --format="%H %s"
-/Users/hw/orca/workspaces/claude-code-kit/census-T4
+<worktree>
 dd63b44 fix(ci): gitleaks private-project-names 오탐 해소 — 테스트 식별자 개명
 
 $ git rev-parse origin/main
@@ -207,7 +207,7 @@ fdfea93 feat(evals): tier2 커버리지·분류 완전성 검사 신설 (W-024 T
 # 설계문서 SSOT 위치 확인 (이 워크트리엔 없음)
 $ find . -iname "2026-09-07-hiway-program-design.md"   # 이 워크트리 내부, 결과 없음
 $ find / -iname "2026-09-07-hiway-program-design.md" 2>/dev/null
-/Users/hw/orca/workspaces/claude-code-kit/torpedo/docs/specs/2026-09-07-hiway-program-design.md
+<design-worktree>/docs/specs/2026-09-07-hiway-program-design.md
 (+ 마켓플레이스 캐시 사본, 무시)
 
 # 스코프 파일 존재 여부 (57개 전수)

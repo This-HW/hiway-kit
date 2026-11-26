@@ -51,9 +51,8 @@ scratch 워크트리(`4858c14`, detached)에서 한 번에 하나씩 바꾸고, 
 
 이어서 워커 워크트리에서 확인한 것:
 
-- 고정 ruff venv 로 `verify-done.sh` 를 돌렸다 → `42 pass / 0 fail`(pytest 3459 passed, §32 포함)
+- `verify-done.sh` 를 돌렸다 → `42 pass / 0 fail`(pytest 3459 passed, §32 포함)
 - `git diff --quiet origin/main -- plugins/common` → rc 0
-- `.claude/rules/archify.md` 는 무시되고, `.claude/skills/archify` 링크도 미추적이다(`git status --porcelain .claude` 0줄)
 
 도식은 Chrome 헤드리스로 SVG 다섯 장을 렌더해 직접 봤다(plan-build-verify·task-size·skill-selector·harness-loop·mcp-routing). 레이아웃·한글 렌더링·화살표 경로에 결함은 없었다. `skill-selector` 는 위 결정에 따라 뺐다.
 
@@ -63,5 +62,4 @@ scratch 워크트리(`4858c14`, detached)에서 한 번에 하나씩 바꾸고, 
   - 고치는 일은 `plugins/common` 변경이라 디렉토리 심사가 끝난 뒤 다룬다
 - **SVG 가독성**: README 도식의 sublabel 은 원본 크기에서 작다. 내용은 본문의 텍스트 요약이 함께 전한다
 - **재생성 절차**: [`docs/architecture/diagrams/README.md`](../../architecture/diagrams/README.md) 에 있다
-  - Archify 가 이 레포 전용으로 설치돼 있어야 다시 만들 수 있다
   - CI 는 Node 없이 정본·SVG 일치만 판정한다

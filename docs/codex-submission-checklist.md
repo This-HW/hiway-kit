@@ -58,8 +58,7 @@ release is a new ZIP upload with a higher `version`.
 ## (역사) Status — 2026-09-28 (identity verified; blocked by a platform-side outage of Skills only)
 
 Submission portal: OpenAI Platform → **Plugins** (`platform.openai.com/plugins`), per
-[Submit plugins](https://developers.openai.com/plugins/deploy/submission). Checked through the Aside
-browser signed in as `thisyj.work@gmail.com`:
+[Submit plugins](https://developers.openai.com/plugins/deploy/submission). Checked while signed in as the organization owner.
 
 | Requirement | State |
 | --- | --- |
@@ -112,7 +111,7 @@ Expected warnings only: `agents/` and hooks are not part of a skills-only listin
 
 **(역사 — 2026-09-30 Upload plugin 흐름으로 대체됨) Once Skills only appears:**
 
-1. `scripts/build-codex-zip.py --out ~/.aside/u/0/uploads/hiway-kit-codex-<ver>.zip` (refuses a dirty
+1. `scripts/build-codex-zip.py --out <uploads>/hiway-kit-codex-<ver>.zip` (refuses a dirty
    plugin root, so the ZIP matches the pushed release).
 2. Portal → **Create plugin → Skills only** → upload → read every validation message → listing (display
    name `hiway-kit`, short description `Coding agent discipline kit`, long description ≤ 4,000, category

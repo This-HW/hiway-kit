@@ -19,7 +19,9 @@ as_of: 2026-11-25
 
 ## 실측 환경
 
-- macOS 27.2.1 (26B131), arm64. `command -v agy`가 반환한 `/Users/hw/.local/bin/agy`를 절대경로로 실행했다. 샌드박스 안의 `--version`은 rc 0과 `1.5.15`를 반환했다.
+기준 Hermes 프로필을 재사용할 때는 호스트 셸에서 `-D HOME="$HOME"`을 전달한다. 아래 agy 측정은 별도의 파생 프로필을 사용했다.
+
+- macOS 27.2.1 (26B131), arm64. `command -v agy`로 찾은 바이너리를 절대경로로 실행했다. 샌드박스 안의 `--version`은 rc 0과 `1.5.15`를 반환했다.
 - `env -i`로 시작해 `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_CACHE_HOME`, `XDG_STATE_HOME`, `XDG_RUNTIME_DIR`, `TMPDIR`을 변형별 `/private/tmp/agy-u0/env/<변형>/` 아래로 지정했다. `ANTIGRAVITY_CONFIG_REL_DIR=.gemini/antigravity-cli`, `ANTIGRAVITY_APP_DATA_DIR=$HOME/.antigravity`를 설정했다. 실제 플러그인 설치 경로도 격리 HOME의 `.gemini/config/plugins/` 아래였다. [CLI 설정 경로](https://antigravity.google/docs/cli/using/#settings) <!-- doc-ref-ok: 격리 HOME의 상대 경로 -->
 - [Hermes 샌드박스](../../../scripts/hermes-sandbox.sb)를 바탕으로 `agy.sb`를 만들었다. `sandbox-exec -f /private/tmp/agy-u0/agy.sb`는 `/private/tmp/agy-u0` 아래에만 파일 쓰기를 허용하고 네트워크를 차단했다. 실제 홈은 실행 파일 한 개를 제외하고 읽기도 차단했다. 사전 점검에서 격리 경로 안 읽기·쓰기는 성공했다. 실제 홈의 `.gemini/antigravity-cli`, `.antigravity`, `Library/Keychains` 읽기, 격리 경로 밖 쓰기, 로컬 TCP 접속은 `EPERM`이었다. 로그인과 모델 호출은 0회였다.
 - `packaging/targets.json`의 11월 21일 기록(`_observations20261121`, agy 1.5.13)과 [Antigravity 설치 안내](../../harnesses.md#antigravity)의 명령을 사용했다. 스킬 인식은 설치 결과에 나온 이름과 설치 후 `list --json`의 `skills` 배열로 확인했다.
@@ -38,7 +40,7 @@ AP v1의 `$schema`는 `https://agent-plugins.org/schemas/1.0.0/plugin.schema.jso
 
 ## 명령과 출력
 
-표의 `agy`는 절대경로 바이너리를 샌드박스에서 실행한 명령을 뜻한다. `F`는 `/private/tmp/agy-u0/fixtures`, `P`는 `/opt/homebrew/bin/python3.11 -B /private/tmp/agy-u0/check-skill.py`다. `P`는 저장한 CLI 출력의 스킬 이름과 설치된 `SKILL.md`가 픽스처와 일치하는지 확인했다.
+표의 `agy`는 절대경로 바이너리를 샌드박스에서 실행한 명령을 뜻한다. `F`는 `/private/tmp/agy-u0/fixtures`, `P`는 `python3.11 -B /private/tmp/agy-u0/check-skill.py`다. `P`는 저장한 CLI 출력의 스킬 이름과 설치된 `SKILL.md`가 픽스처와 일치하는지 확인했다.
 
 | 변형 | 명령 | rc | 출력 요지 |
 | --- | --- | --- | --- |
@@ -67,4 +69,4 @@ AP v1의 `$schema`는 `https://agent-plugins.org/schemas/1.0.0/plugin.schema.jso
 
 홈의 `.antigravity*`, `.gemini` 및 표준 설정·캐시·앱 데이터 위치에서 Antigravity·Gemini·`agy` 이름이 붙은 경로 9개를 전후 재탐색했다. 경로 24,413개, 그중 일반 파일 18,929개의 파일별 SHA-256·크기·모드·소유자·수정 시각과 심링크 대상을 비교했다. `diff -u home-before.json home-after.json`은 rc 0, 출력 0바이트였다.
 
-원 로그는 `~/.cache/hiway-research/hermes/u0/`에 있다. 변형별 하위 디렉터리의 `.cmd`, `.rc`, `.stdout`, `.stderr`에 환경 인자와 절대경로를 포함한 명령 및 결과를 남겼다. 같은 위치에 프로필, 픽스처, 사전 점검 및 홈 대조 결과를 보관했다.
+변형별 하위 디렉터리의 `.cmd`, `.rc`, `.stdout`, `.stderr`에 환경 인자와 절대경로를 포함한 명령 및 결과를 남겼다. 같은 위치에 프로필, 픽스처, 사전 점검 및 홈 대조 결과를 보관했다.

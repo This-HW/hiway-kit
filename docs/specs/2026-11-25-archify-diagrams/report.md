@@ -5,12 +5,6 @@ as_of: 2026-11-25
 
 # Archify 도식 교체 보고서
 
-## 프로젝트 설치
-
-- 이 워크트리의 .claude/skills/archify에서 tt-a1i/archify 3.3.1, 커밋 `62f3a995eb26ee23f784bdea4a7992340078e9be`의 읽기 전용 캐시 사본을 가리킨다. 캐시 경로는 `~/.cache/hiway-kit-tools/archify-3.3.1-62f3a99/archify/`다.
-- .claude/rules/archify.md에는 `[archify explainer: on-demand]` 한 줄을 기록했다. `git check-ignore -v`에서 링크는 공통 `.git/info/exclude`, 규칙 파일은 `.gitignore`로 제외됨을 확인했다. 두 경로의 `git status --porcelain` 출력은 비어 있었다.
-- `ARCHIFY_UPDATE_CHECK_DISABLED=1`을 사용했다. 로컬 Chrome 래퍼는 `~/.cache/hiway-research/archify/chrome-offline.sh`에 복사했다. Seatbelt 프로필은 IP 인바운드·아웃바운드와 mDNS 조회를 막고 Chrome 내부 Unix 소켓을 허용한다.
-
 ## 검수 반영
 
 뷰어 런타임이 반복된 HTML 12개는 총 11,114,000바이트였다. 직접 마켓플레이스 설치와
@@ -67,21 +61,7 @@ README의 "What to type first"는 검색과 복사가 쉬운 원래 `skills` 펜
 
 ## 도식과 검증 명령
 
-도식 디렉토리는 `docs/architecture/diagrams/<slug>/`다. 각 행의 `slug`·`kind`·`run`으로 아래 최종 명령의 변수를 채웠다. 파일 크기는 바이트 단위다.
-
-```sh
-d="docs/architecture/diagrams/$slug"
-cache="$HOME/.cache/hiway-research/archify"
-archify="$HOME/.cache/hiway-kit-tools/archify-3.3.1-62f3a99/archify"
-profile='(version 1) (allow default) (deny network-outbound (remote ip)) (deny network-inbound (local ip)) (deny mach-lookup (global-name "com.apple.mDNSResponder"))'
-ARCHIFY_UPDATE_CHECK_DISABLED=1 ARCHIFY_CHROME="$cache/chrome-offline.sh" \
-  /usr/bin/sandbox-exec -p "$profile" node "$archify/bin/archify.mjs" \
-  finalize "$kind" "$d/candidate.json" "$d/$slug.html" --quality showcase \
-  --repo-root "$PWD" --out-dir "$cache/receipts/$slug/$run" --json
-ARCHIFY_UPDATE_CHECK_DISABLED=1 ARCHIFY_CHROME="$cache/chrome-offline.sh" \
-  /usr/bin/sandbox-exec -p "$profile" node "$archify/bin/export-svg.mjs" \
-  "$d/$slug.html" "$d/$slug.svg" auto
-```
+도식 디렉토리는 `docs/architecture/diagrams/<slug>/`다. Archify 3.3.1(tt-a1i/archify, 커밋 `62f3a995eb26`)로 생성했다. 각 행에는 후보 유형, 실행 식별자, 검증 결과와 파일 크기(바이트)를 기록했다. 재생성 명령은 [도식 관리 문서](../../architecture/diagrams/README.md)에 있다.
 
 | slug | kind | run | 품질 | finalize rc | 검증한 출처 | 로컬 HTML | 추적 SVG |
 | --- | --- | --- | --- | --- | --- | ---: | ---: |
@@ -317,7 +297,7 @@ rc=0
 
 ## Code Analysis
 
-저장소 루트에서 `scripts/`, `plugins/common/hooks`, `plugins/common/tools`의 Python만 포함하도록 `--config`로 범위를 제한했다. 53개 파일을 분석했고 테스트 역할 28개는 분석에서 제외됐다. 파싱 오류는 없었다. 전체 루트 실행에서는 자매 파일의 비수식 import를 해석하지 못해 모듈 간 연결이 0개로 나왔다. 같은 분석을 세 경로를 각각 루트로 두고 보완했다. HTML, 분석 원본, 설정은 레포 밖 `~/.cache/hiway-research/archify/code-analysis/`에 있다.
+저장소 루트에서 `scripts/`, `plugins/common/hooks`, `plugins/common/tools`의 Python만 포함하도록 `--config`로 범위를 제한했다. 53개 파일을 분석했고 테스트 역할 28개는 분석에서 제외됐다. 파싱 오류는 없었다. 전체 루트 실행에서는 자매 파일의 비수식 import를 해석하지 못해 모듈 간 연결이 0개로 나왔다. 같은 분석을 세 경로를 각각 루트로 두고 보완했다.
 
 - **순환.** `plugins/common/tools/code_intel.py:126`의 지연 import와 `plugins/common/tools/code_intel_rules.py:24`의 모듈 import가 한 순환을 이룬다. 파일과 모듈 규칙이 각각 같은 순환을 보고했다. `scripts/`와 훅 범위에서 도구가 발견한 순환은 없었다.
 - **결합.** 도구의 범위별 incoming import에서 `scripts/git_tracked.py` 7건, `scripts/edition_tree.py` 4건, `plugins/common/hooks/utils.py` 4건, `plugins/common/tools/intel_runtime.py` 7건, `plugins/common/tools/lsp_index_policy.py` 6건이 상위였다. 근거 예시는 `scripts/check_doc_status.py:72`, `scripts/build-hermes-branch.py:82–92`, `plugins/common/hooks/auto-format.py:45`, `plugins/common/tools/lsp_transport.py:14–15`다.
@@ -331,8 +311,8 @@ rc=0
   2개 건너뜀이었다. Archify 게이트 테스트는 57개다. 기존 문서 참조 게이트에서 복원한
   `skills` 펜스 1개를 확인했고, 새 게이트는 추적 도식 11개를 통과시켰다.
 - 초기 도식 작업의 첫 전체 게이트는 네 프로세스 정리 테스트에서 로컬 Seatbelt가 macOS의 `ps` 실행을 막아 실패했다. 네 사례를 일반 실행 환경에서 재현해 통과를 확인했다. 재실행에서는 Git의 SSH 전송을 끄고 네트워크 차단을 Claude 검증 프로세스에 적용해 같은 테스트 전량을 실행했다. 오프라인이므로 원격 태그 조회 줄은 게이트의 기존 조건에 따라 생략됐다.
-- 외부 네트워크, 전역 설치, Archify 사본 수정은 각각 0건이다. `git diff --quiet origin/main -- plugins/common`은 rc 0이다. `CLAUDE.md`와 `AGENTS.md`도 작업 기준 커밋과 같다.
+- 외부 네트워크 접근은 0건이었다. `git diff --quiet origin/main -- plugins/common`은 rc 0이다. `CLAUDE.md`와 `AGENTS.md`도 작업 기준 커밋과 같다.
 - 요구된 pytest를 실행하면 기존 디렉토리 빌더 픽스처가 임시 로컬 저장소를 복제한다. 원격 전송 없이 진행됐다. 근거는 `scripts/tests/test_build_directory_branch.py:412–416`이다.
 - 생성한 HTML·SVG는 Archify가 삽입한 라이선스, 고지, 템플릿 공백을 포함해 원본 바이트를 보존한다. 생성물의 줄 끝 공백이 `git diff --check`에 잡혔고, 작성한 문서와 코드는 이 검사에서 경고가 없었다.
-- README의 개수 표는 기존 위치와 값으로 유지했다. Archify 브라우저 증거와 조사 HTML은 로컬 캐시에 있다.
+- README의 개수 표는 기존 위치와 값으로 유지했다.
 - 작업 계획 `execution_status: in-progress`에서 구현과 자체 검증을 기록했다. 독립적인 렌더링·근거 대조·게이트 재실행은 controller 검수 단계다.

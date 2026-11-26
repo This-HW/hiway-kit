@@ -1152,12 +1152,12 @@ def test_blocks_dotenv_local():
 
 
 def test_blocks_ssh_key():
-    result = run_hook("Read", file_path="/home/user/.ssh/id_rsa")
+    result = run_hook("Read", file_path="/fixture/account/.ssh/id_rsa")
     assert result.returncode == 2, "Should block SSH key"
 
 
 def test_blocks_aws_credentials():
-    result = run_hook("Edit", file_path="/home/user/.aws/credentials")
+    result = run_hook("Edit", file_path="/fixture/account/.aws/credentials")
     assert result.returncode == 2, "Should block AWS credentials"
 
 

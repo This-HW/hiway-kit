@@ -16,7 +16,7 @@ Antigravity는 하위 매니페스트를 선택했다. 검증은 Claude용 에�
 
 - 준비 커밋은 `6eda68950b2707bcaf0cf37877db7cd909d5e7e1`, 하위 트리는 `f8b7d8cde5781c81858de8982a193c4ead763628`이다. 원본 사본 `/private/tmp/hiway-unify-plugin-6eda689`에는 파일 127개와 스킬 17개가 있었다. 루트 매니페스트는 Agent Plugins v1 `hiway-kit` 5.9.1이다. Antigravity 하위 매니페스트는 같은 이름과 설명을 선언하며 `version` 필드를 생략한다.
 - macOS 27.2.1 (26B131), arm64. Hermes `vgit.352b249`와 Python 3.14.10, agy 1.5.15를 사용했다. 기존 Hermes 격리 venv와 PM 런타임을 재사용했다. upstream HEAD는 `352b249f67fb6a4a7d7904acaca9dd410db229e0`이며 `uv.lock`과 `pm/lock.json`은 HEAD와 동일했다. <!-- doc-ref-ok: 격리 환경의 Hermes upstream 파일명 -->
-- [H1](../2026-11-24-hermes-edition/h1-measurement.md)과 [U-0](u0-antigravity.md)의 방식으로 빈 환경에서 시작해 격리 HOME·XDG·임시 경로를 지정했다. Hermes는 [Hermes 프로필](../../../scripts/hermes-sandbox.sb)을 복사해 `HERMES_NETWORK=off`로 실행했다. agy는 U-0의 `/private/tmp/agy-u0/agy.sb`와 절대경로 바이너리를 사용했다. 양쪽 모두 stdin을 `/dev/null`로 지정했다.
+- [H1](../2026-11-24-hermes-edition/h1-measurement.md)과 [U-0](u0-antigravity.md)의 방식으로 빈 환경에서 시작해 격리 HOME·XDG·임시 경로를 지정했다. Hermes는 [Hermes 프로필](../../../scripts/hermes-sandbox.sb)로 측정했다. 재현 시 호스트 셸에서 `-D HOME="$HOME" -D HERMES_NETWORK=off`를 전달한다. agy는 U-0의 `/private/tmp/agy-u0/agy.sb`와 절대경로 바이너리를 사용했다. 양쪽 모두 stdin을 `/dev/null`로 지정했다.
 - 쓰기 거부 사전 점검은 각각 rc 0이었다. 격리 루트 안 쓰기는 성공했고, 실제 홈 읽기·쓰기 및 TCP 루프백 접속은 `EPERM`이었다. agy의 첫 대조는 쓰기 허용 루트 안을 거부 경로로 지정해 rc 1이었다. 프로필은 그대로 두고, 대조 경로만 루트 밖으로 바꾼 재시도에서 `EPERM`을 확인했다. CLI 실측은 이 확인 뒤 시작했다.
 
 아래 명령의 경로 약칭이다. 각 명령의 실제 argv와 작업 디렉터리는 원 로그에 있다.
@@ -30,14 +30,14 @@ hs=$W/source/plugins/common
 as=$A/fixture
 H=$R/venv-main-314/bin/hermes
 py=$R/venv-main-314/bin/python
-agy=/Users/hw/.local/bin/agy
+agy="$(command -v agy)"
 profile=ub-ff9ad2a49085
 hp=$R/hermes-home/profiles/$profile
 installed=$hp/plugins/hiway-kit
 rev=6c60d2a8ad982469be958fd15d524257fa399ac7
 url=file://$W/mirror.git#plugins/common
-log=$HOME/.cache/hiway-research/hermes/ub
-baseline=$HOME/.cache/hiway-research/hermes/h1/phase2/phase2-final-p1-findings.log
+log="${UB_LOG_DIR:?set to the U-B log directory}"
+baseline="${H1_BASELINE:?set to the H1 findings log}"
 ```
 
 | 준비 명령 | rc | 관측 |
@@ -54,7 +54,7 @@ baseline=$HOME/.cache/hiway-research/hermes/h1/phase2/phase2-final-p1-findings.l
 | --- | --- | --- |
 | `"$H" plugins validate "$hs" --json` | 0 | `ok: true`, AP v1로 파싱, 격리 판정 `portable`, `host_ready: true`, 보안 판정 `caution`. |
 | `"$py" -B "$R/phase2/scan.py" "$hs"` | 0 | 148건. critical 0, high 6, medium 57, low 85. |
-| `/opt/homebrew/bin/python3.11 -B "$log/compare-findings.py" "$baseline" "$log/24-hermes-findings.stdout"` | 0 | H1 최종 후보 87건에서 148건으로 61건 증가했다. 심각도·파일·규칙을 키로 중복 건수까지 대조해 추가 72건, 감소 11건을 확인했다. |
+| `python3.11 -B "$log/compare-findings.py" "$baseline" "$log/24-hermes-findings.stdout"` | 0 | H1 최종 후보 87건에서 148건으로 61건 증가했다. 심각도·파일·규칙을 키로 중복 건수까지 대조해 추가 72건, 감소 11건을 확인했다. |
 
 | high 발견 파일 | 줄 | 스캔 규칙 |
 | --- | --- | --- |
@@ -98,7 +98,7 @@ high 6건 중 H1 최종 후보에도 있던 에이전트 리뷰 예시 2건과 �
 | `grep -E '^<!-- kit:(begin \|end -->$)' "$W/project/AGENTS.md"` | 실행 전 2, 실행 후 0 | 실행 전 파일 부재, 실행 후 시작·끝 마커 각 1줄. |
 | `h plugins disable hiway-kit`, `h plugins remove hiway-kit` | 각 0 | 플러그인 디렉터리가 삭제됐다. |
 | `h plugins list` | 4회 각 0 | `not enabled` → `enabled` → `disabled` → `hiway-kit` 항목 없음. |
-| `/opt/homebrew/bin/python3.11 -B "$R/phase2/profile_state.py" capture "$hp" "$snapshot"`, `cat "$hp/plugins/.install-metadata.json"` | 각 0 | 제거 뒤 메타데이터 `{}`, 그 잠금 파일, `config.yaml`의 `plugins.enabled: []`·`plugins.disabled: []`·`_config_version: 54`가 격리 프로필에 남았다. |
+| `python3.11 -B "$R/phase2/profile_state.py" capture "$hp" "$snapshot"`, `cat "$hp/plugins/.install-metadata.json"` | 각 0 | 제거 뒤 메타데이터 `{}`, 그 잠금 파일, `config.yaml`의 `plugins.enabled: []`·`plugins.disabled: []`·`_config_version: 54`가 격리 프로필에 남았다. |
 
 활성화 후 목록과 프롬프트에서 확인한 이름이다.
 
@@ -156,9 +156,9 @@ hiway-kit:web-research
 
 | 명령 | rc | 관측 |
 | --- | --- | --- |
-| `/opt/homebrew/bin/python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"` 및 같은 스크립트의 `compare "$before" "$after"` | 각 0 | 실제 `~/.hermes` 항목 217,037개, Claude 플러그인 항목 2,881개, 외부 홈 경로 18개를 대조했다. 기존 허용 목록 안에서 Hermes 데몬 파일 9건(게이트웨이·cron·SQLite 상태)이 바뀌었다. 보호 경로, 허용 목록 밖, Claude 플러그인 변경은 각각 0건이었다. |
-| `/opt/homebrew/bin/python3.11 -B /private/tmp/agy-u0/snapshot.py "$snapshot"`, `diff -u "$before" "$after"` | 각 0 | 실제 agy·Antigravity·Gemini 관련 루트 9곳, 경로 24,415개, 일반 파일 18,931개를 검사했다. 일반 파일 SHA-256·크기·모드·소유권·수정 시각과 심링크 대상을 대조한 diff 출력은 0바이트였다. |
+| `python3.11 -B "$R/phase2/home_phase2.py" capture "$snapshot"` 및 같은 스크립트의 `compare "$before" "$after"` | 각 0 | 실제 `~/.hermes` 항목 217,037개, Claude 플러그인 항목 2,881개, 외부 홈 경로 18개를 대조했다. 기존 허용 목록 안에서 Hermes 데몬 파일 9건(게이트웨이·cron·SQLite 상태)이 바뀌었다. 보호 경로, 허용 목록 밖, Claude 플러그인 변경은 각각 0건이었다. |
+| `python3.11 -B /private/tmp/agy-u0/snapshot.py "$snapshot"`, `diff -u "$before" "$after"` | 각 0 | 실제 agy·Antigravity·Gemini 관련 루트 9곳, 경로 24,415개, 일반 파일 18,931개를 검사했다. 일반 파일 SHA-256·크기·모드·소유권·수정 시각과 심링크 대상을 대조한 diff 출력은 0바이트였다. |
 
-원 로그는 `~/.cache/hiway-research/hermes/ub/`에 있다. 단계별 `.cmd`, `.rc`, `.stdout`, `.stderr`에 실행 환경과 결과를 보관했다. 사전 점검의 agy 대조 경로 수정과 Hermes 프로필 스냅샷 출력 경로를 격리 루트로 옮기기 전의 rc 1도 남겼다. 두 경우 모두 샌드박스 프로필은 그대로 사용했다.
+단계별 `.cmd`, `.rc`, `.stdout`, `.stderr`에 실행 환경과 결과를 보관했다. 사전 점검의 agy 대조 경로 수정과 Hermes 프로필 스냅샷 출력 경로를 격리 루트로 옮기기 전의 rc 1도 남겼다. 두 경우 모두 샌드박스 프로필은 그대로 사용했다.
 
 GitHub main의 무ref 설치와 `update`는 계획의 적용 단계 실측으로 남는다. [통합 계획](../../plans/2026-11-25-hermes-unify/plan.md)
